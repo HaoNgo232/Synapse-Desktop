@@ -10,26 +10,7 @@ from typing import Callable, Optional, Set
 
 from core.file_utils import TreeItem
 from services.token_display import TokenDisplayService
-
-
-# Theme colors
-class ThemeColors:
-    """Swiss Professional Light Theme Colors"""
-
-    PRIMARY = "#2563EB"
-    BG_PAGE = "#F8FAFC"
-    BG_SURFACE = "#FFFFFF"
-    BG_ELEVATED = "#F1F5F9"
-    TEXT_PRIMARY = "#0F172A"
-    TEXT_SECONDARY = "#475569"
-    TEXT_MUTED = "#94A3B8"
-    BORDER = "#E2E8F0"
-    SUCCESS = "#10B981"
-    WARNING = "#F59E0B"
-    ERROR = "#EF4444"
-    ICON_FOLDER = "#F59E0B"
-    ICON_FILE = "#64748B"
-    SEARCH_HIGHLIGHT = "#FEF3C7"  # Amber 100
+from core.theme import ThemeColors
 
 
 class FileTreeComponent:

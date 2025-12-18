@@ -16,7 +16,8 @@ from core.prompt_generator import (
     generate_file_contents,
     generate_prompt,
 )
-from components.file_tree import FileTreeComponent, ThemeColors
+from components.file_tree import FileTreeComponent
+from core.theme import ThemeColors
 
 
 class ContextView:
@@ -45,7 +46,7 @@ class ContextView:
             "0 tokens", size=13, weight=ft.FontWeight.W_600, color=ThemeColors.PRIMARY
         )
 
-        left_panel = ft.Container(
+        self.left_panel = ft.Container(
             content=ft.Column(
                 [
                     # Header row
@@ -111,7 +112,7 @@ class ContextView:
 
         self.status_text = ft.Text("", color=ThemeColors.SUCCESS, size=12)
 
-        right_panel = ft.Container(
+        self.right_panel = ft.Container(
             content=ft.Column(
                 [
                     ft.Text(
@@ -162,22 +163,46 @@ class ContextView:
             border_radius=8,
         )
 
-        return ft.Container(
-            content=ft.Row(
-                [
-                    ft.Container(
-                        content=left_panel, expand=2, margin=ft.margin.only(right=8)
-                    ),
-                    ft.Container(
-                        content=right_panel, expand=1, margin=ft.margin.only(left=8)
-                    ),
-                ],
-                expand=True,
-            ),
+        self.layout_container = ft.Container(
+            content=None,  # Will be set by update_layout
             expand=True,
             padding=16,
             bgcolor=ThemeColors.BG_PAGE,
         )
+
+        # Initial layout
+        self.update_layout(self.page.window.width if self.page.window.width else 1000)
+
+        return self.layout_container
+
+    def update_layout(self, width: float):
+        """Update layout based on window width"""
+        if not hasattr(self, "left_panel"):
+            return
+
+        if width < 800:
+            # Vertical layout
+            self.layout_container.content = ft.Column(
+                [
+                    ft.Container(content=self.left_panel, expand=True),
+                    ft.Container(content=self.right_panel, height=350),
+                ],
+                expand=True,
+                spacing=16,
+            )
+        else:
+            # Horizontal layout
+            self.layout_container.content = ft.Row(
+                [
+                    ft.Container(content=self.left_panel, expand=2),
+                    ft.Container(content=self.right_panel, expand=1),
+                ],
+                expand=True,
+                spacing=16,
+            )
+
+        if self.layout_container.page:
+            self.layout_container.update()
 
     def on_workspace_changed(self, workspace_path: Path):
         """Khi user chon folder moi hoac settings thay doi"""

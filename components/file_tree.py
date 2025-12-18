@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Optional, Set
 
 from core.file_utils import TreeItem
+from services.token_display import TokenDisplayService
 
 
 # Theme colors
@@ -37,22 +38,28 @@ class FileTreeComponent:
     - Checkbox selection
     - Collapse/Expand folders
     - Search/Filter files
+    - Token counts per file
     """
 
     def __init__(
         self,
         page: ft.Page,
         on_selection_changed: Optional[Callable[[Set[str]], None]] = None,
+        show_tokens: bool = True,
     ):
         self.page = page
         self.on_selection_changed = on_selection_changed
+        self.show_tokens = show_tokens
 
         # State
         self.tree: Optional[TreeItem] = None
         self.selected_paths: Set[str] = set()
         self.expanded_paths: Set[str] = set()
         self.search_query: str = ""
-        self.matched_paths: Set[str] = set()  # Paths matching search
+        self.matched_paths: Set[str] = set()
+
+        # Token display service
+        self._token_service = TokenDisplayService(on_update=self._on_tokens_updated)
 
         # UI elements
         self.tree_container: Optional[ft.Column] = None
@@ -124,10 +131,17 @@ class FileTreeComponent:
         """Set tree data va render"""
         self.tree = tree
         self.selected_paths.clear()
-        self.expanded_paths = {tree.path}  # Expand root by default
+        self.expanded_paths = {tree.path}
         self.search_query = ""
         self.matched_paths.clear()
+
+        # Clear token cache va request tokens cho visible files
+        self._token_service.clear_cache()
         self._render_tree()
+
+        # Request tokens sau khi render
+        if self.show_tokens:
+            self._request_visible_tokens()
 
     def get_selected_paths(self) -> Set[str]:
         """
@@ -394,6 +408,8 @@ class FileTreeComponent:
                 checkbox,
                 ft.Icon(icon, size=18, color=icon_color),
                 label_container,
+                # Token count display (cho ca files va folders)
+                self._create_token_badge(item) if self.show_tokens else ft.Container(),
             ],
             spacing=2,
         )
@@ -454,3 +470,61 @@ class FileTreeComponent:
             self.selected_paths.discard(child.path)
             if child.children:
                 self._deselect_all_children(child.children)
+
+    # =========================================================================
+    # TOKEN DISPLAY
+    # =========================================================================
+
+    def _create_token_badge(self, item: TreeItem) -> ft.Container:
+        """
+        Tao badge hien thi token count cho file hoac folder.
+        - File: hien thi token count cua file
+        - Folder: hien thi tong tokens cua tat ca files ben trong
+        """
+        if item.is_dir:
+            # Folder: tinh tong tu children
+            folder_tokens = self._token_service.get_folder_tokens(item.path, self.tree)
+            if folder_tokens is None:
+                # Chua tinh xong - return empty
+                return ft.Container(width=0)
+            if folder_tokens == 0:
+                # Empty folder hoac chi chua folders
+                return ft.Container(width=0)
+            token_text = self._token_service._format_tokens(folder_tokens)
+        else:
+            # File: lay tu cache
+            token_text = self._token_service.get_token_display(item.path)
+            if not token_text:
+                # Chua co - request va return empty
+                self._token_service.request_token_count(item.path)
+                return ft.Container(width=0)
+
+        return ft.Container(
+            content=ft.Text(
+                token_text,
+                size=10,
+                color=ThemeColors.TEXT_MUTED,
+            ),
+            margin=ft.margin.only(left=8),
+        )
+
+    def _on_tokens_updated(self):
+        """Callback khi TokenService update cache - re-render tree"""
+        # Re-render de cap nhat token displays
+        # Su dung page.update thay vi _render_tree de tranh re-render toan bo
+        try:
+            if self.page:
+                self.page.update()
+        except Exception:
+            pass  # Ignore errors khi page chua san sang
+
+    def _request_visible_tokens(self):
+        """Request tokens cho cac files dang hien thi"""
+        if not self.tree:
+            return
+
+        # Collect visible paths
+        visible = self.matched_paths if self.search_query else None
+        self._token_service.request_tokens_for_tree(
+            self.tree, visible_only=bool(self.search_query), visible_paths=visible
+        )

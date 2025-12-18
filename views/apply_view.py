@@ -11,6 +11,12 @@ from typing import Callable, Optional
 from core.opx_parser import parse_opx_response
 from core.file_actions import apply_file_actions, ActionResult
 from core.theme import ThemeColors
+from services.preview_analyzer import (
+    analyze_file_actions,
+    format_change_summary,
+    get_change_color,
+    PreviewRow,
+)
 
 
 class ApplyView:
@@ -27,14 +33,13 @@ class ApplyView:
     def build(self) -> ft.Container:
         """Build UI cho Apply view voi Swiss Professional styling"""
 
-        # OPX Input
+        # OPX Input - Compact de danh khong gian cho Results
         self.opx_input = ft.TextField(
             label="Paste OPX Response",
             multiline=True,
-            min_lines=10,
-            max_lines=15,
+            min_lines=4,
+            max_lines=6,
             hint_text="Paste the LLM's OPX XML response here...",
-            expand=True,
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
             label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
@@ -139,12 +144,16 @@ class ApplyView:
         )
 
     def _preview_changes(self):
-        """Preview changes without applying"""
+        """
+        Preview changes without applying.
+        Hien thi diff stats (+lines/-lines) cho moi action.
+        """
         opx_text = self.opx_input.value
         if not opx_text:
             self._show_status("Please paste OPX response first", is_error=True)
             return
 
+        # Parse OPX
         result = parse_opx_response(opx_text)
 
         # Clear previous results
@@ -157,26 +166,26 @@ class ApplyView:
                     self._create_result_row("ERROR", "", error, success=False)
                 )
 
-        # Show parsed actions
-        for action in result.file_actions:
-            description = ""
-            if action.changes:
-                description = action.changes[0].description
-            if action.new_path:
-                description = f"-> {action.new_path}"
+        # Analyze file actions to get diff stats
+        workspace = self.get_workspace()
+        preview_data = analyze_file_actions(result.file_actions, workspace)
 
+        # Show analysis errors
+        for error in preview_data.errors:
             self.results_column.controls.append(
-                self._create_result_row(
-                    action.action.upper(),
-                    action.path,
-                    description,
-                    success=True,
-                    is_preview=True,
-                )
+                self._create_result_row("ERROR", "", error, success=False)
             )
 
-        if result.file_actions:
-            self._show_status(f"Preview: {len(result.file_actions)} action(s) parsed")
+        # Show parsed actions with diff stats
+        for row in preview_data.rows:
+            self.results_column.controls.append(self._create_preview_row(row))
+
+        if preview_data.rows:
+            total_added = sum(r.changes.added for r in preview_data.rows)
+            total_removed = sum(r.changes.removed for r in preview_data.rows)
+            self._show_status(
+                f"Preview: {len(preview_data.rows)} action(s) | +{total_added} / -{total_removed} lines"
+            )
         else:
             self._show_status("No actions found in OPX", is_error=True)
 
@@ -302,6 +311,93 @@ class ApplyView:
                         message[:60] + "..." if len(message) > 60 else message,
                         size=11,
                         color=ThemeColors.TEXT_SECONDARY,
+                    ),
+                ],
+                spacing=12,
+            ),
+            padding=12,
+            bgcolor=row_bg,
+            border=ft.border.all(1, ThemeColors.BORDER),
+            border_radius=6,
+            margin=ft.margin.only(bottom=8),
+        )
+
+    def _create_preview_row(self, row: PreviewRow) -> ft.Container:
+        """
+        Tao mot preview row voi diff stats (+lines/-lines).
+        Hien thi chi tiet thay doi truoc khi apply.
+        """
+        # Action badge color
+        action_colors = {
+            "create": ThemeColors.SUCCESS,
+            "modify": ThemeColors.PRIMARY,
+            "rewrite": ThemeColors.WARNING,
+            "delete": ThemeColors.ERROR,
+            "rename": "#8B5CF6",  # Purple
+        }
+        badge_color = action_colors.get(row.action, ThemeColors.TEXT_SECONDARY)
+
+        # Diff stats
+        diff_text = format_change_summary(row.changes)
+        diff_color = get_change_color(row.changes)
+
+        # Error handling
+        if row.has_error:
+            status_icon = ft.Icon(ft.Icons.ERROR, size=16, color=ThemeColors.ERROR)
+            row_bg = "#FEF2F2"
+        else:
+            status_icon = ft.Icon(
+                ft.Icons.VISIBILITY, size=16, color=ThemeColors.TEXT_MUTED
+            )
+            row_bg = ThemeColors.BG_ELEVATED
+
+        return ft.Container(
+            content=ft.Row(
+                [
+                    status_icon,
+                    # Action badge
+                    ft.Container(
+                        content=ft.Text(
+                            row.action.upper(),
+                            size=11,
+                            weight=ft.FontWeight.W_600,
+                            color="#FFFFFF",
+                        ),
+                        bgcolor=badge_color,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=3),
+                        border_radius=4,
+                    ),
+                    # File path
+                    ft.Text(
+                        row.path,
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                        color=ThemeColors.TEXT_PRIMARY,
+                        expand=True,
+                    ),
+                    # Diff stats badge (+X / -Y)
+                    ft.Container(
+                        content=ft.Text(
+                            diff_text,
+                            size=11,
+                            weight=ft.FontWeight.W_600,
+                            color=diff_color,
+                        ),
+                        bgcolor=ThemeColors.BG_ELEVATED,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=3),
+                        border_radius=4,
+                        border=ft.border.all(1, ThemeColors.BORDER),
+                    ),
+                    # Description
+                    ft.Text(
+                        (
+                            row.description[:40] + "..."
+                            if len(row.description) > 40
+                            else row.description
+                        ),
+                        size=11,
+                        color=ThemeColors.TEXT_SECONDARY,
+                        width=200,
                     ),
                 ],
                 spacing=12,

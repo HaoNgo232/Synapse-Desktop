@@ -17,6 +17,7 @@ from core.prompt_generator import (
     generate_prompt,
 )
 from components.file_tree import FileTreeComponent
+from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
 
 
@@ -32,6 +33,7 @@ class ContextView:
         self.token_count_text: Optional[ft.Text] = None
         self.instructions_field: Optional[ft.TextField] = None
         self.status_text: Optional[ft.Text] = None
+        self.token_stats_panel: Optional[TokenStatsPanel] = None
 
     def build(self) -> ft.Container:
         """Build UI cho Context view"""
@@ -100,17 +102,21 @@ class ContextView:
         self.instructions_field = ft.TextField(
             label="User Instructions",
             multiline=True,
-            min_lines=5,
-            max_lines=10,
+            min_lines=3,
+            max_lines=6,
             hint_text="Enter your task instructions here...",
             expand=True,
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
             label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
             text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY),
+            on_change=lambda _: self._update_token_count(),
         )
 
         self.status_text = ft.Text("", color=ThemeColors.SUCCESS, size=12)
+
+        # Token stats panel
+        self.token_stats_panel = TokenStatsPanel()
 
         self.right_panel = ft.Container(
             content=ft.Column(
@@ -123,7 +129,7 @@ class ContextView:
                     ),
                     ft.Container(height=8),
                     self.instructions_field,
-                    ft.Container(height=16),
+                    ft.Container(height=12),
                     ft.Row(
                         [
                             ft.OutlinedButton(
@@ -153,8 +159,12 @@ class ContextView:
                     ),
                     ft.Container(height=8),
                     self.status_text,
+                    ft.Container(height=12),
+                    # Token stats panel
+                    self.token_stats_panel.build(),
                 ],
                 expand=True,
+                scroll=ft.ScrollMode.AUTO,
             ),
             padding=16,
             expand=True,
@@ -251,26 +261,42 @@ class ContextView:
 
     def _update_token_count(self):
         """
-        Update token count display.
+        Update token count display va token stats panel.
         Su dung visible paths khi dang search de hien thi chinh xac.
         """
         if not self.file_tree_component:
             return
 
-        total_tokens = 0
+        file_tokens = 0
+        file_count = 0
+
         # Su dung visible paths de hien thi chinh xac khi dang search
         selected_paths = self.file_tree_component.get_visible_selected_paths()
 
         for path_str in selected_paths:
             path = Path(path_str)
             if path.is_file():
-                total_tokens += count_tokens_for_file(path)
+                file_tokens += count_tokens_for_file(path)
+                file_count += 1
 
         # Hien thi indicator khi dang filter
         if self.file_tree_component.is_searching():
-            self.token_count_text.value = f"{total_tokens:,} tokens (filtered)"
+            self.token_count_text.value = f"{file_tokens:,} tokens (filtered)"
         else:
-            self.token_count_text.value = f"{total_tokens:,} tokens"
+            self.token_count_text.value = f"{file_tokens:,} tokens"
+
+        # Update token stats panel
+        instruction_tokens = 0
+        if self.instructions_field and self.instructions_field.value:
+            instruction_tokens = count_tokens(self.instructions_field.value)
+
+        if self.token_stats_panel:
+            self.token_stats_panel.update_stats(
+                file_count=file_count,
+                file_tokens=file_tokens,
+                instruction_tokens=instruction_tokens,
+            )
+
         self.page.update()
 
     def _copy_context(self, include_xml: bool):

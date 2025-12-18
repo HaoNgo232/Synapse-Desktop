@@ -1,0 +1,22 @@
+{
+  "version": "0.4.2",
+  "environments": [
+    "cursor",
+    "github",
+    "gemini",
+    "kilocode",
+    "roo",
+    "antigravity"
+  ],
+  "initializedPhases": [
+    "requirements",
+    "design",
+    "planning",
+    "implementation",
+    "testing",
+    "deployment",
+    "monitoring"
+  ],
+  "createdAt": "2025-12-18T13:12:57.064Z",
+  "updatedAt": "2025-12-18T13:12:57.141Z"
+}

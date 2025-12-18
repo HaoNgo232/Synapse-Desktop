@@ -2,6 +2,7 @@
 Context View - Tab de chon files va copy context
 
 Theme: Swiss Professional (Light)
+Features: Collapsible folders, checkbox selection, token counting
 """
 
 import flet as ft
@@ -14,7 +15,7 @@ from core.token_counter import count_tokens_for_file, count_tokens
 from core.prompt_generator import generate_file_map, generate_file_contents, generate_prompt
 
 
-# Import theme colors from main
+# Theme colors
 class ThemeColors:
     """Swiss Professional Light Theme Colors"""
     PRIMARY = "#2563EB"
@@ -33,7 +34,7 @@ class ThemeColors:
 
 
 class ContextView:
-    """View cho Context tab"""
+    """View cho Context tab voi collapsible file tree"""
     
     def __init__(self, page: ft.Page, get_workspace: Callable[[], Optional[Path]]):
         self.page = page
@@ -41,13 +42,14 @@ class ContextView:
         
         self.tree: Optional[TreeItem] = None
         self.selected_paths: set[str] = set()
+        self.expanded_paths: set[str] = set()  # Track expanded folders
         self.tree_container: Optional[ft.Column] = None
         self.token_count_text: Optional[ft.Text] = None
         self.instructions_field: Optional[ft.TextField] = None
         self.status_text: Optional[ft.Text] = None
     
     def build(self) -> ft.Container:
-        """Build UI cho Context view voi Swiss Professional styling"""
+        """Build UI cho Context view"""
         
         # Left panel: File tree
         self.tree_container = ft.Column(
@@ -77,6 +79,20 @@ class ContextView:
                     ft.Text("Files", weight=ft.FontWeight.W_600, size=14, color=ThemeColors.TEXT_PRIMARY),
                     ft.Container(expand=True),
                     self.token_count_text,
+                    ft.IconButton(
+                        icon=ft.Icons.UNFOLD_MORE,
+                        icon_size=18,
+                        icon_color=ThemeColors.TEXT_SECONDARY,
+                        tooltip="Expand All",
+                        on_click=lambda _: self._expand_all()
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.UNFOLD_LESS,
+                        icon_size=18,
+                        icon_color=ThemeColors.TEXT_SECONDARY,
+                        tooltip="Collapse All",
+                        on_click=lambda _: self._collapse_all()
+                    ),
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,
                         icon_size=18,
@@ -153,7 +169,7 @@ class ContextView:
             border_radius=8
         )
         
-        # Main layout: split view
+        # Main layout
         return ft.Container(
             content=ft.Row([
                 ft.Container(content=left_panel, expand=2, margin=ft.margin.only(right=8)),
@@ -169,9 +185,8 @@ class ContextView:
         self._load_tree(workspace_path)
     
     def _load_tree(self, workspace_path: Path):
-        """Load file tree tu workspace, su dung settings cho excluded patterns"""
+        """Load file tree tu workspace"""
         try:
-            # Import settings
             from views.settings_view import get_excluded_patterns, get_use_gitignore
             
             excluded_patterns = get_excluded_patterns()
@@ -183,6 +198,8 @@ class ContextView:
                 use_gitignore=use_gitignore
             )
             self.selected_paths.clear()
+            # Expand root by default
+            self.expanded_paths = {self.tree.path}
             self._render_tree()
             self._update_token_count()
         except Exception as e:
@@ -201,8 +218,26 @@ class ContextView:
         self.page.update()
     
     def _render_tree_item(self, item: TreeItem, depth: int):
-        """Render mot item trong tree voi Swiss Professional styling"""
-        indent = depth * 20
+        """Render mot item trong tree voi collapse/expand support"""
+        indent = depth * 16
+        is_expanded = item.path in self.expanded_paths
+        has_children = item.is_dir and len(item.children) > 0
+        
+        # Expand/Collapse arrow cho folders
+        if has_children:
+            expand_icon = ft.IconButton(
+                icon=ft.Icons.KEYBOARD_ARROW_DOWN if is_expanded else ft.Icons.KEYBOARD_ARROW_RIGHT,
+                icon_size=16,
+                icon_color=ThemeColors.TEXT_SECONDARY,
+                tooltip="Collapse" if is_expanded else "Expand",
+                width=24,
+                height=24,
+                padding=0,
+                on_click=lambda e, p=item.path: self._toggle_expand(p)
+            )
+        else:
+            # Placeholder cho alignment
+            expand_icon = ft.Container(width=24)
         
         # Checkbox cho selection
         checkbox = ft.Checkbox(
@@ -213,15 +248,20 @@ class ContextView:
                 self._on_item_toggled(e, p, is_dir, children)
         )
         
-        # Icon voi theme colors
-        icon = ft.Icons.FOLDER if item.is_dir else ft.Icons.INSERT_DRIVE_FILE
-        icon_color = ThemeColors.ICON_FOLDER if item.is_dir else ThemeColors.ICON_FILE
+        # Folder/File icon
+        if item.is_dir:
+            icon = ft.Icons.FOLDER_OPEN if is_expanded else ft.Icons.FOLDER
+            icon_color = ThemeColors.ICON_FOLDER
+        else:
+            icon = ft.Icons.INSERT_DRIVE_FILE
+            icon_color = ThemeColors.ICON_FILE
         
         # Text styling
         text_weight = ft.FontWeight.W_500 if item.is_dir else ft.FontWeight.NORMAL
         
         row = ft.Row([
             ft.Container(width=indent),
+            expand_icon,
             checkbox,
             ft.Icon(icon, size=18, color=icon_color),
             ft.Text(
@@ -230,24 +270,52 @@ class ContextView:
                 color=ThemeColors.TEXT_PRIMARY,
                 weight=text_weight
             )
-        ], spacing=6)
+        ], spacing=2)
         
         self.tree_container.controls.append(row)
         
-        # Render children
-        for child in item.children:
-            self._render_tree_item(child, depth + 1)
+        # Render children only if expanded
+        if item.is_dir and is_expanded:
+            for child in item.children:
+                self._render_tree_item(child, depth + 1)
+    
+    def _toggle_expand(self, path: str):
+        """Toggle expand/collapse cho folder"""
+        if path in self.expanded_paths:
+            self.expanded_paths.discard(path)
+        else:
+            self.expanded_paths.add(path)
+        self._render_tree()
+    
+    def _expand_all(self):
+        """Expand tat ca folders"""
+        if not self.tree:
+            return
+        self._collect_all_folder_paths(self.tree)
+        self._render_tree()
+    
+    def _collapse_all(self):
+        """Collapse tat ca folders (giu root expanded)"""
+        if not self.tree:
+            return
+        self.expanded_paths = {self.tree.path}
+        self._render_tree()
+    
+    def _collect_all_folder_paths(self, item: TreeItem):
+        """Thu thap tat ca folder paths de expand"""
+        if item.is_dir:
+            self.expanded_paths.add(item.path)
+            for child in item.children:
+                self._collect_all_folder_paths(child)
     
     def _on_item_toggled(self, e, path: str, is_dir: bool, children: list):
         """Xu ly khi user tick/untick mot item"""
         if e.control.value:
             self.selected_paths.add(path)
-            # Neu la folder, them tat ca children
             if is_dir:
                 self._select_all_children(children)
         else:
             self.selected_paths.discard(path)
-            # Neu la folder, bo chon tat ca children
             if is_dir:
                 self._deselect_all_children(children)
         
@@ -269,7 +337,7 @@ class ContextView:
                 self._deselect_all_children(child.children)
     
     def _update_token_count(self):
-        """Cap nhat hien thi token count"""
+        """Cap nhat token count"""
         total_tokens = 0
         
         for path_str in self.selected_paths:
@@ -293,19 +361,15 @@ class ContextView:
             return
         
         try:
-            # Generate prompt
             file_map = generate_file_map(self.tree, self.selected_paths)
             file_contents = generate_file_contents(self.selected_paths)
             instructions = self.instructions_field.value or ""
             
             prompt = generate_prompt(file_map, file_contents, instructions, include_xml)
             
-            # Copy to clipboard
             pyperclip.copy(prompt)
             
-            # Count tokens
             token_count = count_tokens(prompt)
-            
             suffix = " + OPX" if include_xml else ""
             self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
             

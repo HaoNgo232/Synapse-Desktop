@@ -11,6 +11,7 @@ from typing import Optional
 
 from views.context_view import ContextView
 from views.apply_view import ApplyView
+from views.settings_view import SettingsView
 
 
 class OverwriteApp:
@@ -65,10 +66,12 @@ class OverwriteApp:
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST
         )
         
-        # Tabs
+        # Views
         self.context_view = ContextView(self.page, self._get_workspace_path)
         self.apply_view = ApplyView(self.page, self._get_workspace_path)
+        self.settings_view = SettingsView(self.page, self._on_settings_changed)
         
+        # Tabs
         tabs = ft.Tabs(
             selected_index=0,
             animation_duration=300,
@@ -82,6 +85,11 @@ class OverwriteApp:
                     text="Apply",
                     icon=ft.Icons.PLAY_ARROW,
                     content=self.apply_view.build()
+                ),
+                ft.Tab(
+                    text="Settings",
+                    icon=ft.Icons.SETTINGS,
+                    content=self.settings_view.build()
                 ),
             ],
             expand=True
@@ -107,6 +115,11 @@ class OverwriteApp:
             # Notify views
             self.context_view.on_workspace_changed(self.workspace_path)
     
+    def _on_settings_changed(self):
+        """Xu ly khi settings thay doi - refresh file tree"""
+        if self.workspace_path:
+            self.context_view.on_workspace_changed(self.workspace_path)
+    
     def _get_workspace_path(self) -> Optional[Path]:
         """Getter cho workspace path"""
         return self.workspace_path
@@ -119,3 +132,4 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     ft.app(target=main)
+

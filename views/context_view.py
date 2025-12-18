@@ -130,13 +130,23 @@ class ContextView:
         )
     
     def on_workspace_changed(self, workspace_path: Path):
-        """Duoc goi khi user chon folder moi"""
+        """Duoc goi khi user chon folder moi hoac settings thay doi"""
         self._load_tree(workspace_path)
     
     def _load_tree(self, workspace_path: Path):
-        """Load file tree tu workspace"""
+        """Load file tree tu workspace, su dung settings cho excluded patterns"""
         try:
-            self.tree = scan_directory(workspace_path)
+            # Import settings
+            from views.settings_view import get_excluded_patterns, get_use_gitignore
+            
+            excluded_patterns = get_excluded_patterns()
+            use_gitignore = get_use_gitignore()
+            
+            self.tree = scan_directory(
+                workspace_path,
+                excluded_patterns=excluded_patterns,
+                use_gitignore=use_gitignore
+            )
             self.selected_paths.clear()
             self._render_tree()
             self._update_token_count()

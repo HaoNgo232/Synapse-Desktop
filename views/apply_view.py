@@ -5,8 +5,9 @@ Theme: Swiss Professional (Light)
 """
 
 import flet as ft
+import pyperclip
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from core.opx_parser import parse_opx_response
 from core.file_actions import apply_file_actions, ActionResult
@@ -16,6 +17,12 @@ from services.preview_analyzer import (
     format_change_summary,
     get_change_color,
     PreviewRow,
+    PreviewData,
+)
+from services.error_context import (
+    build_error_context_for_ai,
+    build_general_error_context,
+    ApplyRowResult,
 )
 
 
@@ -29,6 +36,12 @@ class ApplyView:
         self.opx_input: Optional[ft.TextField] = None
         self.results_column: Optional[ft.Column] = None
         self.status_text: Optional[ft.Text] = None
+        self.copy_error_btn: Optional[ft.OutlinedButton] = None
+
+        # State for error copying
+        self.last_preview_data: Optional[PreviewData] = None
+        self.last_apply_results: List[ApplyRowResult] = []
+        self.last_opx_text: str = ""
 
     def build(self) -> ft.Container:
         """Build UI cho Apply view voi Swiss Professional styling"""
@@ -48,6 +61,18 @@ class ApplyView:
 
         # Status
         self.status_text = ft.Text("", size=12)
+
+        # Copy Error button (hidden by default, shown when errors occur)
+        self.copy_error_btn = ft.OutlinedButton(
+            "Copy Error for AI",
+            icon=ft.Icons.CONTENT_COPY,
+            on_click=lambda _: self._copy_error_for_ai(),
+            visible=False,
+            style=ft.ButtonStyle(
+                color=ThemeColors.ERROR,
+                side=ft.BorderSide(1, ThemeColors.ERROR),
+            ),
+        )
 
         # Results table
         self.results_column = ft.Column(
@@ -118,11 +143,17 @@ class ApplyView:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text(
-                                    "Results",
-                                    weight=ft.FontWeight.W_600,
-                                    size=14,
-                                    color=ThemeColors.TEXT_PRIMARY,
+                                ft.Row(
+                                    [
+                                        ft.Text(
+                                            "Results",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Container(expand=True),
+                                        self.copy_error_btn,
+                                    ]
                                 ),
                                 ft.Divider(height=1, color=ThemeColors.BORDER),
                                 self.results_column,
@@ -204,8 +235,11 @@ class ApplyView:
         # Parse OPX
         parse_result = parse_opx_response(opx_text)
 
-        # Clear previous results
+        # Clear previous results and state
         self.results_column.controls.clear()
+        self.last_apply_results = []
+        self.last_opx_text = opx_text
+        self.copy_error_btn.visible = False
 
         # Show parse errors if any
         if parse_result.errors:
@@ -214,6 +248,8 @@ class ApplyView:
                     self._create_result_row("ERROR", "", error, success=False)
                 )
             self._show_status("Parse errors occurred", is_error=True)
+            # Show copy error button for parse errors
+            self.copy_error_btn.visible = True
             self.page.update()
             return
 
@@ -222,8 +258,27 @@ class ApplyView:
             self.page.update()
             return
 
+        # Analyze for preview data (used in error context)
+        self.last_preview_data = analyze_file_actions(
+            parse_result.file_actions, workspace
+        )
+
         # Apply actions
         results = apply_file_actions(parse_result.file_actions, workspace_roots)
+
+        # Convert to ApplyRowResult and save
+        self.last_apply_results = []
+        for i, result in enumerate(results):
+            self.last_apply_results.append(
+                ApplyRowResult(
+                    row_index=i,
+                    path=result.path,
+                    action=result.action,
+                    success=result.success,
+                    message=result.message,
+                    is_cascade_failure=False,  # TODO: detect cascade failures
+                )
+            )
 
         # Display results
         success_count = 0
@@ -240,12 +295,17 @@ class ApplyView:
                 success_count += 1
 
         total = len(results)
+        failed_count = total - success_count
+
         if success_count == total:
             self._show_status(f"Applied all {total} action(s) successfully!")
+            self.copy_error_btn.visible = False
         else:
             self._show_status(
                 f"Applied {success_count}/{total} action(s)", is_error=True
             )
+            # Show copy error button when there are failures
+            self.copy_error_btn.visible = True
 
         self.page.update()
 
@@ -414,3 +474,37 @@ class ApplyView:
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()
+
+    def _copy_error_for_ai(self):
+        """
+        Copy error context for AI de fix.
+        Bao gom context day du: errors, search patterns, instructions.
+        """
+        try:
+            # Build error context
+            if self.last_preview_data and self.last_apply_results:
+                # Full context from apply results
+                context = build_error_context_for_ai(
+                    preview_data=self.last_preview_data,
+                    row_results=self.last_apply_results,
+                    original_opx=self.last_opx_text,
+                    include_opx=True,
+                )
+            else:
+                # Fallback for parse errors or other errors
+                context = build_general_error_context(
+                    error_type="OPX Apply Error",
+                    error_message=self.status_text.value or "Unknown error",
+                    additional_context=f"Original OPX:\\n```xml\\n{self.last_opx_text}\\n```",
+                )
+
+            # Copy to clipboard
+            pyperclip.copy(context)
+
+            # Show success feedback
+            self._show_status(
+                "Error context copied! Paste to AI for fix.", is_error=False
+            )
+
+        except Exception as e:
+            self._show_status(f"Failed to copy: {e}", is_error=True)

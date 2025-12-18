@@ -1,7 +1,7 @@
 """
 Settings View - Tab de cau hinh excluded folders va gitignore
 
-Port tu: /home/hao/Desktop/labs/overwrite/src/webview-ui/src/components/settings-tab/
+Theme: Swiss Professional (Light)
 """
 
 import flet as ft
@@ -12,6 +12,22 @@ import json
 
 # Settings file path
 SETTINGS_FILE = Path.home() / ".overwrite-desktop" / "settings.json"
+
+
+# Theme colors
+class ThemeColors:
+    """Swiss Professional Light Theme Colors"""
+    PRIMARY = "#2563EB"
+    BG_PAGE = "#F8FAFC"
+    BG_SURFACE = "#FFFFFF"
+    BG_ELEVATED = "#F1F5F9"
+    TEXT_PRIMARY = "#0F172A"
+    TEXT_SECONDARY = "#475569"
+    TEXT_MUTED = "#94A3B8"
+    BORDER = "#E2E8F0"
+    SUCCESS = "#10B981"
+    WARNING = "#F59E0B"
+    ERROR = "#EF4444"
 
 
 def load_settings() -> dict:
@@ -91,25 +107,32 @@ class SettingsView:
         self.status_text: Optional[ft.Text] = None
     
     def build(self) -> ft.Container:
-        """Build UI cho Settings view"""
+        """Build UI cho Settings view voi Swiss Professional styling"""
         
         settings = load_settings()
         
         # Excluded folders textarea
         self.excluded_field = ft.TextField(
-            label="Excluded Folders (one per line, similar to .gitignore)",
+            label="Excluded Folders",
             multiline=True,
             min_lines=8,
-            max_lines=15,
+            max_lines=12,
             value=settings.get("excluded_folders", ""),
             hint_text="node_modules\ndist\nbuild\n__pycache__",
-            expand=True
+            expand=True,
+            border_color=ThemeColors.BORDER,
+            focused_border_color=ThemeColors.PRIMARY,
+            label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
+            text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=13),
         )
         
         # Respect .gitignore checkbox
         self.gitignore_checkbox = ft.Checkbox(
             label="Respect .gitignore",
             value=settings.get("use_gitignore", True),
+            active_color=ThemeColors.PRIMARY,
+            check_color="#FFFFFF",
+            label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
         )
         
         # Status
@@ -117,82 +140,102 @@ class SettingsView:
         
         return ft.Container(
             content=ft.Column([
-                ft.Text("Settings", size=20, weight=ft.FontWeight.BOLD),
-                ft.Divider(height=1),
-                ft.Container(height=10),
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.SETTINGS, color=ThemeColors.TEXT_PRIMARY, size=24),
+                    ft.Text("Settings", size=20, weight=ft.FontWeight.W_600, color=ThemeColors.TEXT_PRIMARY),
+                ], spacing=12),
+                ft.Divider(height=1, color=ThemeColors.BORDER),
+                ft.Container(height=16),
                 
-                # Gitignore toggle
+                # Main content in card
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("File Tree Options", weight=ft.FontWeight.BOLD, size=14),
-                        self.gitignore_checkbox,
-                        ft.Text(
-                            "When enabled, files matching patterns in .gitignore will be hidden from the file tree.",
-                            size=12,
-                            color=ft.Colors.GREY_400,
-                            italic=True
-                        )
-                    ]),
-                    padding=ft.padding.only(bottom=20)
-                ),
-                
-                # Excluded folders
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text("Excluded Folders", weight=ft.FontWeight.BOLD, size=14),
-                        ft.Text(
-                            "Enter folder patterns to exclude from the file tree. One pattern per line. "
-                            "Lines starting with # are comments.",
-                            size=12,
-                            color=ft.Colors.GREY_400,
-                            italic=True
+                        # Gitignore toggle section
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text("File Tree Options", weight=ft.FontWeight.W_600, size=14, color=ThemeColors.TEXT_PRIMARY),
+                                ft.Container(height=8),
+                                self.gitignore_checkbox,
+                                ft.Text(
+                                    "When enabled, files matching patterns in .gitignore will be hidden from the file tree.",
+                                    size=12,
+                                    color=ThemeColors.TEXT_SECONDARY,
+                                )
+                            ]),
+                            padding=ft.padding.only(bottom=24)
                         ),
-                        ft.Container(height=5),
-                        self.excluded_field,
-                    ]),
+                        
+                        # Excluded folders section
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text("Excluded Folders", weight=ft.FontWeight.W_600, size=14, color=ThemeColors.TEXT_PRIMARY),
+                                ft.Text(
+                                    "Enter folder patterns to exclude from the file tree. One pattern per line. Lines starting with # are comments.",
+                                    size=12,
+                                    color=ThemeColors.TEXT_SECONDARY,
+                                ),
+                                ft.Container(height=8),
+                                self.excluded_field,
+                            ]),
+                            expand=True
+                        ),
+                        
+                        ft.Container(height=16),
+                        
+                        # Action buttons
+                        ft.Row([
+                            ft.ElevatedButton(
+                                "Save Settings",
+                                icon=ft.Icons.SAVE,
+                                on_click=lambda _: self._save_settings(),
+                                style=ft.ButtonStyle(
+                                    color="#FFFFFF",
+                                    bgcolor=ThemeColors.SUCCESS,
+                                )
+                            ),
+                            ft.OutlinedButton(
+                                "Reset to Default",
+                                icon=ft.Icons.RESTORE,
+                                on_click=lambda _: self._reset_settings(),
+                                style=ft.ButtonStyle(
+                                    color=ThemeColors.TEXT_PRIMARY,
+                                    side=ft.BorderSide(1, ThemeColors.BORDER),
+                                )
+                            ),
+                            ft.Container(expand=True),
+                            self.status_text
+                        ], spacing=12),
+                    ], expand=True),
+                    padding=20,
+                    bgcolor=ThemeColors.BG_SURFACE,
+                    border=ft.border.all(1, ThemeColors.BORDER),
+                    border_radius=8,
                     expand=True
                 ),
                 
-                ft.Container(height=10),
-                
-                # Save button
-                ft.Row([
-                    ft.ElevatedButton(
-                        "Save Settings",
-                        icon=ft.Icons.SAVE,
-                        on_click=lambda _: self._save_settings(),
-                        bgcolor=ft.Colors.GREEN_700
-                    ),
-                    ft.ElevatedButton(
-                        "Reset to Default",
-                        icon=ft.Icons.RESTORE,
-                        on_click=lambda _: self._reset_settings()
-                    ),
-                    ft.Container(expand=True),
-                    self.status_text
-                ], spacing=10),
-                
-                ft.Container(height=20),
+                ft.Container(height=16),
                 
                 # Info section
                 ft.Container(
-                    content=ft.Column([
-                        ft.Text("Default Excluded", weight=ft.FontWeight.BOLD, size=14),
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.INFO_OUTLINE, color=ThemeColors.TEXT_SECONDARY, size=18),
                         ft.Text(
-                            "These folders are always excluded:\n"
-                            "• .git, .hg, .svn (Version control)\n",
+                            "Default excluded: .git, .hg, .svn (Version control folders are always excluded)",
                             size=12,
-                            color=ft.Colors.GREY_400
+                            color=ThemeColors.TEXT_SECONDARY
                         )
-                    ]),
-                    bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
-                    padding=15,
-                    border_radius=5
+                    ], spacing=8),
+                    bgcolor=ThemeColors.BG_ELEVATED,
+                    padding=12,
+                    border_radius=6,
+                    border=ft.border.all(1, ThemeColors.BORDER)
                 )
                 
             ], expand=True),
             padding=20,
-            expand=True
+            expand=True,
+            bgcolor=ThemeColors.BG_PAGE
         )
     
     def _save_settings(self):
@@ -225,5 +268,5 @@ class SettingsView:
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""
         self.status_text.value = message
-        self.status_text.color = ft.Colors.RED_400 if is_error else ft.Colors.GREEN_400
+        self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()

@@ -1,11 +1,7 @@
 """
 Context View - Tab de chon files va copy context
 
-Chua:
-- File tree voi checkbox selection
-- Token count display
-- User instructions input
-- Copy Context buttons
+Theme: Swiss Professional (Light)
 """
 
 import flet as ft
@@ -16,6 +12,24 @@ import pyperclip
 from core.file_utils import scan_directory, TreeItem, flatten_tree_files
 from core.token_counter import count_tokens_for_file, count_tokens
 from core.prompt_generator import generate_file_map, generate_file_contents, generate_prompt
+
+
+# Import theme colors from main
+class ThemeColors:
+    """Swiss Professional Light Theme Colors"""
+    PRIMARY = "#2563EB"
+    BG_PAGE = "#F8FAFC"
+    BG_SURFACE = "#FFFFFF"
+    BG_ELEVATED = "#F1F5F9"
+    TEXT_PRIMARY = "#0F172A"
+    TEXT_SECONDARY = "#475569"
+    TEXT_MUTED = "#94A3B8"
+    BORDER = "#E2E8F0"
+    SUCCESS = "#10B981"
+    WARNING = "#F59E0B"
+    ERROR = "#EF4444"
+    ICON_FOLDER = "#F59E0B"
+    ICON_FILE = "#64748B"
 
 
 class ContextView:
@@ -33,15 +47,16 @@ class ContextView:
         self.status_text: Optional[ft.Text] = None
     
     def build(self) -> ft.Container:
-        """Build UI cho Context view"""
+        """Build UI cho Context view voi Swiss Professional styling"""
         
         # Left panel: File tree
         self.tree_container = ft.Column(
             controls=[
                 ft.Text(
                     "Open a folder to see files",
-                    color=ft.Colors.GREY_500,
-                    italic=True
+                    color=ThemeColors.TEXT_MUTED,
+                    italic=True,
+                    size=14
                 )
             ],
             scroll=ft.ScrollMode.AUTO,
@@ -51,29 +66,33 @@ class ContextView:
         # Token count display
         self.token_count_text = ft.Text(
             "0 tokens",
-            size=14,
-            weight=ft.FontWeight.BOLD,
-            color=ft.Colors.BLUE_400
+            size=13,
+            weight=ft.FontWeight.W_600,
+            color=ThemeColors.PRIMARY
         )
         
         left_panel = ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Text("Files", weight=ft.FontWeight.BOLD),
+                    ft.Text("Files", weight=ft.FontWeight.W_600, size=14, color=ThemeColors.TEXT_PRIMARY),
                     ft.Container(expand=True),
                     self.token_count_text,
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,
+                        icon_size=18,
+                        icon_color=ThemeColors.TEXT_SECONDARY,
                         tooltip="Refresh",
                         on_click=lambda _: self._refresh_tree()
                     )
                 ]),
-                ft.Divider(height=1),
+                ft.Divider(height=1, color=ThemeColors.BORDER),
                 self.tree_container
             ], expand=True),
-            padding=10,
+            padding=16,
             expand=True,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST
+            bgcolor=ThemeColors.BG_SURFACE,
+            border=ft.border.all(1, ThemeColors.BORDER),
+            border_radius=8
         )
         
         # Right panel: Instructions and actions
@@ -83,50 +102,66 @@ class ContextView:
             min_lines=5,
             max_lines=10,
             hint_text="Enter your task instructions here...",
-            expand=True
+            expand=True,
+            border_color=ThemeColors.BORDER,
+            focused_border_color=ThemeColors.PRIMARY,
+            label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
+            text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY),
         )
         
         self.status_text = ft.Text(
             "",
-            color=ft.Colors.GREEN_400,
+            color=ThemeColors.SUCCESS,
             size=12
         )
         
         right_panel = ft.Container(
             content=ft.Column([
-                ft.Text("Instructions", weight=ft.FontWeight.BOLD),
+                ft.Text("Instructions", weight=ft.FontWeight.W_600, size=14, color=ThemeColors.TEXT_PRIMARY),
+                ft.Container(height=8),
                 self.instructions_field,
-                ft.Container(height=10),
+                ft.Container(height=16),
                 ft.Row([
-                    ft.ElevatedButton(
+                    ft.OutlinedButton(
                         "Copy Context",
                         icon=ft.Icons.CONTENT_COPY,
                         on_click=lambda _: self._copy_context(include_xml=False),
-                        expand=True
+                        expand=True,
+                        style=ft.ButtonStyle(
+                            color=ThemeColors.TEXT_PRIMARY,
+                            side=ft.BorderSide(1, ThemeColors.BORDER),
+                        )
                     ),
                     ft.ElevatedButton(
-                        "Copy Context + OPX",
+                        "Copy + OPX",
                         icon=ft.Icons.CODE,
                         on_click=lambda _: self._copy_context(include_xml=True),
                         expand=True,
-                        bgcolor=ft.Colors.BLUE_700
+                        style=ft.ButtonStyle(
+                            color="#FFFFFF",
+                            bgcolor=ThemeColors.PRIMARY,
+                        )
                     )
-                ], spacing=10),
-                ft.Container(height=5),
+                ], spacing=12),
+                ft.Container(height=8),
                 self.status_text
             ], expand=True),
-            padding=10,
-            expand=True
+            padding=16,
+            expand=True,
+            bgcolor=ThemeColors.BG_SURFACE,
+            border=ft.border.all(1, ThemeColors.BORDER),
+            border_radius=8
         )
         
         # Main layout: split view
         return ft.Container(
             content=ft.Row([
-                ft.Container(content=left_panel, expand=2),
-                ft.VerticalDivider(width=1, color=ft.Colors.GREY_800),
-                ft.Container(content=right_panel, expand=1)
+                ft.Container(content=left_panel, expand=2, margin=ft.margin.only(right=8)),
+                ft.Container(content=right_panel, expand=1, margin=ft.margin.only(left=8))
             ], expand=True),
-            expand=True
+            expand=True,
+            padding=16,
+            bgcolor=ThemeColors.BG_PAGE
         )
     
     def on_workspace_changed(self, workspace_path: Path):
@@ -152,7 +187,7 @@ class ContextView:
             self._update_token_count()
         except Exception as e:
             self.tree_container.controls = [
-                ft.Text(f"Error loading folder: {e}", color=ft.Colors.RED_400)
+                ft.Text(f"Error loading folder: {e}", color=ThemeColors.ERROR)
             ]
             self.page.update()
     
@@ -166,26 +201,36 @@ class ContextView:
         self.page.update()
     
     def _render_tree_item(self, item: TreeItem, depth: int):
-        """Render mot item trong tree"""
+        """Render mot item trong tree voi Swiss Professional styling"""
         indent = depth * 20
         
         # Checkbox cho selection
         checkbox = ft.Checkbox(
             value=item.path in self.selected_paths,
+            active_color=ThemeColors.PRIMARY,
+            check_color="#FFFFFF",
             on_change=lambda e, p=item.path, is_dir=item.is_dir, children=item.children: 
                 self._on_item_toggled(e, p, is_dir, children)
         )
         
-        # Icon
+        # Icon voi theme colors
         icon = ft.Icons.FOLDER if item.is_dir else ft.Icons.INSERT_DRIVE_FILE
-        icon_color = ft.Colors.YELLOW_700 if item.is_dir else ft.Colors.GREY_400
+        icon_color = ThemeColors.ICON_FOLDER if item.is_dir else ThemeColors.ICON_FILE
+        
+        # Text styling
+        text_weight = ft.FontWeight.W_500 if item.is_dir else ft.FontWeight.NORMAL
         
         row = ft.Row([
             ft.Container(width=indent),
             checkbox,
             ft.Icon(icon, size=18, color=icon_color),
-            ft.Text(item.label, size=13)
-        ], spacing=5)
+            ft.Text(
+                item.label, 
+                size=13, 
+                color=ThemeColors.TEXT_PRIMARY,
+                weight=text_weight
+            )
+        ], spacing=6)
         
         self.tree_container.controls.append(row)
         
@@ -261,7 +306,7 @@ class ContextView:
             # Count tokens
             token_count = count_tokens(prompt)
             
-            suffix = " + OPX Instructions" if include_xml else ""
+            suffix = " + OPX" if include_xml else ""
             self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
             
         except Exception as e:
@@ -270,5 +315,5 @@ class ContextView:
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""
         self.status_text.value = message
-        self.status_text.color = ft.Colors.RED_400 if is_error else ft.Colors.GREEN_400
+        self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()

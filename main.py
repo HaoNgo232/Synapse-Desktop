@@ -38,7 +38,7 @@ class OverwriteApp:
         self.page.window.min_width = 800
         self.page.window.min_height = 600
         self.page.window.width = 1500
-        self.page.window.height = 950
+        self.page.window.height = 900
 
         # Build UI
         self._build_ui()

@@ -15,6 +15,7 @@ from views.context_view import ContextView
 from views.apply_view import ApplyView
 from views.settings_view import SettingsView
 from views.history_view import HistoryView
+from views.logs_view import LogsView
 from core.theme import ThemeColors
 from services.recent_folders import (
     load_recent_folders,
@@ -151,6 +152,7 @@ class OverwriteApp:
         self.apply_view = ApplyView(self.page, self._get_workspace_path)
         self.settings_view = SettingsView(self.page, self._on_settings_changed)
         self.history_view = HistoryView(self.page, self._on_reapply_from_history)
+        self.logs_view = LogsView(self.page)
 
         # Tabs voi Swiss styling
         self.tabs = ft.Tabs(
@@ -177,6 +179,11 @@ class OverwriteApp:
                     text="History",
                     icon=ft.Icons.HISTORY,
                     content=self.history_view.build(),
+                ),
+                ft.Tab(
+                    text="Logs",
+                    icon=ft.Icons.TERMINAL,
+                    content=self.logs_view.build(),
                 ),
                 ft.Tab(
                     text="Settings",
@@ -374,9 +381,11 @@ class OverwriteApp:
     #                 self.context_view.on_workspace_changed(self.workspace_path)
 
     def _on_tab_changed(self, e):
-        """Handle tab change - refresh History khi chọn"""
+        """Handle tab change - refresh History/Logs khi chọn"""
         if e.control.selected_index == 2:  # History tab
             self.history_view.on_view_activated()
+        elif e.control.selected_index == 3:  # Logs tab
+            self.logs_view.on_view_activated()
 
     def _on_reapply_from_history(self, opx_content: str):
         """Callback khi user muốn re-apply OPX từ History"""

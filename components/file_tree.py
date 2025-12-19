@@ -116,9 +116,19 @@ class FileTreeComponent:
         Args:
             tree: TreeItem root moi
             preserve_selection: Neu True, giu lai cac selected paths van ton tai trong tree moi
+                               va auto-select files moi trong cac folders da duoc chon
         """
         # Luu lai selected paths neu can preserve
         old_selected = self.selected_paths.copy() if preserve_selection else set()
+
+        # Tim cac folders da duoc chon (de auto-select files moi trong do)
+        old_selected_folders: Set[str] = set()
+        if preserve_selection:
+            for path in old_selected:
+                from pathlib import Path
+
+                if Path(path).is_dir():
+                    old_selected_folders.add(path)
 
         self.tree = tree
         self.expanded_paths = {tree.path}
@@ -126,9 +136,15 @@ class FileTreeComponent:
         self.matched_paths.clear()
 
         if preserve_selection:
-            # Chi giu lai cac paths van ton tai trong tree moi
+            # Lay tat ca paths trong tree moi
             valid_paths = self._get_all_paths_in_tree(tree)
+
+            # Giu lai cac paths van ton tai
             self.selected_paths = old_selected & valid_paths
+
+            # Auto-select files moi trong cac folders da duoc chon
+            for folder_path in old_selected_folders:
+                self._auto_select_children_in_folder(tree, folder_path)
         else:
             self.selected_paths.clear()
 
@@ -552,3 +568,38 @@ class FileTreeComponent:
         for child in item.children:
             paths.update(self._get_all_paths_in_tree(child))
         return paths
+
+    def _auto_select_children_in_folder(self, tree: TreeItem, folder_path: str):
+        """
+        Tim folder trong tree va auto-select tat ca children cua no.
+        Dung de auto-select files moi trong folder da duoc chon sau khi refresh.
+
+        Args:
+            tree: TreeItem root
+            folder_path: Path cua folder can tim
+        """
+        folder_item = self._find_item_by_path(tree, folder_path)
+        if folder_item and folder_item.is_dir:
+            # Select folder va tat ca children
+            self._select_all_children(folder_item.children)
+
+    def _find_item_by_path(
+        self, item: TreeItem, target_path: str
+    ) -> Optional[TreeItem]:
+        """
+        Tim TreeItem theo path trong tree.
+
+        Args:
+            item: TreeItem hien tai
+            target_path: Path can tim
+
+        Returns:
+            TreeItem neu tim thay, None neu khong
+        """
+        if item.path == target_path:
+            return item
+        for child in item.children:
+            found = self._find_item_by_path(child, target_path)
+            if found:
+                return found
+        return None

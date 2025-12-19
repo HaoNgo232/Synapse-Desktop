@@ -217,6 +217,9 @@ class FileTreeComponent:
 
     def _on_search_changed(self, e):
         """Xu ly khi search query thay doi"""
+        assert self.search_field is not None
+        assert self.match_count_text is not None
+
         self.search_query = (e.control.value or "").lower().strip()
 
         # Update clear button visibility
@@ -233,6 +236,9 @@ class FileTreeComponent:
 
     def _clear_search(self, e):
         """Clear search"""
+        assert self.search_field is not None
+        assert self.match_count_text is not None
+
         self.search_field.value = ""
         self.search_query = ""
         self.matched_paths.clear()
@@ -253,6 +259,7 @@ class FileTreeComponent:
         self._expand_matched_parents()
 
         # Update count
+        assert self.match_count_text is not None
         file_count = sum(1 for p in self.matched_paths if not Path(p).is_dir())
         self.match_count_text.value = f"{file_count} found"
 
@@ -304,6 +311,8 @@ class FileTreeComponent:
 
     def _render_tree(self):
         """Render tree vao UI"""
+        assert self.tree_container is not None
+
         if not self.tree:
             return
 
@@ -344,7 +353,7 @@ class FileTreeComponent:
                     width=24,
                     height=24,
                     padding=0,
-                    on_click=lambda e, p=item.path: self._toggle_expand(p),
+                    on_click=lambda e: self._toggle_expand(item.path),
                 )
             else:
                 expand_icon = ft.Container(width=24)
@@ -356,8 +365,8 @@ class FileTreeComponent:
             value=item.path in self.selected_paths,
             active_color=ThemeColors.PRIMARY,
             check_color="#FFFFFF",
-            on_change=lambda e, p=item.path, is_dir=item.is_dir, children=item.children: self._on_item_toggled(
-                e, p, is_dir, children
+            on_change=lambda e: self._on_item_toggled(
+                e, item.path, item.is_dir, item.children
             ),
         )
 
@@ -395,6 +404,7 @@ class FileTreeComponent:
             spacing=2,
         )
 
+        assert self.tree_container is not None
         self.tree_container.controls.append(row)
 
         # Render children if expanded
@@ -464,6 +474,7 @@ class FileTreeComponent:
         """
         if item.is_dir:
             # Folder: tinh tong tu children
+            assert self.tree is not None
             folder_tokens = self._token_service.get_folder_tokens(item.path, self.tree)
             if folder_tokens is None:
                 # Chua tinh xong - return empty

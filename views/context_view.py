@@ -233,6 +233,7 @@ class ContextView:
             )
 
             # Set tree to component
+            assert self.file_tree_component is not None
             self.file_tree_component.set_tree(self.tree)
             self._update_token_count()
 
@@ -280,6 +281,7 @@ class ContextView:
                 file_count += 1
 
         # Hien thi indicator khi dang filter
+        assert self.token_count_text is not None
         if self.file_tree_component.is_searching():
             self.token_count_text.value = f"{file_tokens:,} tokens (filtered)"
         else:
@@ -317,6 +319,7 @@ class ContextView:
         try:
             file_map = generate_file_map(self.tree, selected_paths)
             file_contents = generate_file_contents(selected_paths)
+            assert self.instructions_field is not None
             instructions = self.instructions_field.value or ""
 
             prompt = generate_prompt(file_map, file_contents, instructions, include_xml)
@@ -332,6 +335,7 @@ class ContextView:
 
     def _show_status(self, message: str, is_error: bool = False):
         """Show status message"""
+        assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()

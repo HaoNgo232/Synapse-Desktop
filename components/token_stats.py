@@ -161,8 +161,11 @@ class TokenStatsPanel:
 
     def _refresh_ui(self):
         """Refresh stats display"""
-        if not self.file_count_text:
-            return
+        assert self.file_count_text is not None
+        assert self.file_tokens_text is not None
+        assert self.instruction_tokens_text is not None
+        assert self.total_tokens_text is not None
+        assert self.total_xml_tokens_text is not None
 
         self.file_count_text.value = f"Selected files: {self.stats.file_count}"
         self.file_tokens_text.value = f"File tokens: {self.stats.file_tokens:,}"

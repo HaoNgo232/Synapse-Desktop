@@ -184,6 +184,10 @@ class ApplyView:
         Preview changes without applying.
         Hien thi diff stats (+lines/-lines) cho moi action.
         """
+        # Type assertions - dam bao cac controls da duoc khoi tao
+        assert self.opx_input is not None
+        assert self.results_column is not None
+
         opx_text = self.opx_input.value
         if not opx_text:
             self._show_status("Please paste OPX response first", is_error=True)
@@ -239,6 +243,11 @@ class ApplyView:
 
     def _apply_changes(self):
         """Apply changes to files"""
+        # Type assertions - dam bao cac controls da duoc khoi tao
+        assert self.opx_input is not None
+        assert self.results_column is not None
+        assert self.copy_error_btn is not None
+
         opx_text = self.opx_input.value
         if not opx_text:
             self._show_status("Please paste OPX response first", is_error=True)
@@ -453,7 +462,7 @@ class ApplyView:
                 icon_size=18,
                 icon_color=ThemeColors.TEXT_SECONDARY,
                 tooltip="Show Diff" if not is_expanded else "Hide Diff",
-                on_click=lambda e, idx=row_idx: self._toggle_diff_expand(idx),
+                on_click=lambda e: self._toggle_diff_expand(row_idx),
             )
 
         # Header row
@@ -510,8 +519,8 @@ class ApplyView:
             spacing=12,
         )
 
-        # Column content
-        column_content = [header_row]
+        # Column content - List of Controls (Row or Container)
+        column_content: list[ft.Control] = [header_row]
 
         # Diff viewer (neu expanded)
         if is_expanded and diff_lines:
@@ -556,6 +565,7 @@ class ApplyView:
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""
+        assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()
@@ -577,9 +587,12 @@ class ApplyView:
                 )
             else:
                 # Fallback for parse errors or other errors
+                error_msg = (
+                    self.status_text.value if self.status_text else "Unknown error"
+                )
                 context = build_general_error_context(
                     error_type="OPX Apply Error",
-                    error_message=self.status_text.value or "Unknown error",
+                    error_message=error_msg or "Unknown error",
                     additional_context=f"Original OPX:\\n```xml\\n{self.last_opx_text}\\n```",
                 )
 

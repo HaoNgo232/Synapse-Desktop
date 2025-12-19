@@ -265,6 +265,9 @@ class SettingsView:
 
     def _save_settings(self):
         """Save settings va notify"""
+        assert self.excluded_field is not None
+        assert self.gitignore_checkbox is not None
+
         settings = {
             "excluded_folders": self.excluded_field.value or "",
             "use_gitignore": self.gitignore_checkbox.value or False,
@@ -279,6 +282,9 @@ class SettingsView:
 
     def _reset_settings(self):
         """Reset ve default settings"""
+        assert self.excluded_field is not None
+        assert self.gitignore_checkbox is not None
+
         default = {
             "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache",
             "use_gitignore": True,
@@ -292,6 +298,7 @@ class SettingsView:
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""
+        assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()

@@ -65,25 +65,36 @@ class TokenStatsPanel:
         """Build token stats panel UI"""
 
         self.file_count_text = ft.Text(
-            "Selected files: 0", size=12, color=ThemeColors.TEXT_SECONDARY
+            "Selected files: 0",
+            size=12,
+            color=ThemeColors.TEXT_SECONDARY,
+            tooltip="Number of files selected for context",
         )
         self.file_tokens_text = ft.Text(
-            "File tokens: 0", size=12, color=ThemeColors.TEXT_SECONDARY
+            "File tokens: 0",
+            size=12,
+            color=ThemeColors.TEXT_SECONDARY,
+            tooltip="Total tokens from file contents",
         )
         self.instruction_tokens_text = ft.Text(
-            "Instruction tokens: 0", size=12, color=ThemeColors.TEXT_SECONDARY
+            "Instruction tokens: 0",
+            size=12,
+            color=ThemeColors.TEXT_SECONDARY,
+            tooltip="Tokens from your instruction text",
         )
         self.total_tokens_text = ft.Text(
             "Total (Copy): 0",
             size=12,
             weight=ft.FontWeight.W_500,
             color=ThemeColors.TEXT_PRIMARY,
+            tooltip="Total tokens when using Copy Context",
         )
         self.total_xml_tokens_text = ft.Text(
             "Total (+ OPX): 0",
             size=12,
             weight=ft.FontWeight.W_500,
             color=ThemeColors.PRIMARY,
+            tooltip="Total tokens when using Copy + OPX (includes OPX instructions)",
         )
 
         self.skipped_column = ft.Column(controls=[], spacing=4, visible=False)

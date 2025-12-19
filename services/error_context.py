@@ -12,10 +12,10 @@ Tao error context day du de AI co the hieu va fix ngay:
 
 from dataclasses import dataclass
 from typing import List, Optional
-import pyperclip
 
 from services.preview_analyzer import PreviewRow, PreviewData
 from core.file_actions import ActionResult
+from services.clipboard_utils import copy_to_clipboard
 
 
 @dataclass
@@ -339,8 +339,5 @@ def copy_error_to_clipboard(context: str) -> bool:
     Returns:
         True neu thanh cong, False neu that bai
     """
-    try:
-        pyperclip.copy(context)
-        return True
-    except Exception:
-        return False
+    success, _ = copy_to_clipboard(context)
+    return success

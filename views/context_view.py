@@ -7,9 +7,9 @@ Su dung FileTreeComponent tu components/file_tree.py
 import flet as ft
 from pathlib import Path
 from typing import Callable, Optional, Set
-import pyperclip
 
 from core.file_utils import scan_directory, TreeItem
+from services.clipboard_utils import copy_to_clipboard
 from core.token_counter import count_tokens_for_file, count_tokens
 from core.prompt_generator import (
     generate_file_map,
@@ -237,6 +237,10 @@ class ContextView:
             workspace_path: Path to workspace folder
             preserve_selection: Neu True, giu lai selection hien tai (cho Refresh)
         """
+        # Show loading state
+        self._show_status("Loading...", is_error=False)
+        self.page.update()
+
         try:
             from views.settings_view import get_excluded_patterns, get_use_gitignore
 
@@ -255,6 +259,9 @@ class ContextView:
                 self.tree, preserve_selection=preserve_selection
             )
             self._update_token_count()
+
+            # Clear loading status
+            self._show_status("")
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
@@ -343,11 +350,14 @@ class ContextView:
 
             prompt = generate_prompt(file_map, file_contents, instructions, include_xml)
 
-            pyperclip.copy(prompt)
+            success, message = copy_to_clipboard(prompt)
 
-            token_count = count_tokens(prompt)
-            suffix = " + OPX" if include_xml else ""
-            self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
+            if success:
+                token_count = count_tokens(prompt)
+                suffix = " + OPX" if include_xml else ""
+                self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
+            else:
+                self._show_status(message, is_error=True)
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
@@ -373,10 +383,13 @@ class ContextView:
 
             prompt = generate_tree_map_only(self.tree, selected_paths, instructions)
 
-            pyperclip.copy(prompt)
+            success, message = copy_to_clipboard(prompt)
 
-            token_count = count_tokens(prompt)
-            self._show_status(f"Tree map copied! ({token_count:,} tokens)")
+            if success:
+                token_count = count_tokens(prompt)
+                self._show_status(f"Tree map copied! ({token_count:,} tokens)")
+            else:
+                self._show_status(message, is_error=True)
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)

@@ -7,6 +7,7 @@ Tach ra tu context_view.py de tranh god content.
 import flet as ft
 import logging
 from pathlib import Path
+from threading import Timer
 from typing import Callable, Optional, Set
 
 from core.file_utils import TreeItem
@@ -47,6 +48,10 @@ class FileTreeComponent:
         self.tree_container: Optional[ft.Column] = None
         self.search_field: Optional[ft.TextField] = None
         self.match_count_text: Optional[ft.Text] = None
+
+        # Debounce timer for search
+        self._search_timer: Optional[Timer] = None
+        self._search_debounce_ms: float = 150  # 150ms debounce
 
     def build(self) -> ft.Container:
         """Build file tree component UI"""
@@ -248,15 +253,31 @@ class FileTreeComponent:
     # =========================================================================
 
     def _on_search_changed(self, e):
-        """Xu ly khi search query thay doi"""
+        """Xu ly khi search query thay doi voi debounce"""
         assert self.search_field is not None
         assert self.match_count_text is not None
 
         self.search_query = (e.control.value or "").lower().strip()
 
-        # Update clear button visibility
+        # Update clear button visibility immediately
         if self.search_field.suffix:
             self.search_field.suffix.visible = bool(self.search_query)
+            self.page.update()
+
+        # Cancel previous timer if exists
+        if self._search_timer is not None:
+            self._search_timer.cancel()
+
+        # Debounce search execution
+        self._search_timer = Timer(
+            self._search_debounce_ms / 1000.0,
+            self._execute_search
+        )
+        self._search_timer.start()
+
+    def _execute_search(self):
+        """Execute search after debounce delay"""
+        assert self.match_count_text is not None
 
         if self.search_query:
             self._perform_search()

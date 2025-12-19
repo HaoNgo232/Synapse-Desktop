@@ -5,11 +5,11 @@ Theme: Swiss Professional (Light)
 """
 
 import flet as ft
-import pyperclip
 from pathlib import Path
 from typing import Callable, Optional, List
 
 from core.opx_parser import parse_opx_response
+from services.clipboard_utils import copy_to_clipboard
 from core.file_actions import apply_file_actions, ActionResult
 from core.theme import ThemeColors
 from services.preview_analyzer import (
@@ -596,13 +596,15 @@ class ApplyView:
                     additional_context=f"Original OPX:\\n```xml\\n{self.last_opx_text}\\n```",
                 )
 
-            # Copy to clipboard
-            pyperclip.copy(context)
+            # Copy to clipboard with fallback handling
+            success, message = copy_to_clipboard(context)
 
-            # Show success feedback
-            self._show_status(
-                "Error context copied! Paste to AI for fix.", is_error=False
-            )
+            if success:
+                self._show_status(
+                    "Error context copied! Paste to AI for fix.", is_error=False
+                )
+            else:
+                self._show_status(f"Failed to copy: {message}", is_error=True)
 
         except Exception as e:
             self._show_status(f"Failed to copy: {e}", is_error=True)

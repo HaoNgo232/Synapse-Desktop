@@ -345,8 +345,17 @@ class OverwriteApp:
         save_session_state(state)
 
     def _on_app_close(self, e):
-        """Xử lý khi đóng app - lưu session"""
+        """Xử lý khi đóng app - lưu session và cleanup"""
         self._save_session()
+        
+        # Cleanup file tree resources
+        if hasattr(self, 'context_view') and self.context_view:
+            self.context_view.cleanup()
+        
+        # Flush and cleanup logs
+        from core.logging_config import flush_logs, cleanup_old_logs
+        flush_logs()
+        cleanup_old_logs(max_age_days=7)
 
     # def _on_drop(self, e: ft.DropEvent):
     #     """Handle drag and drop of folders"""

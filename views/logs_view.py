@@ -133,6 +133,19 @@ class LogsView:
                             [
                                 self.filter_dropdown,
                                 self.auto_scroll_checkbox,
+                                ft.Checkbox(
+                                    label="Debug Mode",
+                                    value=False,
+                                    active_color=ThemeColors.WARNING,
+                                    check_color="#FFFFFF",
+                                    label_style=ft.TextStyle(
+                                        color=ThemeColors.TEXT_SECONDARY, size=12
+                                    ),
+                                    on_change=lambda e: self._toggle_debug_mode(
+                                        e.control.value
+                                    ),
+                                    tooltip="Enable verbose DEBUG logging (restart may be needed)",
+                                ),
                                 ft.Container(expand=True),
                                 ft.OutlinedButton(
                                     "Load Logs",
@@ -457,6 +470,17 @@ class LogsView:
         self.log_count_text.value = "0 logs"
         self._show_status("Display cleared")
         self.page.update()
+
+    def _toggle_debug_mode(self, enabled: bool):
+        """Toggle debug logging mode"""
+        from core.logging_config import set_debug_mode
+
+        set_debug_mode(enabled)
+
+        if enabled:
+            self._show_status("Debug mode enabled - verbose logging active")
+        else:
+            self._show_status("Debug mode disabled - normal logging")
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hiển thị status message"""

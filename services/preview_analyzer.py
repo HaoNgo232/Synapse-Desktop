@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Optional, List
 
 from core.opx_parser import FileAction, ChangeBlock
+from components.diff_viewer import (
+    DiffLine,
+    generate_diff_lines,
+    generate_create_diff_lines,
+    generate_delete_diff_lines,
+)
 
 
 @dataclass
@@ -35,6 +41,7 @@ class PreviewRow:
     has_error: bool = False
     error_message: Optional[str] = None
     change_blocks: List[dict] = field(default_factory=list)
+    diff_lines: List[DiffLine] = field(default_factory=list)  # Visual diff lines
 
 
 @dataclass
@@ -287,3 +294,69 @@ def get_change_color(changes: ChangeSummary) -> str:
         return ThemeColors.ERROR  # Red - net remove
     else:
         return ThemeColors.PRIMARY  # Blue - neutral
+
+
+def generate_preview_diff_lines(
+    file_action: FileAction, workspace_root: Optional[Path] = None
+) -> List[DiffLine]:
+    """
+    Tao diff lines cho mot file action de hien thi visual diff.
+
+    Args:
+        file_action: FileAction tu OPX parser
+        workspace_root: Optional workspace root de resolve paths
+
+    Returns:
+        List DiffLine de truyen vao DiffViewer
+    """
+    action = file_action.action
+    file_path = _resolve_path(file_action.path, workspace_root)
+
+    # Lay noi dung file cu (neu file ton tai)
+    old_content = ""
+    if file_path and file_path.exists():
+        try:
+            old_content = file_path.read_text(encoding="utf-8")
+        except Exception:
+            pass
+
+    # Lay noi dung moi tu changes
+    new_content = ""
+    if file_action.changes:
+        for change in file_action.changes:
+            if change.content:
+                new_content += change.content
+
+    # Xu ly tung loai action
+    if action == "create":
+        # File moi - tat ca la dong duoc them
+        return generate_create_diff_lines(new_content, file_action.path)
+
+    elif action == "delete":
+        # Xoa file - tat ca la dong bi xoa
+        return generate_delete_diff_lines(old_content, file_action.path)
+
+    elif action == "rewrite":
+        # Rewrite - diff giua old va new
+        return generate_diff_lines(old_content, new_content, file_action.path)
+
+    elif action == "modify":
+        # Modify (patch) - can simulate file sau khi apply
+        # Thay search patterns bang new content
+        modified_content = old_content
+        if file_action.changes:
+            for change in file_action.changes:
+                if change.search and change.content:
+                    # Tim va thay the
+                    modified_content = modified_content.replace(
+                        change.search,
+                        change.content,
+                        1,  # Chi thay the lan dau tien (tuong tu occurrence=first)
+                    )
+        return generate_diff_lines(old_content, modified_content, file_action.path)
+
+    elif action == "rename":
+        # Rename - khong co diff noi dung
+        return []
+
+    return []

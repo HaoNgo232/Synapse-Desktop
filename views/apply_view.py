@@ -18,7 +18,9 @@ from services.preview_analyzer import (
     get_change_color,
     PreviewRow,
     PreviewData,
+    generate_preview_diff_lines,
 )
+from components.diff_viewer import DiffViewer
 from services.error_context import (
     build_error_context_for_ai,
     build_general_error_context,
@@ -42,6 +44,9 @@ class ApplyView:
         self.last_preview_data: Optional[PreviewData] = None
         self.last_apply_results: List[ApplyRowResult] = []
         self.last_opx_text: str = ""
+
+        # State for diff expansion
+        self.expanded_diffs: set = set()  # Set of row indices that are expanded
 
     def build(self) -> ft.Container:
         """Build UI cho Apply view voi Swiss Professional styling"""
@@ -208,8 +213,18 @@ class ApplyView:
             )
 
         # Show parsed actions with diff stats
-        for row in preview_data.rows:
-            self.results_column.controls.append(self._create_preview_row(row))
+        for idx, row in enumerate(preview_data.rows):
+            self.results_column.controls.append(
+                self._create_preview_row(
+                    row,
+                    idx,
+                    (
+                        result.file_actions[idx]
+                        if idx < len(result.file_actions)
+                        else None
+                    ),
+                )
+            )
 
         if preview_data.rows:
             total_added = sum(r.changes.added for r in preview_data.rows)
@@ -382,10 +397,17 @@ class ApplyView:
             margin=ft.margin.only(bottom=8),
         )
 
-    def _create_preview_row(self, row: PreviewRow) -> ft.Container:
+    def _create_preview_row(
+        self, row: PreviewRow, row_idx: int = 0, file_action=None
+    ) -> ft.Container:
         """
-        Tao mot preview row voi diff stats (+lines/-lines).
+        Tao mot preview row voi diff stats (+lines/-lines) va expandable visual diff.
         Hien thi chi tiet thay doi truoc khi apply.
+
+        Args:
+            row: PreviewRow data
+            row_idx: Index cua row (dung de track expand state)
+            file_action: FileAction goc (dung de generate diff lines)
         """
         # Action badge color
         action_colors = {
@@ -411,56 +433,104 @@ class ApplyView:
             )
             row_bg = ThemeColors.BG_ELEVATED
 
-        return ft.Container(
-            content=ft.Row(
-                [
-                    status_icon,
-                    # Action badge
-                    ft.Container(
-                        content=ft.Text(
-                            row.action.upper(),
-                            size=11,
-                            weight=ft.FontWeight.W_600,
-                            color="#FFFFFF",
-                        ),
-                        bgcolor=badge_color,
-                        padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                        border_radius=4,
-                    ),
-                    # File path
-                    ft.Text(
-                        row.path,
-                        size=12,
-                        weight=ft.FontWeight.W_500,
-                        color=ThemeColors.TEXT_PRIMARY,
-                        expand=True,
-                    ),
-                    # Diff stats badge (+X / -Y)
-                    ft.Container(
-                        content=ft.Text(
-                            diff_text,
-                            size=11,
-                            weight=ft.FontWeight.W_600,
-                            color=diff_color,
-                        ),
-                        bgcolor=ThemeColors.BG_ELEVATED,
-                        padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                        border_radius=4,
-                        border=ft.border.all(1, ThemeColors.BORDER),
-                    ),
-                    # Description
-                    ft.Text(
-                        (
-                            row.description[:40] + "..."
-                            if len(row.description) > 40
-                            else row.description
-                        ),
+        # Generate diff lines neu chua co
+        workspace = self.get_workspace()
+        diff_lines = []
+        if file_action and row.action != "rename":
+            try:
+                diff_lines = generate_preview_diff_lines(file_action, workspace)
+            except Exception:
+                pass
+
+        # Check expand state
+        is_expanded = row_idx in self.expanded_diffs
+
+        # Show diff button (chi hien thi neu co diff lines)
+        show_diff_btn = None
+        if diff_lines:
+            show_diff_btn = ft.IconButton(
+                icon=ft.Icons.EXPAND_MORE if not is_expanded else ft.Icons.EXPAND_LESS,
+                icon_size=18,
+                icon_color=ThemeColors.TEXT_SECONDARY,
+                tooltip="Show Diff" if not is_expanded else "Hide Diff",
+                on_click=lambda e, idx=row_idx: self._toggle_diff_expand(idx),
+            )
+
+        # Header row
+        header_row = ft.Row(
+            [
+                status_icon,
+                # Action badge
+                ft.Container(
+                    content=ft.Text(
+                        row.action.upper(),
                         size=11,
-                        color=ThemeColors.TEXT_SECONDARY,
-                        width=200,
+                        weight=ft.FontWeight.W_600,
+                        color="#FFFFFF",
                     ),
-                ],
-                spacing=12,
+                    bgcolor=badge_color,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=3),
+                    border_radius=4,
+                ),
+                # File path
+                ft.Text(
+                    row.path,
+                    size=12,
+                    weight=ft.FontWeight.W_500,
+                    color=ThemeColors.TEXT_PRIMARY,
+                    expand=True,
+                ),
+                # Diff stats badge (+X / -Y)
+                ft.Container(
+                    content=ft.Text(
+                        diff_text,
+                        size=11,
+                        weight=ft.FontWeight.W_600,
+                        color=diff_color,
+                    ),
+                    bgcolor=ThemeColors.BG_ELEVATED,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=3),
+                    border_radius=4,
+                    border=ft.border.all(1, ThemeColors.BORDER),
+                ),
+                # Description
+                ft.Text(
+                    (
+                        row.description[:40] + "..."
+                        if len(row.description) > 40
+                        else row.description
+                    ),
+                    size=11,
+                    color=ThemeColors.TEXT_SECONDARY,
+                    width=180,
+                ),
+                # Show diff button
+                show_diff_btn if show_diff_btn else ft.Container(width=0),
+            ],
+            spacing=12,
+        )
+
+        # Column content
+        column_content = [header_row]
+
+        # Diff viewer (neu expanded)
+        if is_expanded and diff_lines:
+            diff_viewer = DiffViewer(
+                diff_lines=diff_lines,
+                max_height=250,
+                show_line_numbers=True,
+            )
+            column_content.append(
+                ft.Container(
+                    content=diff_viewer,
+                    margin=ft.margin.only(top=8),
+                )
+            )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=column_content,
+                spacing=0,
             ),
             padding=12,
             bgcolor=row_bg,
@@ -468,6 +538,21 @@ class ApplyView:
             border_radius=6,
             margin=ft.margin.only(bottom=8),
         )
+
+    def _toggle_diff_expand(self, row_idx: int):
+        """
+        Toggle expand/collapse cua diff viewer cho row.
+
+        Args:
+            row_idx: Index cua row
+        """
+        if row_idx in self.expanded_diffs:
+            self.expanded_diffs.discard(row_idx)
+        else:
+            self.expanded_diffs.add(row_idx)
+
+        # Re-render preview
+        self._preview_changes()
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""

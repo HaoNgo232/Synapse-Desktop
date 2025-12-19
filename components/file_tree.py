@@ -60,6 +60,13 @@ class FileTreeComponent:
             self._search_timer = None
         self._token_service.clear_cache()
 
+    def set_loading(self, is_loading: bool):
+        """Set loading state của file tree"""
+        if self.loading_indicator:
+            self.loading_indicator.visible = is_loading
+            if self.page:
+                self.page.update()
+
     def build(self) -> ft.Container:
         """Build file tree component UI"""
 
@@ -88,6 +95,15 @@ class FileTreeComponent:
 
         self.match_count_text = ft.Text("", size=11, color=ThemeColors.TEXT_SECONDARY)
 
+        # Loading indicator
+        self.loading_indicator = ft.ProgressRing(
+            width=20,
+            height=20,
+            stroke_width=2,
+            color=ThemeColors.PRIMARY,
+            visible=False,
+        )
+
         # Tree container
         self.tree_container = ft.Column(
             controls=[
@@ -111,6 +127,7 @@ class FileTreeComponent:
                             [
                                 ft.Container(content=self.search_field, expand=True),
                                 self.match_count_text,
+                                self.loading_indicator,
                             ],
                             spacing=8,
                         ),

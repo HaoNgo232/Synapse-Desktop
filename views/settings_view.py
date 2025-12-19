@@ -10,6 +10,7 @@ from typing import Callable, Optional
 import json
 
 from core.theme import ThemeColors
+from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 
 
 # Settings file path
@@ -218,10 +219,35 @@ class SettingsView:
                                                 ),
                                             ),
                                         ),
+                                        ft.Container(width=16),
+                                        ft.OutlinedButton(
+                                            "Export",
+                                            icon=ft.Icons.DOWNLOAD,
+                                            on_click=lambda _: self._export_settings(),
+                                            tooltip="Copy settings to clipboard",
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.BORDER
+                                                ),
+                                            ),
+                                        ),
+                                        ft.OutlinedButton(
+                                            "Import",
+                                            icon=ft.Icons.UPLOAD,
+                                            on_click=lambda _: self._import_settings(),
+                                            tooltip="Import settings from clipboard",
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.BORDER
+                                                ),
+                                            ),
+                                        ),
                                         ft.Container(expand=True),
                                         self.status_text,
                                     ],
-                                    spacing=12,
+                                    spacing=8,
                                 ),
                             ],
                             expand=True,
@@ -295,6 +321,53 @@ class SettingsView:
         self.page.update()
 
         self._show_status("Reset to defaults (not saved yet)", is_error=False)
+
+    def _export_settings(self):
+        """Export settings to clipboard as JSON"""
+        assert self.excluded_field is not None
+        assert self.gitignore_checkbox is not None
+        
+        settings = {
+            "excluded_folders": self.excluded_field.value or "",
+            "use_gitignore": self.gitignore_checkbox.value or False,
+            "export_version": "1.0",
+        }
+        
+        settings_json = json.dumps(settings, indent=2, ensure_ascii=False)
+        success, message = copy_to_clipboard(settings_json)
+        
+        if success:
+            self._show_status("Settings exported to clipboard!")
+        else:
+            self._show_status(f"Export failed: {message}", is_error=True)
+
+    def _import_settings(self):
+        """Import settings from clipboard JSON"""
+        success, clipboard_text = get_clipboard_text()
+        
+        if not success or not clipboard_text:
+            self._show_status("Clipboard is empty", is_error=True)
+            return
+        
+        try:
+            imported = json.loads(clipboard_text)
+            
+            # Validate structure
+            if "excluded_folders" not in imported:
+                self._show_status("Invalid settings format", is_error=True)
+                return
+            
+            assert self.excluded_field is not None
+            assert self.gitignore_checkbox is not None
+            
+            self.excluded_field.value = imported.get("excluded_folders", "")
+            self.gitignore_checkbox.value = imported.get("use_gitignore", True)
+            
+            self.page.update()
+            self._show_status("Settings imported! Click Save to apply.")
+            
+        except json.JSONDecodeError:
+            self._show_status("Invalid JSON in clipboard", is_error=True)
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""

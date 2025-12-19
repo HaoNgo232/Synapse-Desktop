@@ -26,6 +26,7 @@ from services.error_context import (
     build_general_error_context,
     ApplyRowResult,
 )
+from services.clipboard_utils import get_clipboard_text
 
 
 class ApplyView:
@@ -112,6 +113,18 @@ class ApplyView:
                                 ft.Row(
                                     [
                                         ft.OutlinedButton(
+                                            "Paste",
+                                            icon=ft.Icons.CONTENT_PASTE,
+                                            on_click=lambda _: self._paste_from_clipboard(),
+                                            tooltip="Paste OPX from clipboard",
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.BORDER
+                                                ),
+                                            ),
+                                        ),
+                                        ft.OutlinedButton(
                                             "Preview",
                                             icon=ft.Icons.VISIBILITY,
                                             on_click=lambda _: self._preview_changes(),
@@ -157,8 +170,20 @@ class ApplyView:
                                             color=ThemeColors.TEXT_PRIMARY,
                                         ),
                                         ft.Container(expand=True),
+                                        ft.OutlinedButton(
+                                            "Clear",
+                                            icon=ft.Icons.CLEAR_ALL,
+                                            on_click=lambda _: self._clear_results(),
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.BORDER
+                                                ),
+                                            ),
+                                        ),
                                         self.copy_error_btn,
-                                    ]
+                                    ],
+                                    spacing=8,
                                 ),
                                 ft.Divider(height=1, color=ThemeColors.BORDER),
                                 self.results_column,
@@ -647,6 +672,44 @@ class ApplyView:
 
         # Re-render preview
         self._preview_changes()
+
+    def _clear_results(self):
+        """Clear tất cả results và reset input"""
+        assert self.results_column is not None
+        assert self.opx_input is not None
+        assert self.copy_error_btn is not None
+        
+        self.results_column.controls.clear()
+        self.results_column.controls.append(
+            ft.Text(
+                "Results will appear here after Preview or Apply",
+                color=ThemeColors.TEXT_MUTED,
+                italic=True,
+                size=14,
+            )
+        )
+        
+        self.opx_input.value = ""
+        self.copy_error_btn.visible = False
+        self.expanded_diffs.clear()
+        self.last_preview_data = None
+        self.last_apply_results = []
+        self.last_opx_text = ""
+        
+        self._show_status("")
+        self.page.update()
+
+    def _paste_from_clipboard(self):
+        """Paste OPX content từ clipboard vào input field"""
+        success, result = get_clipboard_text()
+        
+        if success and result:
+            assert self.opx_input is not None
+            self.opx_input.value = result
+            self.page.update()
+            self._show_status("Pasted from clipboard")
+        else:
+            self._show_status(result or "Clipboard is empty", is_error=True)
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""

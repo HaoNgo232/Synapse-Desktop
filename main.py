@@ -15,6 +15,11 @@ from views.context_view import ContextView
 from views.apply_view import ApplyView
 from views.settings_view import SettingsView
 from core.theme import ThemeColors
+from services.recent_folders import (
+    load_recent_folders,
+    add_recent_folder,
+    get_folder_display_name,
+)
 
 
 class OverwriteApp:
@@ -93,11 +98,20 @@ class OverwriteApp:
         folder_picker = ft.FilePicker(on_result=self._on_folder_picked)
         self.page.overlay.append(folder_picker)
 
+        # Recent folders dropdown
+        self.recent_folders_btn = ft.PopupMenuButton(
+            icon=ft.Icons.HISTORY,
+            icon_color=ThemeColors.TEXT_SECONDARY,
+            tooltip="Recent Folders",
+            items=self._build_recent_folders_menu(),
+        )
+
         header = ft.Container(
             content=ft.Row(
                 [
                     ft.Icon(ft.Icons.FOLDER_OPEN, color=ThemeColors.PRIMARY, size=20),
                     self.folder_path_text,
+                    self.recent_folders_btn,
                     ft.ElevatedButton(
                         "Open Folder",
                         icon=ft.Icons.FOLDER,
@@ -154,12 +168,65 @@ class OverwriteApp:
         # Layout
         self.page.add(ft.Column([header, tabs], spacing=0, expand=True))
 
+    def _build_recent_folders_menu(self) -> list:
+        """Build menu items cho recent folders dropdown"""
+        recent = load_recent_folders()
+
+        if not recent:
+            return [
+                ft.PopupMenuItem(
+                    text="No recent folders",
+                    disabled=True,
+                )
+            ]
+
+        items = []
+        for folder_path in recent:
+            display_name = get_folder_display_name(folder_path)
+            # Dùng IIFE pattern để capture folder_path tại thời điểm tạo
+            # Tránh lỗi late binding của closure trong loop
+            items.append(
+                ft.PopupMenuItem(
+                    text=display_name,
+                    on_click=(lambda p: lambda e: self._open_recent_folder(p))(
+                        folder_path
+                    ),
+                )
+            )
+
+        return items
+
+    def _open_recent_folder(self, folder_path: str):
+        """Mở folder từ recent list"""
+        path = Path(folder_path)
+        if path.exists() and path.is_dir():
+            self.workspace_path = path
+            self.folder_path_text.value = str(self.workspace_path)
+            self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
+
+            # Update recent list
+            add_recent_folder(folder_path)
+            self._refresh_recent_folders_menu()
+
+            self.page.update()
+            self.context_view.on_workspace_changed(self.workspace_path)
+
+    def _refresh_recent_folders_menu(self):
+        """Refresh recent folders menu"""
+        if hasattr(self, "recent_folders_btn"):
+            self.recent_folders_btn.items = self._build_recent_folders_menu()
+
     def _on_folder_picked(self, e: ft.FilePickerResultEvent):
         """Xu ly khi user chon folder"""
         if e.path:
             self.workspace_path = Path(e.path)
             self.folder_path_text.value = str(self.workspace_path)
             self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
+
+            # Save to recent folders
+            add_recent_folder(e.path)
+            self._refresh_recent_folders_menu()
+
             self.page.update()
 
             # Notify views
@@ -177,7 +244,7 @@ class OverwriteApp:
     def _on_keyboard_event(self, e: ft.KeyboardEvent):
         """
         Handle keyboard shortcuts.
-        
+
         Shortcuts:
         - Ctrl+Shift+C: Copy Context
         - Ctrl+Shift+O: Copy + OPX

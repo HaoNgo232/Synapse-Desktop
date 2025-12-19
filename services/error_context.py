@@ -287,8 +287,6 @@ def build_general_error_context(
         String context cho AI
     """
     sections = [
-        "# Error Context for AI",
-        "",
         f"## Error Type: {error_type}",
         "",
         f"**Error Message:**",

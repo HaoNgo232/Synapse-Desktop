@@ -27,6 +27,11 @@ from services.session_state import (
     save_session_state,
     load_session_state,
 )
+from services.memory_monitor import (
+    get_memory_monitor,
+    format_memory_display,
+    MemoryStats,
+)
 
 
 class OverwriteApp:
@@ -35,6 +40,11 @@ class OverwriteApp:
     def __init__(self, page: ft.Page):
         self.page = page
         self.workspace_path: Optional[Path] = None
+
+        # Memory monitor
+        self._memory_monitor = get_memory_monitor()
+        self._memory_monitor.on_update = self._on_memory_update
+        self._memory_text: Optional[ft.Text] = None
 
         # Apply Swiss Professional Light Theme
         self._apply_theme()
@@ -122,6 +132,14 @@ class OverwriteApp:
             items=self._build_recent_folders_menu(),
         )
 
+        # Memory display
+        self._memory_text = ft.Text(
+            "Mem: --",
+            size=11,
+            color=ThemeColors.TEXT_MUTED,
+            tooltip="Memory usage | Token cache | Files loaded",
+        )
+
         header = ft.Container(
             content=ft.Row(
                 [
@@ -139,6 +157,9 @@ class OverwriteApp:
                             dialog_title="Select Workspace Folder"
                         ),
                     ),
+                    ft.Container(width=20),  # Spacer
+                    ft.Icon(ft.Icons.MEMORY, size=14, color=ThemeColors.TEXT_MUTED),
+                    self._memory_text,
                 ],
                 spacing=12,
             ),
@@ -193,11 +214,14 @@ class OverwriteApp:
             ],
             expand=True,
         )
-        
+
         tabs = self.tabs
 
         # Layout
         self.page.add(ft.Column([header, tabs], spacing=0, expand=True))
+
+        # Start memory monitoring
+        self._memory_monitor.start()
 
     def _build_recent_folders_menu(self) -> list:
         """Build menu items cho recent folders dropdown"""
@@ -347,15 +371,48 @@ class OverwriteApp:
     def _on_app_close(self, e):
         """Xử lý khi đóng app - lưu session và cleanup"""
         self._save_session()
-        
+
+        # Stop memory monitor
+        self._memory_monitor.stop()
+
         # Cleanup file tree resources
-        if hasattr(self, 'context_view') and self.context_view:
+        if hasattr(self, "context_view") and self.context_view:
             self.context_view.cleanup()
-        
+
         # Flush and cleanup logs
         from core.logging_config import flush_logs, cleanup_old_logs
+
         flush_logs()
         cleanup_old_logs(max_age_days=7)
+
+    def _on_memory_update(self, stats: MemoryStats):
+        """
+        Callback khi memory monitor có update mới.
+        Cập nhật memory display trong header.
+
+        Args:
+            stats: MemoryStats object với thông tin memory usage
+        """
+        if not self._memory_text:
+            return
+
+        try:
+            # Update memory display text
+            display_text = format_memory_display(stats)
+            self._memory_text.value = display_text
+
+            # Change color based on warning level
+            if stats.warning and "Critical" in stats.warning:
+                self._memory_text.color = ThemeColors.ERROR
+            elif stats.warning:
+                self._memory_text.color = ThemeColors.WARNING
+            else:
+                self._memory_text.color = ThemeColors.TEXT_MUTED
+
+            # Update UI (safe call from background thread)
+            self.page.update()
+        except Exception:
+            pass  # Ignore errors during update
 
     # def _on_drop(self, e: ft.DropEvent):
     #     """Handle drag and drop of folders"""

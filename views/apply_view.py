@@ -11,6 +11,7 @@ from typing import Callable, Optional, List
 from core.opx_parser import parse_opx_response
 from services.clipboard_utils import copy_to_clipboard
 from core.file_actions import apply_file_actions, ActionResult
+from services.history_service import add_history_entry
 from core.theme import ThemeColors
 from services.preview_analyzer import (
     analyze_file_actions,
@@ -434,6 +435,23 @@ class ApplyView:
             )
             # Show copy error button when there are failures
             self.copy_error_btn.visible = True
+
+        # Save to history
+        workspace = self.get_workspace()
+        action_results_for_history = [
+            {
+                "action": r.action,
+                "path": r.path,
+                "success": r.success,
+                "message": r.message,
+            }
+            for r in results
+        ]
+        add_history_entry(
+            workspace_path=str(workspace) if workspace else "",
+            opx_content=opx_text,
+            action_results=action_results_for_history,
+        )
 
         self.page.update()
 

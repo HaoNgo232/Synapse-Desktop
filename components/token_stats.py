@@ -214,6 +214,13 @@ class TokenStatsPanel:
         if self.loading_indicator:
             self.loading_indicator.visible = is_loading
 
+    def reset(self):
+        """Reset all stats to zero"""
+        self.stats = TokenStats()
+        self.skipped_files = []
+        self._refresh_ui()
+        self._refresh_skipped_ui()
+
     def get_stats(self) -> TokenStats:
         """
         Get current token statistics.

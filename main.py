@@ -14,6 +14,7 @@ from typing import Optional
 from views.context_view import ContextView
 from views.apply_view import ApplyView
 from views.settings_view import SettingsView
+from views.history_view import HistoryView
 from core.theme import ThemeColors
 from services.recent_folders import (
     load_recent_folders,
@@ -149,9 +150,10 @@ class OverwriteApp:
         self.context_view = ContextView(self.page, self._get_workspace_path)
         self.apply_view = ApplyView(self.page, self._get_workspace_path)
         self.settings_view = SettingsView(self.page, self._on_settings_changed)
+        self.history_view = HistoryView(self.page, self._on_reapply_from_history)
 
         # Tabs voi Swiss styling
-        tabs = ft.Tabs(
+        self.tabs = ft.Tabs(
             selected_index=0,
             animation_duration=200,
             indicator_color=ThemeColors.PRIMARY,
@@ -159,6 +161,7 @@ class OverwriteApp:
             label_color=ThemeColors.TEXT_PRIMARY,
             unselected_label_color=ThemeColors.TEXT_SECONDARY,
             divider_color=ThemeColors.BORDER,
+            on_change=self._on_tab_changed,
             tabs=[
                 ft.Tab(
                     text="Context",
@@ -171,6 +174,11 @@ class OverwriteApp:
                     content=self.apply_view.build(),
                 ),
                 ft.Tab(
+                    text="History",
+                    icon=ft.Icons.HISTORY,
+                    content=self.history_view.build(),
+                ),
+                ft.Tab(
                     text="Settings",
                     icon=ft.Icons.SETTINGS,
                     content=self.settings_view.build(),
@@ -178,6 +186,8 @@ class OverwriteApp:
             ],
             expand=True,
         )
+        
+        tabs = self.tabs
 
         # Layout
         self.page.add(ft.Column([header, tabs], spacing=0, expand=True))
@@ -362,6 +372,20 @@ class OverwriteApp:
 
     #                 self.page.update()
     #                 self.context_view.on_workspace_changed(self.workspace_path)
+
+    def _on_tab_changed(self, e):
+        """Handle tab change - refresh History khi chọn"""
+        if e.control.selected_index == 2:  # History tab
+            self.history_view.on_view_activated()
+
+    def _on_reapply_from_history(self, opx_content: str):
+        """Callback khi user muốn re-apply OPX từ History"""
+        # Fill OPX vào Apply tab
+        if self.apply_view.opx_input:
+            self.apply_view.opx_input.value = opx_content
+        # Chuyển sang Apply tab
+        self.tabs.selected_index = 1
+        self.page.update()
 
     def _on_keyboard_event(self, e: ft.KeyboardEvent):
         """

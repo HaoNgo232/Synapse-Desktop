@@ -160,6 +160,13 @@ class OverwriteApp:
                     ft.Container(width=20),  # Spacer
                     ft.Icon(ft.Icons.MEMORY, size=14, color=ThemeColors.TEXT_MUTED),
                     self._memory_text,
+                    ft.IconButton(
+                        icon=ft.Icons.CLEANING_SERVICES,
+                        icon_size=16,
+                        icon_color=ThemeColors.TEXT_SECONDARY,
+                        tooltip="Clear cache & free memory",
+                        on_click=lambda _: self._clear_memory(),
+                    ),
                 ],
                 spacing=12,
             ),
@@ -413,6 +420,46 @@ class OverwriteApp:
             self.page.update()
         except Exception:
             pass  # Ignore errors during update
+
+    def _clear_memory(self):
+        """
+        Clear cache và giải phóng memory.
+
+        Thực hiện:
+        - Clear token cache từ FileTreeComponent
+        - Force Python garbage collection
+        - Cập nhật memory display
+        """
+        import gc
+
+        try:
+            # Clear token cache nếu có file tree component
+            if hasattr(self, "context_view") and self.context_view.file_tree_component:
+                token_service = self.context_view.file_tree_component._token_service
+                token_service.clear_cache()
+
+            # Force garbage collection
+            gc.collect()
+
+            # Update memory display ngay lập tức
+            stats = self._memory_monitor.get_current_stats()
+            if self._memory_text:
+                self._memory_text.value = format_memory_display(stats)
+                self._memory_text.color = (
+                    ThemeColors.SUCCESS
+                )  # Màu xanh để cho thấy đã clear
+
+            self.page.update()
+
+            # Log action
+            from core.logging_config import log_info
+
+            log_info(f"Memory cleared. Current usage: {stats.rss_mb:.0f}MB")
+
+        except Exception as e:
+            from core.logging_config import log_error
+
+            log_error(f"Error clearing memory: {e}")
 
     # def _on_drop(self, e: ft.DropEvent):
     #     """Handle drag and drop of folders"""

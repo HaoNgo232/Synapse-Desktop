@@ -782,6 +782,71 @@ class ApplyView:
             dialog.open = False
             self.page.update()
 
+        def rollback_last_batch(e):
+            """Restore files from the most recent backup batch (within 60s window)"""
+            workspace = self.get_workspace()
+            if not workspace:
+                self._show_status("No workspace selected", is_error=True)
+                return
+
+            if not backups:
+                return
+
+            from datetime import datetime
+
+            # Helper checks timestamp
+            def get_time(backup_path):
+                 parts = backup_path.name.rsplit(".", 2)
+                 if len(parts) >= 3:
+                     try:
+                         return datetime.strptime(parts[1], "%Y%m%d_%H%M%S")
+                     except ValueError:
+                         pass
+                 return None
+
+            # Sort backups by time desc
+            backup_data = []
+            for b in backups:
+                t = get_time(b)
+                if t:
+                    backup_data.append((b, t))
+            
+            # list_backups usually sorted, but ensure desc
+            backup_data.sort(key=lambda x: x[1], reverse=True)
+
+            if not backup_data:
+                self._show_status("No valid backups found", is_error=True)
+                return
+
+            # Identify latest batch (cluster of backups within 60s of the newest one)
+            latest_time = backup_data[0][1]
+            batch_backups = []
+            BATCH_THRESHOLD = 60.0 # seconds
+
+            for b, t in backup_data:
+                delta = (latest_time - t).total_seconds()
+                if delta <= BATCH_THRESHOLD:
+                    batch_backups.append(b)
+                else:
+                    break # Gap detected, end of batch
+
+            # Restore batch
+            restored_files = set()
+            count = 0
+            for backup in batch_backups:
+                parts = backup.name.rsplit(".", 2)
+                original_name = parts[0]
+                
+                if original_name not in restored_files:
+                    target = workspace / original_name
+                    if restore_backup(backup, target):
+                        count += 1
+                    restored_files.add(original_name)
+            
+            self._show_status(f"Undid changes for {count} files (Last Batch)")
+            dialog.open = False
+            self.page.update()
+
         # Build backup list
         backup_items = []
         for backup in backups[:20]:  # Show max 20
@@ -823,6 +888,12 @@ class ApplyView:
                 height=300,
             ),
             actions=[
+                ft.TextButton(
+                    "Undo Last Apply",
+                    on_click=rollback_last_batch,
+                    style=ft.ButtonStyle(color=ThemeColors.ERROR),
+                    tooltip="Revert all files from the most recent patch apply",
+                ),
                 ft.TextButton("Close", on_click=close_dialog),
             ],
             actions_alignment=ft.MainAxisAlignment.END,

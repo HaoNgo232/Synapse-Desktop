@@ -63,7 +63,7 @@ class FileTreeComponent:
                 timer.cancel()
             except Exception:
                 pass
-        
+
         # Stop token service
         self._token_service.stop()
         self._token_service.clear_cache()
@@ -268,7 +268,7 @@ class FileTreeComponent:
     def set_expanded_paths(self, paths: Set[str]):
         """
         Set expanded paths từ bên ngoài (e.g., restore session).
-        
+
         Args:
             paths: Set các folder paths cần expand
         """
@@ -307,8 +307,7 @@ class FileTreeComponent:
 
         # Debounce search execution
         self._search_timer = Timer(
-            self._search_debounce_ms / 1000.0,
-            self._execute_search
+            self._search_debounce_ms / 1000.0, self._execute_search
         )
         self._search_timer.start()
 
@@ -438,13 +437,13 @@ class FileTreeComponent:
             return
 
         self.tree_container.controls.clear()
-        
+
         # Track rendered count for performance
         self._rendered_count = 0
         self._max_render_items = 1000  # Limit for very large trees
-        
+
         self._render_tree_item(self.tree, 0)
-        
+
         # Add truncation notice if needed
         if self._rendered_count >= self._max_render_items:
             self.tree_container.controls.append(
@@ -455,16 +454,19 @@ class FileTreeComponent:
                     size=11,
                 )
             )
-        
+
         self.page.update()
 
     def _render_tree_item(self, item: TreeItem, depth: int):
         """Render mot item voi search highlighting"""
-        
+
         # Check render limit
-        if hasattr(self, '_rendered_count') and self._rendered_count >= self._max_render_items:
+        if (
+            hasattr(self, "_rendered_count")
+            and self._rendered_count >= self._max_render_items
+        ):
             return
-        
+
         # Neu dang search, chi hien thi matched items
         if self.search_query and item.path not in self.matched_paths:
             return
@@ -548,9 +550,9 @@ class FileTreeComponent:
 
         assert self.tree_container is not None
         self.tree_container.controls.append(row)
-        
+
         # Increment render count
-        if hasattr(self, '_rendered_count'):
+        if hasattr(self, "_rendered_count"):
             self._rendered_count += 1
 
         # Render children if expanded
@@ -640,8 +642,9 @@ class FileTreeComponent:
         return ft.Container(
             content=ft.Text(
                 token_text,
-                size=10,
-                color=ThemeColors.TEXT_MUTED,
+                size=11,
+                color=ThemeColors.SUCCESS,
+                weight=ft.FontWeight.W_500,
             ),
             margin=ft.margin.only(left=8),
         )

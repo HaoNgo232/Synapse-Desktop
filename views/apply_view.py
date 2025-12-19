@@ -181,6 +181,18 @@ class ApplyView:
                                                 ),
                                             ),
                                         ),
+                                        ft.OutlinedButton(
+                                            "View Backups",
+                                            icon=ft.Icons.HISTORY,
+                                            on_click=lambda _: self._show_backups_dialog(),
+                                            tooltip="View and restore from backups",
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.BORDER
+                                                ),
+                                            ),
+                                        ),
                                         self.copy_error_btn,
                                     ],
                                     spacing=8,
@@ -221,7 +233,9 @@ class ApplyView:
         # Basic validation - check for edit tags
         opx_text_lower = opx_text.lower()
         if "<edit" not in opx_text_lower:
-            self._show_status("No <edit> tags found. Paste valid OPX response.", is_error=True)
+            self._show_status(
+                "No <edit> tags found. Paste valid OPX response.", is_error=True
+            )
             return
 
         # Parse OPX
@@ -433,14 +447,14 @@ class ApplyView:
     ) -> ft.Container:
         """
         Tạo một row trong results với Swiss Professional styling.
-        
+
         Args:
             action: Loại action (CREATE, MODIFY, DELETE, etc.)
             path: Đường dẫn file
             message: Message kết quả
             success: True nếu thành công
             is_preview: True nếu đang ở chế độ preview
-            
+
         Returns:
             Container chứa row UI
         """
@@ -519,7 +533,7 @@ class ApplyView:
             row: PreviewRow data chứa thông tin về file action
             row_idx: Index của row (dùng để track expand state)
             file_action: FileAction gốc (dùng để generate diff lines)
-            
+
         Returns:
             Container chứa preview row UI với:
             - Action badge (CREATE, MODIFY, etc.)
@@ -678,7 +692,7 @@ class ApplyView:
         assert self.results_column is not None
         assert self.opx_input is not None
         assert self.copy_error_btn is not None
-        
+
         self.results_column.controls.clear()
         self.results_column.controls.append(
             ft.Text(
@@ -688,21 +702,21 @@ class ApplyView:
                 size=14,
             )
         )
-        
+
         self.opx_input.value = ""
         self.copy_error_btn.visible = False
         self.expanded_diffs.clear()
         self.last_preview_data = None
         self.last_apply_results = []
         self.last_opx_text = ""
-        
+
         self._show_status("")
         self.page.update()
 
     def _paste_from_clipboard(self):
         """Paste OPX content từ clipboard vào input field"""
         success, result = get_clipboard_text()
-        
+
         if success and result:
             assert self.opx_input is not None
             self.opx_input.value = result
@@ -716,6 +730,88 @@ class ApplyView:
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
+        self.page.update()
+
+    def _show_backups_dialog(self):
+        """Show dialog to view and restore backups"""
+        from core.file_actions import list_backups, restore_backup, BACKUP_DIR
+
+        backups = list_backups()
+
+        if not backups:
+            self._show_status("No backups available", is_error=True)
+            return
+
+        def close_dialog(e):
+            dialog.open = False
+            self.page.update()
+
+        def restore_selected(backup_path: Path):
+            # Extract original filename from backup name (format: filename.timestamp.bak)
+            parts = backup_path.name.rsplit(".", 2)
+            if len(parts) >= 3:
+                original_name = parts[0]
+                # Ask user for restore location
+                workspace = self.get_workspace()
+                if workspace:
+                    # Simple restore to workspace root for now
+                    # In future, could add file picker
+                    target = workspace / original_name
+                    if restore_backup(backup_path, target):
+                        self._show_status(f"Restored: {original_name}")
+                    else:
+                        self._show_status("Restore failed", is_error=True)
+            dialog.open = False
+            self.page.update()
+
+        # Build backup list
+        backup_items = []
+        for backup in backups[:20]:  # Show max 20
+            # Parse timestamp from name
+            parts = backup.name.rsplit(".", 2)
+            if len(parts) >= 3:
+                file_name = parts[0]
+                timestamp = parts[1]
+                # Format timestamp for display
+                try:
+                    from datetime import datetime
+
+                    dt = datetime.strptime(timestamp, "%Y%m%d_%H%M%S")
+                    time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    time_str = timestamp
+
+                backup_items.append(
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.RESTORE, color=ThemeColors.PRIMARY),
+                        title=ft.Text(file_name, size=13),
+                        subtitle=ft.Text(
+                            time_str, size=11, color=ThemeColors.TEXT_MUTED
+                        ),
+                        on_click=(lambda b: lambda e: restore_selected(b))(backup),
+                    )
+                )
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Backup Files", weight=ft.FontWeight.W_600),
+            content=ft.Container(
+                content=ft.Column(
+                    backup_items,
+                    scroll=ft.ScrollMode.AUTO,
+                    spacing=0,
+                ),
+                width=400,
+                height=300,
+            ),
+            actions=[
+                ft.TextButton("Close", on_click=close_dialog),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
         self.page.update()
 
     def _copy_error_for_ai(self):

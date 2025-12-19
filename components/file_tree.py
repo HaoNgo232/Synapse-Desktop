@@ -55,9 +55,17 @@ class FileTreeComponent:
 
     def cleanup(self):
         """Cleanup resources when component is destroyed"""
-        if self._search_timer is not None:
-            self._search_timer.cancel()
-            self._search_timer = None
+        # Cancel search timer safely
+        timer = self._search_timer
+        self._search_timer = None
+        if timer is not None:
+            try:
+                timer.cancel()
+            except Exception:
+                pass
+        
+        # Stop token service
+        self._token_service.stop()
         self._token_service.clear_cache()
 
     def set_loading(self, is_loading: bool):
@@ -256,6 +264,20 @@ class FileTreeComponent:
         if self.tree:
             self._collect_all_folder_paths(self.tree)
             self._render_tree()
+
+    def set_expanded_paths(self, paths: Set[str]):
+        """
+        Set expanded paths từ bên ngoài (e.g., restore session).
+        
+        Args:
+            paths: Set các folder paths cần expand
+        """
+        if self.tree:
+            # Chỉ giữ lại các paths tồn tại trong tree hiện tại
+            valid_paths = self._get_all_paths_in_tree(self.tree)
+            self.expanded_paths = paths & valid_paths
+            # Đảm bảo root luôn expanded
+            self.expanded_paths.add(self.tree.path)
 
     def collapse_all(self):
         """Collapse tat ca (giu root open)"""

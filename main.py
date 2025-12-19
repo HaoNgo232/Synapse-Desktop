@@ -20,6 +20,11 @@ from services.recent_folders import (
     add_recent_folder,
     get_folder_display_name,
 )
+from services.session_state import (
+    SessionState,
+    save_session_state,
+    load_session_state,
+)
 
 
 class OverwriteApp:
@@ -48,8 +53,17 @@ class OverwriteApp:
         # Keyboard shortcuts
         self.page.on_keyboard_event = self._on_keyboard_event
 
+        # Drag and drop support (Tắt tạm thời do Flet chưa hỗ trợ API này trong version hiện tại)
+        # self.page.on_drop = self._on_drop
+
         # Build UI
         self._build_ui()
+
+        # Restore previous session
+        self._restore_session()
+
+        # Save session on close
+        self.page.on_close = self._on_app_close
 
     def _on_resize(self, e):
         """Handle window resize"""
@@ -240,6 +254,114 @@ class OverwriteApp:
     def _get_workspace_path(self) -> Optional[Path]:
         """Getter cho workspace path"""
         return self.workspace_path
+
+    def _restore_session(self):
+        """Khôi phục session từ lần mở trước"""
+        session = load_session_state()
+        if not session:
+            return
+
+        # Restore workspace
+        if session.workspace_path:
+            workspace = Path(session.workspace_path)
+            if workspace.exists() and workspace.is_dir():
+                self.workspace_path = workspace
+                self.folder_path_text.value = str(self.workspace_path)
+                self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
+
+                # Notify context view to load tree
+                self.context_view.on_workspace_changed(self.workspace_path)
+
+                # Restore selected files after tree is loaded
+                if session.selected_files and self.context_view.file_tree_component:
+                    self.context_view.file_tree_component.selected_paths = set(
+                        f for f in session.selected_files if Path(f).exists()
+                    )
+                    self.context_view.file_tree_component._render_tree()
+                    self.context_view._update_token_count()
+
+                # Restore expanded folders
+                if session.expanded_folders and self.context_view.file_tree_component:
+                    self.context_view.file_tree_component.expanded_paths = set(
+                        f for f in session.expanded_folders if Path(f).exists()
+                    )
+                    self.context_view.file_tree_component._render_tree()
+
+        # Restore instructions
+        if session.instructions_text and self.context_view.instructions_field:
+            self.context_view.instructions_field.value = session.instructions_text
+
+        # Restore window size
+        if session.window_width and session.window_height:
+            self.page.window.width = session.window_width
+            self.page.window.height = session.window_height
+
+        self.page.update()
+
+    def _save_session(self):
+        """Lưu session hiện tại"""
+        state = SessionState(
+            workspace_path=str(self.workspace_path) if self.workspace_path else None,
+            selected_files=(
+                list(self.context_view.file_tree_component.selected_paths)
+                if self.context_view.file_tree_component
+                else []
+            ),
+            expanded_folders=(
+                list(self.context_view.file_tree_component.expanded_paths)
+                if self.context_view.file_tree_component
+                else []
+            ),
+            instructions_text=(
+                (self.context_view.instructions_field.value or "")
+                if self.context_view.instructions_field
+                else ""
+            ),
+            active_tab_index=0,  # TODO: track active tab
+            window_width=(
+                int(self.page.window.width) if self.page.window.width else None
+            ),
+            window_height=(
+                int(self.page.window.height) if self.page.window.height else None
+            ),
+        )
+        save_session_state(state)
+
+    def _on_app_close(self, e):
+        """Xử lý khi đóng app - lưu session"""
+        self._save_session()
+
+    # def _on_drop(self, e: ft.DropEvent):
+    #     """Handle drag and drop of folders"""
+    #     if e.files:
+    #         # Get first dropped item
+    #         dropped_path = Path(e.files[0].path)
+
+    #         # Check if it's a directory
+    #         if dropped_path.is_dir():
+    #             self.workspace_path = dropped_path
+    #             self.folder_path_text.value = str(self.workspace_path)
+    #             self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
+
+    #             # Save to recent folders
+    #             add_recent_folder(str(dropped_path))
+    #             self._refresh_recent_folders_menu()
+
+    #             self.page.update()
+    #             self.context_view.on_workspace_changed(self.workspace_path)
+    #         else:
+    #             # If file was dropped, use its parent directory
+    #             parent_dir = dropped_path.parent
+    #             if parent_dir.is_dir():
+    #                 self.workspace_path = parent_dir
+    #                 self.folder_path_text.value = str(self.workspace_path)
+    #                 self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
+
+    #                 add_recent_folder(str(parent_dir))
+    #                 self._refresh_recent_folders_menu()
+
+    #                 self.page.update()
+    #                 self.context_view.on_workspace_changed(self.workspace_path)
 
     def _on_keyboard_event(self, e: ft.KeyboardEvent):
         """

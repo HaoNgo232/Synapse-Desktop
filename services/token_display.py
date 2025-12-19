@@ -62,8 +62,10 @@ class TokenDisplayService:
             self._cache.clear()
             self._loading_paths.clear()
             self._pending_paths.clear()
-            # Signal background thread to stop
+            # Signal background thread to stop immediately
             self._is_processing = False
+            # Clear any remaining items to prevent stale processing
+            self._pending_paths = []
 
     def stop(self):
         """Stop background processing gracefully"""

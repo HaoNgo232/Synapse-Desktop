@@ -265,6 +265,9 @@ class ContextView:
 
     def on_workspace_changed(self, workspace_path: Path):
         """Khi user chon folder moi hoac settings thay doi"""
+        # Cleanup old resources before loading new tree
+        if self.file_tree_component:
+            self.file_tree_component.cleanup()
         self._load_tree(workspace_path)
 
     def _load_tree(self, workspace_path: Path, preserve_selection: bool = False):

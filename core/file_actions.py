@@ -77,6 +77,34 @@ def restore_backup(backup_path: Path, original_path: Path) -> bool:
     return False
 
 
+def list_backups(file_name: Optional[str] = None) -> list[Path]:
+    """
+    List all backup files, optionally filtered by original file name.
+    
+    Args:
+        file_name: Optional original file name to filter by
+        
+    Returns:
+        List of backup file paths, sorted by modification time (newest first)
+    """
+    if not BACKUP_DIR.exists():
+        return []
+    
+    try:
+        backups = list(BACKUP_DIR.glob("*.bak"))
+        
+        if file_name:
+            # Filter by file name (backup format: filename.timestamp.bak)
+            backups = [b for b in backups if b.name.startswith(file_name + ".")]
+        
+        # Sort by modification time, newest first
+        backups.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        return backups
+    except Exception as e:
+        log_error("Failed to list backups", e)
+        return []
+
+
 def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
     """
     Cleanup backup files cũ hơn max_age_days hoặc vượt quá max_count.

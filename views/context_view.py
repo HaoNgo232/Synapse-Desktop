@@ -20,6 +20,7 @@ from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
+from views.settings_view import add_excluded_patterns, remove_excluded_patterns
 from threading import Timer
 from typing import Set
 
@@ -50,6 +51,9 @@ class ContextView:
 
         # Status auto-clear timer
         self._status_clear_timer: Optional[Timer] = None
+
+        # Last ignored patterns for undo
+        self._last_ignored_patterns: list[str] = []
 
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
@@ -160,6 +164,29 @@ class ContextView:
                                     icon_color=ThemeColors.TEXT_SECONDARY,
                                     tooltip="Refresh",
                                     on_click=lambda _: self._refresh_tree(),
+                                ),
+                                # Separator
+                                ft.Container(
+                                    width=1,
+                                    height=20,
+                                    bgcolor=ThemeColors.BORDER,
+                                    margin=ft.margin.symmetric(horizontal=4),
+                                ),
+                                # Add to Ignore
+                                ft.IconButton(
+                                    icon=ft.Icons.BLOCK,
+                                    icon_size=20,
+                                    icon_color=ThemeColors.TEXT_SECONDARY,
+                                    tooltip="Add selected to ignore list",
+                                    on_click=lambda _: self._add_to_ignore(),
+                                ),
+                                # Undo Ignore
+                                ft.IconButton(
+                                    icon=ft.Icons.UNDO,
+                                    icon_size=20,
+                                    icon_color=ThemeColors.TEXT_SECONDARY,
+                                    tooltip="Undo last ignore",
+                                    on_click=lambda _: self._undo_ignore(),
                                 ),
                             ],
                             spacing=0,
@@ -421,6 +448,82 @@ class ContextView:
                     instruction_tokens=instruction_tokens,
                 )
             self._update_token_count()
+
+    def _add_to_ignore(self):
+        """
+        Them cac file/folder dang duoc chon vao danh sach excluded folders.
+
+        Chi lay ten folder/file (khong phai full path) de them vao ignore list.
+        Sau do refresh tree de an cac items da ignore.
+        """
+        if not self.file_tree_component:
+            return
+
+        selected = self.file_tree_component.selected_paths
+        if not selected:
+            self._show_status("No files selected", is_error=True)
+            return
+
+        workspace = self.get_workspace()
+        if not workspace:
+            self._show_status("No workspace selected", is_error=True)
+            return
+
+        # Convert absolute paths to relative paths (lay ten file/folder)
+        patterns_to_add = []
+        for path_str in selected:
+            path = Path(path_str)
+            try:
+                # Lay relative path tu workspace
+                rel_path = path.relative_to(workspace)
+                # Chi lay ten cuoi cung (file hoac folder name)
+                # Neu la folder con, co the lay full relative path
+                if len(rel_path.parts) == 1:
+                    # Root level item - chi lay ten
+                    patterns_to_add.append(rel_path.name)
+                else:
+                    # Nested item - lay relative path day du hoac chi ten
+                    # Dung ten de ignore tat ca instances cua folder/file do
+                    patterns_to_add.append(rel_path.name)
+            except ValueError:
+                # Path khong nam trong workspace
+                continue
+
+        if not patterns_to_add:
+            self._show_status("No valid patterns to add", is_error=True)
+            return
+
+        # Loc trung lap
+        unique_patterns = list(set(patterns_to_add))
+
+        # Them vao settings
+        if add_excluded_patterns(unique_patterns):
+            # Luu lai patterns de ho tro undo
+            self._last_ignored_patterns = unique_patterns
+            count = len(unique_patterns)
+            self._show_status(f"Added {count} pattern(s). Click Undo to revert.")
+            # Refresh tree de an cac items da ignore
+            self._refresh_tree()
+        else:
+            self._show_status("Failed to save settings", is_error=True)
+
+    def _undo_ignore(self):
+        """
+        Undo hanh dong ignore cuoi cung.
+        Xoa cac patterns vua them va refresh tree.
+        """
+        if not self._last_ignored_patterns:
+            self._show_status("Nothing to undo", is_error=True)
+            return
+
+        patterns = self._last_ignored_patterns
+        if remove_excluded_patterns(patterns):
+            count = len(patterns)
+            self._show_status(f"Removed {count} pattern(s) from ignore list")
+            self._last_ignored_patterns = []  # Clear sau khi undo
+            self._refresh_tree()
+        else:
+            self._show_status("Failed to undo", is_error=True)
 
     def _select_all_recursive(self, item: TreeItem):
         """Recursively select all files in tree"""

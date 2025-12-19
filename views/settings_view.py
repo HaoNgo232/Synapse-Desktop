@@ -94,6 +94,72 @@ def get_use_gitignore() -> bool:
     return settings.get("use_gitignore", True)
 
 
+def add_excluded_patterns(patterns: list[str]) -> bool:
+    """
+    Them cac pattern vao danh sach excluded folders.
+
+    Args:
+        patterns: List cac pattern can them (relative paths hoac glob patterns)
+
+    Returns:
+        True neu save thanh cong
+    """
+    if not patterns:
+        return True
+
+    settings = load_settings()
+    current = settings.get("excluded_folders", "")
+
+    # Loc bo cac pattern da ton tai
+    existing_patterns = set(
+        line.strip()
+        for line in current.split("\n")
+        if line.strip() and not line.strip().startswith("#")
+    )
+
+    new_patterns = [p for p in patterns if p not in existing_patterns]
+
+    if not new_patterns:
+        return True  # Khong co pattern moi can them
+
+    # Append new patterns
+    new_content = "\n".join(new_patterns)
+    if current.strip():
+        settings["excluded_folders"] = current.rstrip() + "\n" + new_content
+    else:
+        settings["excluded_folders"] = new_content
+
+    return save_settings(settings)
+
+
+def remove_excluded_patterns(patterns: list[str]) -> bool:
+    """
+    Xoa cac pattern khoi danh sach excluded folders.
+    Dung cho chuc nang Undo khi add nhiem.
+
+    Args:
+        patterns: List cac pattern can xoa
+
+    Returns:
+        True neu save thanh cong
+    """
+    if not patterns:
+        return True
+
+    settings = load_settings()
+    current = settings.get("excluded_folders", "")
+
+    # Tach thanh cac dong va loc bo patterns can xoa
+    lines = current.split("\n")
+    patterns_set = set(patterns)
+
+    # Giu lai cac dong khong nam trong patterns can xoa
+    remaining_lines = [line for line in lines if line.strip() not in patterns_set]
+
+    settings["excluded_folders"] = "\n".join(remaining_lines)
+    return save_settings(settings)
+
+
 class SettingsView:
     """View cho Settings tab"""
 
@@ -117,6 +183,7 @@ class SettingsView:
         self.excluded_field = ft.TextField(
             multiline=True,
             min_lines=15,
+            max_lines=15,
             value=settings.get("excluded_folders", ""),
             hint_text="node_modules\ndist\nbuild\n__pycache__",
             border_color=ThemeColors.BORDER,
@@ -280,11 +347,23 @@ class SettingsView:
                                 ft.Column(
                                     col={"sm": 12, "md": 7},
                                     controls=[
-                                        ft.Text(
-                                            "Excluded Folders",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ft.Row(
+                                            [
+                                                ft.Text(
+                                                    "Excluded Folders",
+                                                    weight=ft.FontWeight.W_600,
+                                                    size=14,
+                                                    color=ThemeColors.TEXT_PRIMARY,
+                                                ),
+                                                ft.Container(expand=True),
+                                                ft.IconButton(
+                                                    icon=ft.Icons.REFRESH,
+                                                    icon_size=18,
+                                                    icon_color=ThemeColors.TEXT_SECONDARY,
+                                                    tooltip="Reload from file",
+                                                    on_click=lambda _: self._reload_settings(),
+                                                ),
+                                            ],
                                         ),
                                         ft.Text(
                                             "One pattern per line. Lines starting with # are comments.",
@@ -370,6 +449,7 @@ class SettingsView:
                     ),
                 ],
                 expand=True,
+                scroll=ft.ScrollMode.AUTO,
             ),
             padding=20,
             expand=True,
@@ -493,3 +573,18 @@ class SettingsView:
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()
+
+    def _reload_settings(self):
+        """
+        Reload settings tu file va cap nhat UI.
+        Dung de refresh khi settings bi thay doi tu ben ngoai (vd: Context tab).
+        """
+        assert self.excluded_field is not None
+        assert self.gitignore_checkbox is not None
+
+        settings = load_settings()
+        self.excluded_field.value = settings.get("excluded_folders", "")
+        self.gitignore_checkbox.value = settings.get("use_gitignore", True)
+
+        self.page.update()
+        self._show_status("Settings reloaded from file")

@@ -54,13 +54,18 @@ class DiffLine:
 class DiffColors:
     """
     Mau sac cho cac loai dong trong diff.
-    Dua tren VS Code diff colors.
+    Dark Mode colors - van xai dark bg voi text mau ro rang.
     """
 
-    ADDED_BG = "#DCFCE7"  # Light green - dong duoc them
-    REMOVED_BG = "#FEE2E2"  # Light red - dong bi xoa
-    CONTEXT_BG = "#F9FAFB"  # Light gray - context
-    HEADER_BG = "#E0E7FF"  # Light blue - header @@
+    ADDED_BG = "#052E16"  # Dark green bg - dong duoc them
+    REMOVED_BG = "#450A0A"  # Dark red bg - dong bi xoa
+    CONTEXT_BG = "#1E293B"  # Slate 800 - context (same as surface)
+    HEADER_BG = "#1E3A5F"  # Dark blue - header @@
+
+    # Text colors for contrast on dark backgrounds
+    ADDED_TEXT = "#86EFAC"  # Light green text
+    REMOVED_TEXT = "#FCA5A5"  # Light red text
+    HEADER_TEXT = "#93C5FD"  # Light blue text
 
 
 def generate_diff_lines(
@@ -268,12 +273,12 @@ class DiffViewer(ft.Column):
             DiffLineType.HEADER: DiffColors.HEADER_BG,
         }.get(line.line_type, DiffColors.CONTEXT_BG)
 
-        # Chon mau text
+        # Chon mau text - su dung DiffColors constants
         text_color = {
-            DiffLineType.ADDED: "#166534",  # Dark green
-            DiffLineType.REMOVED: "#991B1B",  # Dark red
+            DiffLineType.ADDED: DiffColors.ADDED_TEXT,
+            DiffLineType.REMOVED: DiffColors.REMOVED_TEXT,
             DiffLineType.CONTEXT: ThemeColors.TEXT_SECONDARY,
-            DiffLineType.HEADER: "#3730A3",  # Dark blue
+            DiffLineType.HEADER: DiffColors.HEADER_TEXT,
         }.get(line.line_type, ThemeColors.TEXT_PRIMARY)
 
         # Build row content

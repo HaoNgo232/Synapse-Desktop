@@ -1,39 +1,40 @@
 """
-Swiss Professional Theme - Core Design System
+Dark Mode OLED Theme - Core Design System
 
 Centralized theme configuration following UI/UX Pro Max guidelines.
+Style: Dark Mode (OLED) + Minimalism for Developer Tools
 """
 
 
 class ThemeColors:
-    """Swiss Professional Light Theme Colors - High Contrast Edition"""
+    """Dark Mode OLED Theme Colors - Developer Tools Edition"""
 
-    # Primary - Blue 600
-    PRIMARY = "#2563EB"
-    PRIMARY_HOVER = "#1D4ED8"
+    # Primary - Blue 500
+    PRIMARY = "#3B82F6"
+    PRIMARY_HOVER = "#2563EB"
 
-    # Backgrounds
-    BG_PAGE = "#F8FAFC"  # Slate 50
-    BG_SURFACE = "#FFFFFF"  # White
-    BG_ELEVATED = "#F1F5F9"  # Slate 100
+    # Backgrounds - OLED Deep Black
+    BG_PAGE = "#0F172A"  # Slate 900 - Main background
+    BG_SURFACE = "#1E293B"  # Slate 800 - Cards, panels
+    BG_ELEVATED = "#334155"  # Slate 700 - Hover states
 
-    # Text - High Contrast for Readability
-    TEXT_PRIMARY = "#0F172A"  # Slate 900
-    TEXT_SECONDARY = "#334155"  # Slate 700 (Darkened from 600)
-    TEXT_MUTED = "#64748B"  # Slate 500 (Darkened from 400)
+    # Text - High Contrast on Dark
+    TEXT_PRIMARY = "#F1F5F9"  # Slate 100 - Main text
+    TEXT_SECONDARY = "#94A3B8"  # Slate 400 - Muted text
+    TEXT_MUTED = "#64748B"  # Slate 500 - Very muted
 
-    # Borders - More visible definition
-    BORDER = "#CBD5E1"  # Slate 300 (Darkened from 200)
-    BORDER_FOCUS = "#2563EB"  # Blue 600
+    # Borders - Subtle on Dark
+    BORDER = "#334155"  # Slate 700
+    BORDER_FOCUS = "#3B82F6"  # Blue 500
 
     # Status
-    SUCCESS = "#059669"  # Emerald 600 (Darkened)
-    WARNING = "#D97706"  # Amber 600 (Darkened)
-    ERROR = "#DC2626"  # Red 600 (Darkened)
+    SUCCESS = "#10B981"  # Emerald 500
+    WARNING = "#F59E0B"  # Amber 500
+    ERROR = "#EF4444"  # Red 500
 
     # Icons
-    ICON_FOLDER = "#D97706"  # Amber 600
+    ICON_FOLDER = "#F59E0B"  # Amber 500
     ICON_FILE = "#64748B"  # Slate 500
 
     # Search
-    SEARCH_HIGHLIGHT = "#FEF3C7"  # Amber 100 (Unchanged, good bg)
+    SEARCH_HIGHLIGHT = "#422006"  # Amber 950 - Dark amber bg

@@ -4,7 +4,7 @@ Overwrite Desktop - Main Application Entry Point
 Flet-based desktop app ke thua tinh nang Copy Context va OPX Apply
 tu Overwrite VS Code extension.
 
-Theme: Swiss Professional (Light)
+Theme: Dark Mode OLED (Developer Tools Edition)
 """
 
 import flet as ft
@@ -38,7 +38,7 @@ class OverwriteApp:
         self.page.window.min_width = 800
         self.page.window.min_height = 600
         self.page.window.width = 1500
-        self.page.window.height = 750
+        self.page.window.height = 950
 
         # Build UI
         self._build_ui()
@@ -54,8 +54,8 @@ class OverwriteApp:
             self.context_view.update_layout(width)
 
     def _apply_theme(self):
-        """Apply Swiss Professional Light Theme"""
-        self.page.theme_mode = ft.ThemeMode.LIGHT
+        """Apply Dark Mode OLED Theme for Developer Tools"""
+        self.page.theme_mode = ft.ThemeMode.DARK
         self.page.bgcolor = ThemeColors.BG_PAGE
 
         self.page.theme = ft.Theme(

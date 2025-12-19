@@ -8,9 +8,10 @@ Tach ra theo SOLID:
 """
 
 from pathlib import Path
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, Callable, Set
 from dataclasses import dataclass
 from threading import Thread, Lock
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 from core.token_counter import count_tokens_for_file
@@ -32,9 +33,15 @@ class TokenDisplayService:
 
     Features:
     - Cache token counts de tranh tinh toan lai
-    - Background loading de khong block UI
+    - Background loading de khong block UI (với ThreadPoolExecutor)
     - Aggregate tokens cho folders
+    - Auto cleanup stale cache entries
     """
+
+    # Config
+    BATCH_SIZE = 20  # Process 20 files per batch
+    MAX_WORKERS = 4  # Thread pool size
+    MAX_CACHE_SIZE = 5000  # Maximum cache entries
 
     def __init__(self, on_update: Optional[Callable[[], None]] = None):
         """
@@ -47,7 +54,7 @@ class TokenDisplayService:
         self._cache: Dict[str, int] = {}
 
         # Tracking loading state
-        self._loading_paths: set = set()
+        self._loading_paths: Set[str] = set()
 
         # Background loading queue
         self._pending_paths: list = []
@@ -55,6 +62,9 @@ class TokenDisplayService:
 
         # Thread safety lock
         self._lock = Lock()
+
+        # Thread pool for parallel processing
+        self._executor: Optional[ThreadPoolExecutor] = None
 
     def clear_cache(self):
         """Xoa toan bo cache (khi reload tree)"""
@@ -73,10 +83,15 @@ class TokenDisplayService:
             self._is_processing = False
             self._pending_paths.clear()
 
+        # Shutdown executor if exists
+        if self._executor:
+            self._executor.shutdown(wait=False)
+            self._executor = None
+
     def cleanup_stale_entries(self, valid_paths: set):
         """
         Xóa các cache entries không còn tồn tại trong tree.
-        
+
         Args:
             valid_paths: Set các paths hiện tại trong tree
         """
@@ -149,8 +164,6 @@ class TokenDisplayService:
         """
         self._collect_files_to_count(tree, visible_only, visible_paths)
 
-        self._collect_files_to_count(tree, visible_only, visible_paths)
-
         with self._lock:
             if self._pending_paths and not self._is_processing:
                 self._start_background_processing()
@@ -184,56 +197,91 @@ class TokenDisplayService:
         thread.start()
 
     def _process_pending(self):
-        """Process pending paths trong background với rate limiting"""
-        batch_count = 0
-        batch_start_time = time.time()
-        max_files_per_second = 50  # Rate limit
-        
+        """Process pending paths trong background với batch processing và ThreadPoolExecutor"""
+        # Initialize executor if needed
+        if not self._executor:
+            self._executor = ThreadPoolExecutor(max_workers=self.MAX_WORKERS)
+
         while True:
-            path = None
+            # Get batch of paths to process
+            batch: list = []
             with self._lock:
                 if not self._pending_paths:
                     self._is_processing = False
                     break
-                path = self._pending_paths.pop(0)
 
-            if path:
-                try:
-                    tokens = count_tokens_for_file(Path(path))
-                    with self._lock:
-                        self._cache[path] = tokens
-                except Exception:
-                    with self._lock:
-                        self._cache[path] = 0
-                finally:
-                    with self._lock:
+                # Take up to BATCH_SIZE items
+                batch_size = min(self.BATCH_SIZE, len(self._pending_paths))
+                batch = self._pending_paths[:batch_size]
+                self._pending_paths = self._pending_paths[batch_size:]
+
+            if not batch:
+                break
+
+            # Process batch in parallel
+            try:
+                futures = {
+                    self._executor.submit(self._count_file_tokens, path): path
+                    for path in batch
+                }
+
+                for future in as_completed(futures, timeout=30):
+                    path = futures[future]
+                    try:
+                        tokens = future.result()
+                        with self._lock:
+                            self._cache[path] = tokens
+                            self._loading_paths.discard(path)
+                    except Exception:
+                        with self._lock:
+                            self._cache[path] = 0
+                            self._loading_paths.discard(path)
+
+            except Exception:
+                # Timeout or other error - mark all as 0
+                with self._lock:
+                    for path in batch:
+                        if path not in self._cache:
+                            self._cache[path] = 0
                         self._loading_paths.discard(path)
 
-                batch_count += 1
-                
-                # Notify UI sau moi batch (10 files)
-                should_update = False
-                with self._lock:
-                    if len(self._pending_paths) % 10 == 0 or not self._pending_paths:
-                        should_update = True
-
-                if should_update and self.on_update:
+            # Notify UI after each batch
+            if self.on_update:
+                try:
                     self.on_update()
+                except Exception:
+                    pass
 
-                # Rate limiting: pause if processing too fast
-                if batch_count >= max_files_per_second:
-                    elapsed = time.time() - batch_start_time
-                    if elapsed < 1.0:
-                        time.sleep(1.0 - elapsed)
-                    batch_count = 0
-                    batch_start_time = time.time()
-                else:
-                    # Small delay de khong block CPU
-                    time.sleep(0.005)
+            # Small delay between batches
+            time.sleep(0.01)
+
+            # Cleanup cache if too large
+            self._cleanup_cache_if_needed()
 
         # Final update
         if self.on_update:
-            self.on_update()
+            try:
+                self.on_update()
+            except Exception:
+                pass
+
+    def _count_file_tokens(self, path: str) -> int:
+        """Count tokens for a single file (called from thread pool)"""
+        try:
+            return count_tokens_for_file(Path(path))
+        except Exception:
+            return 0
+
+    def _cleanup_cache_if_needed(self):
+        """Remove oldest cache entries if cache is too large"""
+        with self._lock:
+            if len(self._cache) > self.MAX_CACHE_SIZE:
+                # Remove 20% of oldest entries
+                # Since dict maintains insertion order in Python 3.7+
+                remove_count = len(self._cache) // 5
+                keys_to_remove = list(self._cache.keys())[:remove_count]
+                for key in keys_to_remove:
+                    del self._cache[key]
 
     def get_folder_tokens(self, folder_path: str, tree: TreeItem) -> Optional[int]:
         """

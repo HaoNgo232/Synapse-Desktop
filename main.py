@@ -48,7 +48,7 @@ class OverwriteApp:
         self.page.window.min_width = 800
         self.page.window.min_height = 600
         self.page.window.width = 1500
-        self.page.window.height = 900
+        self.page.window.height = 1000
 
         # Keyboard shortcuts
         self.page.on_keyboard_event = self._on_keyboard_event

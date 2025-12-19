@@ -37,11 +37,11 @@ class ContextView:
         self.instructions_field: Optional[ft.TextField] = None
         self.status_text: Optional[ft.Text] = None
         self.token_stats_panel: Optional[TokenStatsPanel] = None
-        
+
         # Debounce timer for token counting
         self._token_update_timer: Optional[Timer] = None
         self._token_debounce_ms: float = 300  # 300ms debounce
-        
+
         # Status auto-clear timer
         self._status_clear_timer: Optional[Timer] = None
 
@@ -363,13 +363,13 @@ class ContextView:
         """Recursively select all files in tree"""
         if not self.file_tree_component:
             return
-        
+
         # Only select if visible (when searching)
         is_visible = (
-            not self.file_tree_component.search_query 
+            not self.file_tree_component.search_query
             or item.path in self.file_tree_component.matched_paths
         )
-        
+
         if is_visible:
             self.file_tree_component.selected_paths.add(item.path)
             for child in item.children:
@@ -386,14 +386,13 @@ class ContextView:
         # Cancel previous timer if exists
         if self._token_update_timer is not None:
             self._token_update_timer.cancel()
-        
+
         # Schedule token update with debounce
         self._token_update_timer = Timer(
-            self._token_debounce_ms / 1000.0,
-            self._do_update_token_count
+            self._token_debounce_ms / 1000.0, self._do_update_token_count
         )
         self._token_update_timer.start()
-    
+
     def _do_update_token_count(self):
         """Execute token count update (called after debounce)"""
         try:
@@ -456,7 +455,10 @@ class ContextView:
         if not selected_paths:
             # Provide helpful message based on context
             if self.file_tree_component.is_searching():
-                self._show_status("No matching files selected. Clear search or select files.", is_error=True)
+                self._show_status(
+                    "No matching files selected. Clear search or select files.",
+                    is_error=True,
+                )
             else:
                 self._show_status("Select files from the tree first", is_error=True)
             return
@@ -465,9 +467,11 @@ class ContextView:
             # Show copying state for large selections
             file_count = sum(1 for p in selected_paths if Path(p).is_file())
             if file_count > 10:
-                self._show_status(f"Copying {file_count} files...", is_error=False, auto_clear=False)
+                self._show_status(
+                    f"Copying {file_count} files...", is_error=False, auto_clear=False
+                )
                 self.page.update()
-            
+
             file_map = generate_file_map(self.tree, selected_paths)
             file_contents = generate_file_contents(selected_paths)
             assert self.instructions_field is not None
@@ -519,10 +523,12 @@ class ContextView:
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
 
-    def _show_status(self, message: str, is_error: bool = False, auto_clear: bool = True):
+    def _show_status(
+        self, message: str, is_error: bool = False, auto_clear: bool = True
+    ):
         """
         Show status message with optional auto-clear.
-        
+
         Args:
             message: Status message to display
             is_error: True for error styling
@@ -537,9 +543,10 @@ class ContextView:
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()
-        
+
         # Auto-clear success messages after 3 seconds
         if auto_clear and not is_error and message:
+
             def clear_status():
                 try:
                     if self.status_text and self.status_text.value == message:
@@ -547,6 +554,6 @@ class ContextView:
                         self.page.update()
                 except Exception:
                     pass
-            
+
             self._status_clear_timer = Timer(3.0, clear_status)
             self._status_clear_timer.start()

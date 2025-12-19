@@ -11,10 +11,22 @@ import json
 
 from core.theme import ThemeColors
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
+from services.session_state import clear_session_state, get_session_age_hours
 
 
 # Settings file path
 SETTINGS_FILE = Path.home() / ".overwrite-desktop" / "settings.json"
+
+
+# Preset profiles for different project types
+PRESET_PROFILES = {
+    "Python": "__pycache__\n.pytest_cache\n.venv\nvenv\n.eggs\n*.egg-info\ndist\nbuild\n.mypy_cache\n.tox\ncoverage\nhtmlcov\n.coverage",
+    "Node.js": "node_modules\ndist\nbuild\n.next\ncoverage\n.cache\n.parcel-cache\npnpm-lock.yaml\npackage-lock.json\nyarn.lock",
+    "Rust": "target\nCargo.lock",
+    "Go": "vendor\nbin",
+    "Java": "target\n*.class\n.gradle\nbuild\nout",
+    "General": "dist\nbuild\ncoverage\n.cache\ntmp\ntemp\nlogs\n*.log",
+}
 
 
 def load_settings() -> dict:
@@ -190,6 +202,33 @@ class SettingsView:
                                                 color=ThemeColors.TEXT_SECONDARY,
                                             ),
                                             ft.Container(height=8),
+                                            ft.Row(
+                                                [
+                                                    ft.Text(
+                                                        "Load preset:",
+                                                        size=12,
+                                                        color=ThemeColors.TEXT_SECONDARY,
+                                                    ),
+                                                    ft.Dropdown(
+                                                        width=150,
+                                                        text_size=12,
+                                                        options=[
+                                                            ft.dropdown.Option(
+                                                                key=name, text=name
+                                                            )
+                                                            for name in PRESET_PROFILES.keys()
+                                                        ],
+                                                        on_change=lambda e: self._load_preset(
+                                                            e.control.value
+                                                        ),
+                                                        hint_text="Select preset...",
+                                                        border_color=ThemeColors.BORDER,
+                                                        focused_border_color=ThemeColors.PRIMARY,
+                                                    ),
+                                                ],
+                                                spacing=8,
+                                            ),
+                                            ft.Container(height=8),
                                             self.excluded_field,
                                         ]
                                     ),
@@ -259,6 +298,48 @@ class SettingsView:
                         expand=True,
                     ),
                     ft.Container(height=16),
+                    # Session section
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    "Session",
+                                    weight=ft.FontWeight.W_600,
+                                    size=14,
+                                    color=ThemeColors.TEXT_PRIMARY,
+                                ),
+                                ft.Container(height=8),
+                                ft.Row(
+                                    [
+                                        ft.Text(
+                                            "Your workspace and selected files are automatically saved when closing the app.",
+                                            size=12,
+                                            color=ThemeColors.TEXT_SECONDARY,
+                                            expand=True,
+                                        ),
+                                        ft.OutlinedButton(
+                                            "Clear Session",
+                                            icon=ft.Icons.DELETE_OUTLINE,
+                                            on_click=lambda _: self._clear_session(),
+                                            tooltip="Clear saved workspace and selections",
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.BORDER
+                                                ),
+                                            ),
+                                        ),
+                                    ],
+                                    spacing=12,
+                                ),
+                            ]
+                        ),
+                        padding=16,
+                        bgcolor=ThemeColors.BG_SURFACE,
+                        border=ft.border.all(1, ThemeColors.BORDER),
+                        border_radius=8,
+                    ),
+                    ft.Container(height=16),
                     # Info section
                     ft.Container(
                         content=ft.Row(
@@ -326,16 +407,16 @@ class SettingsView:
         """Export settings to clipboard as JSON"""
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
-        
+
         settings = {
             "excluded_folders": self.excluded_field.value or "",
             "use_gitignore": self.gitignore_checkbox.value or False,
             "export_version": "1.0",
         }
-        
+
         settings_json = json.dumps(settings, indent=2, ensure_ascii=False)
         success, message = copy_to_clipboard(settings_json)
-        
+
         if success:
             self._show_status("Settings exported to clipboard!")
         else:
@@ -344,30 +425,61 @@ class SettingsView:
     def _import_settings(self):
         """Import settings from clipboard JSON"""
         success, clipboard_text = get_clipboard_text()
-        
+
         if not success or not clipboard_text:
             self._show_status("Clipboard is empty", is_error=True)
             return
-        
+
         try:
             imported = json.loads(clipboard_text)
-            
+
             # Validate structure
             if "excluded_folders" not in imported:
                 self._show_status("Invalid settings format", is_error=True)
                 return
-            
+
             assert self.excluded_field is not None
             assert self.gitignore_checkbox is not None
-            
+
             self.excluded_field.value = imported.get("excluded_folders", "")
             self.gitignore_checkbox.value = imported.get("use_gitignore", True)
-            
+
             self.page.update()
             self._show_status("Settings imported! Click Save to apply.")
-            
+
         except json.JSONDecodeError:
             self._show_status("Invalid JSON in clipboard", is_error=True)
+
+    def _clear_session(self):
+        """Clear saved session state"""
+        if clear_session_state():
+            self._show_status("Session cleared. Restart app to see effect.")
+        else:
+            self._show_status("Failed to clear session", is_error=True)
+
+    def _load_preset(self, preset_name: str):
+        """Load a preset profile into excluded folders field"""
+        if not preset_name or preset_name not in PRESET_PROFILES:
+            return
+
+        assert self.excluded_field is not None
+
+        # Append to existing or replace?
+        current = self.excluded_field.value or ""
+        preset_content = PRESET_PROFILES[preset_name]
+
+        if current.strip():
+            # Append with separator
+            self.excluded_field.value = (
+                current.rstrip() + "\n# " + preset_name + " preset\n" + preset_content
+            )
+        else:
+            self.excluded_field.value = (
+                "# " + preset_name + " preset\n" + preset_content
+            )
+
+        self.page.update()
+        self._show_status(f"Loaded {preset_name} preset (not saved yet)")
 
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""

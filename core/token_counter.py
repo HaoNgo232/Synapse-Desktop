@@ -56,9 +56,17 @@ def count_tokens_for_file(file_path: Path) -> int:
         So luong tokens, hoac 0 neu skip/error
     """
     try:
+        # Check file exists
+        if not file_path.exists():
+            return 0
+        
+        if not file_path.is_file():
+            return 0
+        
         # Check file size
         stat = file_path.stat()
         if stat.st_size > MAX_BYTES:
+            # File too large, skip silently (expected behavior)
             return 0
         
         # Check if binary (read first 8KB)

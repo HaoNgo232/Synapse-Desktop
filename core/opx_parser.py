@@ -87,9 +87,16 @@ def parse_opx_response(xml_content: str) -> ParseResult:
     result = ParseResult()
     
     try:
+        # Input validation
+        if xml_content is None:
+            return ParseResult(errors=["Input is None"])
+        
+        if not isinstance(xml_content, str):
+            return ParseResult(errors=[f"Invalid input type: {type(xml_content).__name__}"])
+        
         cleaned = _sanitize_response(xml_content)
         if not cleaned:
-            return ParseResult(errors=["Empty input"])
+            return ParseResult(errors=["Empty input after sanitization"])
         
         edits = _collect_edits(cleaned)
         if not edits:

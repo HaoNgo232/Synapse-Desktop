@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Optional, Literal, Union
 
 from core.opx_parser import FileAction, ChangeBlock
+from core.logging_config import log_error, log_info, log_debug
 
 
 @dataclass
@@ -45,9 +46,11 @@ def apply_file_actions(
         Danh sach ActionResult cho tung action
     """
     results: list[ActionResult] = []
+    log_info(f"Applying {len(file_actions)} file action(s)")
 
     for action in file_actions:
         try:
+            log_debug(f"Processing: {action.action} on {action.path}")
             # Resolve path (ho tro absolute, relative, va multi-workspace)
             file_path = _resolve_path(action.path, action.root, workspace_roots)
 
@@ -72,6 +75,7 @@ def apply_file_actions(
             results.append(result)
 
         except Exception as e:
+            log_error(f"Action failed: {action.action} on {action.path}", e)
             results.append(
                 ActionResult(
                     path=action.path,
@@ -81,6 +85,8 @@ def apply_file_actions(
                 )
             )
 
+    success_count = sum(1 for r in results if r.success)
+    log_info(f"Completed: {success_count}/{len(results)} action(s) successful")
     return results
 
 

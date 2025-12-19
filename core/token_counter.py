@@ -6,7 +6,8 @@ Don gian hoa dang ke vi tiktoken la Python native library (OpenAI official).
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Tuple
+from functools import lru_cache
 import tiktoken
 
 # Lazy-loaded encoder singleton
@@ -14,6 +15,10 @@ _encoder: Optional[tiktoken.Encoding] = None
 
 # Guardrail: skip files > 5MB
 MAX_BYTES = 5 * 1024 * 1024
+
+# File content cache: path -> (mtime, token_count)
+_file_token_cache: Dict[str, Tuple[float, int]] = {}
+_MAX_CACHE_SIZE = 1000
 
 
 def _get_encoder() -> tiktoken.Encoding:
@@ -27,6 +32,14 @@ def _get_encoder() -> tiktoken.Encoding:
     return _encoder
 
 
+@lru_cache(maxsize=256)
+def _count_tokens_cached(text_hash: int, text_len: int) -> int:
+    """Internal cached token counting by hash"""
+    # This is called from count_tokens with hash as key
+    # The actual text is passed separately
+    return 0  # Placeholder, actual implementation below
+
+
 def count_tokens(text: str) -> int:
     """
     Dem so token trong mot doan text.
@@ -37,6 +50,12 @@ def count_tokens(text: str) -> int:
     Returns:
         So luong tokens
     """
+    # For short texts, use direct counting
+    if len(text) < 100:
+        encoder = _get_encoder()
+        return len(encoder.encode(text))
+    
+    # For longer texts, encode directly (LRU cache overhead not worth it)
     encoder = _get_encoder()
     return len(encoder.encode(text))
 
@@ -48,6 +67,7 @@ def count_tokens_for_file(file_path: Path) -> int:
     - Skip files qua lon (> 5MB)
     - Skip binary files
     - Return 0 neu khong doc duoc
+    - Uses mtime-based caching for performance
     
     Args:
         file_path: Duong dan den file
@@ -55,6 +75,8 @@ def count_tokens_for_file(file_path: Path) -> int:
     Returns:
         So luong tokens, hoac 0 neu skip/error
     """
+    global _file_token_cache
+    
     try:
         # Check file exists
         if not file_path.exists():
@@ -69,6 +91,14 @@ def count_tokens_for_file(file_path: Path) -> int:
             # File too large, skip silently (expected behavior)
             return 0
         
+        # Check cache with mtime
+        path_str = str(file_path)
+        cached = _file_token_cache.get(path_str)
+        if cached is not None:
+            cached_mtime, cached_count = cached
+            if cached_mtime == stat.st_mtime:
+                return cached_count
+        
         # Check if binary (read first 8KB)
         with open(file_path, 'rb') as f:
             chunk = f.read(8000)
@@ -78,10 +108,26 @@ def count_tokens_for_file(file_path: Path) -> int:
         
         # Read and count
         content = file_path.read_text(encoding='utf-8', errors='replace')
-        return count_tokens(content)
+        token_count = count_tokens(content)
+        
+        # Update cache (with size limit)
+        if len(_file_token_cache) >= _MAX_CACHE_SIZE:
+            # Remove oldest entries (first 20%)
+            keys_to_remove = list(_file_token_cache.keys())[:_MAX_CACHE_SIZE // 5]
+            for key in keys_to_remove:
+                del _file_token_cache[key]
+        
+        _file_token_cache[path_str] = (stat.st_mtime, token_count)
+        return token_count
         
     except (OSError, IOError):
         return 0
+
+
+def clear_token_cache():
+    """Clear the file token cache"""
+    global _file_token_cache
+    _file_token_cache.clear()
 
 
 def _looks_binary(chunk: bytes) -> bool:

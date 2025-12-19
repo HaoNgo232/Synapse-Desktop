@@ -38,10 +38,11 @@ class TokenDisplayService:
     - Auto cleanup stale cache entries
     """
 
-    # Config
-    BATCH_SIZE = 20  # Process 20 files per batch
-    MAX_WORKERS = 4  # Thread pool size
-    MAX_CACHE_SIZE = 5000  # Maximum cache entries
+    # Config - optimized for performance
+    BATCH_SIZE = 50  # Process 50 files per batch (increased from 20)
+    MAX_WORKERS = 6  # Thread pool size (increased from 4)
+    MAX_CACHE_SIZE = 10000  # Maximum cache entries (increased from 5000)
+    UPDATE_THROTTLE_MS = 100  # Minimum time between UI updates
 
     def __init__(self, on_update: Optional[Callable[[], None]] = None):
         """
@@ -65,6 +66,9 @@ class TokenDisplayService:
 
         # Thread pool for parallel processing
         self._executor: Optional[ThreadPoolExecutor] = None
+        
+        # Throttling for UI updates
+        self._last_update_time: float = 0
 
     def clear_cache(self):
         """Xoa toan bo cache (khi reload tree)"""
@@ -245,15 +249,17 @@ class TokenDisplayService:
                             self._cache[path] = 0
                         self._loading_paths.discard(path)
 
-            # Notify UI after each batch
-            if self.on_update:
+            # Notify UI after each batch (throttled)
+            current_time = time.time() * 1000  # ms
+            if self.on_update and (current_time - self._last_update_time) >= self.UPDATE_THROTTLE_MS:
                 try:
                     self.on_update()
+                    self._last_update_time = current_time
                 except Exception:
                     pass
 
             # Small delay between batches
-            time.sleep(0.01)
+            time.sleep(0.005)  # Reduced from 0.01 for faster processing
 
             # Cleanup cache if too large
             self._cleanup_cache_if_needed()

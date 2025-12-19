@@ -8,8 +8,11 @@ Su dung pathspec thay vi ignore library.
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, Tuple
 import pathspec
+
+# Cache for gitignore patterns: root_path -> (mtime, patterns)
+_gitignore_cache: Dict[str, Tuple[float, list]] = {}
 
 
 @dataclass
@@ -144,13 +147,30 @@ def _read_gitignore(root_path: Path) -> list[str]:
     """
     Doc .gitignore va .git/info/exclude.
     Logic tuong tu TypeScript nhung don gian hoa.
+    Uses caching based on .gitignore mtime.
     """
+    global _gitignore_cache
+    
+    gitignore_path = root_path / ".gitignore"
+    cache_key = str(root_path)
+    
+    # Check cache validity
+    if cache_key in _gitignore_cache:
+        cached_mtime, cached_patterns = _gitignore_cache[cache_key]
+        try:
+            current_mtime = gitignore_path.stat().st_mtime if gitignore_path.exists() else 0
+            if current_mtime == cached_mtime:
+                return cached_patterns.copy()
+        except OSError:
+            pass
+    
     patterns: list[str] = []
+    gitignore_mtime = 0.0
     
     # 1) Project .gitignore
-    gitignore_path = root_path / ".gitignore"
     if gitignore_path.exists():
         try:
+            gitignore_mtime = gitignore_path.stat().st_mtime
             content = gitignore_path.read_text(encoding="utf-8", errors="replace")
             patterns.extend(content.splitlines())
         except (OSError, IOError):
@@ -182,7 +202,16 @@ def _read_gitignore(root_path: Path) -> list[str]:
             except (OSError, IOError):
                 pass
     
+    # Update cache
+    _gitignore_cache[cache_key] = (gitignore_mtime, patterns.copy())
+    
     return patterns
+
+
+def clear_gitignore_cache():
+    """Clear the gitignore pattern cache"""
+    global _gitignore_cache
+    _gitignore_cache.clear()
 
 
 def flatten_tree_files(tree: TreeItem) -> list[Path]:

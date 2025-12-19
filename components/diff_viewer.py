@@ -68,6 +68,11 @@ class DiffColors:
     HEADER_TEXT = "#93C5FD"  # Light blue text
 
 
+# Maximum lines to process for diff (performance guard)
+MAX_DIFF_LINES = 10000
+MAX_DIFF_OUTPUT_LINES = 2000
+
+
 def generate_diff_lines(
     old_content: str, new_content: str, file_path: str = "", context_lines: int = 3
 ) -> List[DiffLine]:
@@ -87,6 +92,13 @@ def generate_diff_lines(
     # Split content thanh lines
     old_lines = old_content.splitlines(keepends=True) if old_content else []
     new_lines = new_content.splitlines(keepends=True) if new_content else []
+    
+    # Guard against very large files
+    if len(old_lines) > MAX_DIFF_LINES or len(new_lines) > MAX_DIFF_LINES:
+        return [DiffLine(
+            content=f"[File too large for diff preview: {len(old_lines)}/{len(new_lines)} lines]",
+            line_type=DiffLineType.HEADER
+        )]
 
     # Tao unified diff
     diff_generator = difflib.unified_diff(
@@ -157,6 +169,14 @@ def generate_diff_lines(
                     new_line_no=new_line_no,
                 )
             )
+        
+        # Early termination for very large diffs
+        if len(result) >= MAX_DIFF_OUTPUT_LINES:
+            result.append(DiffLine(
+                content=f"[... truncated, showing first {MAX_DIFF_OUTPUT_LINES} lines ...]",
+                line_type=DiffLineType.HEADER
+            ))
+            break
 
     return result
 

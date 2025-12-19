@@ -40,7 +40,11 @@ class ContextView:
 
         # Debounce timer for token counting
         self._token_update_timer: Optional[Timer] = None
-        self._token_debounce_ms: float = 300  # 300ms debounce
+        self._token_debounce_ms: float = 150  # 150ms debounce (reduced for responsiveness)
+        
+        # Selection change debounce
+        self._selection_update_timer: Optional[Timer] = None
+        self._selection_debounce_ms: float = 50  # 50ms debounce for selection
 
         # Status auto-clear timer
         self._status_clear_timer: Optional[Timer] = None
@@ -50,6 +54,9 @@ class ContextView:
         if self._token_update_timer is not None:
             self._token_update_timer.cancel()
             self._token_update_timer = None
+        if self._selection_update_timer is not None:
+            self._selection_update_timer.cancel()
+            self._selection_update_timer = None
         if self._status_clear_timer is not None:
             self._status_clear_timer.cancel()
             self._status_clear_timer = None
@@ -322,8 +329,22 @@ class ContextView:
             self.page.update()
 
     def _on_selection_changed(self, selected_paths: Set[str]):
-        """Callback khi selection thay doi"""
-        self._update_token_count()
+        """Callback khi selection thay doi - debounced"""
+        # Cancel previous timer if exists
+        if self._selection_update_timer is not None:
+            self._selection_update_timer.cancel()
+        
+        # For small selections, update immediately
+        if len(selected_paths) < 10:
+            self._update_token_count()
+            return
+        
+        # For larger selections, debounce
+        self._selection_update_timer = Timer(
+            self._selection_debounce_ms / 1000.0,
+            self._do_update_token_count
+        )
+        self._selection_update_timer.start()
 
     def _expand_all(self):
         """Expand all folders"""

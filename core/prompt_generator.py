@@ -88,17 +88,20 @@ def _build_tree_string(items: list[TreeItem], prefix: str, lines: list[str]) -> 
             _build_tree_string(item.children, new_prefix, lines)
 
 
-def generate_file_contents(selected_paths: set[str]) -> str:
+def generate_file_contents(selected_paths: set[str], max_file_size: int = 1024 * 1024) -> str:
     """
     Tao file contents string cho cac files duoc chon.
     
     Args:
         selected_paths: Set cac duong dan file duoc tick
+        max_file_size: Maximum file size to include (default 1MB)
         
     Returns:
         File contents string voi markdown code blocks
     """
+    # Pre-allocate list with estimated size for better performance
     contents: list[str] = []
+    contents_append = contents.append  # Local reference for faster append
     
     # Sort paths de thu tu nhat quan
     sorted_paths = sorted(selected_paths)
@@ -113,15 +116,24 @@ def generate_file_contents(selected_paths: set[str]) -> str:
             
             # Skip binary files
             if is_binary_by_extension(path):
-                contents.append(f"File: {path}\n*** Skipped: Binary file ***\n")
+                contents_append(f"File: {path}\n*** Skipped: Binary file ***\n")
                 continue
+            
+            # Skip files that are too large
+            try:
+                file_size = path.stat().st_size
+                if file_size > max_file_size:
+                    contents_append(f"File: {path}\n*** Skipped: File too large ({file_size // 1024}KB) ***\n")
+                    continue
+            except OSError:
+                pass
             
             # Doc va format content
             content = path.read_text(encoding="utf-8", errors="replace")
-            contents.append(f"File: {path}\n```\n{content}\n```\n")
+            contents_append(f"File: {path}\n```\n{content}\n```\n")
             
         except (OSError, IOError) as e:
-            contents.append(f"File: {path}\n*** Error reading file: {e} ***\n")
+            contents_append(f"File: {path}\n*** Error reading file: {e} ***\n")
     
     return "\n".join(contents).strip()
 

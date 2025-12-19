@@ -2,6 +2,71 @@
 
 A lightweight desktop application for AI-assisted code editing.
 
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10+
+- pip
+
+### Installation
+
+#### Linux
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/overwrite-desktop.git
+cd overwrite-desktop
+
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+./start.sh
+# OR
+python main.py
+```
+
+#### Windows
+
+```powershell
+# Clone the repository
+git clone https://github.com/yourusername/overwrite-desktop.git
+cd overwrite-desktop
+
+# Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+python main.py
+```
+
+### Build from Source
+
+To build a standalone executable using PyInstaller:
+
+#### Linux
+
+```bash
+# Ensure develop dependencies are installed
+pip install pyinstaller
+
+# Run build script
+./build_appimage.sh
+
+# The executable will be in dist/OverwriteDesktop
+```
+
+---
+
 ## Why This Project?
 
 The original [Overwrite VS Code Extension](https://marketplace.visualstudio.com/items?itemName=peymanmortazavi.overwrite) is no longer maintained and has stopped working on recent versions of VS Code and its forks (Cursor, Windsurf, etc.).
@@ -21,57 +86,8 @@ This desktop version was created to:
 - **Token Counter** - Track token usage before sending to LLM
 - **Gitignore Support** - Respect `.gitignore` patterns automatically
 - **Excluded Folders** - Configure custom exclusion patterns
-
-## Screenshots
-
-_Coming soon_
-
----
-
-## Installation
-
-### Prerequisites
-
-- Python 3.10+
-- pip
-
-### Linux
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/overwrite-desktop.git
-cd overwrite-desktop
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python main.py
-```
-
-### Windows
-
-```powershell
-# Clone the repository
-git clone https://github.com/yourusername/overwrite-desktop.git
-cd overwrite-desktop
-
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python main.py
-```
-
----
+- **Ignore & Undo** - Quickly add files to ignore list and undo if needed
+- **History & Rollback** - View backups and undo the last applied batch of changes
 
 ## Usage
 
@@ -90,11 +106,12 @@ python main.py
 3. Paste the OPX XML response
 4. Click **Preview** to see changes
 5. Click **Apply Changes** to execute
+6. Use **History** -> **Undo Last Apply** if you need to revert
 
 ### 3. Settings
 
-- **Excluded Folders** - Add patterns like `node_modules`, `dist`
-- **Respect .gitignore** - Toggle to include/exclude gitignored files
+1. **Excluded Folders** - Add patterns like `node_modules`, `dist`
+2. **Respect .gitignore** - Toggle to include/exclude gitignored files
 
 ---
 

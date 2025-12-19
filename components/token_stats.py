@@ -64,44 +64,52 @@ class TokenStatsPanel:
         self.loading_indicator: Optional[ft.ProgressRing] = None
 
     def build(self) -> ft.Container:
-        """Build token stats panel UI"""
+        """
+        Build token stats panel UI với compact layout.
 
+        Layout mới:
+        ┌─────────────────────────────────────────────────────┐
+        │  5 files  •  1,200 tokens                          │
+        │  Files: 1,150  •  Instructions: 50  •  +OPX: 1,350 │
+        └─────────────────────────────────────────────────────┘
+        """
+        # File count - nổi bật
         self.file_count_text = ft.Text(
-            "Selected files: 0",
-            size=12,
-            color=ThemeColors.TEXT_SECONDARY,
-            tooltip="Number of files selected for context",
+            "0 files",
+            size=14,
+            weight=ft.FontWeight.W_600,
+            color=ThemeColors.PRIMARY,
         )
+
+        # Total tokens - inline với file count
+        self.total_tokens_text = ft.Text(
+            "0 tokens",
+            size=14,
+            weight=ft.FontWeight.W_600,
+            color=ThemeColors.TEXT_PRIMARY,
+        )
+
+        # Details row - compact
         self.file_tokens_text = ft.Text(
-            "File tokens: 0",
-            size=12,
+            "Files: 0",
+            size=11,
             color=ThemeColors.TEXT_SECONDARY,
-            tooltip="Total tokens from file contents",
         )
         self.instruction_tokens_text = ft.Text(
-            "Instruction tokens: 0",
-            size=12,
+            "Instructions: 0",
+            size=11,
             color=ThemeColors.TEXT_SECONDARY,
-            tooltip="Tokens from your instruction text",
-        )
-        self.total_tokens_text = ft.Text(
-            "Total (Copy): 0",
-            size=12,
-            weight=ft.FontWeight.W_500,
-            color=ThemeColors.TEXT_PRIMARY,
-            tooltip="Total tokens when using Copy Context",
         )
         self.total_xml_tokens_text = ft.Text(
-            "Total (+ OPX): 0",
-            size=12,
+            "+OPX: 0",
+            size=11,
             weight=ft.FontWeight.W_500,
             color=ThemeColors.PRIMARY,
-            tooltip="Total tokens when using Copy + OPX (includes OPX instructions)",
         )
 
         self.loading_indicator = ft.ProgressRing(
-            width=14,
-            height=14,
+            width=12,
+            height=12,
             stroke_width=2,
             color=ThemeColors.PRIMARY,
             visible=False,
@@ -112,46 +120,33 @@ class TokenStatsPanel:
         self.container = ft.Container(
             content=ft.Column(
                 [
-                    # Stats grid
+                    # Main stats row
                     ft.Row(
                         [
-                            ft.Column(
-                                [
-                                    self.file_count_text,
-                                    self.file_tokens_text,
-                                ],
-                                spacing=4,
-                                expand=True,
-                            ),
-                            ft.Column(
-                                [
-                                    self.instruction_tokens_text,
-                                    self.total_tokens_text,
-                                ],
-                                spacing=4,
-                                expand=True,
-                            ),
-                            ft.Column(
-                                [
-                                    ft.Row(
-                                        [
-                                            self.total_xml_tokens_text,
-                                            self.loading_indicator,
-                                        ],
-                                        spacing=8,
-                                    ),
-                                ],
-                                spacing=4,
-                            ),
+                            self.file_count_text,
+                            ft.Text("•", color=ThemeColors.TEXT_MUTED, size=11),
+                            self.total_tokens_text,
+                            self.loading_indicator,
                         ],
-                        spacing=16,
+                        spacing=8,
+                    ),
+                    # Details row
+                    ft.Row(
+                        [
+                            self.file_tokens_text,
+                            ft.Text("•", color=ThemeColors.TEXT_MUTED, size=10),
+                            self.instruction_tokens_text,
+                            ft.Text("•", color=ThemeColors.TEXT_MUTED, size=10),
+                            self.total_xml_tokens_text,
+                        ],
+                        spacing=6,
                     ),
                     # Skipped files warning
                     self.skipped_column,
                 ],
-                spacing=8,
+                spacing=4,
             ),
-            padding=12,
+            padding=ft.padding.symmetric(horizontal=12, vertical=8),
             bgcolor=ThemeColors.BG_ELEVATED,
             border=ft.border.all(1, ThemeColors.BORDER),
             border_radius=6,
@@ -191,22 +186,21 @@ class TokenStatsPanel:
         self._refresh_skipped_ui()
 
     def _refresh_ui(self):
-        """Refresh stats display"""
+        """Refresh stats display với compact format"""
         assert self.file_count_text is not None
         assert self.file_tokens_text is not None
         assert self.instruction_tokens_text is not None
         assert self.total_tokens_text is not None
         assert self.total_xml_tokens_text is not None
 
-        self.file_count_text.value = f"Selected files: {self.stats.file_count}"
-        self.file_tokens_text.value = f"File tokens: {self.stats.file_tokens:,}"
-        self.instruction_tokens_text.value = (
-            f"Instruction tokens: {self.stats.instruction_tokens:,}"
-        )
-        self.total_tokens_text.value = f"Total (Copy): {self.stats.total_tokens:,}"
-        self.total_xml_tokens_text.value = (
-            f"Total (+ OPX): {self.stats.total_with_xml_tokens:,}"
-        )
+        # Main row - compact format
+        self.file_count_text.value = f"{self.stats.file_count} files"
+        self.total_tokens_text.value = f"{self.stats.total_tokens:,} tokens"
+
+        # Details row - compact format
+        self.file_tokens_text.value = f"Files: {self.stats.file_tokens:,}"
+        self.instruction_tokens_text.value = f"Instr: {self.stats.instruction_tokens:,}"
+        self.total_xml_tokens_text.value = f"+OPX: {self.stats.total_with_xml_tokens:,}"
 
     def set_loading(self, is_loading: bool):
         """Set loading state"""
@@ -224,7 +218,7 @@ class TokenStatsPanel:
     def get_stats(self) -> TokenStats:
         """
         Get current token statistics.
-        
+
         Returns:
             TokenStats object với các thống kê hiện tại
         """

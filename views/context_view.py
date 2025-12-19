@@ -40,8 +40,10 @@ class ContextView:
 
         # Debounce timer for token counting
         self._token_update_timer: Optional[Timer] = None
-        self._token_debounce_ms: float = 150  # 150ms debounce (reduced for responsiveness)
-        
+        self._token_debounce_ms: float = (
+            150  # 150ms debounce (reduced for responsiveness)
+        )
+
         # Selection change debounce
         self._selection_update_timer: Optional[Timer] = None
         self._selection_debounce_ms: float = 50  # 50ms debounce for selection
@@ -79,7 +81,7 @@ class ContextView:
         self.left_panel = ft.Container(
             content=ft.Column(
                 [
-                    # Header row
+                    # Header với title và token count
                     ft.Row(
                         [
                             ft.Text(
@@ -90,43 +92,79 @@ class ContextView:
                             ),
                             ft.Container(expand=True),
                             self.token_count_text,
-                            ft.IconButton(
-                                icon=ft.Icons.SELECT_ALL,
-                                icon_size=18,
-                                icon_color=ThemeColors.TEXT_SECONDARY,
-                                tooltip="Select All",
-                                on_click=lambda _: self._select_all(),
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.DESELECT,
-                                icon_size=18,
-                                icon_color=ThemeColors.TEXT_SECONDARY,
-                                tooltip="Deselect All",
-                                on_click=lambda _: self._deselect_all(),
-                            ),
-                            ft.Container(width=8),  # Separator
-                            ft.IconButton(
-                                icon=ft.Icons.UNFOLD_MORE,
-                                icon_size=18,
-                                icon_color=ThemeColors.TEXT_SECONDARY,
-                                tooltip="Expand All",
-                                on_click=lambda _: self._expand_all(),
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.UNFOLD_LESS,
-                                icon_size=18,
-                                icon_color=ThemeColors.TEXT_SECONDARY,
-                                tooltip="Collapse All",
-                                on_click=lambda _: self._collapse_all(),
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.REFRESH,
-                                icon_size=18,
-                                icon_color=ThemeColors.TEXT_SECONDARY,
-                                tooltip="Refresh",
-                                on_click=lambda _: self._refresh_tree(),
-                            ),
                         ]
+                    ),
+                    # Toolbar với grouped buttons
+                    ft.Container(
+                        content=ft.Row(
+                            alignment=ft.MainAxisAlignment.END,
+                            controls=[
+                                # Selection group
+                                ft.Row(
+                                    [
+                                        ft.IconButton(
+                                            icon=ft.Icons.SELECT_ALL,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.TEXT_SECONDARY,
+                                            tooltip="Select All",
+                                            on_click=lambda _: self._select_all(),
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.DESELECT,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.TEXT_SECONDARY,
+                                            tooltip="Deselect All",
+                                            on_click=lambda _: self._deselect_all(),
+                                        ),
+                                    ],
+                                    spacing=0,
+                                ),
+                                # Separator
+                                ft.Container(
+                                    width=1,
+                                    height=20,
+                                    bgcolor=ThemeColors.BORDER,
+                                    margin=ft.margin.symmetric(horizontal=4),
+                                ),
+                                # Expand/Collapse group
+                                ft.Row(
+                                    [
+                                        ft.IconButton(
+                                            icon=ft.Icons.UNFOLD_MORE,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.TEXT_SECONDARY,
+                                            tooltip="Expand All",
+                                            on_click=lambda _: self._expand_all(),
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.UNFOLD_LESS,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.TEXT_SECONDARY,
+                                            tooltip="Collapse All",
+                                            on_click=lambda _: self._collapse_all(),
+                                        ),
+                                    ],
+                                    spacing=0,
+                                ),
+                                # Separator
+                                ft.Container(
+                                    width=1,
+                                    height=20,
+                                    bgcolor=ThemeColors.BORDER,
+                                    margin=ft.margin.symmetric(horizontal=4),
+                                ),
+                                # Refresh
+                                ft.IconButton(
+                                    icon=ft.Icons.REFRESH,
+                                    icon_size=20,
+                                    icon_color=ThemeColors.TEXT_SECONDARY,
+                                    tooltip="Refresh",
+                                    on_click=lambda _: self._refresh_tree(),
+                                ),
+                            ],
+                            spacing=0,
+                        ),
+                        padding=ft.padding.only(bottom=8),
                     ),
                     ft.Divider(height=1, color=ThemeColors.BORDER),
                     # File tree component
@@ -223,7 +261,7 @@ class ContextView:
                 scroll=ft.ScrollMode.AUTO,
             ),
             padding=16,
-            expand=True,
+            expand=False,
             bgcolor=ThemeColors.BG_SURFACE,
             border=ft.border.all(1, ThemeColors.BORDER),
             border_radius=8,
@@ -261,10 +299,15 @@ class ContextView:
             self.layout_container.content = ft.Row(
                 [
                     ft.Container(content=self.left_panel, expand=2),
-                    ft.Container(content=self.right_panel, expand=1),
+                    ft.Container(
+                        content=self.right_panel,
+                        expand=1,
+                        alignment=ft.alignment.top_center,
+                    ),
                 ],
                 expand=True,
                 spacing=16,
+                vertical_alignment=ft.CrossAxisAlignment.START,
             )
 
         if self.layout_container.page:
@@ -333,16 +376,15 @@ class ContextView:
         # Cancel previous timer if exists
         if self._selection_update_timer is not None:
             self._selection_update_timer.cancel()
-        
+
         # For small selections, update immediately
         if len(selected_paths) < 10:
             self._update_token_count()
             return
-        
+
         # For larger selections, debounce
         self._selection_update_timer = Timer(
-            self._selection_debounce_ms / 1000.0,
-            self._do_update_token_count
+            self._selection_debounce_ms / 1000.0, self._do_update_token_count
         )
         self._selection_update_timer.start()
 

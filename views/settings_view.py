@@ -113,18 +113,20 @@ class SettingsView:
         settings = load_settings()
 
         # Excluded folders textarea
+        # Excluded folders textarea - Fix: Removed label to prevent overlap, better styling
         self.excluded_field = ft.TextField(
-            label="Excluded Folders",
             multiline=True,
-            min_lines=8,
-            max_lines=12,
+            min_lines=15,
             value=settings.get("excluded_folders", ""),
             hint_text="node_modules\ndist\nbuild\n__pycache__",
-            expand=True,
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
-            label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
-            text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=13),
+            text_style=ft.TextStyle(
+                color=ThemeColors.TEXT_PRIMARY, size=13, font_family="monospace"
+            ),
+            content_padding=15,
+            cursor_color=ThemeColors.PRIMARY,
+            bgcolor=ThemeColors.BG_PAGE,
         )
 
         # Respect .gitignore checkbox
@@ -161,83 +163,60 @@ class SettingsView:
                     ),
                     ft.Divider(height=1, color=ThemeColors.BORDER),
                     ft.Container(height=16),
-                    # Main content in card
+                    # Main content in Grid Layout
                     ft.Container(
-                        content=ft.Column(
+                        content=ft.ResponsiveRow(
                             [
-                                # Gitignore toggle section
-                                ft.Container(
-                                    content=ft.Column(
-                                        [
-                                            ft.Text(
-                                                "File Tree Options",
-                                                weight=ft.FontWeight.W_600,
-                                                size=14,
-                                                color=ThemeColors.TEXT_PRIMARY,
+                                # LEFT COLUMN: Options & Controls
+                                ft.Column(
+                                    col={"sm": 12, "md": 5},
+                                    controls=[
+                                        # File Tree Options
+                                        ft.Text(
+                                            "File Tree Options",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Container(height=4),
+                                        self.gitignore_checkbox,
+                                        ft.Text(
+                                            "When enabled, files matching .gitignore patterns will be hidden.",
+                                            size=12,
+                                            color=ThemeColors.TEXT_SECONDARY,
+                                        ),
+                                        ft.Container(height=24),
+                                        # Presets
+                                        ft.Text(
+                                            "Quick Presets",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Container(height=4),
+                                        ft.Text(
+                                            "Load standard exclusion patterns:",
+                                            size=12,
+                                            color=ThemeColors.TEXT_SECONDARY,
+                                        ),
+                                        ft.Container(height=8),
+                                        ft.Dropdown(
+                                            options=[
+                                                ft.dropdown.Option(key=name, text=name)
+                                                for name in PRESET_PROFILES.keys()
+                                            ],
+                                            on_change=lambda e: self._load_preset(
+                                                e.control.value
                                             ),
-                                            ft.Container(height=8),
-                                            self.gitignore_checkbox,
-                                            ft.Text(
-                                                "When enabled, files matching patterns in .gitignore will be hidden from the file tree.",
-                                                size=12,
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                            ),
-                                        ]
-                                    ),
-                                    padding=ft.padding.only(bottom=24),
-                                ),
-                                # Excluded folders section
-                                ft.Container(
-                                    content=ft.Column(
-                                        [
-                                            ft.Text(
-                                                "Excluded Folders",
-                                                weight=ft.FontWeight.W_600,
-                                                size=14,
-                                                color=ThemeColors.TEXT_PRIMARY,
-                                            ),
-                                            ft.Text(
-                                                "Enter folder patterns to exclude from the file tree. One pattern per line. Lines starting with # are comments.",
-                                                size=12,
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                            ),
-                                            ft.Container(height=8),
-                                            ft.Row(
-                                                [
-                                                    ft.Text(
-                                                        "Load preset:",
-                                                        size=12,
-                                                        color=ThemeColors.TEXT_SECONDARY,
-                                                    ),
-                                                    ft.Dropdown(
-                                                        width=150,
-                                                        text_size=12,
-                                                        options=[
-                                                            ft.dropdown.Option(
-                                                                key=name, text=name
-                                                            )
-                                                            for name in PRESET_PROFILES.keys()
-                                                        ],
-                                                        on_change=lambda e: self._load_preset(
-                                                            e.control.value
-                                                        ),
-                                                        hint_text="Select preset...",
-                                                        border_color=ThemeColors.BORDER,
-                                                        focused_border_color=ThemeColors.PRIMARY,
-                                                    ),
-                                                ],
-                                                spacing=8,
-                                            ),
-                                            ft.Container(height=8),
-                                            self.excluded_field,
-                                        ]
-                                    ),
-                                    expand=True,
-                                ),
-                                ft.Container(height=16),
-                                # Action buttons
-                                ft.Row(
-                                    [
+                                            hint_text="Select a preset...",
+                                            text_size=13,
+                                            border_color=ThemeColors.BORDER,
+                                            focused_border_color=ThemeColors.PRIMARY,
+                                            dense=True,
+                                            width=220,  # Compact fixed width
+                                        ),
+                                        ft.Container(height=32),
+                                        # Action Buttons Grouped
                                         ft.ElevatedButton(
                                             "Save Settings",
                                             icon=ft.Icons.SAVE,
@@ -245,57 +224,84 @@ class SettingsView:
                                             style=ft.ButtonStyle(
                                                 color="#FFFFFF",
                                                 bgcolor=ThemeColors.SUCCESS,
-                                            ),
-                                        ),
-                                        ft.OutlinedButton(
-                                            "Reset to Default",
-                                            icon=ft.Icons.RESTORE,
-                                            on_click=lambda _: self._reset_settings(),
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_PRIMARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
+                                                shape=ft.RoundedRectangleBorder(
+                                                    radius=6
                                                 ),
                                             ),
+                                            width=float("inf"),  # Full width
                                         ),
-                                        ft.Container(width=16),
-                                        ft.OutlinedButton(
-                                            "Export",
-                                            icon=ft.Icons.DOWNLOAD,
-                                            on_click=lambda _: self._export_settings(),
-                                            tooltip="Copy settings to clipboard",
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
+                                        ft.Container(height=8),
+                                        ft.Row(
+                                            [
+                                                ft.OutlinedButton(
+                                                    "Reset",
+                                                    icon=ft.Icons.RESTORE,
+                                                    on_click=lambda _: self._reset_settings(),
+                                                    style=ft.ButtonStyle(
+                                                        color=ThemeColors.TEXT_PRIMARY,
+                                                        side=ft.BorderSide(
+                                                            1, ThemeColors.BORDER
+                                                        ),
+                                                    ),
+                                                    expand=True,
                                                 ),
-                                            ),
+                                                ft.OutlinedButton(
+                                                    "Export",
+                                                    icon=ft.Icons.DOWNLOAD,
+                                                    on_click=lambda _: self._export_settings(),
+                                                    style=ft.ButtonStyle(
+                                                        color=ThemeColors.TEXT_SECONDARY,
+                                                        side=ft.BorderSide(
+                                                            1, ThemeColors.BORDER
+                                                        ),
+                                                    ),
+                                                    expand=True,
+                                                ),
+                                            ],
+                                            spacing=8,
                                         ),
                                         ft.OutlinedButton(
-                                            "Import",
+                                            "Import Settings",
                                             icon=ft.Icons.UPLOAD,
                                             on_click=lambda _: self._import_settings(),
-                                            tooltip="Import settings from clipboard",
                                             style=ft.ButtonStyle(
                                                 color=ThemeColors.TEXT_SECONDARY,
                                                 side=ft.BorderSide(
                                                     1, ThemeColors.BORDER
                                                 ),
                                             ),
+                                            width=float("inf"),
                                         ),
-                                        ft.Container(expand=True),
+                                        ft.Container(height=16),
                                         self.status_text,
                                     ],
-                                    spacing=8,
+                                ),
+                                # RIGHT COLUMN: Excluded Folders Input
+                                ft.Column(
+                                    col={"sm": 12, "md": 7},
+                                    controls=[
+                                        ft.Text(
+                                            "Excluded Folders",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            "One pattern per line. Lines starting with # are comments.",
+                                            size=12,
+                                            color=ThemeColors.TEXT_SECONDARY,
+                                        ),
+                                        ft.Container(height=8),
+                                        self.excluded_field,
+                                    ],
                                 ),
                             ],
-                            expand=True,
+                            spacing=40,
                         ),
-                        padding=20,
+                        padding=24,
                         bgcolor=ThemeColors.BG_SURFACE,
                         border=ft.border.all(1, ThemeColors.BORDER),
                         border_radius=8,
-                        expand=True,
                     ),
                     ft.Container(height=16),
                     # Session section

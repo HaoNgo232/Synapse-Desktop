@@ -140,10 +140,39 @@ class OverwriteApp:
             tooltip="Memory usage | Token cache | Files loaded",
         )
 
-        header = ft.Container(
+        # Top bar: App title + Memory display
+        top_bar = ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.FOLDER_OPEN, color=ThemeColors.PRIMARY, size=20),
+                    ft.Text(
+                        "Overwrite Desktop",
+                        size=16,
+                        weight=ft.FontWeight.W_600,
+                        color=ThemeColors.TEXT_PRIMARY,
+                    ),
+                    ft.Container(expand=True),
+                    ft.Icon(ft.Icons.MEMORY, size=14, color=ThemeColors.TEXT_MUTED),
+                    self._memory_text,
+                    ft.IconButton(
+                        icon=ft.Icons.CLEANING_SERVICES,
+                        icon_size=16,
+                        icon_color=ThemeColors.TEXT_SECONDARY,
+                        tooltip="Clear cache & free memory",
+                        on_click=lambda _: self._clear_memory(),
+                    ),
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.padding.symmetric(horizontal=20, vertical=8),
+            bgcolor=ThemeColors.BG_SURFACE,
+        )
+
+        # Folder bar: Folder picker + Recent + Open button
+        folder_bar = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.FOLDER_OPEN, color=ThemeColors.PRIMARY, size=18),
                     self.folder_path_text,
                     self.recent_folders_btn,
                     ft.ElevatedButton(
@@ -157,22 +186,19 @@ class OverwriteApp:
                             dialog_title="Select Workspace Folder"
                         ),
                     ),
-                    ft.Container(width=20),  # Spacer
-                    ft.Icon(ft.Icons.MEMORY, size=14, color=ThemeColors.TEXT_MUTED),
-                    self._memory_text,
-                    ft.IconButton(
-                        icon=ft.Icons.CLEANING_SERVICES,
-                        icon_size=16,
-                        icon_color=ThemeColors.TEXT_SECONDARY,
-                        tooltip="Clear cache & free memory",
-                        on_click=lambda _: self._clear_memory(),
-                    ),
                 ],
                 spacing=12,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=20, vertical=12),
-            bgcolor=ThemeColors.BG_SURFACE,
+            padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            bgcolor=ThemeColors.BG_PAGE,
             border=ft.border.only(bottom=ft.BorderSide(1, ThemeColors.BORDER)),
+        )
+
+        # Combined header
+        header = ft.Column(
+            [top_bar, folder_bar],
+            spacing=0,
         )
 
         # Views

@@ -17,6 +17,7 @@ class ThemeColors:
     BG_PAGE = "#0F172A"  # Slate 900 - Main background
     BG_SURFACE = "#1E293B"  # Slate 800 - Cards, panels
     BG_ELEVATED = "#334155"  # Slate 700 - Hover states
+    BG_HOVER = "#475569"  # Slate 600 - Interactive hover
 
     # Text - High Contrast on Dark
     TEXT_PRIMARY = "#F1F5F9"  # Slate 100 - Main text
@@ -26,6 +27,7 @@ class ThemeColors:
     # Borders - Subtle on Dark
     BORDER = "#334155"  # Slate 700
     BORDER_FOCUS = "#3B82F6"  # Blue 500
+    BORDER_LIGHT = "#475569"  # Slate 600 - Lighter border
 
     # Status
     SUCCESS = "#10B981"  # Emerald 500
@@ -38,3 +40,23 @@ class ThemeColors:
 
     # Search
     SEARCH_HIGHLIGHT = "#422006"  # Amber 950 - Dark amber bg
+
+
+class ThemeSpacing:
+    """Spacing constants for consistent layouts"""
+
+    XS = 4
+    SM = 8
+    MD = 12
+    LG = 16
+    XL = 20
+    XXL = 24
+
+
+class ThemeRadius:
+    """Border radius constants"""
+
+    SM = 4
+    MD = 6
+    LG = 8
+    XL = 12

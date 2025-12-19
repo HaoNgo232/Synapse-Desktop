@@ -22,6 +22,10 @@ class TokenStats:
     total_with_xml_tokens: int = 0
 
 
+# Constant cho so token uoc tinh cua OPX XML instructions
+OPX_XML_OVERHEAD_TOKENS = 150
+
+
 @dataclass
 class SkippedFile:
     """File bi skip khi tinh tokens"""
@@ -133,7 +137,7 @@ class TokenStatsPanel:
         file_count: int,
         file_tokens: int,
         instruction_tokens: int,
-        xml_overhead: int = 150,  # OPX instructions tokens
+        xml_overhead: int = OPX_XML_OVERHEAD_TOKENS,
     ):
         """
         Update token stats.
@@ -142,7 +146,7 @@ class TokenStatsPanel:
             file_count: So files duoc chon
             file_tokens: Tong tokens cua files
             instruction_tokens: Tokens cua user instructions
-            xml_overhead: Tokens cua OPX XML instructions (default 150)
+            xml_overhead: Tokens cua OPX XML instructions (default constant)
         """
         self.stats = TokenStats(
             file_count=file_count,

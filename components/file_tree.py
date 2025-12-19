@@ -5,6 +5,7 @@ Tach ra tu context_view.py de tranh god content.
 """
 
 import flet as ft
+import logging
 from pathlib import Path
 from typing import Callable, Optional, Set
 
@@ -507,7 +508,8 @@ class FileTreeComponent:
         try:
             if self.page:
                 self.page.update()
-        except Exception:
+        except Exception as e:
+            logging.debug(f"Error updating page from token service: {e}")
             pass  # Ignore errors khi page chua san sang
 
     def _request_visible_tokens(self):

@@ -10,7 +10,7 @@ Tach ra theo SOLID:
 from pathlib import Path
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass
-from threading import Thread
+from threading import Thread, Lock
 import time
 
 from core.token_counter import count_tokens_for_file
@@ -53,18 +53,23 @@ class TokenDisplayService:
         self._pending_paths: list = []
         self._is_processing = False
 
+        # Thread safety lock
+        self._lock = Lock()
+
     def clear_cache(self):
         """Xoa toan bo cache (khi reload tree)"""
-        self._cache.clear()
-        self._loading_paths.clear()
-        self._pending_paths.clear()
+        with self._lock:
+            self._cache.clear()
+            self._loading_paths.clear()
+            self._pending_paths.clear()
 
     def get_token_count(self, path: str) -> Optional[int]:
         """
         Lay token count tu cache.
         Returns None neu chua duoc tinh.
         """
-        return self._cache.get(path)
+        with self._lock:
+            return self._cache.get(path)
 
     def get_token_display(self, path: str) -> str:
         """
@@ -80,7 +85,8 @@ class TokenDisplayService:
 
     def is_loading(self, path: str) -> bool:
         """Check xem path dang duoc load khong"""
-        return path in self._loading_paths
+        with self._lock:
+            return path in self._loading_paths
 
     def request_token_count(self, path: str):
         """
@@ -94,12 +100,16 @@ class TokenDisplayService:
         if Path(path).is_dir():
             return
 
-        self._pending_paths.append(path)
-        self._loading_paths.add(path)
+        with self._lock:
+            if path in self._cache or path in self._loading_paths:
+                return
 
-        # Start background processing neu chua chay
-        if not self._is_processing:
-            self._start_background_processing()
+            self._pending_paths.append(path)
+            self._loading_paths.add(path)
+
+            # Start background processing neu chua chay
+            if not self._is_processing:
+                self._start_background_processing()
 
     def request_tokens_for_tree(
         self,
@@ -117,8 +127,11 @@ class TokenDisplayService:
         """
         self._collect_files_to_count(tree, visible_only, visible_paths)
 
-        if self._pending_paths and not self._is_processing:
-            self._start_background_processing()
+        self._collect_files_to_count(tree, visible_only, visible_paths)
+
+        with self._lock:
+            if self._pending_paths and not self._is_processing:
+                self._start_background_processing()
 
     def _collect_files_to_count(
         self, item: TreeItem, visible_only: bool, visible_paths: Optional[set]
@@ -130,9 +143,13 @@ class TokenDisplayService:
 
         if not item.is_dir:
             # La file - request token count
-            if item.path not in self._cache and item.path not in self._loading_paths:
-                self._pending_paths.append(item.path)
-                self._loading_paths.add(item.path)
+            with self._lock:
+                if (
+                    item.path not in self._cache
+                    and item.path not in self._loading_paths
+                ):
+                    self._pending_paths.append(item.path)
+                    self._loading_paths.add(item.path)
         else:
             # La folder - recurse vao children
             for child in item.children:
@@ -146,26 +163,37 @@ class TokenDisplayService:
 
     def _process_pending(self):
         """Process pending paths trong background"""
-        while self._pending_paths:
-            path = self._pending_paths.pop(0)
+        while True:
+            path = None
+            with self._lock:
+                if not self._pending_paths:
+                    self._is_processing = False
+                    break
+                path = self._pending_paths.pop(0)
 
-            try:
-                tokens = count_tokens_for_file(Path(path))
-                self._cache[path] = tokens
-            except Exception:
-                self._cache[path] = 0
-            finally:
-                self._loading_paths.discard(path)
+            if path:
+                try:
+                    tokens = count_tokens_for_file(Path(path))
+                    with self._lock:
+                        self._cache[path] = tokens
+                except Exception:
+                    with self._lock:
+                        self._cache[path] = 0
+                finally:
+                    with self._lock:
+                        self._loading_paths.discard(path)
 
-            # Notify UI sau moi batch (10 files)
-            if len(self._pending_paths) % 10 == 0 or not self._pending_paths:
-                if self.on_update:
+                # Notify UI sau moi batch (10 files)
+                should_update = False
+                with self._lock:
+                    if len(self._pending_paths) % 10 == 0 or not self._pending_paths:
+                        should_update = True
+
+                if should_update and self.on_update:
                     self.on_update()
 
             # Small delay de khong block CPU
             time.sleep(0.01)
-
-        self._is_processing = False
 
         # Final update
         if self.on_update:
@@ -184,10 +212,12 @@ class TokenDisplayService:
         all_cached = True
 
         for file_path in self._get_all_file_paths(folder_item):
-            if file_path in self._cache:
-                total += self._cache[file_path]
-            else:
-                all_cached = False
+            with self._lock:
+                if file_path in self._cache:
+                    total += self._cache[file_path]
+                else:
+                    all_cached = False
+                    break
 
         return total if all_cached else None
 

@@ -16,6 +16,7 @@ from core.prompt_generator import (
     generate_file_contents,
     generate_prompt,
 )
+from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
@@ -132,6 +133,16 @@ class ContextView:
                     ft.Container(height=12),
                     ft.Row(
                         [
+                            ft.OutlinedButton(
+                                "Copy Tree Map",
+                                icon=ft.Icons.ACCOUNT_TREE,
+                                on_click=lambda _: self._copy_tree_map_only(),
+                                expand=True,
+                                style=ft.ButtonStyle(
+                                    color=ThemeColors.TEXT_SECONDARY,
+                                    side=ft.BorderSide(1, ThemeColors.BORDER),
+                                ),
+                            ),
                             ft.OutlinedButton(
                                 "Copy Context",
                                 icon=ft.Icons.CONTENT_COPY,
@@ -329,6 +340,35 @@ class ContextView:
             token_count = count_tokens(prompt)
             suffix = " + OPX" if include_xml else ""
             self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
+
+        except Exception as e:
+            self._show_status(f"Error: {e}", is_error=True)
+
+    def _copy_tree_map_only(self):
+        """
+        Copy chi tree map to clipboard (khong co file contents).
+        Tiet kiem tokens khi chi can LLM hieu cau truc project.
+        """
+        if not self.tree or not self.file_tree_component:
+            self._show_status("No files selected", is_error=True)
+            return
+
+        # Su dung visible paths
+        selected_paths = self.file_tree_component.get_visible_selected_paths()
+        if not selected_paths:
+            self._show_status("No files selected", is_error=True)
+            return
+
+        try:
+            assert self.instructions_field is not None
+            instructions = self.instructions_field.value or ""
+
+            prompt = generate_tree_map_only(self.tree, selected_paths, instructions)
+
+            pyperclip.copy(prompt)
+
+            token_count = count_tokens(prompt)
+            self._show_status(f"Tree map copied! ({token_count:,} tokens)")
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)

@@ -24,7 +24,7 @@ def load_settings() -> dict:
         Dict voi keys: excluded_folders (str), use_gitignore (bool)
     """
     default = {
-        "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\n",
+        "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",
         "use_gitignore": True,
     }
 

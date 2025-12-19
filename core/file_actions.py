@@ -20,7 +20,7 @@ from typing import Optional, Literal, Union
 from datetime import datetime
 
 from core.opx_parser import FileAction, ChangeBlock
-from core.logging_config import log_error, log_info, log_debug
+from core.logging_config import log_error, log_info, log_debug, log_warning
 
 
 # Backup directory
@@ -30,24 +30,24 @@ BACKUP_DIR = Path.home() / ".overwrite-desktop" / "backups"
 def create_backup(file_path: Path) -> Optional[Path]:
     """
     Tạo backup của file trước khi modify.
-    
+
     Args:
         file_path: Path đến file cần backup
-        
+
     Returns:
         Path đến backup file, hoặc None nếu thất bại
     """
     if not file_path.exists():
         return None
-    
+
     try:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        
+
         # Tạo tên backup với timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file_path.name}.{timestamp}.bak"
         backup_path = BACKUP_DIR / backup_name
-        
+
         shutil.copy2(file_path, backup_path)
         log_debug(f"Created backup: {backup_path}")
         return backup_path
@@ -59,19 +59,28 @@ def create_backup(file_path: Path) -> Optional[Path]:
 def restore_backup(backup_path: Path, original_path: Path) -> bool:
     """
     Khôi phục file từ backup.
-    
+
     Args:
         backup_path: Path đến backup file
         original_path: Path đến file gốc cần restore
-        
+
     Returns:
         True nếu restore thành công
     """
     try:
-        if backup_path.exists():
-            shutil.copy2(backup_path, original_path)
-            log_info(f"Restored from backup: {original_path}")
-            return True
+        if not backup_path.exists():
+            log_error(f"Backup file not found: {backup_path}")
+            return False
+
+        # Basic validation: check file is readable and not empty
+        file_size = backup_path.stat().st_size
+        if file_size == 0:
+            log_warning(f"Backup file is empty: {backup_path}")
+            # Still allow restore of empty files - might be intentional
+
+        shutil.copy2(backup_path, original_path)
+        log_info(f"Restored from backup: {original_path}")
+        return True
     except Exception as e:
         log_error(f"Failed to restore backup for {original_path}", e)
     return False
@@ -80,23 +89,23 @@ def restore_backup(backup_path: Path, original_path: Path) -> bool:
 def list_backups(file_name: Optional[str] = None) -> list[Path]:
     """
     List all backup files, optionally filtered by original file name.
-    
+
     Args:
         file_name: Optional original file name to filter by
-        
+
     Returns:
         List of backup file paths, sorted by modification time (newest first)
     """
     if not BACKUP_DIR.exists():
         return []
-    
+
     try:
         backups = list(BACKUP_DIR.glob("*.bak"))
-        
+
         if file_name:
             # Filter by file name (backup format: filename.timestamp.bak)
             backups = [b for b in backups if b.name.startswith(file_name + ".")]
-        
+
         # Sort by modification time, newest first
         backups.sort(key=lambda f: f.stat().st_mtime, reverse=True)
         return backups
@@ -108,27 +117,24 @@ def list_backups(file_name: Optional[str] = None) -> list[Path]:
 def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
     """
     Cleanup backup files cũ hơn max_age_days hoặc vượt quá max_count.
-    
+
     Args:
         max_age_days: Số ngày tối đa giữ backup (default 7)
         max_count: Số lượng backup tối đa giữ lại (default 100)
-        
+
     Returns:
         Số lượng files đã xóa
     """
     if not BACKUP_DIR.exists():
         return 0
-    
+
     deleted_count = 0
     now = datetime.now()
-    
+
     try:
         # List all backup files sorted by modification time (oldest first)
-        backup_files = sorted(
-            BACKUP_DIR.glob("*.bak"),
-            key=lambda f: f.stat().st_mtime
-        )
-        
+        backup_files = sorted(BACKUP_DIR.glob("*.bak"), key=lambda f: f.stat().st_mtime)
+
         # Delete files older than max_age_days
         cutoff_time = now.timestamp() - (max_age_days * 24 * 60 * 60)
         for backup_file in backup_files[:]:
@@ -140,7 +146,7 @@ def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
                     log_debug(f"Deleted old backup: {backup_file.name}")
                 except Exception:
                     pass
-        
+
         # Delete oldest files if count exceeds max_count
         while len(backup_files) > max_count:
             oldest = backup_files.pop(0)
@@ -150,13 +156,13 @@ def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
                 log_debug(f"Deleted excess backup: {oldest.name}")
             except Exception:
                 pass
-        
+
         if deleted_count > 0:
             log_info(f"Cleaned up {deleted_count} old backup file(s)")
-            
+
     except Exception as e:
         log_error("Failed to cleanup backups", e)
-    
+
     return deleted_count
 
 
@@ -172,9 +178,9 @@ class ActionResult:
 
 
 def apply_file_actions(
-    file_actions: list[FileAction], 
+    file_actions: list[FileAction],
     workspace_roots: Optional[list[Path]] = None,
-    dry_run: bool = False
+    dry_run: bool = False,
 ) -> list[ActionResult]:
     """
     Thuc thi danh sach file actions.
@@ -190,7 +196,7 @@ def apply_file_actions(
     # Cleanup old backups before creating new ones (skip in dry-run)
     if not dry_run:
         cleanup_old_backups()
-    
+
     results: list[ActionResult] = []
     mode = "Validating" if dry_run else "Applying"
     log_info(f"{mode} {len(file_actions)} file action(s)")

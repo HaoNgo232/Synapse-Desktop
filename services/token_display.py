@@ -38,11 +38,12 @@ class TokenDisplayService:
     - Auto cleanup stale cache entries
     """
 
-    # Config - optimized for performance
-    BATCH_SIZE = 50  # Process 50 files per batch (increased from 20)
-    MAX_WORKERS = 6  # Thread pool size (increased from 4)
-    MAX_CACHE_SIZE = 10000  # Maximum cache entries (increased from 5000)
+    # Config - balanced for responsiveness
+    BATCH_SIZE = 50  # Process 50 files per batch
+    MAX_WORKERS = 4  # Thread pool size (reduced for stability)
+    MAX_CACHE_SIZE = 10000  # Maximum cache entries
     UPDATE_THROTTLE_MS = 100  # Minimum time between UI updates
+    BATCH_TIMEOUT_SEC = 15  # Timeout per batch (reduced from 30)
 
     def __init__(self, on_update: Optional[Callable[[], None]] = None):
         """
@@ -222,6 +223,10 @@ class TokenDisplayService:
             if not batch:
                 break
 
+            # Check if cancelled before processing
+            if not self._is_processing:
+                break
+
             # Process batch in parallel
             try:
                 futures = {
@@ -229,7 +234,7 @@ class TokenDisplayService:
                     for path in batch
                 }
 
-                for future in as_completed(futures, timeout=30):
+                for future in as_completed(futures, timeout=self.BATCH_TIMEOUT_SEC):
                     path = futures[future]
                     try:
                         tokens = future.result()

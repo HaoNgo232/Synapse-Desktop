@@ -106,8 +106,13 @@ def flush_logs():
     """
     if _logger:
         for handler in _logger.handlers:
-            if isinstance(handler, logging.handlers.MemoryHandler):
-                handler.flush()
+            try:
+                if isinstance(handler, logging.handlers.MemoryHandler):
+                    handler.flush()
+                elif hasattr(handler, 'flush'):
+                    handler.flush()
+            except Exception:
+                pass  # Ignore errors during shutdown
 
 
 def set_debug_mode(enabled: bool):

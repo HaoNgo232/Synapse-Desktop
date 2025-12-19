@@ -8,11 +8,14 @@ Cung cấp:
 - Warning khi memory cao
 """
 
-import psutil
 import os
 from threading import Timer
 from typing import Callable, Optional
 from dataclasses import dataclass
+
+# psutil should always be available (in requirements.txt)
+# but wrap in try/except for runtime errors
+import psutil
 
 
 @dataclass
@@ -96,26 +99,44 @@ class MemoryMonitor:
         Returns:
             MemoryStats với thông tin memory usage
         """
+        rss_mb = 0.0
+        
+        # Method 1: psutil (chính xác nhất)
         try:
-            # Lấy memory info từ process
             mem_info = self._process.memory_info()
-            rss_mb = mem_info.rss / (1024 * 1024)  # Convert to MB
-
-            # Xác định warning
-            warning = None
-            if rss_mb >= self.CRITICAL_THRESHOLD_MB:
-                warning = f"Critical: Memory usage {rss_mb:.0f}MB exceeds {self.CRITICAL_THRESHOLD_MB}MB!"
-            elif rss_mb >= self.WARNING_THRESHOLD_MB:
-                warning = f"Warning: Memory usage {rss_mb:.0f}MB is high"
-
-            return MemoryStats(
-                rss_mb=rss_mb,
-                token_cache_count=self._token_cache_count,
-                file_count=self._file_count,
-                warning=warning,
-            )
+            rss_mb = mem_info.rss / (1024 * 1024)
         except Exception:
-            return MemoryStats(rss_mb=0, warning="Unable to read memory stats")
+            # Method 2: Fallback đọc /proc trên Linux
+            rss_mb = self._read_proc_memory()
+
+        # Xác định warning
+        warning = None
+        if rss_mb >= self.CRITICAL_THRESHOLD_MB:
+            warning = f"Critical: Memory usage {rss_mb:.0f}MB exceeds {self.CRITICAL_THRESHOLD_MB}MB!"
+        elif rss_mb >= self.WARNING_THRESHOLD_MB:
+            warning = f"Warning: Memory usage {rss_mb:.0f}MB is high"
+        elif rss_mb == 0:
+            warning = "Unable to read memory stats"
+
+        return MemoryStats(
+            rss_mb=rss_mb,
+            token_cache_count=self._token_cache_count,
+            file_count=self._file_count,
+            warning=warning,
+        )
+    
+    def _read_proc_memory(self) -> float:
+        """Fallback: đọc memory từ /proc/self/status (Linux only)"""
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            return int(parts[1]) / 1024  # kB to MB
+        except Exception:
+            pass
+        return 0.0
 
     def _schedule_update(self):
         """Schedule next update"""

@@ -229,8 +229,14 @@ class ContextView:
         """Khi user chon folder moi hoac settings thay doi"""
         self._load_tree(workspace_path)
 
-    def _load_tree(self, workspace_path: Path):
-        """Load file tree"""
+    def _load_tree(self, workspace_path: Path, preserve_selection: bool = False):
+        """
+        Load file tree.
+
+        Args:
+            workspace_path: Path to workspace folder
+            preserve_selection: Neu True, giu lai selection hien tai (cho Refresh)
+        """
         try:
             from views.settings_view import get_excluded_patterns, get_use_gitignore
 
@@ -245,7 +251,9 @@ class ContextView:
 
             # Set tree to component
             assert self.file_tree_component is not None
-            self.file_tree_component.set_tree(self.tree)
+            self.file_tree_component.set_tree(
+                self.tree, preserve_selection=preserve_selection
+            )
             self._update_token_count()
 
         except Exception as e:
@@ -266,10 +274,10 @@ class ContextView:
             self.file_tree_component.collapse_all()
 
     def _refresh_tree(self):
-        """Refresh tree"""
+        """Refresh tree - giu lai selection hien tai"""
         workspace = self.get_workspace()
         if workspace:
-            self._load_tree(workspace)
+            self._load_tree(workspace, preserve_selection=True)
 
     def _update_token_count(self):
         """

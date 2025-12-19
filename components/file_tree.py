@@ -109,13 +109,28 @@ class FileTreeComponent:
             expand=True,
         )
 
-    def set_tree(self, tree: TreeItem):
-        """Set tree data va render"""
+    def set_tree(self, tree: TreeItem, preserve_selection: bool = False):
+        """
+        Set tree data va render.
+
+        Args:
+            tree: TreeItem root moi
+            preserve_selection: Neu True, giu lai cac selected paths van ton tai trong tree moi
+        """
+        # Luu lai selected paths neu can preserve
+        old_selected = self.selected_paths.copy() if preserve_selection else set()
+
         self.tree = tree
-        self.selected_paths.clear()
         self.expanded_paths = {tree.path}
         self.search_query = ""
         self.matched_paths.clear()
+
+        if preserve_selection:
+            # Chi giu lai cac paths van ton tai trong tree moi
+            valid_paths = self._get_all_paths_in_tree(tree)
+            self.selected_paths = old_selected & valid_paths
+        else:
+            self.selected_paths.clear()
 
         # Clear token cache va request tokens cho visible files
         self._token_service.clear_cache()
@@ -522,3 +537,18 @@ class FileTreeComponent:
         self._token_service.request_tokens_for_tree(
             self.tree, visible_only=bool(self.search_query), visible_paths=visible
         )
+
+    def _get_all_paths_in_tree(self, item: TreeItem) -> Set[str]:
+        """
+        Lay tat ca paths trong tree (de dang cho so sanh).
+
+        Args:
+            item: TreeItem root
+
+        Returns:
+            Set chua tat ca paths trong tree
+        """
+        paths: Set[str] = {item.path}
+        for child in item.children:
+            paths.update(self._get_all_paths_in_tree(child))
+        return paths

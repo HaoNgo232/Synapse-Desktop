@@ -40,6 +40,9 @@ class OverwriteApp:
         self.page.window.width = 1500
         self.page.window.height = 900
 
+        # Keyboard shortcuts
+        self.page.on_keyboard_event = self._on_keyboard_event
+
         # Build UI
         self._build_ui()
 
@@ -170,6 +173,43 @@ class OverwriteApp:
     def _get_workspace_path(self) -> Optional[Path]:
         """Getter cho workspace path"""
         return self.workspace_path
+
+    def _on_keyboard_event(self, e: ft.KeyboardEvent):
+        """
+        Handle keyboard shortcuts.
+        
+        Shortcuts:
+        - Ctrl+Shift+C: Copy Context
+        - Ctrl+Shift+O: Copy + OPX
+        - Ctrl+R: Refresh file tree
+        - Ctrl+F: Focus search field
+        - Escape: Clear search
+        """
+        # Let file tree component handle its own keyboard events first
+        if hasattr(self, "context_view") and self.context_view.file_tree_component:
+            if self.context_view.file_tree_component.handle_keyboard_event(e):
+                self.page.update()
+                return
+
+        if e.ctrl and e.shift and e.key == "C":
+            # Copy Context
+            if hasattr(self, "context_view"):
+                self.context_view._copy_context(include_xml=False)
+        elif e.ctrl and e.shift and e.key == "O":
+            # Copy + OPX
+            if hasattr(self, "context_view"):
+                self.context_view._copy_context(include_xml=True)
+        elif e.ctrl and e.key == "R":
+            # Refresh tree
+            if hasattr(self, "context_view"):
+                self.context_view._refresh_tree()
+        elif e.ctrl and e.key == "F":
+            # Focus search field
+            if hasattr(self, "context_view") and self.context_view.file_tree_component:
+                search_field = self.context_view.file_tree_component.search_field
+                if search_field:
+                    search_field.focus()
+                    self.page.update()
 
 
 def main(page: ft.Page):

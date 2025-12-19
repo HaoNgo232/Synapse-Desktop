@@ -51,6 +51,7 @@ class TokenStatsPanel:
     def __init__(self):
         self.stats = TokenStats()
         self.skipped_files: List[SkippedFile] = []
+        self.is_loading: bool = False
 
         # UI elements
         self.container: Optional[ft.Container] = None
@@ -60,6 +61,7 @@ class TokenStatsPanel:
         self.total_tokens_text: Optional[ft.Text] = None
         self.total_xml_tokens_text: Optional[ft.Text] = None
         self.skipped_column: Optional[ft.Column] = None
+        self.loading_indicator: Optional[ft.ProgressRing] = None
 
     def build(self) -> ft.Container:
         """Build token stats panel UI"""
@@ -97,6 +99,14 @@ class TokenStatsPanel:
             tooltip="Total tokens when using Copy + OPX (includes OPX instructions)",
         )
 
+        self.loading_indicator = ft.ProgressRing(
+            width=14,
+            height=14,
+            stroke_width=2,
+            color=ThemeColors.PRIMARY,
+            visible=False,
+        )
+
         self.skipped_column = ft.Column(controls=[], spacing=4, visible=False)
 
         self.container = ft.Container(
@@ -123,7 +133,13 @@ class TokenStatsPanel:
                             ),
                             ft.Column(
                                 [
-                                    self.total_xml_tokens_text,
+                                    ft.Row(
+                                        [
+                                            self.total_xml_tokens_text,
+                                            self.loading_indicator,
+                                        ],
+                                        spacing=8,
+                                    ),
                                 ],
                                 spacing=4,
                             ),
@@ -191,6 +207,28 @@ class TokenStatsPanel:
         self.total_xml_tokens_text.value = (
             f"Total (+ OPX): {self.stats.total_with_xml_tokens:,}"
         )
+
+    def set_loading(self, is_loading: bool):
+        """Set loading state"""
+        self.is_loading = is_loading
+        if self.loading_indicator:
+            self.loading_indicator.visible = is_loading
+
+    def get_stats(self) -> TokenStats:
+        """
+        Get current token statistics.
+        
+        Returns:
+            TokenStats object với các thống kê hiện tại
+        """
+        return self.stats
+
+    def reset(self):
+        """Reset all stats to zero"""
+        self.stats = TokenStats()
+        self.skipped_files = []
+        self._refresh_ui()
+        self._refresh_skipped_ui()
 
     def _refresh_skipped_ui(self):
         """Refresh skipped files display"""

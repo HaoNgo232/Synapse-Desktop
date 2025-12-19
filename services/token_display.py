@@ -62,6 +62,26 @@ class TokenDisplayService:
             self._cache.clear()
             self._loading_paths.clear()
             self._pending_paths.clear()
+            # Signal background thread to stop
+            self._is_processing = False
+
+    def stop(self):
+        """Stop background processing gracefully"""
+        with self._lock:
+            self._is_processing = False
+            self._pending_paths.clear()
+
+    def cleanup_stale_entries(self, valid_paths: set):
+        """
+        Xóa các cache entries không còn tồn tại trong tree.
+        
+        Args:
+            valid_paths: Set các paths hiện tại trong tree
+        """
+        with self._lock:
+            stale_keys = [k for k in self._cache.keys() if k not in valid_paths]
+            for key in stale_keys:
+                del self._cache[key]
 
     def get_token_count(self, path: str) -> Optional[int]:
         """
@@ -162,7 +182,11 @@ class TokenDisplayService:
         thread.start()
 
     def _process_pending(self):
-        """Process pending paths trong background"""
+        """Process pending paths trong background với rate limiting"""
+        batch_count = 0
+        batch_start_time = time.time()
+        max_files_per_second = 50  # Rate limit
+        
         while True:
             path = None
             with self._lock:
@@ -183,6 +207,8 @@ class TokenDisplayService:
                     with self._lock:
                         self._loading_paths.discard(path)
 
+                batch_count += 1
+                
                 # Notify UI sau moi batch (10 files)
                 should_update = False
                 with self._lock:
@@ -192,8 +218,16 @@ class TokenDisplayService:
                 if should_update and self.on_update:
                     self.on_update()
 
-            # Small delay de khong block CPU
-            time.sleep(0.01)
+                # Rate limiting: pause if processing too fast
+                if batch_count >= max_files_per_second:
+                    elapsed = time.time() - batch_start_time
+                    if elapsed < 1.0:
+                        time.sleep(1.0 - elapsed)
+                    batch_count = 0
+                    batch_start_time = time.time()
+                else:
+                    # Small delay de khong block CPU
+                    time.sleep(0.005)
 
         # Final update
         if self.on_update:

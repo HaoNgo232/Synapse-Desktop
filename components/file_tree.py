@@ -53,12 +53,19 @@ class FileTreeComponent:
         self._search_timer: Optional[Timer] = None
         self._search_debounce_ms: float = 150  # 150ms debounce
 
+    def cleanup(self):
+        """Cleanup resources when component is destroyed"""
+        if self._search_timer is not None:
+            self._search_timer.cancel()
+            self._search_timer = None
+        self._token_service.clear_cache()
+
     def build(self) -> ft.Container:
         """Build file tree component UI"""
 
-        # Search field
+        # Search field with keyboard support
         self.search_field = ft.TextField(
-            hint_text="Search files...",
+            hint_text="Search files... (Ctrl+F)",
             prefix_icon=ft.Icons.SEARCH,
             dense=True,
             height=36,
@@ -66,11 +73,14 @@ class FileTreeComponent:
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
             on_change=self._on_search_changed,
+            on_submit=self._on_search_submit,
+            on_blur=self._on_search_blur,
+            autofocus=False,
             suffix=ft.IconButton(
                 icon=ft.Icons.CLOSE,
                 icon_size=14,
                 icon_color=ThemeColors.TEXT_MUTED,
-                tooltip="Clear search",
+                tooltip="Clear search (Esc)",
                 on_click=self._clear_search,
                 visible=False,
             ),
@@ -220,18 +230,6 @@ class FileTreeComponent:
                 else:
                     self._collect_visible_files_recursive(child, result)
 
-    def _find_item_by_path(
-        self, item: TreeItem, target_path: str
-    ) -> Optional[TreeItem]:
-        """Tim TreeItem theo path"""
-        if item.path == target_path:
-            return item
-        for child in item.children:
-            found = self._find_item_by_path(child, target_path)
-            if found:
-                return found
-        return None
-
     def is_searching(self) -> bool:
         """Check xem co dang search khong"""
         return bool(self.search_query)
@@ -287,8 +285,25 @@ class FileTreeComponent:
 
         self._render_tree()
 
-    def _clear_search(self, e):
+    def _on_search_submit(self, e):
+        """Handle Enter key trong search field - select first match"""
+        if self.search_query and self.matched_paths:
+            # Select first matched file (not folder)
+            for path in sorted(self.matched_paths):
+                if not Path(path).is_dir():
+                    self.selected_paths.add(path)
+                    if self.on_selection_changed:
+                        self.on_selection_changed(self.selected_paths)
+                    self._render_tree()
+                    break
+
+    def _clear_search(self, e=None):
         """Clear search"""
+        # Cancel any pending search timer
+        if self._search_timer is not None:
+            self._search_timer.cancel()
+            self._search_timer = None
+
         assert self.search_field is not None
         assert self.match_count_text is not None
 
@@ -299,6 +314,20 @@ class FileTreeComponent:
         if self.search_field.suffix:
             self.search_field.suffix.visible = False
         self._render_tree()
+
+    def _on_search_blur(self, e):
+        """Handle search field blur - used for keyboard events"""
+        pass  # Placeholder for future keyboard handling
+
+    def handle_keyboard_event(self, e: ft.KeyboardEvent) -> bool:
+        """
+        Handle keyboard events for the file tree.
+        Returns True if event was handled.
+        """
+        if e.key == "Escape" and self.search_query:
+            self._clear_search()
+            return True
+        return False
 
     def _perform_search(self):
         """Tim kiem files matching query"""

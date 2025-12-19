@@ -20,6 +20,8 @@ from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
+from threading import Timer
+from typing import Set
 
 
 class ContextView:
@@ -35,6 +37,24 @@ class ContextView:
         self.instructions_field: Optional[ft.TextField] = None
         self.status_text: Optional[ft.Text] = None
         self.token_stats_panel: Optional[TokenStatsPanel] = None
+        
+        # Debounce timer for token counting
+        self._token_update_timer: Optional[Timer] = None
+        self._token_debounce_ms: float = 300  # 300ms debounce
+        
+        # Status auto-clear timer
+        self._status_clear_timer: Optional[Timer] = None
+
+    def cleanup(self):
+        """Cleanup resources when view is destroyed"""
+        if self._token_update_timer is not None:
+            self._token_update_timer.cancel()
+            self._token_update_timer = None
+        if self._status_clear_timer is not None:
+            self._status_clear_timer.cancel()
+            self._status_clear_timer = None
+        if self.file_tree_component:
+            self.file_tree_component.cleanup()
 
     def build(self) -> ft.Container:
         """Build UI cho Context view"""
@@ -63,6 +83,21 @@ class ContextView:
                             ),
                             ft.Container(expand=True),
                             self.token_count_text,
+                            ft.IconButton(
+                                icon=ft.Icons.SELECT_ALL,
+                                icon_size=18,
+                                icon_color=ThemeColors.TEXT_SECONDARY,
+                                tooltip="Select All",
+                                on_click=lambda _: self._select_all(),
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.DESELECT,
+                                icon_size=18,
+                                icon_color=ThemeColors.TEXT_SECONDARY,
+                                tooltip="Deselect All",
+                                on_click=lambda _: self._deselect_all(),
+                            ),
+                            ft.Container(width=8),  # Separator
                             ft.IconButton(
                                 icon=ft.Icons.UNFOLD_MORE,
                                 icon_size=18,
@@ -111,7 +146,7 @@ class ContextView:
             focused_border_color=ThemeColors.PRIMARY,
             label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
             text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY),
-            on_change=lambda _: self._update_token_count(),
+            on_change=lambda _: self._on_instructions_changed(),
         )
 
         self.status_text = ft.Text("", color=ThemeColors.SUCCESS, size=12)
@@ -138,6 +173,7 @@ class ContextView:
                                 icon=ft.Icons.ACCOUNT_TREE,
                                 on_click=lambda _: self._copy_tree_map_only(),
                                 expand=True,
+                                tooltip="Copy only file structure without contents",
                                 style=ft.ButtonStyle(
                                     color=ThemeColors.TEXT_SECONDARY,
                                     side=ft.BorderSide(1, ThemeColors.BORDER),
@@ -150,6 +186,7 @@ class ContextView:
                                     include_xml=False
                                 ),
                                 expand=True,
+                                tooltip="Ctrl+Shift+C",
                                 style=ft.ButtonStyle(
                                     color=ThemeColors.TEXT_PRIMARY,
                                     side=ft.BorderSide(1, ThemeColors.BORDER),
@@ -160,6 +197,7 @@ class ContextView:
                                 icon=ft.Icons.CODE,
                                 on_click=lambda _: self._copy_context(include_xml=True),
                                 expand=True,
+                                tooltip="Ctrl+Shift+O",
                                 style=ft.ButtonStyle(
                                     color="#FFFFFF",
                                     bgcolor=ThemeColors.PRIMARY,
@@ -237,8 +275,15 @@ class ContextView:
             workspace_path: Path to workspace folder
             preserve_selection: Neu True, giu lai selection hien tai (cho Refresh)
         """
+        # Save current selection before loading
+        old_selection: Set[str] = set()
+        if preserve_selection and self.file_tree_component:
+            old_selection = self.file_tree_component.get_selected_paths()
+
         # Show loading state
         self._show_status("Loading...", is_error=False)
+        if self.token_stats_panel:
+            self.token_stats_panel.set_loading(True)
         self.page.update()
 
         try:
@@ -265,6 +310,13 @@ class ContextView:
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
+            # Restore old selection on error if possible
+            if preserve_selection and old_selection and self.file_tree_component:
+                self.file_tree_component.selected_paths = old_selection
+        finally:
+            if self.token_stats_panel:
+                self.token_stats_panel.set_loading(False)
+            self.page.update()
 
     def _on_selection_changed(self, selected_paths: Set[str]):
         """Callback khi selection thay doi"""
@@ -280,11 +332,71 @@ class ContextView:
         if self.file_tree_component:
             self.file_tree_component.collapse_all()
 
+    def _select_all(self):
+        """Select all visible files"""
+        if self.file_tree_component and self.tree:
+            self._select_all_recursive(self.tree)
+            self.file_tree_component._render_tree()
+            self._update_token_count()
+
+    def _deselect_all(self):
+        """Deselect all files"""
+        if self.file_tree_component:
+            self.file_tree_component.selected_paths.clear()
+            self.file_tree_component._render_tree()
+            # Immediately update token stats to zero
+            if self.token_stats_panel:
+                instruction_tokens = 0
+                if self.instructions_field and self.instructions_field.value:
+                    instruction_tokens = count_tokens(self.instructions_field.value)
+                self.token_stats_panel.update_stats(
+                    file_count=0,
+                    file_tokens=0,
+                    instruction_tokens=instruction_tokens,
+                )
+            self._update_token_count()
+
+    def _select_all_recursive(self, item: TreeItem):
+        """Recursively select all files in tree"""
+        if not self.file_tree_component:
+            return
+        
+        # Only select if visible (when searching)
+        is_visible = (
+            not self.file_tree_component.search_query 
+            or item.path in self.file_tree_component.matched_paths
+        )
+        
+        if is_visible:
+            self.file_tree_component.selected_paths.add(item.path)
+            for child in item.children:
+                self._select_all_recursive(child)
+
     def _refresh_tree(self):
         """Refresh tree - giu lai selection hien tai"""
         workspace = self.get_workspace()
         if workspace:
             self._load_tree(workspace, preserve_selection=True)
+
+    def _on_instructions_changed(self):
+        """Handle instructions field change with debounce"""
+        # Cancel previous timer if exists
+        if self._token_update_timer is not None:
+            self._token_update_timer.cancel()
+        
+        # Schedule token update with debounce
+        self._token_update_timer = Timer(
+            self._token_debounce_ms / 1000.0,
+            self._do_update_token_count
+        )
+        self._token_update_timer.start()
+    
+    def _do_update_token_count(self):
+        """Execute token count update (called after debounce)"""
+        try:
+            self._update_token_count()
+        except Exception:
+            pass  # Ignore errors from background timer
 
     def _update_token_count(self):
         """
@@ -339,10 +451,20 @@ class ContextView:
         # Su dung visible paths de chi copy files dang hien thi
         selected_paths = self.file_tree_component.get_visible_selected_paths()
         if not selected_paths:
-            self._show_status("No files selected", is_error=True)
+            # Provide helpful message based on context
+            if self.file_tree_component.is_searching():
+                self._show_status("No matching files selected. Clear search or select files.", is_error=True)
+            else:
+                self._show_status("Select files from the tree first", is_error=True)
             return
 
         try:
+            # Show copying state for large selections
+            file_count = sum(1 for p in selected_paths if Path(p).is_file())
+            if file_count > 10:
+                self._show_status(f"Copying {file_count} files...", is_error=False, auto_clear=False)
+                self.page.update()
+            
             file_map = generate_file_map(self.tree, selected_paths)
             file_contents = generate_file_contents(selected_paths)
             assert self.instructions_field is not None
@@ -394,9 +516,34 @@ class ContextView:
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
 
-    def _show_status(self, message: str, is_error: bool = False):
-        """Show status message"""
+    def _show_status(self, message: str, is_error: bool = False, auto_clear: bool = True):
+        """
+        Show status message with optional auto-clear.
+        
+        Args:
+            message: Status message to display
+            is_error: True for error styling
+            auto_clear: If True, clear message after 3 seconds (for success messages)
+        """
+        # Cancel previous auto-clear timer
+        if self._status_clear_timer is not None:
+            self._status_clear_timer.cancel()
+            self._status_clear_timer = None
+
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
         self.page.update()
+        
+        # Auto-clear success messages after 3 seconds
+        if auto_clear and not is_error and message:
+            def clear_status():
+                try:
+                    if self.status_text and self.status_text.value == message:
+                        self.status_text.value = ""
+                        self.page.update()
+                except Exception:
+                    pass
+            
+            self._status_clear_timer = Timer(3.0, clear_status)
+            self._status_clear_timer.start()

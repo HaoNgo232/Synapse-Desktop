@@ -193,6 +193,12 @@ class ApplyView:
             self._show_status("Please paste OPX response first", is_error=True)
             return
 
+        # Basic validation - check for edit tags
+        opx_text_lower = opx_text.lower()
+        if "<edit" not in opx_text_lower:
+            self._show_status("No <edit> tags found. Paste valid OPX response.", is_error=True)
+            return
+
         # Parse OPX
         result = parse_opx_response(opx_text)
 
@@ -253,6 +259,59 @@ class ApplyView:
             self._show_status("Please paste OPX response first", is_error=True)
             return
 
+        # Parse first to count actions
+        parse_result = parse_opx_response(opx_text)
+        if parse_result.file_actions:
+            action_count = len(parse_result.file_actions)
+            # Count unique files
+            unique_files = set(a.path for a in parse_result.file_actions)
+            file_count = len(unique_files)
+            # Show confirmation dialog
+            self._show_confirmation_dialog(
+                f"Apply {action_count} change(s) to {file_count} file(s)?",
+                "This will modify files in your workspace. Backups will be created automatically.",
+                lambda: self._do_apply_changes(opx_text),
+            )
+        else:
+            self._do_apply_changes(opx_text)
+
+    def _show_confirmation_dialog(self, title: str, message: str, on_confirm: Callable):
+        """Hiển thị confirmation dialog"""
+
+        def close_dialog(e):
+            dialog.open = False
+            self.page.update()
+
+        def confirm_action(e):
+            dialog.open = False
+            self.page.update()
+            on_confirm()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(title, weight=ft.FontWeight.W_600),
+            content=ft.Text(message, color=ThemeColors.TEXT_SECONDARY),
+            actions=[
+                ft.TextButton("Cancel", on_click=close_dialog),
+                ft.ElevatedButton(
+                    "Apply",
+                    on_click=confirm_action,
+                    style=ft.ButtonStyle(
+                        color="#FFFFFF",
+                        bgcolor=ThemeColors.SUCCESS,
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        assert self.page.overlay is not None
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+
+    def _do_apply_changes(self, opx_text: str):
+        """Thực hiện apply changes sau khi confirm"""
         workspace = self.get_workspace()
         workspace_roots = [workspace] if workspace else None
 
@@ -260,6 +319,9 @@ class ApplyView:
         parse_result = parse_opx_response(opx_text)
 
         # Clear previous results and state
+        assert self.results_column is not None
+        assert self.copy_error_btn is not None
+
         self.results_column.controls.clear()
         self.last_apply_results = []
         self.last_opx_text = opx_text
@@ -305,6 +367,9 @@ class ApplyView:
             )
 
         # Display results
+        assert self.results_column is not None
+        assert self.copy_error_btn is not None
+
         success_count = 0
         for result in results:
             self.results_column.controls.append(
@@ -341,7 +406,19 @@ class ApplyView:
         success: bool,
         is_preview: bool = False,
     ) -> ft.Container:
-        """Tao mot row trong results voi Swiss Professional styling"""
+        """
+        Tạo một row trong results với Swiss Professional styling.
+        
+        Args:
+            action: Loại action (CREATE, MODIFY, DELETE, etc.)
+            path: Đường dẫn file
+            message: Message kết quả
+            success: True nếu thành công
+            is_preview: True nếu đang ở chế độ preview
+            
+        Returns:
+            Container chứa row UI
+        """
 
         # Action badge color
         action_colors = {
@@ -410,13 +487,21 @@ class ApplyView:
         self, row: PreviewRow, row_idx: int = 0, file_action=None
     ) -> ft.Container:
         """
-        Tao mot preview row voi diff stats (+lines/-lines) va expandable visual diff.
-        Hien thi chi tiet thay doi truoc khi apply.
+        Tạo một preview row với diff stats (+lines/-lines) và expandable visual diff.
+        Hiển thị chi tiết thay đổi trước khi apply.
 
         Args:
-            row: PreviewRow data
-            row_idx: Index cua row (dung de track expand state)
-            file_action: FileAction goc (dung de generate diff lines)
+            row: PreviewRow data chứa thông tin về file action
+            row_idx: Index của row (dùng để track expand state)
+            file_action: FileAction gốc (dùng để generate diff lines)
+            
+        Returns:
+            Container chứa preview row UI với:
+            - Action badge (CREATE, MODIFY, etc.)
+            - File path
+            - Diff stats (+X / -Y lines)
+            - Description
+            - Expandable diff viewer
         """
         # Action badge color
         action_colors = {

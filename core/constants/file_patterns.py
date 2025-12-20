@@ -17,7 +17,13 @@ BINARY_EXTENSIONS = {
     ".svg",
     ".ico",
     ".heic",
+    ".heif",
     ".avif",
+    ".psd",
+    ".icns",
+    ".raw",
+    ".cr2",
+    ".nef",
     # Videos
     ".mp4",
     ".avi",
@@ -51,6 +57,7 @@ BINARY_EXTENSIONS = {
     ".cab",
     ".dmg",
     ".iso",
+    ".asar",
     # Executables
     ".exe",
     ".dll",
@@ -78,12 +85,19 @@ BINARY_EXTENSIONS = {
     ".woff",
     ".woff2",
     ".eot",
-    # Other binary
-    ".bin",
-    ".dat",
+    ".cmap",
+    # Database
     ".db",
     ".sqlite",
     ".sqlite3",
+    ".mdb",
+    ".accdb",
+    # Flash/Multimedia
+    ".swf",
+    ".fla",
+    # Other binary
+    ".bin",
+    ".dat",
     ".class",
     ".pyc",
     ".o",

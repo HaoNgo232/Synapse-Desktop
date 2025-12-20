@@ -21,7 +21,13 @@ from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
+from core.security_check import (
+    scan_for_secrets,
+    scan_secrets_in_files,
+    format_security_warning,
+)
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
+from services.settings_manager import get_setting
 from services.file_watcher import FileWatcher
 from threading import Timer
 from typing import Set
@@ -665,6 +671,7 @@ class ContextView:
         """
         Copy context to clipboard.
         Khi dang search, chi copy cac files dang hien thi (visible).
+        Có security check để cảnh báo nếu phát hiện secrets.
         """
         if not self.tree or not self.file_tree_component:
             self._show_status("No files selected", is_error=True)
@@ -688,10 +695,41 @@ class ContextView:
             file_count = sum(1 for p in selected_paths if Path(p).is_file())
             if file_count > 10:
                 self._show_status(
-                    f"Copying {file_count} files...", is_error=False, auto_clear=False
+                    f"Scanning {file_count} files...", is_error=False, auto_clear=False
                 )
                 self.page.update()
 
+            # --- SECURITY CHECK ---
+            # Check if security scan is enabled
+            enable_security = get_setting("enable_security_check", True)
+
+            # Debug log
+            from core.logging_config import log_info
+
+            log_info(f"[SecurityCheck] enable_security_check = {enable_security}")
+
+            if enable_security:
+                secret_matches = scan_secrets_in_files(selected_paths)
+            else:
+                secret_matches = []
+
+            if secret_matches:
+                file_map = generate_file_map(self.tree, selected_paths)
+                file_contents = generate_file_contents(selected_paths)
+                assert self.instructions_field is not None
+                instructions = self.instructions_field.value or ""
+                prompt = generate_prompt(
+                    file_map, file_contents, instructions, include_xml
+                )
+
+                self._show_security_dialog(
+                    prompt=prompt,
+                    matches=secret_matches,
+                    include_xml=include_xml,
+                )
+                return
+
+            # No secrets found
             file_map = generate_file_map(self.tree, selected_paths)
             file_contents = generate_file_contents(selected_paths)
             assert self.instructions_field is not None
@@ -699,14 +737,8 @@ class ContextView:
 
             prompt = generate_prompt(file_map, file_contents, instructions, include_xml)
 
-            success, message = copy_to_clipboard(prompt)
-
-            if success:
-                token_count = count_tokens(prompt)
-                suffix = " + OPX" if include_xml else ""
-                self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
-            else:
-                self._show_status(message, is_error=True)
+            # No secrets found - copy directly
+            self._do_copy(prompt, include_xml)
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
@@ -786,16 +818,210 @@ class ContextView:
             if instructions.strip():
                 prompt += f"\n<user_instructions>\n{instructions.strip()}\n</user_instructions>\n"
 
-            success, message = copy_to_clipboard(prompt)
+            # Security check - scan for secrets
+            secret_matches = scan_for_secrets(prompt)
+            if secret_matches:
+                # Show confirmation dialog
+                self._show_security_dialog(
+                    prompt=prompt,
+                    matches=secret_matches,
+                    is_smart=True,
+                )
+                return
 
-            if success:
-                token_count = count_tokens(prompt)
-                self._show_status(f"Smart Context copied! ({token_count:,} tokens)")
-            else:
-                self._show_status(message, is_error=True)
+            # No secrets found - copy directly
+            self._do_copy(prompt, is_smart=True)
 
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
+
+    def _do_copy(self, prompt: str, include_xml: bool = False, is_smart: bool = False):
+        """
+        Thực hiện copy prompt vào clipboard.
+        Helper method được gọi sau khi security check pass hoặc user confirm.
+
+        Args:
+            prompt: Prompt content to copy
+            include_xml: True nếu có OPX instructions
+            is_smart: True nếu đây là Smart Context copy
+        """
+        success, message = copy_to_clipboard(prompt)
+
+        if success:
+            token_count = count_tokens(prompt)
+            if is_smart:
+                self._show_status(f"Smart Context copied! ({token_count:,} tokens)")
+            else:
+                suffix = " + OPX" if include_xml else ""
+                self._show_status(f"Copied! ({token_count:,} tokens){suffix}")
+        else:
+            self._show_status(message, is_error=True)
+
+    def _show_security_dialog(
+        self,
+        prompt: str,
+        matches: list,
+        include_xml: bool = False,
+        is_smart: bool = False,
+    ):
+        """
+        Hiển thị confirmation dialog khi phát hiện secrets.
+
+        Args:
+            prompt: Prompt content to copy if user confirms
+            matches: List of SecretMatch from security scan
+            include_xml: True nếu có OPX instructions
+            is_smart: True nếu đây là Smart Context copy
+        """
+        warning_message = format_security_warning(matches)
+
+        def close_dialog(e):
+            dialog.open = False
+            self.page.update()
+
+        def copy_anyway(e):
+            dialog.open = False
+            self.page.update()
+            # Proceed with copy
+            self._do_copy(prompt, include_xml, is_smart)
+
+        # Prepare details view
+        details_col = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            height=200,
+            spacing=4,
+            width=500,
+        )
+
+        for match in matches:
+            file_info = f" in {match.file_path}" if match.file_path else ""
+            details_col.controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Icon(
+                                        ft.Icons.SECURITY,
+                                        size=14,
+                                        color=ThemeColors.WARNING,
+                                    ),
+                                    ft.Text(
+                                        f"{match.secret_type}",
+                                        size=12,
+                                        weight=ft.FontWeight.W_600,
+                                    ),
+                                    ft.Text(
+                                        f"{file_info} (Line {match.line_number})",
+                                        size=12,
+                                        color=ThemeColors.TEXT_SECONDARY,
+                                    ),
+                                ],
+                                spacing=6,
+                            ),
+                            ft.Text(
+                                f"Value: {match.redacted_preview}",
+                                size=11,
+                                color=ThemeColors.TEXT_SECONDARY,
+                                font_family="monospace",
+                                italic=True,
+                            ),
+                        ],
+                        spacing=2,
+                    ),
+                    bgcolor=ThemeColors.BG_SURFACE,
+                    padding=6,
+                    border_radius=4,
+                )
+            )
+
+        def copy_results(e):
+            # Copy scan results to clipboard for debugging
+            import json
+
+            results_data = [
+                {
+                    "type": m.secret_type,
+                    "file": m.file_path or "N/A",
+                    "line": m.line_number,
+                    "preview": m.redacted_preview,
+                }
+                for m in matches
+            ]
+            results_json = json.dumps(results_data, indent=2, ensure_ascii=False)
+            copy_to_clipboard(results_json)
+            self._show_status(f"Copied {len(matches)} results to clipboard")
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Row(
+                [
+                    ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=ThemeColors.WARNING),
+                    ft.Text(
+                        "Security Warning",
+                        weight=ft.FontWeight.BOLD,
+                        color=ThemeColors.WARNING,
+                    ),
+                ]
+            ),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            warning_message,
+                            size=14,
+                            color=ThemeColors.TEXT_PRIMARY,
+                        ),
+                        ft.Container(height=8),
+                        ft.Text("Details:", size=12, weight=ft.FontWeight.BOLD),
+                        ft.Container(
+                            content=details_col,
+                            border=ft.border.all(1, ThemeColors.BORDER),
+                            border_radius=4,
+                            padding=4,
+                        ),
+                        ft.Container(height=8),
+                        ft.Text(
+                            "Please review your content before sharing with AI tools.",
+                            size=12,
+                            color=ThemeColors.TEXT_SECONDARY,
+                            italic=True,
+                        ),
+                    ],
+                    tight=True,
+                ),
+                width=550,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    on_click=close_dialog,
+                    style=ft.ButtonStyle(color=ThemeColors.TEXT_SECONDARY),
+                ),
+                ft.OutlinedButton(
+                    "Copy Results",
+                    on_click=copy_results,
+                    icon=ft.Icons.BUG_REPORT,
+                    style=ft.ButtonStyle(
+                        color=ThemeColors.TEXT_SECONDARY,
+                        side=ft.BorderSide(1, ThemeColors.BORDER),
+                    ),
+                ),
+                ft.ElevatedButton(
+                    "Copy Anyway",
+                    on_click=copy_anyway,
+                    style=ft.ButtonStyle(
+                        color="#FFFFFF",
+                        bgcolor=ThemeColors.WARNING,
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
 
     def _show_status(
         self, message: str, is_error: bool = False, auto_clear: bool = True

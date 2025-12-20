@@ -128,7 +128,12 @@ class SettingsView:
 
         self.excluded_field: Optional[ft.TextField] = None
         self.gitignore_checkbox: Optional[ft.Checkbox] = None
+        self.security_check_checkbox: Optional[ft.Checkbox] = None
         self.status_text: Optional[ft.Text] = None
+
+        # Track unsaved changes
+        self._has_unsaved_changes: bool = False
+        self._initial_values: dict = {}
 
     def build(self) -> ft.Container:
         """Build UI cho Settings view voi Swiss Professional styling"""
@@ -151,6 +156,7 @@ class SettingsView:
             content_padding=15,
             cursor_color=ThemeColors.PRIMARY,
             bgcolor=ThemeColors.BG_PAGE,
+            on_change=lambda e: self._mark_changed(),
         )
 
         # Respect .gitignore checkbox
@@ -160,7 +166,26 @@ class SettingsView:
             active_color=ThemeColors.PRIMARY,
             check_color="#FFFFFF",
             label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
+            on_change=lambda e: self._mark_changed(),
         )
+
+        # Security Check checkbox
+        self.security_check_checkbox = ft.Checkbox(
+            label="Enable Security Check",
+            value=settings.get("enable_security_check", True),
+            active_color=ThemeColors.WARNING,
+            check_color="#FFFFFF",
+            label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
+            on_change=lambda e: self._mark_changed(),
+        )
+
+        # Store initial values for comparison
+        self._initial_values = {
+            "excluded_folders": settings.get("excluded_folders", ""),
+            "use_gitignore": settings.get("use_gitignore", True),
+            "enable_security_check": settings.get("enable_security_check", True),
+        }
+        self._has_unsaved_changes = False
 
         # Status
         self.status_text = ft.Text("", size=12)
@@ -206,6 +231,21 @@ class SettingsView:
                                         self.gitignore_checkbox,
                                         ft.Text(
                                             "When enabled, files matching .gitignore patterns will be hidden.",
+                                            size=12,
+                                            color=ThemeColors.TEXT_SECONDARY,
+                                        ),
+                                        ft.Container(height=24),
+                                        # Security Check
+                                        ft.Text(
+                                            "Security",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Container(height=4),
+                                        self.security_check_checkbox,
+                                        ft.Text(
+                                            "When enabled, scan for secrets (API Keys, etc) before copying.",
                                             size=12,
                                             color=ThemeColors.TEXT_SECONDARY,
                                         ),
@@ -417,14 +457,17 @@ class SettingsView:
         """Save settings va notify"""
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
+        assert self.security_check_checkbox is not None
 
         settings = {
             "excluded_folders": self.excluded_field.value or "",
             "use_gitignore": self.gitignore_checkbox.value or False,
+            "enable_security_check": self.security_check_checkbox.value or False,
         }
 
         if save_settings(settings):
-            self._show_status("Settings saved!", is_error=False)
+            self._show_status("Settings saved!")
+            self.reset_unsaved_state()  # Reset unsaved state after successful save
             if self.on_settings_changed:
                 self.on_settings_changed()
         else:
@@ -434,6 +477,7 @@ class SettingsView:
         """Reset ve default settings"""
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
+        assert self.security_check_checkbox is not None
 
         # Reset UI but don't save yet to match previous behavior
         # But wait, logic changed. Let's just load defaults from manager manually?
@@ -446,6 +490,7 @@ class SettingsView:
 
         self.excluded_field.value = default_excluded
         self.gitignore_checkbox.value = True
+        self.security_check_checkbox.value = True
         self.page.update()
 
         self._show_status("Reset to defaults (not saved yet)", is_error=False)
@@ -549,3 +594,116 @@ class SettingsView:
 
         self.page.update()
         self._show_status("Settings reloaded from file")
+
+    def _mark_changed(self):
+        """
+        Đánh dấu có thay đổi chưa save.
+        Được gọi bởi on_change handlers của các form fields.
+        """
+        self._has_unsaved_changes = True
+
+    def has_unsaved_changes(self) -> bool:
+        """
+        Kiểm tra có thay đổi chưa save không.
+        So sánh giá trị hiện tại với initial values.
+        """
+        if not self._has_unsaved_changes:
+            return False
+
+        # Double check by comparing actual values
+        if (
+            self.excluded_field
+            and self.gitignore_checkbox
+            and self.security_check_checkbox
+        ):
+            current_excluded = self.excluded_field.value or ""
+            current_gitignore = self.gitignore_checkbox.value or False
+            current_security = self.security_check_checkbox.value or False
+
+            return (
+                current_excluded != self._initial_values.get("excluded_folders", "")
+                or current_gitignore != self._initial_values.get("use_gitignore", True)
+                or current_security
+                != self._initial_values.get("enable_security_check", True)
+            )
+
+        return self._has_unsaved_changes
+
+    def show_unsaved_dialog(
+        self, on_discard: Callable[[], None], on_cancel: Callable[[], None]
+    ):
+        """
+        Hiển thị dialog cảnh báo có thay đổi chưa save.
+
+        Args:
+            on_discard: Callback khi user chọn discard changes
+            on_cancel: Callback khi user chọn cancel (ở lại Settings)
+        """
+
+        def close_and_discard(e):
+            dialog.open = False
+            self.page.update()
+            on_discard()
+
+        def close_and_stay(e):
+            dialog.open = False
+            self.page.update()
+            on_cancel()
+
+        def save_and_leave(e):
+            dialog.open = False
+            self._save_settings()
+            self.page.update()
+            on_discard()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Unsaved Changes",
+                weight=ft.FontWeight.BOLD,
+                color=ThemeColors.WARNING,
+            ),
+            content=ft.Text(
+                "You have unsaved changes in Settings. What would you like to do?",
+                size=14,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Discard",
+                    on_click=close_and_discard,
+                    style=ft.ButtonStyle(color=ThemeColors.ERROR),
+                ),
+                ft.TextButton(
+                    "Stay",
+                    on_click=close_and_stay,
+                    style=ft.ButtonStyle(color=ThemeColors.TEXT_SECONDARY),
+                ),
+                ft.ElevatedButton(
+                    "Save & Leave",
+                    on_click=save_and_leave,
+                    style=ft.ButtonStyle(
+                        color="#FFFFFF",
+                        bgcolor=ThemeColors.SUCCESS,
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+
+    def reset_unsaved_state(self):
+        """Reset trạng thái unsaved sau khi save hoặc load."""
+        self._has_unsaved_changes = False
+        if (
+            self.excluded_field
+            and self.gitignore_checkbox
+            and self.security_check_checkbox
+        ):
+            self._initial_values = {
+                "excluded_folders": self.excluded_field.value or "",
+                "use_gitignore": self.gitignore_checkbox.value or False,
+                "enable_security_check": self.security_check_checkbox.value or False,
+            }

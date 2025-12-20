@@ -520,10 +520,31 @@ class OverwriteApp:
     #                 self.context_view.on_workspace_changed(self.workspace_path)
 
     def _on_tab_changed(self, e):
-        """Handle tab change - refresh History/Logs khi chọn"""
-        if e.control.selected_index == 2:  # History tab
+        """Handle tab change - refresh History/Logs khi chọn và check unsaved Settings"""
+        new_index = e.control.selected_index
+
+        # Check if leaving Settings tab (index 4) with unsaved changes
+        if hasattr(self, "_previous_tab_index") and self._previous_tab_index == 4:
+            if self.settings_view.has_unsaved_changes():
+                # Show dialog and prevent tab change
+                def on_discard():
+                    # Reset unsaved state and switch tab
+                    self.settings_view.reset_unsaved_state()
+                    self._previous_tab_index = new_index
+                    # Already on new tab, just update state
+
+                def on_cancel():
+                    # Revert to Settings tab
+                    self.tabs.selected_index = 4
+                    self.page.update()
+
+                self.settings_view.show_unsaved_dialog(on_discard, on_cancel)
+
+        self._previous_tab_index = new_index
+
+        if new_index == 2:  # History tab
             self.history_view.on_view_activated()
-        elif e.control.selected_index == 3:  # Logs tab
+        elif new_index == 3:  # Logs tab
             self.logs_view.on_view_activated()
 
     def _on_reapply_from_history(self, opx_content: str):

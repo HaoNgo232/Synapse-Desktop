@@ -1,8 +1,6 @@
 """
 Error Context Builder - Tao context loi cho AI de fix
 
-Port tu: /home/hao/Desktop/labs/overwrite/src/webview-ui/src/components/apply-tab/preview-table.tsx
-
 Tao error context day du de AI co the hieu va fix ngay:
 - Thong tin loi chi tiet
 - Previous operations da thanh cong

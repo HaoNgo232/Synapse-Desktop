@@ -1,7 +1,6 @@
 """
 Preview Analyzer - Phan tich va tao diff preview cho file actions
 
-Port tu: /home/hao/Desktop/labs/overwrite/src/services/preview-analyzer.ts
 Hien thi +lines/-lines thay doi truoc khi apply.
 """
 

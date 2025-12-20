@@ -1,7 +1,6 @@
 """
 Token Counter - Dem token su dung tiktoken
 
-Port tu: /home/hao/Desktop/labs/overwrite/src/services/token-counter.ts
 Don gian hoa dang ke vi tiktoken la Python native library (OpenAI official).
 """
 

@@ -1,8 +1,6 @@
 """
 File Actions - Thuc thi cac file operations tu OPX
 
-Port tu: /home/hao/Desktop/labs/overwrite/src/providers/file-explorer/file-action-handler.ts
-
 Cac operations:
 - create: Tao file moi
 - rewrite: Ghi de toan bo file

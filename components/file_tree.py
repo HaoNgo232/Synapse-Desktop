@@ -12,6 +12,7 @@ from typing import Callable, Optional, Set
 
 from core.utils.file_utils import TreeItem
 from services.token_display import TokenDisplayService
+from services.line_count_display import LineCountService
 from core.theme import ThemeColors
 
 
@@ -22,6 +23,7 @@ class FileTreeComponent:
     - Collapse/Expand folders
     - Search/Filter files
     - Token counts per file
+    - Line counts per file
     """
 
     def __init__(
@@ -29,10 +31,12 @@ class FileTreeComponent:
         page: ft.Page,
         on_selection_changed: Optional[Callable[[Set[str]], None]] = None,
         show_tokens: bool = True,
+        show_lines: bool = True,
     ):
         self.page = page
         self.on_selection_changed = on_selection_changed
         self.show_tokens = show_tokens
+        self.show_lines = show_lines
 
         # State
         self.tree: Optional[TreeItem] = None
@@ -42,7 +46,10 @@ class FileTreeComponent:
         self.matched_paths: Set[str] = set()
 
         # Token display service
-        self._token_service = TokenDisplayService(on_update=self._on_tokens_updated)
+        self._token_service = TokenDisplayService(on_update=self._on_metrics_updated)
+
+        # Line count display service
+        self._line_service = LineCountService(on_update=self._on_metrics_updated)
 
         # UI elements
         self.tree_container: Optional[ft.Column] = None
@@ -67,6 +74,9 @@ class FileTreeComponent:
         # Stop token service
         self._token_service.stop()
         self._token_service.clear_cache()
+
+        # Clear line count service
+        self._line_service.clear_cache()
 
     def set_loading(self, is_loading: bool):
         """Set loading state của file tree"""
@@ -190,11 +200,14 @@ class FileTreeComponent:
 
         # Clear token cache va request tokens cho visible files
         self._token_service.clear_cache()
+        self._line_service.clear_cache()
         self._render_tree()
 
-        # Request tokens sau khi render
+        # Request tokens va lines sau khi render
         if self.show_tokens:
             self._request_visible_tokens()
+        if self.show_lines:
+            self._request_visible_lines()
 
     def get_selected_paths(self) -> Set[str]:
         """
@@ -542,6 +555,12 @@ class FileTreeComponent:
                 checkbox,
                 ft.Icon(icon, size=18, color=icon_color),
                 label_container,
+                # Line count display (cho ca files va folders)
+                (
+                    self._create_line_count_badge(item)
+                    if self.show_lines
+                    else ft.Container()
+                ),
                 # Token count display (cho ca files va folders)
                 self._create_token_badge(item) if self.show_tokens else ft.Container(),
             ],
@@ -611,8 +630,44 @@ class FileTreeComponent:
                 self._deselect_all_children(child.children)
 
     # =========================================================================
-    # TOKEN DISPLAY
+    # LINE COUNT & TOKEN DISPLAY
     # =========================================================================
+
+    def _create_line_count_badge(self, item: TreeItem) -> ft.Container:
+        """
+        Tao badge hien thi line count cho file hoac folder.
+        - File: hien thi line count cua file
+        - Folder: hien thi tong lines cua tat ca files ben trong
+        """
+        if item.is_dir:
+            # Folder: tinh tong tu children
+            assert self.tree is not None
+            folder_lines = self._line_service.get_folder_lines(item.path, self.tree)
+            if folder_lines is None:
+                # Chua tinh xong - return empty
+                return ft.Container(width=0)
+            if folder_lines == 0:
+                # Empty folder hoac chi chua folders
+                return ft.Container(width=0)
+            line_text = self._line_service._format_lines(folder_lines)
+        else:
+            # File: lay tu cache
+            line_text = self._line_service.get_line_display(item.path)
+            if not line_text:
+                # Chua co - request va return empty
+                self._line_service.request_line_count(item.path)
+                return ft.Container(width=0)
+
+        # Format với suffix "L" để dễ phân biệt với tokens
+        return ft.Container(
+            content=ft.Text(
+                f"{line_text} lines",  # L = Lines
+                size=11,
+                color=ThemeColors.PRIMARY,  # Màu xanh dương để phân biệt với token (SUCCESS - xanh lá)
+                weight=ft.FontWeight.W_500,
+            ),
+            margin=ft.margin.only(left=8),
+        )
 
     def _create_token_badge(self, item: TreeItem) -> ft.Container:
         """
@@ -649,15 +704,15 @@ class FileTreeComponent:
             margin=ft.margin.only(left=8),
         )
 
-    def _on_tokens_updated(self):
-        """Callback khi TokenService update cache - re-render tree"""
-        # Re-render de cap nhat token displays
+    def _on_metrics_updated(self):
+        """Callback khi TokenService hoac LineService update cache - re-render tree"""
+        # Re-render de cap nhat token/line displays
         # Su dung page.update thay vi _render_tree de tranh re-render toan bo
         try:
             if self.page:
                 self.page.update()
         except Exception as e:
-            logging.debug(f"Error updating page from token service: {e}")
+            logging.debug(f"Error updating page from metrics service: {e}")
             pass  # Ignore errors khi page chua san sang
 
     def _request_visible_tokens(self):
@@ -668,6 +723,17 @@ class FileTreeComponent:
         # Collect visible paths
         visible = self.matched_paths if self.search_query else None
         self._token_service.request_tokens_for_tree(
+            self.tree, visible_only=bool(self.search_query), visible_paths=visible
+        )
+
+    def _request_visible_lines(self):
+        """Request line counts cho cac files dang hien thi"""
+        if not self.tree:
+            return
+
+        # Collect visible paths
+        visible = self.matched_paths if self.search_query else None
+        self._line_service.request_lines_for_tree(
             self.tree, visible_only=bool(self.search_query), visible_paths=visible
         )
 

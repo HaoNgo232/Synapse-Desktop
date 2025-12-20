@@ -4,9 +4,11 @@ Token Counter - Dem token su dung tiktoken
 Don gian hoa dang ke vi tiktoken la Python native library (OpenAI official).
 """
 
+import os
 from pathlib import Path
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, List
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import tiktoken
 
 # Lazy-loaded encoder singleton
@@ -229,3 +231,77 @@ def _analyze_byte_content(chunk: bytes) -> bool:
         return True
 
     return False
+
+
+# ============================================================================
+# PARALLEL PROCESSING - Port from Repomix (src/shared/processConcurrency.ts)
+# ============================================================================
+
+# Worker initialization is expensive, so we prefer fewer threads unless there are many files
+TASKS_PER_WORKER = 100
+
+# Minimum number of files to trigger parallel processing
+MIN_FILES_FOR_PARALLEL = 10
+
+
+def get_worker_count(num_tasks: int) -> int:
+    """
+    Tinh so luong workers toi uu dua tren so luong tasks va CPU cores.
+
+    Logic port tu Repomix:
+    - Moi worker xu ly ~100 tasks.
+    - Khong vuot qua so CPU cores.
+    - Toi thieu 1 worker.
+
+    Args:
+        num_tasks: So luong tasks can xu ly.
+
+    Returns:
+        So luong workers toi uu.
+    """
+    cpu_count = os.cpu_count() or 4
+    # ceil(num_tasks / TASKS_PER_WORKER) = (num_tasks + TASKS_PER_WORKER - 1) // TASKS_PER_WORKER
+    calculated = (num_tasks + TASKS_PER_WORKER - 1) // TASKS_PER_WORKER
+    return max(1, min(cpu_count, calculated))
+
+
+def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
+    """
+    Dem token cho nhieu files song song (parallel).
+
+    Su dung ThreadPoolExecutor vi:
+    - File I/O la I/O-bound, release GIL.
+    - Tiktoken la C-extension, release GIL khi encode.
+    - ThreadPool it overhead hon ProcessPool (khong can pickle).
+
+    Args:
+        file_paths: Danh sach duong dan files can dem token.
+
+    Returns:
+        Dict mapping path string -> token count.
+    """
+    num_files = len(file_paths)
+
+    # Khong can parallel cho so luong nho
+    if num_files < MIN_FILES_FOR_PARALLEL:
+        return {str(p): count_tokens_for_file(p) for p in file_paths}
+
+    worker_count = get_worker_count(num_files)
+    results: Dict[str, int] = {}
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        # Submit tat ca tasks
+        future_to_path = {
+            executor.submit(count_tokens_for_file, path): path for path in file_paths
+        }
+
+        # Thu thap ket qua khi hoan thanh
+        for future in as_completed(future_to_path):
+            path = future_to_path[future]
+            try:
+                results[str(path)] = future.result()
+            except Exception:
+                # Silent fail for individual files
+                results[str(path)] = 0
+
+    return results

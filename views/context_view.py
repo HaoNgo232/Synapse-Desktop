@@ -10,7 +10,7 @@ from typing import Callable, Optional, Set
 
 from core.file_utils import scan_directory, TreeItem
 from services.clipboard_utils import copy_to_clipboard
-from core.token_counter import count_tokens_for_file, count_tokens
+from core.token_counter import count_tokens_for_file, count_tokens, count_tokens_batch
 from core.prompt_generator import (
     generate_file_map,
     generate_file_contents,
@@ -631,21 +631,24 @@ class ContextView:
         """
         Update token count display va token stats panel.
         Su dung visible paths khi dang search de hien thi chinh xac.
+        Su dung parallel batch counting cho hieu suat tot hon.
         """
         if not self.file_tree_component:
             return
 
-        file_tokens = 0
-        file_count = 0
-
         # Su dung visible paths de hien thi chinh xac khi dang search
         selected_paths = self.file_tree_component.get_visible_selected_paths()
 
-        for path_str in selected_paths:
-            path = Path(path_str)
-            if path.is_file():
-                file_tokens += count_tokens_for_file(path)
-                file_count += 1
+        # Loc chi cac files (khong phai directories)
+        file_paths = [Path(p) for p in selected_paths if Path(p).is_file()]
+        file_count = len(file_paths)
+
+        # Su dung parallel batch counting cho hieu suat
+        if file_count > 0:
+            token_results = count_tokens_batch(file_paths)
+            file_tokens = sum(token_results.values())
+        else:
+            file_tokens = 0
 
         # Hien thi indicator khi dang filter
         assert self.token_count_text is not None

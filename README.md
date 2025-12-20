@@ -82,6 +82,7 @@ The name represents the vital connection between your codebase and AI intelligen
 - **Debug Mode** - Enable verbose logging when needed
 - **Memory Monitor** - Track memory usage and cache stats
 - **Session Restore** - Automatically restore workspace and selections on restart
+- **Security Check** - Scan for secrets (API keys, tokens) before copying to prevent leaks (powered by detect-secrets)
 
 ## Usage
 
@@ -114,6 +115,7 @@ The name represents the vital connection between your codebase and AI intelligen
 - **Excluded Folders** - Add patterns like `node_modules`, `dist`
 - **Presets** - Quick load common patterns (Python, Node.js, Rust, etc.)
 - **Respect .gitignore** - Toggle to include/exclude gitignored files
+- **Enable Security Check** - Scan for secrets before copying (prevents accidental API key leaks)
 - **Session** - Clear saved workspace and selections
 
 ## Keyboard Shortcuts
@@ -144,6 +146,7 @@ synapse-desktop/
 │   ├── prompt_generator.py # Generate LLM prompts
 │   ├── tree_map_generator.py # Tree-only prompts
 │   ├── language_utils.py   # Language ID for LLMs
+│   ├── security_check.py   # Secret scanning (powered by detect-secrets)
 │   ├── theme.py            # Dark mode OLED theme
 │   └── logging_config.py   # Logging setup
 │
@@ -217,12 +220,18 @@ Application data is stored in `~/.synapse-desktop/`:
 
 ## Acknowledgements & Inspirations
 
-While Synapse Desktop is a standalone project, I have learned and adapted valuable concepts from the open-source community, particularly **Pastemax**. I deeply respect their work and have integrated some of their best practices into the Python/Flet implementation:
+While Synapse Desktop is a standalone project, I have learned and adapted valuable concepts from the open-source community:
 
+### Pastemax
 - **Advanced Language Detection**: Adapted from Pastemax's extensive language map to ensure perfect syntax highlighting for LLMs.
 - **Concurrent Processing**: Inspired by their parallel file scanning strategies for optimal performance.
 - **Dashboard Aesthetics**: Adopted the modern "Dashboard Metrics" style for clear and beautiful token statistics.
 - **Smart File Filtering**: Implemented robust exclusion logic similar to their ignore management.
+
+### Repomix
+- **Security Check Architecture**: Studied their secret scanning workflow design and integration patterns.
+- **Secret Detection Approach**: Learned from their use of @secretlint for comprehensive secret detection.
+- **User Experience**: Adopted the concept of warning dialogs with detailed secret information for transparency.
 
 I believe in open collaboration and learning from the best to create better tools for everyone.
 

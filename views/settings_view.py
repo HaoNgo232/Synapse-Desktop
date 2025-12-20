@@ -13,9 +13,8 @@ from core.theme import ThemeColors
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.session_state import clear_session_state, get_session_age_hours
 
-
-# Settings file path
-SETTINGS_FILE = Path.home() / ".overwrite-desktop" / "settings.json"
+# Use shared settings manager
+from services.settings_manager import load_settings, save_settings
 
 
 # Preset profiles for different project types
@@ -27,48 +26,6 @@ PRESET_PROFILES = {
     "Java": "target\n*.class\n.gradle\nbuild\nout",
     "General": "dist\nbuild\ncoverage\n.cache\ntmp\ntemp\nlogs\n*.log",
 }
-
-
-def load_settings() -> dict:
-    """
-    Load settings tu file.
-
-    Returns:
-        Dict voi keys: excluded_folders (str), use_gitignore (bool)
-    """
-    default = {
-        "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",
-        "use_gitignore": True,
-    }
-
-    try:
-        if SETTINGS_FILE.exists():
-            content = SETTINGS_FILE.read_text(encoding="utf-8")
-            saved = json.loads(content)
-            # Merge with defaults
-            return {**default, **saved}
-    except (OSError, json.JSONDecodeError):
-        pass
-
-    return default
-
-
-def save_settings(settings: dict) -> bool:
-    """
-    Save settings ra file.
-
-    Args:
-        settings: Dict voi keys: excluded_folders, use_gitignore
-
-    Returns:
-        True neu save thanh cong
-    """
-    try:
-        SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
-        return True
-    except (OSError, IOError):
-        return False
 
 
 def get_excluded_patterns() -> list[str]:
@@ -478,13 +435,17 @@ class SettingsView:
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
 
-        default = {
-            "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache",
-            "use_gitignore": True,
-        }
+        # Reset UI but don't save yet to match previous behavior
+        # But wait, logic changed. Let's just load defaults from manager manually?
+        # Actually default in manager is internal.
+        # Replicating defaults here for UI consistency or exposing from manager.
+        # Let's keep hardcoded here for now as view-specific defaults if needed,
+        # or better, just rely on visual reset.
 
-        self.excluded_field.value = default["excluded_folders"]
-        self.gitignore_checkbox.value = default["use_gitignore"]
+        default_excluded = "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage"
+
+        self.excluded_field.value = default_excluded
+        self.gitignore_checkbox.value = True
         self.page.update()
 
         self._show_status("Reset to defaults (not saved yet)", is_error=False)

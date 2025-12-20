@@ -5,12 +5,13 @@ Prompt Generator - Tao context prompt cho LLM
 
 import re
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
-from core.file_utils import TreeItem, is_binary_by_extension
+from core.utils.file_utils import TreeItem, is_binary_by_extension
+from core.token_counter import count_tokens_for_file
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-from core.language_utils import get_language_from_path
-from core.git_utils import GitDiffResult, GitLogResult
+from core.utils.language_utils import get_language_from_path
+from core.utils.git_utils import GitDiffResult, GitLogResult
 
 
 def calculate_markdown_delimiter(contents: list[str]) -> str:

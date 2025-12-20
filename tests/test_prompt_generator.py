@@ -15,14 +15,14 @@ from unittest.mock import patch, MagicMock
 import tempfile
 
 from core.prompt_generator import (
+    generate_prompt,
     generate_file_map,
     generate_file_contents,
-    generate_prompt,
-    calculate_markdown_delimiter,
     generate_smart_context,
+    calculate_markdown_delimiter,
 )
-from core.file_utils import TreeItem
-from core.git_utils import GitDiffResult, GitLogResult, GitCommit
+from core.utils.file_utils import TreeItem
+from core.utils.git_utils import GitDiffResult, GitLogResult, GitCommit
 
 
 class TestCalculateMarkdownDelimiter:

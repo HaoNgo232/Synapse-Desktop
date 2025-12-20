@@ -9,13 +9,14 @@ giảm thiểu false positives so với custom regex.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Tuple, Optional
 from pathlib import Path
 import tempfile
+import re
 
 from detect_secrets import SecretsCollection
 from detect_secrets.settings import default_settings
-from core.file_utils import is_binary_by_extension
+from core.utils.file_utils import is_binary_by_extension
 
 
 @dataclass

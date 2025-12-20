@@ -10,7 +10,7 @@ from pathlib import Path
 from threading import Timer
 from typing import Callable, Optional, Set
 
-from core.file_utils import TreeItem
+from core.utils.file_utils import TreeItem
 from services.token_display import TokenDisplayService
 from core.theme import ThemeColors
 

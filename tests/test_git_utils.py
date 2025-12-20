@@ -16,12 +16,13 @@ import subprocess
 import tempfile
 import os
 
-from core.git_utils import (
+from core.utils.git_utils import (
     is_git_repo,
     get_git_diffs,
     get_git_logs,
     GitDiffResult,
     GitLogResult,
+    GitCommit,
 )
 
 
@@ -75,7 +76,7 @@ class TestGetGitDiffs:
         mock_staged = "diff --git a/staged.py b/staged.py\n-old line"
 
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     # Mock cho 2 lần gọi subprocess.run
                     mock_run.side_effect = [
@@ -93,7 +94,7 @@ class TestGetGitDiffs:
     def test_empty_diff(self, tmp_path):
         """Empty diff returns GitDiffResult with empty strings."""
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.side_effect = [
                         MagicMock(stdout="", returncode=0),
@@ -109,7 +110,7 @@ class TestGetGitDiffs:
     def test_subprocess_error(self, tmp_path):
         """Subprocess error returns None."""
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.side_effect = subprocess.CalledProcessError(1, "git")
 
@@ -119,7 +120,7 @@ class TestGetGitDiffs:
     def test_timeout_error(self, tmp_path):
         """Timeout error returns None."""
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.side_effect = subprocess.TimeoutExpired("git", 10)
 
@@ -148,7 +149,7 @@ class TestGetGitLogs:
         mock_log += "\x00def5678|2024-12-19|Second commit\nfile3.py"
 
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.return_value = MagicMock(stdout=mock_log, returncode=0)
 
@@ -171,7 +172,7 @@ class TestGetGitLogs:
     def test_empty_log(self, tmp_path):
         """Empty log returns GitLogResult with empty commits."""
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.return_value = MagicMock(stdout="", returncode=0)
 
@@ -184,7 +185,7 @@ class TestGetGitLogs:
     def test_max_commits_parameter(self, tmp_path):
         """max_commits parameter is passed to git command."""
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.return_value = MagicMock(stdout="", returncode=0)
 
@@ -199,7 +200,7 @@ class TestGetGitLogs:
     def test_subprocess_error(self, tmp_path):
         """Subprocess error returns None."""
         with patch("shutil.which", return_value="/usr/bin/git"):
-            with patch("core.git_utils.is_git_repo", return_value=True):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
                 with patch("subprocess.run") as mock_run:
                     mock_run.side_effect = subprocess.CalledProcessError(1, "git")
 
@@ -230,7 +231,7 @@ class TestGitLogResult:
 
     def test_creation(self):
         """GitLogResult can be created."""
-        from core.git_utils import GitCommit
+        from core.utils.git_utils import GitCommit
 
         commits = [
             GitCommit(

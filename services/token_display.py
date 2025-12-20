@@ -8,14 +8,14 @@ Tach ra theo SOLID:
 """
 
 from pathlib import Path
-from typing import Dict, Optional, Callable, Set
+from typing import Dict, Callable, Set, Optional
 from dataclasses import dataclass
 from threading import Thread, Lock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
+from core.utils.file_utils import TreeItem
 from core.token_counter import count_tokens_for_file
-from core.file_utils import TreeItem
 
 
 @dataclass
@@ -67,7 +67,7 @@ class TokenDisplayService:
 
         # Thread pool for parallel processing
         self._executor: Optional[ThreadPoolExecutor] = None
-        
+
         # Throttling for UI updates
         self._last_update_time: float = 0
 
@@ -256,7 +256,10 @@ class TokenDisplayService:
 
             # Notify UI after each batch (throttled)
             current_time = time.time() * 1000  # ms
-            if self.on_update and (current_time - self._last_update_time) >= self.UPDATE_THROTTLE_MS:
+            if (
+                self.on_update
+                and (current_time - self._last_update_time) >= self.UPDATE_THROTTLE_MS
+            ):
                 try:
                     self.on_update()
                     self._last_update_time = current_time

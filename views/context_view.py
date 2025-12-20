@@ -8,15 +8,16 @@ import flet as ft
 from pathlib import Path
 from typing import Callable, Optional, Set
 
-from core.file_utils import scan_directory, TreeItem
+from core.utils.file_utils import scan_directory, TreeItem
 from services.clipboard_utils import copy_to_clipboard
-from core.token_counter import count_tokens_for_file, count_tokens, count_tokens_batch
+from core.token_counter import count_tokens_batch, count_tokens
 from core.prompt_generator import (
+    generate_prompt,
     generate_file_map,
     generate_file_contents,
-    generate_prompt,
     generate_smart_context,
 )
+from core.utils.git_utils import get_git_diffs, get_git_logs
 from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
 from components.token_stats import TokenStatsPanel
@@ -26,7 +27,6 @@ from core.security_check import (
     scan_secrets_in_files,
     format_security_warning,
 )
-from core.git_utils import get_git_diffs, get_git_logs
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
 from services.settings_manager import get_setting
 from services.file_watcher import FileWatcher

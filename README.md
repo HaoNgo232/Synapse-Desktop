@@ -1,6 +1,10 @@
-# Overwrite Desktop
+# Synapse Desktop
+A lightweight AI-assisted code editing tool for desktop.
 
-A lightweight desktop application for AI-assisted code editing.
+**Synapse Desktop** captures AI context efficiently for your desktop. Built with Python & Flet, it synthesizes the best workflows from the **Overwrite** extension and high-performance logic from **Pastemax** into a unified, standalone application.
+
+- **Core Concept & Workflow**: Adapted from the original [Overwrite](https://github.com/mnismt/overwrite) VS Code extension by mnismt.
+- **Advanced Engine**: High-performance file processing, concurrency logic, and language detection algorithms ported and adapted from [Pastemax](https://github.com/kleneway/pastemax) by kleneway.
 
 ## Getting Started
 
@@ -15,8 +19,8 @@ A lightweight desktop application for AI-assisted code editing.
 
 ```bash
 # Clone the repository
-git clone https://github.com/HaoNgo232/overwrite-desktop.git
-cd overwrite-desktop
+git clone https://github.com/HaoNgo232/synapse-desktop.git
+cd synapse-desktop
 
 # Create virtual environment
 python3 -m venv .venv
@@ -31,24 +35,6 @@ pip install -r requirements.txt
 python main.py
 ```
 
-#### Windows
-
-```powershell
-# Clone the repository
-git clone https://github.com/HaoNgo232/overwrite-desktop.git
-cd overwrite-desktop
-
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python main.py
-```
-
 ### Build from Source
 
 To build a standalone AppImage (Linux):
@@ -60,21 +46,14 @@ pip install pyinstaller
 # Run build script
 ./build-appimage.sh
 
-# The AppImage will be in build/Overwrite-Desktop-1.0.0-x86_64.AppImage
+# The AppImage will be in build/Synapse-Desktop-1.0.0-x86_64.AppImage
 ```
 
 ---
 
-## Why This Project?
+## Why "Synapse"?
 
-The original [Overwrite VS Code](https://github.com/mnismt/overwrite) extension has not been updated for a long time and no longer works on the latest VS Code versions or its forks (Cursor, Windsurf, etc.).
-
-This desktop version was created to:
-
-- **Independence** - No dependency on VS Code API updates or extension compatibility issues
-- **Stability** - Works reliably without being affected by IDE updates
-- **Lightweight** - Smaller footprint than Electron-based VS Code extensions
-- **Long-term usability** - Can be used for years without maintenance concerns
+The name represents the vital connection between your codebase and AI intelligence. Just like a synapse transmits signals between neurons, **Synapse Desktop** transmits precise code context to LLMs and applies their intelligence back to your project.
 
 ## Features
 
@@ -150,7 +129,7 @@ This desktop version was created to:
 ## Project Structure
 
 ```text
-overwrite-desktop/
+synapse-desktop/
 ├── main.py                 # App entry point
 ├── requirements.txt        # Python dependencies
 ├── start.sh                # Linux start script
@@ -160,10 +139,11 @@ overwrite-desktop/
 │   ├── opx_parser.py       # OPX XML parser
 │   ├── opx_instruction.py  # OPX system prompt for LLMs
 │   ├── file_actions.py     # File operations (create, modify, delete)
-│   ├── file_utils.py       # File tree scanning
+│   ├── file_utils.py       # File tree scanning with language detection
 │   ├── token_counter.py    # Token counting with tiktoken
 │   ├── prompt_generator.py # Generate LLM prompts
 │   ├── tree_map_generator.py # Tree-only prompts
+│   ├── language_utils.py   # Language ID for LLMs
 │   ├── theme.py            # Dark mode OLED theme
 │   └── logging_config.py   # Logging setup
 │
@@ -184,6 +164,7 @@ overwrite-desktop/
 │   ├── history_service.py  # History storage
 │   ├── session_state.py    # Session persistence
 │   ├── recent_folders.py   # Recent folders
+│   ├── settings_manager.py # Settings persistence
 │   ├── memory_monitor.py   # Memory tracking
 │   ├── token_display.py    # Token cache service
 │   ├── preview_analyzer.py # Diff analysis
@@ -221,28 +202,31 @@ flet run main.py -r
 OVERWRITE_DEBUG=1 python main.py
 ```
 
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `Flet` | Cross-platform UI framework |
-| `tiktoken` | Token counting (OpenAI) |
-| `pathspec` | Gitignore parsing |
-| `pyperclip` | Clipboard access |
-| `psutil` | Memory monitoring |
-
 ## Data Storage
 
-Application data is stored in `~/.overwrite-desktop/`:
+Application data is stored in `~/.synapse-desktop/`:
 
 | File | Purpose |
 |------|---------|
-| `settings.json` | Excluded folders and preferences |
+| `settings.json` | Excluded folders and model preferences |
 | `recent_folders.json` | Recently opened folders |
 | `session.json` | Last session state (workspace, selections) |
 | `history.json` | Apply operation history |
 | `logs/app.log` | Application logs |
 | `backups/` | File backups before modifications |
+
+## Acknowledgements & Inspirations
+
+While Synapse Desktop is a standalone project, I have learned and adapted valuable concepts from the open-source community, particularly **Pastemax**. I deeply respect their work and have integrated some of their best practices into the Python/Flet implementation:
+
+- **Advanced Language Detection**: Adapted from Pastemax's extensive language map to ensure perfect syntax highlighting for LLMs.
+- **Concurrent Processing**: Inspired by their parallel file scanning strategies for optimal performance.
+- **Dashboard Aesthetics**: Adopted the modern "Dashboard Metrics" style for clear and beautiful token statistics.
+- **Smart File Filtering**: Implemented robust exclusion logic similar to their ignore management.
+
+I believe in open collaboration and learning from the best to create better tools for everyone.
+
+See [NOTICES.md](NOTICES.md) for full license details of adapted components.
 
 ## License
 MIT License

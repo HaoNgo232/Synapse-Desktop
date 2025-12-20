@@ -18,7 +18,7 @@ from core.logging_config import log_error, log_debug, log_info
 
 
 # Session file path
-SESSION_FILE = Path.home() / ".overwrite-desktop" / "session.json"
+SESSION_FILE = Path.home() / ".synapse-desktop" / "session.json"
 
 
 @dataclass

@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-SETTINGS_FILE = Path.home() / ".overwrite-desktop" / "settings.json"
+SETTINGS_FILE = Path.home() / ".synapse-desktop" / "settings.json"
 
 DEFAULT_SETTINGS = {
     "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",

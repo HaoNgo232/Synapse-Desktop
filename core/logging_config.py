@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Optional
 
 # Log directory
-LOG_DIR = Path.home() / ".overwrite-desktop" / "logs"
+LOG_DIR = Path.home() / ".synapse-desktop" / "logs"
 
 # Logger singleton
 _logger: Optional[logging.Logger] = None
@@ -36,37 +36,35 @@ BUFFER_CAPACITY = 100  # Buffer 100 log records before flush
 def get_logger() -> logging.Logger:
     """
     Get hoặc tạo logger singleton.
-    
+
     Returns:
         Configured logger instance
     """
     global _logger
-    
+
     if _logger is not None:
         return _logger
-    
-    _logger = logging.getLogger("overwrite-desktop")
+
+    _logger = logging.getLogger("synapse-desktop")
     _logger.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
-    
+
     # Avoid duplicate handlers
     if _logger.handlers:
         return _logger
-    
+
     # Console handler (INFO level, or DEBUG if debug mode)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
-    console_format = logging.Formatter(
-        "[%(levelname)s] %(message)s"
-    )
+    console_format = logging.Formatter("[%(levelname)s] %(message)s")
     console_handler.setFormatter(console_format)
     _logger.addHandler(console_handler)
-    
+
     # File handler with rotation (INFO level normally, DEBUG if debug mode)
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        
+
         log_file = LOG_DIR / "app.log"
-        
+
         # Use RotatingFileHandler for automatic rotation
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
@@ -75,13 +73,13 @@ def get_logger() -> logging.Logger:
             encoding="utf-8",
         )
         file_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
-        
+
         file_format = logging.Formatter(
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
         file_handler.setFormatter(file_format)
-        
+
         # Wrap with MemoryHandler for buffered writes (reduces disk I/O)
         memory_handler = logging.handlers.MemoryHandler(
             capacity=BUFFER_CAPACITY,
@@ -89,13 +87,13 @@ def get_logger() -> logging.Logger:
             target=file_handler,
         )
         memory_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
-        
+
         _logger.addHandler(memory_handler)
-        
+
     except (OSError, IOError) as e:
         # Log to console if file logging fails
         _logger.warning(f"Could not create log file: {e}")
-    
+
     return _logger
 
 
@@ -109,7 +107,7 @@ def flush_logs():
             try:
                 if isinstance(handler, logging.handlers.MemoryHandler):
                     handler.flush()
-                elif hasattr(handler, 'flush'):
+                elif hasattr(handler, "flush"):
                     handler.flush()
             except Exception:
                 pass  # Ignore errors during shutdown
@@ -118,13 +116,13 @@ def flush_logs():
 def set_debug_mode(enabled: bool):
     """
     Enable or disable debug mode at runtime.
-    
+
     Args:
         enabled: True to enable DEBUG level logging
     """
     global DEBUG_MODE
     DEBUG_MODE = enabled
-    
+
     if _logger:
         new_level = logging.DEBUG if enabled else logging.INFO
         _logger.setLevel(new_level)
@@ -136,16 +134,17 @@ def cleanup_old_logs(max_age_days: int = 7):
     """
     Remove log files older than max_age_days.
     Called periodically to prevent disk space issues.
-    
+
     Args:
         max_age_days: Maximum age of log files to keep
     """
     if not LOG_DIR.exists():
         return
-    
+
     import time
+
     cutoff_time = time.time() - (max_age_days * 24 * 60 * 60)
-    
+
     try:
         for log_file in LOG_DIR.glob("*.log*"):
             try:

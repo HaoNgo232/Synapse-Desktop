@@ -1,5 +1,5 @@
 """
-Overwrite Desktop - Main Application Entry Point
+Synapse Desktop - Main Application Entry Point
 
 Flet-based desktop app ke thua tinh nang Copy Context va OPX Apply
 tu Overwrite VS Code extension.
@@ -50,7 +50,7 @@ class OverwriteApp:
         self._apply_theme()
 
         # Configure page
-        self.page.title = "Overwrite Desktop"
+        self.page.title = "Synapse Desktop"
         self.page.padding = 0
 
         # Resize handler for responsive layout
@@ -145,7 +145,7 @@ class OverwriteApp:
             content=ft.Row(
                 [
                     ft.Text(
-                        "Overwrite Desktop",
+                        "Synapse Desktop",
                         size=16,
                         weight=ft.FontWeight.W_600,
                         color=ThemeColors.TEXT_PRIMARY,

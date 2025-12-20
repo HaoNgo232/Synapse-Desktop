@@ -15,6 +15,7 @@ from core.prompt_generator import (
     generate_file_map,
     generate_file_contents,
     generate_prompt,
+    generate_smart_context,
 )
 from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
@@ -246,6 +247,7 @@ class ContextView:
                     ft.Container(height=8),
                     self.instructions_field,
                     ft.Container(height=12),
+                    # Row 1: Tree Map và Smart Context
                     ft.Row(
                         [
                             ft.OutlinedButton(
@@ -259,6 +261,24 @@ class ContextView:
                                     side=ft.BorderSide(1, ThemeColors.BORDER),
                                 ),
                             ),
+                            ft.OutlinedButton(
+                                "Copy Smart",
+                                icon=ft.Icons.AUTO_AWESOME,
+                                on_click=lambda _: self._copy_smart_context(),
+                                expand=True,
+                                tooltip="Copy code structure only (signatures, docstrings)",
+                                style=ft.ButtonStyle(
+                                    color=ThemeColors.WARNING,
+                                    side=ft.BorderSide(1, ThemeColors.WARNING),
+                                ),
+                            ),
+                        ],
+                        spacing=12,
+                    ),
+                    ft.Container(height=8),
+                    # Row 2: Copy Context và Copy + OPX
+                    ft.Row(
+                        [
                             ft.OutlinedButton(
                                 "Copy Context",
                                 icon=ft.Icons.CONTENT_COPY,
@@ -717,6 +737,60 @@ class ContextView:
             if success:
                 token_count = count_tokens(prompt)
                 self._show_status(f"Tree map copied! ({token_count:,} tokens)")
+            else:
+                self._show_status(message, is_error=True)
+
+        except Exception as e:
+            self._show_status(f"Error: {e}", is_error=True)
+
+    def _copy_smart_context(self):
+        """
+        Copy Smart Context to clipboard.
+        Dùng Tree-sitter để trích xuất code structure (signatures, docstrings).
+        Không fallback sang raw content khi không hỗ trợ.
+        """
+        if not self.tree or not self.file_tree_component:
+            self._show_status("No files selected", is_error=True)
+            return
+
+        selected_paths = self.file_tree_component.get_visible_selected_paths()
+        if not selected_paths:
+            self._show_status("No files selected", is_error=True)
+            return
+
+        try:
+            # Show processing state
+            file_count = sum(1 for p in selected_paths if Path(p).is_file())
+            if file_count > 5:
+                self._show_status(
+                    f"Parsing {file_count} files...", is_error=False, auto_clear=False
+                )
+                self.page.update()
+
+            # Generate smart context
+            smart_contents = generate_smart_context(selected_paths)
+            file_map = generate_file_map(self.tree, selected_paths)
+
+            assert self.instructions_field is not None
+            instructions = self.instructions_field.value or ""
+
+            # Build prompt với smart content
+            prompt = f"""<file_map>
+{file_map}
+</file_map>
+
+<file_contents>
+{smart_contents}
+</file_contents>
+"""
+            if instructions.strip():
+                prompt += f"\n<user_instructions>\n{instructions.strip()}\n</user_instructions>\n"
+
+            success, message = copy_to_clipboard(prompt)
+
+            if success:
+                token_count = count_tokens(prompt)
+                self._show_status(f"Smart Context copied! ({token_count:,} tokens)")
             else:
                 self._show_status(message, is_error=True)
 

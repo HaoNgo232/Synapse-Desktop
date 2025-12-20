@@ -148,6 +148,81 @@ def generate_file_contents(
     return "\n".join(contents).strip()
 
 
+def generate_smart_context(
+    selected_paths: set[str], max_file_size: int = 1024 * 1024
+) -> str:
+    """
+    Tao Smart Context string - chi chua code structure (signatures, docstrings).
+    Dùng Tree-sitter để parse và trích xuất cấu trúc thay vì raw content.
+
+    Args:
+        selected_paths: Set cac duong dan file duoc tick
+        max_file_size: Maximum file size to include (default 1MB)
+
+    Returns:
+        Smart context string voi code signatures
+    """
+    # Import lazy để tránh circular import và load chậm
+    from core.smart_context import smart_parse, is_supported
+
+    contents: list[str] = []
+    contents_append = contents.append
+
+    sorted_paths = sorted(selected_paths)
+
+    for path_str in sorted_paths:
+        path = Path(path_str)
+
+        try:
+            if not path.is_file():
+                continue
+
+            # Skip binary files
+            if is_binary_by_extension(path):
+                contents_append(f"File: {path}\n*** Skipped: Binary file ***\n")
+                continue
+
+            # Skip files that are too large
+            try:
+                file_size = path.stat().st_size
+                if file_size > max_file_size:
+                    contents_append(
+                        f"File: {path}\n*** Skipped: File too large ({file_size // 1024}KB) ***\n"
+                    )
+                    continue
+            except OSError:
+                pass
+
+            # Đọc raw content
+            raw_content = path.read_text(encoding="utf-8", errors="replace")
+
+            # Kiểm tra có hỗ trợ Smart Context không
+            ext = path.suffix.lstrip(".")
+            if not is_supported(ext):
+                # Không hỗ trợ -> hiển thị placeholder thay vì raw content
+                contents_append(
+                    f"File: {path}\n*** Smart Context not available for .{ext} files ***\n"
+                )
+                continue
+
+            # Try Smart Parse
+            smart_content = smart_parse(path_str, raw_content)
+
+            if smart_content:
+                language = get_language_from_path(path_str)
+                contents_append(
+                    f"File: {path} [Smart Context]\n```{language}\n{smart_content}\n```\n"
+                )
+            else:
+                # Parse failed
+                contents_append(f"File: {path}\n*** Smart Context parse failed ***\n")
+
+        except (OSError, IOError) as e:
+            contents_append(f"File: {path}\n*** Error reading file: {e} ***\n")
+
+    return "\n".join(contents).strip()
+
+
 def generate_prompt(
     file_map: str,
     file_contents: str,

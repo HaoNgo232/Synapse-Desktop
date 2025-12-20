@@ -468,7 +468,13 @@ class FileTreeComponent:
                 )
             )
 
-        self.page.update()
+        # Safety check: only update if page exists and component is attached
+        if self.page and hasattr(self, "tree_container") and self.tree_container:
+            try:
+                self.page.update()
+            except AssertionError:
+                # Control not yet attached to page, skip update
+                pass
 
     def _render_tree_item(self, item: TreeItem, depth: int):
         """Render mot item voi search highlighting"""

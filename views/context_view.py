@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Optional, Set
 
 from core.utils.file_utils import scan_directory, TreeItem
+from core.utils.ui_utils import safe_page_update
 from services.clipboard_utils import copy_to_clipboard
 from core.token_counter import count_tokens_batch, count_tokens
 from core.prompt_generator import (
@@ -407,7 +408,7 @@ class ContextView:
         self._show_status("Loading...", is_error=False)
         if self.token_stats_panel:
             self.token_stats_panel.set_loading(True)
-        self.page.update()
+        safe_page_update(self.page)
 
         try:
             from views.settings_view import get_excluded_patterns, get_use_gitignore
@@ -439,7 +440,7 @@ class ContextView:
         finally:
             if self.token_stats_panel:
                 self.token_stats_panel.set_loading(False)
-            self.page.update()
+            safe_page_update(self.page)
 
     def _on_selection_changed(self, selected_paths: Set[str]):
         """Callback khi selection thay doi - debounced"""
@@ -669,7 +670,7 @@ class ContextView:
                 instruction_tokens=instruction_tokens,
             )
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _copy_context(self, include_xml: bool):
         """
@@ -701,7 +702,7 @@ class ContextView:
                 self._show_status(
                     f"Scanning {file_count} files...", is_error=False, auto_clear=False
                 )
-                self.page.update()
+                safe_page_update(self.page)
 
             # --- SECURITY CHECK ---
             # Check if security scan is enabled
@@ -826,7 +827,7 @@ class ContextView:
                 self._show_status(
                     f"Parsing {file_count} files...", is_error=False, auto_clear=False
                 )
-                self.page.update()
+                safe_page_update(self.page)
 
             # Generate smart context
             smart_contents = generate_smart_context(selected_paths)
@@ -906,11 +907,11 @@ class ContextView:
 
         def close_dialog(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
 
         def copy_anyway(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
             # Proceed with copy
             self._do_copy(prompt, include_xml, is_smart)
 
@@ -1050,7 +1051,7 @@ class ContextView:
 
         self.page.overlay.append(dialog)
         dialog.open = True
-        self.page.update()
+        safe_page_update(self.page)
 
     def _show_status(
         self, message: str, is_error: bool = False, auto_clear: bool = True
@@ -1071,7 +1072,7 @@ class ContextView:
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self.page.update()
+        safe_page_update(self.page)
 
         # Auto-clear success messages after 3 seconds
         if auto_clear and not is_error and message:
@@ -1080,7 +1081,7 @@ class ContextView:
                 try:
                     if self.status_text and self.status_text.value == message:
                         self.status_text.value = ""
-                        self.page.update()
+                        safe_page_update(self.page)
                 except Exception:
                     pass
 

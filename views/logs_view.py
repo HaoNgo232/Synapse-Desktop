@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from core.theme import ThemeColors
+from core.utils.ui_utils import safe_page_update
 from core.logging_config import LOG_DIR
 from services.clipboard_utils import copy_to_clipboard
 
@@ -247,7 +248,7 @@ class LogsView:
                     )
                 )
                 self._show_status("No log files found")
-                self.page.update()
+                safe_page_update(self.page)
                 return
 
             # Đọc log file mới nhất
@@ -276,7 +277,7 @@ class LogsView:
             )
             self._show_status(f"Error: {e}", is_error=True)
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _parse_log_line(self, line: str) -> Optional[LogEntry]:
         """Parse một dòng log thành LogEntry"""
@@ -341,7 +342,7 @@ class LogsView:
             for log in display_logs:
                 self.logs_column.controls.append(self._create_log_row(log))
 
-        self.page.update()
+        safe_page_update(self.page)
 
         # Auto-scroll to bottom
         if self.auto_scroll and self.logs_column.controls:
@@ -469,7 +470,7 @@ class LogsView:
         )
         self.log_count_text.value = "0 logs"
         self._show_status("Display cleared")
-        self.page.update()
+        safe_page_update(self.page)
 
     def _toggle_debug_mode(self, enabled: bool):
         """Toggle debug logging mode"""
@@ -487,4 +488,4 @@ class LogsView:
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self.page.update()
+        safe_page_update(self.page)

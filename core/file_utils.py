@@ -5,6 +5,8 @@ Su dung pathspec thay vi ignore library.
 """
 
 import os
+import platform
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Tuple
@@ -31,6 +33,40 @@ class TreeItem:
 def is_binary_by_extension(file_path: Path) -> bool:
     """Check if file is binary based on extension"""
     return file_path.suffix.lower() in BINARY_EXTENSIONS
+
+
+def is_system_path(file_path: Path) -> bool:
+    """
+    Check if path is an OS system path that should be excluded.
+    Supports: Windows, macOS, Linux
+    """
+    system = platform.system()
+    name = file_path.name
+    path_str = str(file_path)
+
+    if system == "Windows":
+        # Check reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+        if re.match(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", name, re.IGNORECASE):
+            return True
+        # Check system folders
+        lower_path = path_str.lower()
+        if "\\windows\\" in lower_path or "\\system32\\" in lower_path:
+            return True
+
+    elif system == "Darwin":  # macOS
+        # Common macOS system files/folders
+        if name in (".DS_Store", ".Trashes", ".fseventsd") or name.startswith(
+            ".Spotlight-"
+        ):
+            return True
+
+    elif system == "Linux":
+        # Critical Linux system directories
+        # Chi check neu scan tu root hoac cac thu muc nay nam trong project
+        if path_str.startswith(("/proc/", "/sys/", "/dev/")):
+            return True
+
+    return False
 
 
 def scan_directory(
@@ -112,6 +148,10 @@ def _build_tree(
     entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
 
     for entry in entries:
+        # Check system path first (fast exclude)
+        if is_system_path(entry):
+            continue
+
         # Get relative path for ignore matching
         try:
             rel_path = entry.relative_to(root_path)

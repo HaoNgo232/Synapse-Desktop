@@ -25,6 +25,10 @@ import tree_sitter_ruby as tsruby  # type: ignore
 import tree_sitter_php as tsphp  # type: ignore
 import tree_sitter_swift as tsswift  # type: ignore
 
+# Phase 5
+import tree_sitter_css as tscss  # type: ignore
+import tree_sitter_solidity as tssolidity  # type: ignore
+
 # Import queries
 from core.smart_context.queries import (
     QUERY_PYTHON,
@@ -40,6 +44,9 @@ from core.smart_context.queries import (
     QUERY_RUBY,
     QUERY_PHP,
     QUERY_SWIFT,
+    # Phase 5
+    QUERY_CSS,
+    QUERY_SOLIDITY,
 )
 
 
@@ -135,6 +142,19 @@ LANGUAGE_CONFIGS: list[LanguageConfig] = [
         extensions=["swift"],
         query=QUERY_SWIFT,
         loader=lambda: Language(tsswift.language()),
+    ),
+    # Phase 5: Special
+    LanguageConfig(
+        name="css",
+        extensions=["css", "scss", "less"],
+        query=QUERY_CSS,
+        loader=lambda: Language(tscss.language()),
+    ),
+    LanguageConfig(
+        name="solidity",
+        extensions=["sol"],
+        query=QUERY_SOLIDITY,
+        loader=lambda: Language(tssolidity.language()),
     ),
 ]
 

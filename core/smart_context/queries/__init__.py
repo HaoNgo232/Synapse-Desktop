@@ -25,6 +25,10 @@ from core.smart_context.queries.ruby import QUERY as QUERY_RUBY
 from core.smart_context.queries.php import QUERY as QUERY_PHP
 from core.smart_context.queries.swift import QUERY as QUERY_SWIFT
 
+# Phase 5: Special
+from core.smart_context.queries.css import QUERY as QUERY_CSS
+from core.smart_context.queries.solidity import QUERY as QUERY_SOLIDITY
+
 __all__ = [
     # Phase 1
     "QUERY_PYTHON",
@@ -42,4 +46,7 @@ __all__ = [
     "QUERY_RUBY",
     "QUERY_PHP",
     "QUERY_SWIFT",
+    # Phase 5
+    "QUERY_CSS",
+    "QUERY_SOLIDITY",
 ]

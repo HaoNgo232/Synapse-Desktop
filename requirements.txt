@@ -21,3 +21,5 @@ tree-sitter-cpp>=0.23.0
 tree-sitter-ruby>=0.23.0
 tree-sitter-php>=0.23.0
 tree-sitter-swift>=0.0.1
+tree-sitter-css>=0.23.0
+tree-sitter-solidity>=1.0.0

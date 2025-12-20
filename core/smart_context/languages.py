@@ -13,6 +13,9 @@ BACKWARD COMPATIBILITY NOTE:
 from typing import Optional, Dict
 import tree_sitter_python as tspython
 import tree_sitter_javascript as tsjavascript
+import tree_sitter_typescript as tstypescript
+import tree_sitter_rust as tsrust
+import tree_sitter_go as tsgo
 from tree_sitter import Language
 
 # Cache các language đã load để tránh load lại nhiều lần
@@ -35,6 +38,10 @@ EXTENSION_TO_LANGUAGE: Dict[str, str] = {
     "mts": "typescript",
     "mtsx": "typescript",
     "cts": "typescript",
+    # Rust - NEW in Phase 2
+    "rs": "rust",
+    # Go - NEW in Phase 2
+    "go": "go",
 }
 
 # Tree-sitter queries ported từ Repomix
@@ -238,6 +245,22 @@ LANGUAGE_QUERIES: Dict[str, str] = {
     right: (arrow_function)
 ) @definition.function
 """,
+    # Rust query - NEW in Phase 2
+    "rust": """
+(line_comment) @comment
+(block_comment) @comment
+(use_declaration) @definition.import
+(struct_item name: (type_identifier) @name.definition.class) @definition.class
+(enum_item name: (type_identifier) @name.definition.class) @definition.class
+(function_item name: (identifier) @name.definition.function) @definition.function
+""",
+    # Go query - NEW in Phase 2
+    "go": """
+(comment) @comment
+(package_clause) @definition.package
+(import_declaration) @definition.import
+(function_declaration name: (identifier) @name) @definition.function
+""",
 }
 
 
@@ -273,8 +296,14 @@ def get_language(extension: str) -> Optional[Language]:
     elif lang_name == "javascript":
         language = Language(tsjavascript.language())
     elif lang_name == "typescript":
-        # TypeScript uses JavaScript grammar with TS-specific rules
-        language = Language(tsjavascript.language())
+        # Fixed: Use actual TypeScript grammar for proper interface/type support
+        language = Language(tstypescript.language_typescript())
+    elif lang_name == "rust":
+        # NEW in Phase 2: Rust support
+        language = Language(tsrust.language())
+    elif lang_name == "go":
+        # NEW in Phase 2: Go support
+        language = Language(tsgo.language())
 
     # Cache lại kết quả
     if language:

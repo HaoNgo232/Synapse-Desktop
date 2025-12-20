@@ -20,6 +20,11 @@ import tree_sitter_c_sharp as tscsharp  # type: ignore
 import tree_sitter_c as tsc  # type: ignore
 import tree_sitter_cpp as tscpp  # type: ignore
 
+# Phase 4
+import tree_sitter_ruby as tsruby  # type: ignore
+import tree_sitter_php as tsphp  # type: ignore
+import tree_sitter_swift as tsswift  # type: ignore
+
 # Import queries
 from core.smart_context.queries import (
     QUERY_PYTHON,
@@ -31,6 +36,10 @@ from core.smart_context.queries import (
     QUERY_CSHARP,
     QUERY_C,
     QUERY_CPP,
+    # Phase 4
+    QUERY_RUBY,
+    QUERY_PHP,
+    QUERY_SWIFT,
 )
 
 
@@ -107,6 +116,25 @@ LANGUAGE_CONFIGS: list[LanguageConfig] = [
         extensions=["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
         query=QUERY_CPP,
         loader=lambda: Language(tscpp.language()),
+    ),
+    # Phase 4: Web & Scripting
+    LanguageConfig(
+        name="ruby",
+        extensions=["rb", "rake", "gemspec"],
+        query=QUERY_RUBY,
+        loader=lambda: Language(tsruby.language()),
+    ),
+    LanguageConfig(
+        name="php",
+        extensions=["php", "phtml", "php3", "php4", "php5"],
+        query=QUERY_PHP,
+        loader=lambda: Language(tsphp.language_php()),
+    ),
+    LanguageConfig(
+        name="swift",
+        extensions=["swift"],
+        query=QUERY_SWIFT,
+        loader=lambda: Language(tsswift.language()),
     ),
 ]
 

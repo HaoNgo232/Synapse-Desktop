@@ -9,6 +9,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Tuple
 import pathspec
+from core.constants import BINARY_EXTENSIONS, EXTENDED_IGNORE_PATTERNS
 
 # Cache for gitignore patterns: root_path -> (mtime, patterns)
 _gitignore_cache: Dict[str, Tuple[float, list]] = {}
@@ -27,94 +28,6 @@ class TreeItem:
     children: list["TreeItem"] = field(default_factory=list)
 
 
-# Danh sach binary extensions - COPY NGUYEN TU TYPESCRIPT
-BINARY_EXTENSIONS = {
-    # Images
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".bmp",
-    ".tiff",
-    ".tif",
-    ".webp",
-    ".svg",
-    ".ico",
-    ".heic",
-    ".avif",
-    # Videos
-    ".mp4",
-    ".avi",
-    ".mov",
-    ".mkv",
-    ".wmv",
-    ".flv",
-    ".webm",
-    ".m4v",
-    ".3gp",
-    ".ogv",
-    # Audio
-    ".mp3",
-    ".wav",
-    ".flac",
-    ".aac",
-    ".ogg",
-    ".wma",
-    ".m4a",
-    ".opus",
-    ".oga",
-    # Archives
-    ".zip",
-    ".rar",
-    ".7z",
-    ".tar",
-    ".gz",
-    ".bz2",
-    ".xz",
-    ".lzma",
-    ".cab",
-    ".dmg",
-    ".iso",
-    # Executables
-    ".exe",
-    ".dll",
-    ".so",
-    ".dylib",
-    ".app",
-    ".deb",
-    ".rpm",
-    ".msi",
-    ".pkg",
-    # Documents
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-    ".ppt",
-    ".pptx",
-    ".odt",
-    ".ods",
-    ".odp",
-    # Fonts
-    ".ttf",
-    ".otf",
-    ".woff",
-    ".woff2",
-    ".eot",
-    # Other binary
-    ".bin",
-    ".dat",
-    ".db",
-    ".sqlite",
-    ".sqlite3",
-    ".class",
-    ".pyc",
-    ".o",
-    ".obj",
-}
-
-
 def is_binary_by_extension(file_path: Path) -> bool:
     """Check if file is binary based on extension"""
     return file_path.suffix.lower() in BINARY_EXTENSIONS
@@ -124,14 +37,22 @@ def scan_directory(
     root_path: Path,
     excluded_patterns: Optional[list[str]] = None,
     use_gitignore: bool = True,
+    use_default_ignores: bool = True,
 ) -> TreeItem:
     """
     Scan mot directory va tra ve tree structure.
 
+    Chuc nang:
+    - Duyet tat ca files/folders trong thu muc goc
+    - Tu dong ignore cac patterns mac dinh (node_modules, __pycache__, etc.)
+    - Ho tro .gitignore va user-defined patterns
+
     Args:
         root_path: Thu muc goc can scan
         excluded_patterns: Danh sach patterns de exclude (giong gitignore format)
-        use_gitignore: Co doc .gitignore khong
+        use_gitignore: Co doc .gitignore khong (default: True)
+        use_default_ignores: Co su dung EXTENDED_IGNORE_PATTERNS khong (default: True)
+                            Tat tinh nang nay neu muon scan TAT CA files
 
     Returns:
         TreeItem root chua toan bo cay thu muc
@@ -141,10 +62,19 @@ def scan_directory(
     # Build ignore spec
     ignore_patterns: list[str] = []
 
-    # Always exclude .git, .hg, .svn
+    # Always exclude version control directories
+    # Luon loai bo cac thu muc version control bat ke cau hinh
     ignore_patterns.extend([".git", ".hg", ".svn"])
 
-    # Add user-defined patterns
+    # Thu tu uu tien: VCS > Default > User > Gitignore
+    # User patterns co the override default patterns
+
+    # Extended default ignore patterns (port tu Repomix)
+    # Bao gom: node_modules, __pycache__, .venv, Cargo.lock, etc.
+    if use_default_ignores:
+        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
+
+    # Add user-defined patterns (co the override default)
     if excluded_patterns:
         ignore_patterns.extend(excluded_patterns)
 

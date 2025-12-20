@@ -3,12 +3,41 @@ Prompt Generator - Tao context prompt cho LLM
 
 """
 
+import re
 from pathlib import Path
 from typing import Optional
 
 from core.file_utils import TreeItem, is_binary_by_extension
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.language_utils import get_language_from_path
+
+
+def calculate_markdown_delimiter(contents: list[str]) -> str:
+    """
+    Tinh toan delimiter an toan cho markdown code blocks.
+
+    Khi file content chua backticks (```), can dung nhieu backticks hon
+    cho code block wrapper de tranh broken markdown.
+
+    Port tu Repomix (src/core/output/outputGenerate.ts lines 26-31)
+
+    Args:
+        contents: Danh sach noi dung files
+
+    Returns:
+        Delimiter string (toi thieu 3 backticks, hoac nhieu hon neu can)
+    """
+    max_backticks = 0
+
+    for content in contents:
+        # Tim tat ca cac day backticks trong content
+        matches = re.findall(r"`+", content)
+        if matches:
+            # Lay do dai lon nhat cua day backticks
+            max_backticks = max(max_backticks, max(len(m) for m in matches))
+
+    # Delimiter phai lon hon max backticks tim thay, toi thieu 3
+    return "`" * max(3, max_backticks + 1)
 
 
 def generate_file_map(tree: TreeItem, selected_paths: set[str]) -> str:
@@ -99,6 +128,9 @@ def generate_file_contents(
     """
     Tao file contents string cho cac files duoc chon.
 
+    Su dung Smart Markdown Delimiter de tranh broken markdown
+    khi file content chua backticks.
+
     Args:
         selected_paths: Set cac duong dan file duoc tick
         max_file_size: Maximum file size to include (default 1MB)
@@ -106,12 +138,12 @@ def generate_file_contents(
     Returns:
         File contents string voi markdown code blocks
     """
-    # Pre-allocate list with estimated size for better performance
-    contents: list[str] = []
-    contents_append = contents.append  # Local reference for faster append
-
     # Sort paths de thu tu nhat quan
     sorted_paths = sorted(selected_paths)
+
+    # Phase 1: Doc tat ca file contents truoc de tinh delimiter
+    file_data: list[tuple[Path, str | None, str | None]] = []  # (path, content, error)
+    all_contents: list[str] = []
 
     for path_str in sorted_paths:
         path = Path(path_str)
@@ -123,27 +155,43 @@ def generate_file_contents(
 
             # Skip binary files
             if is_binary_by_extension(path):
-                contents_append(f"File: {path}\n*** Skipped: Binary file ***\n")
+                file_data.append((path, None, "Binary file"))
                 continue
 
             # Skip files that are too large
             try:
                 file_size = path.stat().st_size
                 if file_size > max_file_size:
-                    contents_append(
-                        f"File: {path}\n*** Skipped: File too large ({file_size // 1024}KB) ***\n"
+                    file_data.append(
+                        (path, None, f"File too large ({file_size // 1024}KB)")
                     )
                     continue
             except OSError:
                 pass
 
-            # Doc va format content với language detection
+            # Doc content
             content = path.read_text(encoding="utf-8", errors="replace")
-            language = get_language_from_path(path_str)
-            contents_append(f"File: {path}\n```{language}\n{content}\n```\n")
+            file_data.append((path, content, None))
+            all_contents.append(content)
 
         except (OSError, IOError) as e:
-            contents_append(f"File: {path}\n*** Error reading file: {e} ***\n")
+            file_data.append((path, None, f"Error reading file: {e}"))
+
+    # Phase 2: Tinh Smart Markdown Delimiter
+    delimiter = calculate_markdown_delimiter(all_contents)
+
+    # Phase 3: Generate output voi dynamic delimiter
+    contents: list[str] = []
+    contents_append = contents.append
+
+    for path, content, error in file_data:
+        if error:
+            contents_append(f"File: {path}\n*** Skipped: {error} ***\n")
+        elif content is not None:
+            language = get_language_from_path(str(path))
+            contents_append(
+                f"File: {path}\n{delimiter}{language}\n{content}\n{delimiter}\n"
+            )
 
     return "\n".join(contents).strip()
 
@@ -153,7 +201,10 @@ def generate_smart_context(
 ) -> str:
     """
     Tao Smart Context string - chi chua code structure (signatures, docstrings).
-    Dùng Tree-sitter để parse và trích xuất cấu trúc thay vì raw content.
+    Dung Tree-sitter de parse va trich xuat cau truc thay vi raw content.
+
+    Su dung Smart Markdown Delimiter de tranh broken markdown
+    khi file content chua backticks.
 
     Args:
         selected_paths: Set cac duong dan file duoc tick
@@ -162,13 +213,16 @@ def generate_smart_context(
     Returns:
         Smart context string voi code signatures
     """
-    # Import lazy để tránh circular import và load chậm
+    # Import lazy de tranh circular import va load cham
     from core.smart_context import smart_parse, is_supported
 
-    contents: list[str] = []
-    contents_append = contents.append
-
     sorted_paths = sorted(selected_paths)
+
+    # Phase 1: Doc va parse tat ca files truoc
+    file_data: list[tuple[Path, str | None, str | None]] = (
+        []
+    )  # (path, smart_content, error)
+    all_contents: list[str] = []
 
     for path_str in sorted_paths:
         path = Path(path_str)
@@ -179,29 +233,28 @@ def generate_smart_context(
 
             # Skip binary files
             if is_binary_by_extension(path):
-                contents_append(f"File: {path}\n*** Skipped: Binary file ***\n")
+                file_data.append((path, None, "Binary file"))
                 continue
 
             # Skip files that are too large
             try:
                 file_size = path.stat().st_size
                 if file_size > max_file_size:
-                    contents_append(
-                        f"File: {path}\n*** Skipped: File too large ({file_size // 1024}KB) ***\n"
+                    file_data.append(
+                        (path, None, f"File too large ({file_size // 1024}KB)")
                     )
                     continue
             except OSError:
                 pass
 
-            # Đọc raw content
+            # Doc raw content
             raw_content = path.read_text(encoding="utf-8", errors="replace")
 
-            # Kiểm tra có hỗ trợ Smart Context không
+            # Kiem tra ho tro Smart Context
             ext = path.suffix.lstrip(".")
             if not is_supported(ext):
-                # Không hỗ trợ -> hiển thị placeholder thay vì raw content
-                contents_append(
-                    f"File: {path}\n*** Smart Context not available for .{ext} files ***\n"
+                file_data.append(
+                    (path, None, f"Smart Context not available for .{ext} files")
                 )
                 continue
 
@@ -209,16 +262,29 @@ def generate_smart_context(
             smart_content = smart_parse(path_str, raw_content)
 
             if smart_content:
-                language = get_language_from_path(path_str)
-                contents_append(
-                    f"File: {path} [Smart Context]\n```{language}\n{smart_content}\n```\n"
-                )
+                file_data.append((path, smart_content, None))
+                all_contents.append(smart_content)
             else:
-                # Parse failed
-                contents_append(f"File: {path}\n*** Smart Context parse failed ***\n")
+                file_data.append((path, None, "Smart Context parse failed"))
 
         except (OSError, IOError) as e:
-            contents_append(f"File: {path}\n*** Error reading file: {e} ***\n")
+            file_data.append((path, None, f"Error reading file: {e}"))
+
+    # Phase 2: Tinh Smart Markdown Delimiter
+    delimiter = calculate_markdown_delimiter(all_contents)
+
+    # Phase 3: Generate output voi dynamic delimiter
+    contents: list[str] = []
+    contents_append = contents.append
+
+    for path, smart_content, error in file_data:
+        if error:
+            contents_append(f"File: {path}\n*** Skipped: {error} ***\n")
+        elif smart_content is not None:
+            language = get_language_from_path(str(path))
+            contents_append(
+                f"File: {path} [Smart Context]\n{delimiter}{language}\n{smart_content}\n{delimiter}\n"
+            )
 
     return "\n".join(contents).strip()
 

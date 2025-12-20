@@ -15,10 +15,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
 from core.logging_config import log_error, log_debug, log_info
-
-
-# History file path
-HISTORY_FILE = Path.home() / ".synapse-desktop" / "history.json"
+from config.paths import HISTORY_FILE
 
 # Số lượng tối đa entries lưu trữ
 MAX_HISTORY_ENTRIES = 100

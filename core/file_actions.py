@@ -19,10 +19,7 @@ from datetime import datetime
 
 from core.opx_parser import FileAction, ChangeBlock
 from core.logging_config import log_error, log_info, log_debug, log_warning
-
-
-# Backup directory
-BACKUP_DIR = Path.home() / ".overwrite-desktop" / "backups"
+from config.paths import BACKUP_DIR
 
 
 def create_backup(file_path: Path) -> Optional[Path]:

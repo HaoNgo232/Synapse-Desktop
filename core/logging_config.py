@@ -2,7 +2,7 @@
 Logging Configuration - Centralized logging setup
 
 Cung cấp logging nhất quán cho toàn bộ app.
-Log file được lưu tại ~/.overwrite-desktop/logs/
+Log file được lưu tại ~/.synapse-desktop/logs/
 
 Optimized for production:
 - Log rotation (max 5 files, 2MB each)
@@ -14,18 +14,13 @@ import logging
 import logging.handlers
 import sys
 import os
-from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-# Log directory
-LOG_DIR = Path.home() / ".synapse-desktop" / "logs"
+from config.paths import LOG_DIR, DEBUG_ENV_VAR, DEBUG_MODE
 
 # Logger singleton
 _logger: Optional[logging.Logger] = None
-
-# Environment variable to enable debug mode
-DEBUG_MODE = os.environ.get("OVERWRITE_DEBUG", "").lower() in ("1", "true", "yes")
 
 # Log rotation config
 MAX_LOG_SIZE = 2 * 1024 * 1024  # 2MB per file

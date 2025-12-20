@@ -15,10 +15,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
 from core.logging_config import log_error, log_debug, log_info
-
-
-# Session file path
-SESSION_FILE = Path.home() / ".synapse-desktop" / "session.json"
+from config.paths import SESSION_FILE
 
 
 @dataclass

@@ -10,10 +10,7 @@ from typing import List
 from datetime import datetime
 
 from core.logging_config import log_error, log_debug
-
-
-# Settings file path (cùng thư mục với settings chính)
-RECENT_FOLDERS_FILE = Path.home() / ".synapse-desktop" / "recent_folders.json"
+from config.paths import RECENT_FOLDERS_FILE
 
 # Số lượng tối đa folders lưu trữ
 MAX_RECENT_FOLDERS = 10

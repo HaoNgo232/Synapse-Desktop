@@ -4,14 +4,13 @@ Settings Manager - Quản lý load/save settings của ứng dụng.
 Service này tập trung logic quản lý settings từ views/settings_view.py và mở rộng
 để hỗ trợ thêm các settings khác (như selected model).
 
-File: ~/.overwrite-desktop/settings.json
+File: ~/.synapse-desktop/settings.json
 """
 
 import json
-from pathlib import Path
 from typing import Dict, Any, Optional
 
-SETTINGS_FILE = Path.home() / ".synapse-desktop" / "settings.json"
+from config.paths import SETTINGS_FILE
 
 DEFAULT_SETTINGS = {
     "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",

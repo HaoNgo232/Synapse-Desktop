@@ -129,6 +129,7 @@ class SettingsView:
         self.excluded_field: Optional[ft.TextField] = None
         self.gitignore_checkbox: Optional[ft.Checkbox] = None
         self.security_check_checkbox: Optional[ft.Checkbox] = None
+        self.git_include_checkbox: Optional[ft.Checkbox] = None
         self.status_text: Optional[ft.Text] = None
 
         # Track unsaved changes
@@ -179,11 +180,22 @@ class SettingsView:
             on_change=lambda e: self._mark_changed(),
         )
 
+        # Git Include Checkbox
+        self.git_include_checkbox = ft.Checkbox(
+            label="Include Git Diff/Log",
+            value=settings.get("include_git_changes", True),
+            active_color=ThemeColors.PRIMARY,
+            check_color="#FFFFFF",
+            label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
+            on_change=lambda e: self._mark_changed(),
+        )
+
         # Store initial values for comparison
         self._initial_values = {
             "excluded_folders": settings.get("excluded_folders", ""),
             "use_gitignore": settings.get("use_gitignore", True),
             "enable_security_check": settings.get("enable_security_check", True),
+            "include_git_changes": settings.get("include_git_changes", True),
         }
         self._has_unsaved_changes = False
 
@@ -231,6 +243,21 @@ class SettingsView:
                                         self.gitignore_checkbox,
                                         ft.Text(
                                             "When enabled, files matching .gitignore patterns will be hidden.",
+                                            size=12,
+                                            color=ThemeColors.TEXT_SECONDARY,
+                                        ),
+                                        ft.Container(height=24),
+                                        # Git Options
+                                        ft.Text(
+                                            "Context Generation",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Container(height=4),
+                                        self.git_include_checkbox,
+                                        ft.Text(
+                                            "Include git diffs and recent logs in prompt.",
                                             size=12,
                                             color=ThemeColors.TEXT_SECONDARY,
                                         ),
@@ -458,11 +485,13 @@ class SettingsView:
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
         assert self.security_check_checkbox is not None
+        assert self.git_include_checkbox is not None
 
         settings = {
             "excluded_folders": self.excluded_field.value or "",
             "use_gitignore": self.gitignore_checkbox.value or False,
             "enable_security_check": self.security_check_checkbox.value or False,
+            "include_git_changes": self.git_include_checkbox.value or False,
         }
 
         if save_settings(settings):
@@ -478,6 +507,7 @@ class SettingsView:
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
         assert self.security_check_checkbox is not None
+        assert self.git_include_checkbox is not None
 
         # Reset UI but don't save yet to match previous behavior
         # But wait, logic changed. Let's just load defaults from manager manually?
@@ -491,6 +521,7 @@ class SettingsView:
         self.excluded_field.value = default_excluded
         self.gitignore_checkbox.value = True
         self.security_check_checkbox.value = True
+        self.git_include_checkbox.value = True
         self.page.update()
 
         self._show_status("Reset to defaults (not saved yet)", is_error=False)
@@ -499,10 +530,12 @@ class SettingsView:
         """Export settings to clipboard as JSON"""
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
+        assert self.git_include_checkbox is not None
 
         settings = {
             "excluded_folders": self.excluded_field.value or "",
             "use_gitignore": self.gitignore_checkbox.value or False,
+            "include_git_changes": self.git_include_checkbox.value or False,
             "export_version": "1.0",
         }
 
@@ -532,9 +565,11 @@ class SettingsView:
 
             assert self.excluded_field is not None
             assert self.gitignore_checkbox is not None
+            assert self.git_include_checkbox is not None
 
             self.excluded_field.value = imported.get("excluded_folders", "")
             self.gitignore_checkbox.value = imported.get("use_gitignore", True)
+            self.git_include_checkbox.value = imported.get("include_git_changes", True)
 
             self.page.update()
             self._show_status("Settings imported! Click Save to apply.")
@@ -587,10 +622,12 @@ class SettingsView:
         """
         assert self.excluded_field is not None
         assert self.gitignore_checkbox is not None
+        assert self.git_include_checkbox is not None
 
         settings = load_settings()
         self.excluded_field.value = settings.get("excluded_folders", "")
         self.gitignore_checkbox.value = settings.get("use_gitignore", True)
+        self.git_include_checkbox.value = settings.get("include_git_changes", True)
 
         self.page.update()
         self._show_status("Settings reloaded from file")
@@ -615,16 +652,19 @@ class SettingsView:
             self.excluded_field
             and self.gitignore_checkbox
             and self.security_check_checkbox
+            and self.git_include_checkbox
         ):
             current_excluded = self.excluded_field.value or ""
             current_gitignore = self.gitignore_checkbox.value or False
             current_security = self.security_check_checkbox.value or False
+            current_git = self.git_include_checkbox.value or False
 
             return (
                 current_excluded != self._initial_values.get("excluded_folders", "")
                 or current_gitignore != self._initial_values.get("use_gitignore", True)
                 or current_security
                 != self._initial_values.get("enable_security_check", True)
+                or current_git != self._initial_values.get("include_git_changes", True)
             )
 
         return self._has_unsaved_changes
@@ -701,9 +741,11 @@ class SettingsView:
             self.excluded_field
             and self.gitignore_checkbox
             and self.security_check_checkbox
+            and self.git_include_checkbox
         ):
             self._initial_values = {
                 "excluded_folders": self.excluded_field.value or "",
                 "use_gitignore": self.gitignore_checkbox.value or False,
                 "enable_security_check": self.security_check_checkbox.value or False,
+                "include_git_changes": self.git_include_checkbox.value or False,
             }

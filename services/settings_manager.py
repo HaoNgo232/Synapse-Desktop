@@ -17,7 +17,8 @@ DEFAULT_SETTINGS = {
     "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",
     "use_gitignore": True,
     "model_id": "claude-sonnet-4.5",  # Default model
-    "enable_security_check": False,  # Disable vi day la beta
+    "enable_security_check": True,  # Enable security check
+    "include_git_changes": True,  # Integrate git diff/log in prompt
 }
 
 

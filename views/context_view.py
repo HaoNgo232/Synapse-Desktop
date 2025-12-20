@@ -26,6 +26,7 @@ from core.security_check import (
     scan_secrets_in_files,
     format_security_warning,
 )
+from core.git_utils import get_git_diffs, get_git_logs
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
 from services.settings_manager import get_setting
 from services.file_watcher import FileWatcher
@@ -713,13 +714,31 @@ class ContextView:
             else:
                 secret_matches = []
 
+            # Get Git Context if enabled
+            include_git = get_setting("include_git_changes", True)
+            git_diffs = None
+            git_logs = None
+
+            if include_git:
+                workspace = self.get_workspace()
+                if workspace:
+                    git_diffs = get_git_diffs(workspace)
+                    git_logs = get_git_logs(workspace)
+
             if secret_matches:
                 file_map = generate_file_map(self.tree, selected_paths)
                 file_contents = generate_file_contents(selected_paths)
                 assert self.instructions_field is not None
                 instructions = self.instructions_field.value or ""
+
+                # Pass git context here too
                 prompt = generate_prompt(
-                    file_map, file_contents, instructions, include_xml
+                    file_map,
+                    file_contents,
+                    instructions,
+                    include_xml,
+                    git_diffs=git_diffs,
+                    git_logs=git_logs,
                 )
 
                 self._show_security_dialog(
@@ -735,7 +754,14 @@ class ContextView:
             assert self.instructions_field is not None
             instructions = self.instructions_field.value or ""
 
-            prompt = generate_prompt(file_map, file_contents, instructions, include_xml)
+            prompt = generate_prompt(
+                file_map,
+                file_contents,
+                instructions,
+                include_xml,
+                git_diffs=git_diffs,
+                git_logs=git_logs,
+            )
 
             # No secrets found - copy directly
             self._do_copy(prompt, include_xml)

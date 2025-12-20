@@ -10,6 +10,7 @@ from typing import Optional
 from core.file_utils import TreeItem, is_binary_by_extension
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.language_utils import get_language_from_path
+from core.git_utils import GitDiffResult, GitLogResult
 
 
 def calculate_markdown_delimiter(contents: list[str]) -> str:
@@ -294,6 +295,8 @@ def generate_prompt(
     file_contents: str,
     user_instructions: str = "",
     include_xml_formatting: bool = False,
+    git_diffs: Optional[GitDiffResult] = None,
+    git_logs: Optional[GitLogResult] = None,
 ) -> str:
     """
     Tao prompt hoan chinh de gui cho LLM.
@@ -303,6 +306,8 @@ def generate_prompt(
         file_contents: File contents string tu generate_file_contents()
         user_instructions: Huong dan tu nguoi dung
         include_xml_formatting: Co bao gom OPX instructions khong
+        git_diffs: Optional git diffs (work tree & staged)
+        git_logs: Optional git logs
 
     Returns:
         Prompt hoan chinh
@@ -315,6 +320,23 @@ def generate_prompt(
 {file_contents}
 </file_contents>
 """
+
+    # Add Git Changes section
+    if git_diffs or git_logs:
+        prompt += "\n<git_changes>\n"
+
+        if git_diffs:
+            if git_diffs.work_tree_diff:
+                prompt += f"<git_diff_worktree>\n{git_diffs.work_tree_diff}\n</git_diff_worktree>\n"
+            if git_diffs.staged_diff:
+                prompt += (
+                    f"<git_diff_staged>\n{git_diffs.staged_diff}\n</git_diff_staged>\n"
+                )
+
+        if git_logs and git_logs.log_content:
+            prompt += f"<git_log>\n{git_logs.log_content}\n</git_log>\n"
+
+        prompt += "</git_changes>\n"
 
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}"

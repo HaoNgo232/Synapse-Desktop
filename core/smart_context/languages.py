@@ -16,6 +16,10 @@ import tree_sitter_javascript as tsjavascript
 import tree_sitter_typescript as tstypescript
 import tree_sitter_rust as tsrust
 import tree_sitter_go as tsgo
+import tree_sitter_java as tsjava
+import tree_sitter_c_sharp as tscsharp
+import tree_sitter_c as tsc
+import tree_sitter_cpp as tscpp
 from tree_sitter import Language
 
 # Cache các language đã load để tránh load lại nhiều lần
@@ -42,6 +46,20 @@ EXTENSION_TO_LANGUAGE: Dict[str, str] = {
     "rs": "rust",
     # Go - NEW in Phase 2
     "go": "go",
+    # Java - NEW in Phase 3
+    "java": "java",
+    # C# - NEW in Phase 3
+    "cs": "c_sharp",
+    # C - NEW in Phase 3
+    "c": "c",
+    "h": "c",
+    # C++ - NEW in Phase 3
+    "cpp": "cpp",
+    "hpp": "cpp",
+    "cc": "cpp",
+    "hh": "cpp",
+    "cxx": "cpp",
+    "hxx": "cpp",
 }
 
 # Tree-sitter queries ported từ Repomix
@@ -260,6 +278,43 @@ LANGUAGE_QUERIES: Dict[str, str] = {
 (package_clause) @definition.package
 (import_declaration) @definition.import
 (function_declaration name: (identifier) @name) @definition.function
+(method_declaration name: (field_identifier) @name) @definition.method
+(type_spec name: (type_identifier) @name) @definition.type
+""",
+    # Java query - NEW in Phase 3
+    "java": """
+(line_comment) @comment
+(block_comment) @comment
+(import_declaration) @definition.import
+(package_declaration) @definition.import
+(class_declaration name: (identifier) @name.definition.class) @definition.class
+(method_declaration name: (identifier) @name.definition.method) @definition.method
+(interface_declaration name: (identifier) @name.definition.interface) @definition.interface
+""",
+    # C# query - NEW in Phase 3
+    "c_sharp": """
+(comment) @comment
+(class_declaration name: (identifier) @name.definition.class) @definition.class
+(interface_declaration name: (identifier) @name.definition.interface) @definition.interface
+(method_declaration name: (identifier) @name.definition.method) @definition.method
+(namespace_declaration name: (identifier) @name.definition.module) @definition.module
+""",
+    # C query - NEW in Phase 3
+    "c": """
+(comment) @comment
+(struct_specifier name: (type_identifier) @name.definition.class) @definition.class
+(function_declarator declarator: (identifier) @name.definition.function) @definition.function
+(type_definition declarator: (type_identifier) @name.definition.type) @definition.type
+(enum_specifier name: (type_identifier) @name.definition.type) @definition.type
+""",
+    # C++ query - NEW in Phase 3
+    "cpp": """
+(comment) @comment
+(struct_specifier name: (type_identifier) @name.definition.class) @definition.class
+(class_specifier name: (type_identifier) @name.definition.class) @definition.class
+(function_declarator declarator: (identifier) @name.definition.function) @definition.function
+(type_definition declarator: (type_identifier) @name.definition.type) @definition.type
+(enum_specifier name: (type_identifier) @name.definition.type) @definition.type
 """,
 }
 
@@ -304,6 +359,18 @@ def get_language(extension: str) -> Optional[Language]:
     elif lang_name == "go":
         # NEW in Phase 2: Go support
         language = Language(tsgo.language())
+    elif lang_name == "java":
+        # NEW in Phase 3: Java support
+        language = Language(tsjava.language())
+    elif lang_name == "c_sharp":
+        # NEW in Phase 3: C# support
+        language = Language(tscsharp.language())
+    elif lang_name == "c":
+        # NEW in Phase 3: C support
+        language = Language(tsc.language())
+    elif lang_name == "cpp":
+        # NEW in Phase 3: C++ support
+        language = Language(tscpp.language())
 
     # Cache lại kết quả
     if language:

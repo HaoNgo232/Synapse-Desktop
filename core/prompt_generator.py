@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import List, Optional
 
 from core.utils.file_utils import TreeItem, is_binary_by_extension
-from core.token_counter import count_tokens_for_file
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.utils.language_utils import get_language_from_path
 from core.utils.git_utils import GitDiffResult, GitLogResult

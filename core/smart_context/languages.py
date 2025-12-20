@@ -2,7 +2,12 @@
 Smart Context Languages - Tree-sitter Language Management
 
 Module quản lý việc load và cache Tree-sitter language grammars.
-Hỗ trợ Python và JavaScript (có thể mở rộng thêm).
+Hỗ trợ Python, JavaScript, và TypeScript với tree-sitter queries port từ Repomix.
+
+BACKWARD COMPATIBILITY NOTE:
+- Existing Python/JavaScript support giữ nguyên APIs
+- TypeScript giờ có parser riêng thay vì dùng JavaScript parser
+- Queries được thêm mới để improve parsing quality
 """
 
 from typing import Optional, Dict
@@ -18,14 +23,221 @@ EXTENSION_TO_LANGUAGE: Dict[str, str] = {
     # Python
     "py": "python",
     "pyw": "python",
-    # JavaScript / TypeScript
+    # JavaScript
     "js": "javascript",
     "jsx": "javascript",
     "mjs": "javascript",
     "cjs": "javascript",
-    # TypeScript sẽ dùng JavaScript parser (syntax tương đương phần lớn)
-    "ts": "javascript",
-    "tsx": "javascript",
+    "mjsx": "javascript",
+    # TypeScript - NOW SEPARATE (not using JavaScript parser configuration anymore)
+    "ts": "typescript",
+    "tsx": "typescript",
+    "mts": "typescript",
+    "mtsx": "typescript",
+    "cts": "typescript",
+}
+
+# Tree-sitter queries ported từ Repomix
+# Queries define cách extract structure từ AST
+LANGUAGE_QUERIES: Dict[str, str] = {
+    # Python query - port từ Repomix queryPython.ts
+    "python": """
+(comment) @comment
+
+(expression_statement
+  (string) @comment) @docstring
+
+; Import statements
+(import_statement
+  name: (dotted_name) @name.reference.module) @definition.import
+
+(import_from_statement
+  module_name: (dotted_name) @name.reference.module) @definition.import
+
+(import_from_statement
+  name: (dotted_name) @name.reference.module) @definition.import
+
+(class_definition
+  name: (identifier) @name.definition.class) @definition.class
+
+(function_definition
+  name: (identifier) @name.definition.function) @definition.function
+
+(call
+  function: [
+      (identifier) @name.reference.call
+      (attribute
+        attribute: (identifier) @name.reference.call)
+  ]) @reference.call
+
+(assignment
+  left: (identifier) @name.definition.type_alias) @definition.type_alias
+""",
+    # JavaScript query - port từ Repomix queryJavascript.ts
+    "javascript": """
+(comment) @comment
+
+(
+  (comment)* @doc
+  .
+  (method_definition
+    name: (property_identifier) @name.definition.method) @definition.method
+  (#not-eq? @name.definition.method "constructor")
+  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#select-adjacent! @doc @definition.method)
+)
+
+(
+  (comment)* @doc
+  .
+  [
+    (class
+      name: (_) @name.definition.class)
+    (class_declaration
+      name: (_) @name.definition.class)
+  ] @definition.class
+  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#select-adjacent! @doc @definition.class)
+)
+
+(
+  (comment)* @doc
+  .
+  [
+    (function_declaration
+      name: (identifier) @name.definition.function)
+    (generator_function
+      name: (identifier) @name.definition.function)
+    (generator_function_declaration
+      name: (identifier) @name.definition.function)
+  ] @definition.function
+  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#select-adjacent! @doc @definition.function)
+)
+
+(
+  (comment)* @doc
+  .
+  (lexical_declaration
+    (variable_declarator
+      name: (identifier) @name.definition.function
+      value: [(arrow_function) (function_declaration)]) @definition.function)
+  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#select-adjacent! @doc @definition.function)
+)
+
+(
+  (comment)* @doc
+  .
+  (variable_declaration
+    (variable_declarator
+      name: (identifier) @name.definition.function
+      value: [(arrow_function) (function_declaration)]) @definition.function)
+  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#select-adjacent! @doc @definition.function)
+)
+
+(assignment_expression
+  left: [
+    (identifier) @name.definition.function
+    (member_expression
+      property: (property_identifier) @name.definition.function)
+  ]
+  right: [(arrow_function) (function_declaration)]
+) @definition.function
+
+(pair
+  key: (property_identifier) @name.definition.function
+  value: [(arrow_function) (function_declaration)]) @definition.function
+
+(
+  (call_expression
+    function: (identifier) @name.reference.call) @reference.call
+  (#not-match? @name.reference.call "^(require)$")
+)
+
+(call_expression
+  function: (member_expression
+    property: (property_identifier) @name.reference.call)
+  arguments: (_) @reference.call)
+
+(new_expression
+  constructor: (_) @name.reference.class) @reference.class
+""",
+    # TypeScript query - port từ Repomix queryTypescript.ts
+    "typescript": """
+(import_statement
+  (import_clause (identifier) @name.reference.module)) @definition.import
+
+(import_statement
+  (import_clause
+    (named_imports
+      (import_specifier
+        name: (identifier) @name.reference.module))) @definition.import)
+
+(comment) @comment
+
+(function_signature
+  name: (identifier) @name.definition.function) @definition.function
+
+(method_signature
+  name: (property_identifier) @name.definition.method) @definition.method
+
+(abstract_method_signature
+  name: (property_identifier) @name.definition.method) @definition.method
+
+(abstract_class_declaration
+  name: (type_identifier) @name.definition.class) @definition.class
+
+(module
+  name: (identifier) @name.definition.module) @definition.module
+
+(interface_declaration
+  name: (type_identifier) @name.definition.interface) @definition.interface
+
+(type_annotation
+  (type_identifier) @name.reference.type) @reference.type
+
+(new_expression
+  constructor: (identifier) @name.reference.class) @reference.class
+
+(function_declaration
+  name: (identifier) @name.definition.function) @definition.function
+
+(method_definition
+  name: (property_identifier) @name.definition.method) @definition.method
+
+(class_declaration
+  name: (type_identifier) @name.definition.class) @definition.class
+
+(interface_declaration
+  name: (type_identifier) @name.definition.class) @definition.class
+
+(type_alias_declaration
+  name: (type_identifier) @name.definition.type) @definition.type
+
+(enum_declaration
+  name: (identifier) @name.definition.enum) @definition.enum
+
+(lexical_declaration
+    (variable_declarator
+      name: (identifier) @name.definition.function
+      value: (arrow_function)
+    )
+  ) @definition.function
+
+(variable_declaration
+    (variable_declarator
+      name: (identifier) @name.definition.function
+      value: (arrow_function)
+    )
+) @definition.function
+
+(assignment_expression
+    left: [(identifier) @name.definition.function]
+    right: (arrow_function)
+) @definition.function
+""",
 }
 
 
@@ -34,10 +246,14 @@ def get_language(extension: str) -> Optional[Language]:
     Lấy Tree-sitter Language dựa trên file extension.
 
     Args:
-        extension: File extension (không có dấu chấm), ví dụ: "py", "js"
+        extension: File extension (không có dấu chấm), ví dụ: "py", "js", "ts"
 
     Returns:
         Language object hoặc None nếu không hỗ trợ
+
+    BACKWARD COMPATIBILITY:
+    - Python và JavaScript: Trả về Language như cũ
+    - TypeScript: Giờ có Language riêng (JavaScript grammar with TS rules)
     """
     ext_lower = extension.lower()
     lang_name = EXTENSION_TO_LANGUAGE.get(ext_lower)
@@ -56,12 +272,36 @@ def get_language(extension: str) -> Optional[Language]:
         language = Language(tspython.language())
     elif lang_name == "javascript":
         language = Language(tsjavascript.language())
+    elif lang_name == "typescript":
+        # TypeScript uses JavaScript grammar with TS-specific rules
+        language = Language(tsjavascript.language())
 
     # Cache lại kết quả
     if language:
         _language_cache[lang_name] = language
 
     return language
+
+
+def get_query(extension: str) -> Optional[str]:
+    """
+    Lấy tree-sitter query string dựa trên file extension.
+
+    Args:
+        extension: File extension (không có dấu chấm)
+
+    Returns:
+        Query string hoặc None nếu không hỗ trợ
+
+    NEW in Phase 1: Query-based parsing để improve quality
+    """
+    ext_lower = extension.lower()
+    lang_name = EXTENSION_TO_LANGUAGE.get(ext_lower)
+
+    if not lang_name:
+        return None
+
+    return LANGUAGE_QUERIES.get(lang_name)
 
 
 def is_supported(extension: str) -> bool:
@@ -73,6 +313,8 @@ def is_supported(extension: str) -> bool:
 
     Returns:
         True nếu hỗ trợ, False nếu không
+
+    BACKWARD COMPATIBILITY: API không đổi
     """
     return extension.lower() in EXTENSION_TO_LANGUAGE
 
@@ -83,5 +325,7 @@ def get_supported_extensions() -> list[str]:
 
     Returns:
         List các extensions (không có dấu chấm)
+
+    BACKWARD COMPATIBILITY: API không đổi
     """
     return list(EXTENSION_TO_LANGUAGE.keys())

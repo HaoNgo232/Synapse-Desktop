@@ -21,6 +21,7 @@ from components.file_tree import FileTreeComponent
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
+from services.file_watcher import FileWatcher
 from threading import Timer
 from typing import Set
 
@@ -55,6 +56,9 @@ class ContextView:
         # Last ignored patterns for undo
         self._last_ignored_patterns: list[str] = []
 
+        # File watcher for auto-refresh
+        self._file_watcher: Optional[FileWatcher] = FileWatcher()
+
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
         if self._token_update_timer is not None:
@@ -68,6 +72,10 @@ class ContextView:
             self._status_clear_timer = None
         if self.file_tree_component:
             self.file_tree_component.cleanup()
+        # Stop file watcher
+        if self._file_watcher:
+            self._file_watcher.stop()
+            self._file_watcher = None
 
     def build(self) -> ft.Container:
         """Build UI cho Context view"""
@@ -347,6 +355,14 @@ class ContextView:
             self.file_tree_component.cleanup()
         self._load_tree(workspace_path)
 
+        # Start file watcher for auto-refresh
+        if self._file_watcher:
+            self._file_watcher.start(
+                path=workspace_path,
+                on_change=lambda: self._on_file_system_changed(),
+                debounce_seconds=0.5,
+            )
+
     def _load_tree(self, workspace_path: Path, preserve_selection: bool = False):
         """
         Load file tree.
@@ -546,6 +562,24 @@ class ContextView:
         workspace = self.get_workspace()
         if workspace:
             self._load_tree(workspace, preserve_selection=True)
+
+    def _on_file_system_changed(self):
+        """
+        Callback khi FileWatcher phát hiện thay đổi trong workspace.
+
+        Tự động refresh tree và giữ nguyên selection hiện tại.
+        Được gọi từ background thread, nên cần update UI an toàn.
+        """
+        try:
+            workspace = self.get_workspace()
+            if workspace:
+                # Reload tree giữ nguyên selection
+                self._load_tree(workspace, preserve_selection=True)
+                self._show_status("File changes detected - tree updated")
+        except Exception as e:
+            from core.logging_config import log_error
+
+            log_error(f"[ContextView] Error refreshing on file change: {e}")
 
     def _on_instructions_changed(self):
         """Handle instructions field change with debounce"""

@@ -41,7 +41,6 @@ class ApplyView:
         self.opx_input: Optional[ft.TextField] = None
         self.results_column: Optional[ft.Column] = None
         self.status_text: Optional[ft.Text] = None
-        self.copy_error_btn: Optional[ft.OutlinedButton] = None
         self.workspace_indicator: Optional[ft.Text] = None  # NEW: Workspace display
 
         # State for error copying
@@ -88,18 +87,6 @@ class ApplyView:
 
         # Status
         self.status_text = ft.Text("", size=12)
-
-        # Copy Error button (hidden by default, shown when errors occur)
-        self.copy_error_btn = ft.OutlinedButton(
-            "Copy Error for AI",
-            icon=ft.Icons.CONTENT_COPY,
-            on_click=lambda _: self._copy_error_for_ai(),
-            visible=False,
-            style=ft.ButtonStyle(
-                color=ThemeColors.ERROR,
-                side=ft.BorderSide(1, ThemeColors.ERROR),
-            ),
-        )
 
         # Results table
         self.results_column = ft.Column(
@@ -221,7 +208,18 @@ class ApplyView:
                                                 ),
                                             ),
                                         ),
-                                        self.copy_error_btn,
+                                        ft.OutlinedButton(
+                                            "Copy All Results",
+                                            icon=ft.Icons.CONTENT_COPY_OUTLINED,
+                                            on_click=lambda _: self._copy_all_results(),
+                                            tooltip="Copy ALL results (success + failure) for AI debugging",
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.PRIMARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.PRIMARY
+                                                ),
+                                            ),
+                                        ),
                                     ],
                                     spacing=8,
                                 ),
@@ -322,7 +320,6 @@ class ApplyView:
         # Type assertions - dam bao cac controls da duoc khoi tao
         assert self.opx_input is not None
         assert self.results_column is not None
-        assert self.copy_error_btn is not None
 
         opx_text = self.opx_input.value
         if not opx_text:
@@ -393,12 +390,10 @@ class ApplyView:
 
         # Clear previous results and state
         assert self.results_column is not None
-        assert self.copy_error_btn is not None
 
         self.results_column.controls.clear()
         self.last_apply_results = []
         self.last_opx_text = opx_text
-        self.copy_error_btn.visible = False
 
         # Show parse errors if any
         if parse_result.errors:
@@ -407,8 +402,7 @@ class ApplyView:
                     self._create_result_row("ERROR", "", error, success=False)
                 )
             self._show_status("Parse errors occurred", is_error=True)
-            # Show copy error button for parse errors
-            self.copy_error_btn.visible = True
+
             safe_page_update(self.page)
             return
 
@@ -441,7 +435,6 @@ class ApplyView:
 
         # Display results
         assert self.results_column is not None
-        assert self.copy_error_btn is not None
 
         success_count = 0
         for result in results:
@@ -461,13 +454,10 @@ class ApplyView:
 
         if success_count == total:
             self._show_status(f"Applied all {total} action(s) successfully!")
-            self.copy_error_btn.visible = False
         else:
             self._show_status(
                 f"Applied {success_count}/{total} action(s)", is_error=True
             )
-            # Show copy error button when there are failures
-            self.copy_error_btn.visible = True
 
         # Save to history
         workspace = self.get_workspace()
@@ -762,7 +752,6 @@ class ApplyView:
         """Clear tất cả results và reset input"""
         assert self.results_column is not None
         assert self.opx_input is not None
-        assert self.copy_error_btn is not None
 
         self.results_column.controls.clear()
         self.results_column.controls.append(
@@ -775,7 +764,6 @@ class ApplyView:
         )
 
         self.opx_input.value = ""
-        self.copy_error_btn.visible = False
         self.expanded_diffs.clear()
         self.last_preview_data = None
         self.last_apply_results = []
@@ -1015,3 +1003,95 @@ class ApplyView:
 
         except Exception as e:
             self._show_status(f"Failed to copy: {e}", is_error=True)
+
+    def _copy_all_results(self):
+        """Copy TOAN BO results (success + failure) cho debugging"""
+        try:
+            results = self.last_apply_results or []
+            opx_text = self.last_opx_text or (
+                self.opx_input.value if self.opx_input else ""
+            )
+
+            if not results:
+                self._show_status("No results to copy", is_error=True)
+                return
+
+            # Calculate stats
+            total = len(results)
+            success = [r for r in results if r.success]
+            failed = [r for r in results if not r.success]
+            ok_count = len(success)
+            bad_count = len(failed)
+            workspace = self.get_workspace()
+
+            # Build conversational context
+            lines = []
+
+            # Intro - conversational, first-person
+            lines.append(
+                "I just applied changes from OPX to the project with the following results:"
+            )
+            lines.append("")
+
+            # Workspace context
+            lines.append(f"**Workspace**: `{workspace or 'Not set'}`")
+            lines.append("")
+
+            # OPX structure explanation (prevent AI hallucination)
+            lines.append("**About OPX:**")
+            lines.append(
+                "OPX is an XML format for defining file operations. Structure:"
+            )
+            lines.append(
+                "- `<file_action>`: One operation (modify/create/delete/rewrite)"
+            )
+            lines.append('- `action="modify"`: Action type')
+            lines.append('- `path="file/path"`: Target file path')
+            lines.append("- `<search>`: Pattern to find (for modify)")
+            lines.append("- `<replace>`: Replacement content")
+            lines.append("- `<content>`: Full content (for create/rewrite)")
+            lines.append("")
+
+            # OPX content
+            lines.append("**Applied OPX:**")
+            lines.append("```xml")
+            lines.append(opx_text if opx_text else "(empty)")
+            lines.append("```")
+            lines.append("")
+
+            # Results summary - natural language
+            lines.append("**Results:**")
+            lines.append(f"- Total: {total} operations")
+            lines.append(f"- Successful: {ok_count} files")
+            lines.append(f"- Failed: {bad_count} files")
+            lines.append("")
+
+            # Success details
+            if success:
+                lines.append("**Success details:**")
+                for idx, r in enumerate(success, 1):
+                    lines.append(f"{idx}. {r.action} `{r.path}` - {r.message}")
+                lines.append("")
+
+            # Failure details
+            if failed:
+                lines.append("**Failure details:**")
+                for idx, r in enumerate(failed, 1):
+                    lines.append(f"{idx}. {r.action} `{r.path}` - ERROR: {r.message}")
+                lines.append("")
+
+            # Outro - Option 2: Confirmation request
+            lines.append("---")
+            lines.append("")
+            lines.append("Please confirm you've received this context.")
+
+            # Copy to clipboard
+            full_context = "\n".join(lines)
+            copy_to_clipboard(full_context)
+
+            self._show_status(
+                f"Copied {total} operations ({ok_count} OK, {bad_count} failed)",
+                is_error=False,
+            )
+        except Exception as e:
+            self._show_status(f"Copy failed: {e}", is_error=True)

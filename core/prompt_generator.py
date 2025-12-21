@@ -1,9 +1,13 @@
 """
 Prompt Generator - Tao context prompt cho LLM
 
+Hỗ trợ nhiều output formats:
+- Markdown: Code blocks với syntax highlighting (default)
+- XML: Structured XML theo chuẩn Repomix
 """
 
 import re
+import html
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,6 +15,7 @@ from core.utils.file_utils import TreeItem, is_binary_by_extension
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.utils.language_utils import get_language_from_path
 from core.utils.git_utils import GitDiffResult, GitLogResult
+from config.output_format import OutputStyle
 
 
 def calculate_markdown_delimiter(contents: list[str]) -> str:
@@ -197,6 +202,73 @@ def generate_file_contents(
     return "\n".join(contents).strip()
 
 
+def generate_file_contents_xml(
+    selected_paths: set[str], max_file_size: int = 1024 * 1024
+) -> str:
+    """
+    Tạo file contents theo Repomix XML format.
+
+    Output format:
+    <files>
+      <file path="src/main.py">
+        content here
+      </file>
+    </files>
+
+    Args:
+        selected_paths: Set các đường dẫn file được tick
+        max_file_size: Maximum file size to include (default 1MB)
+
+    Returns:
+        File contents string với XML structure
+    """
+    sorted_paths = sorted(selected_paths)
+    file_elements: list[str] = []
+
+    for path_str in sorted_paths:
+        path = Path(path_str)
+
+        try:
+            if not path.is_file():
+                continue
+
+            # Skip binary files
+            if is_binary_by_extension(path):
+                file_elements.append(
+                    f'<file path="{html.escape(str(path))}" skipped="true">Binary file</file>'
+                )
+                continue
+
+            # Skip files that are too large
+            try:
+                file_size = path.stat().st_size
+                if file_size > max_file_size:
+                    file_elements.append(
+                        f'<file path="{html.escape(str(path))}" skipped="true">File too large ({file_size // 1024}KB)</file>'
+                    )
+                    continue
+            except OSError:
+                pass
+
+            # Read and escape content for XML
+            content = path.read_text(encoding="utf-8", errors="replace")
+            # Escape XML special characters trong content
+            escaped_content = html.escape(content)
+            file_elements.append(
+                f'<file path="{html.escape(str(path))}">\n{escaped_content}\n</file>'
+            )
+
+        except (OSError, IOError) as e:
+            file_elements.append(
+                f'<file path="{html.escape(str(path))}" skipped="true">Error: {html.escape(str(e))}</file>'
+            )
+
+    if not file_elements:
+        return "<files></files>"
+
+    return "<files>\n" + "\n".join(file_elements) + "\n</files>"
+
+
 def generate_smart_context(
     selected_paths: set[str], max_file_size: int = 1024 * 1024
 ) -> str:
@@ -297,22 +369,35 @@ def generate_prompt(
     include_xml_formatting: bool = False,
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
+    output_style: OutputStyle = OutputStyle.XML,
 ) -> str:
     """
     Tao prompt hoan chinh de gui cho LLM.
 
     Args:
         file_map: File map string tu generate_file_map()
-        file_contents: File contents string tu generate_file_contents()
+        file_contents: File contents string tu generate_file_contents() hoac generate_file_contents_xml()
         user_instructions: Huong dan tu nguoi dung
         include_xml_formatting: Co bao gom OPX instructions khong
         git_diffs: Optional git diffs (work tree & staged)
         git_logs: Optional git logs
+        output_style: Dinh dang dau ra (MARKDOWN hoac XML)
 
     Returns:
         Prompt hoan chinh
     """
-    prompt = f"""<file_map>
+    # Tao prompt structure dua vao output_style
+    if output_style == OutputStyle.XML:
+        # Repomix XML format - structured tags
+        prompt = f"""<directory_structure>
+{file_map}
+</directory_structure>
+
+{file_contents}
+"""
+    else:
+        # Markdown format (default) - original behavior
+        prompt = f"""<file_map>
 {file_map}
 </file_map>
 

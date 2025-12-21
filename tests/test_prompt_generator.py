@@ -4,6 +4,7 @@ Unit tests cho Prompt Generator module.
 Test các case:
 - generate_file_map(): Tạo tree map từ TreeItem.
 - generate_file_contents(): Tạo nội dung files với delimiters.
+- generate_file_contents_xml(): Tạo nội dung files theo Repomix XML format.
 - generate_prompt(): Tạo prompt đầy đủ với Git context.
 - calculate_markdown_delimiter(): Tính delimiter phù hợp.
 - generate_smart_context(): Trích xuất code signatures.
@@ -18,11 +19,13 @@ from core.prompt_generator import (
     generate_prompt,
     generate_file_map,
     generate_file_contents,
+    generate_file_contents_xml,
     generate_smart_context,
     calculate_markdown_delimiter,
 )
 from core.utils.file_utils import TreeItem
 from core.utils.git_utils import GitDiffResult, GitLogResult, GitCommit
+from config.output_format import OutputStyle
 
 
 class TestCalculateMarkdownDelimiter:
@@ -366,6 +369,83 @@ class TestPromptStructure:
 
         # Không có empty instructions tag
         assert "<instructions></instructions>" not in result
+
+
+class TestRepomixXmlFormat:
+    """Test Repomix XML output format."""
+
+    def test_xml_output_structure(self, tmp_path):
+        """XML output has correct structure."""
+        file_path = tmp_path / "main.py"
+        file_path.write_text("print('hello')")
+
+        result = generate_file_contents_xml({str(file_path)})
+
+        assert "<files>" in result
+        assert "</files>" in result
+        assert "<file path=" in result
+        assert "</file>" in result
+
+    def test_xml_file_path_attribute(self, tmp_path):
+        """File path is in attribute, not content."""
+        file_path = tmp_path / "utils.py"
+        file_path.write_text("def helper(): pass")
+
+        result = generate_file_contents_xml({str(file_path)})
+
+        # Path phải nằm trong attribute
+        assert f'path="{tmp_path}/utils.py"' in result or 'path="' in result
+        assert "def helper(): pass" in result
+
+    def test_xml_escapes_special_chars(self, tmp_path):
+        """XML special characters are escaped."""
+        file_path = tmp_path / "test.py"
+        file_path.write_text("if a < b and c > d: pass")
+
+        result = generate_file_contents_xml({str(file_path)})
+
+        # < và > phải được escape
+        assert "&lt;" in result
+        assert "&gt;" in result
+
+    def test_xml_empty_set(self):
+        """Empty set returns empty files tag."""
+        result = generate_file_contents_xml(set())
+        assert result == "<files></files>"
+
+    def test_xml_binary_file_marked_skipped(self, tmp_path):
+        """Binary files are marked as skipped."""
+        file_path = tmp_path / "image.jpg"
+        file_path.write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0]))
+
+        result = generate_file_contents_xml({str(file_path)})
+
+        assert 'skipped="true"' in result
+        assert "Binary file" in result
+
+    def test_generate_prompt_with_xml_style(self):
+        """generate_prompt uses correct tags for XML style."""
+        result = generate_prompt(
+            file_map="src/main.py",
+            file_contents="<files><file>code</file></files>",
+            output_style=OutputStyle.XML,
+        )
+
+        assert "<directory_structure>" in result
+        assert "</directory_structure>" in result
+        # XML style không dùng <file_contents> wrapper
+        assert "<file_map>" not in result
+
+    def test_generate_prompt_default_is_markdown(self):
+        """Default output_style is MARKDOWN."""
+        result = generate_prompt(
+            file_map="test.py",
+            file_contents="code",
+        )
+
+        # Markdown style dùng <file_map> và <file_contents>
+        assert "<file_map>" in result
+        assert "<file_contents>" in result
 
 
 if __name__ == "__main__":

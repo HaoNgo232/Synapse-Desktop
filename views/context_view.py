@@ -16,6 +16,7 @@ from core.prompt_generator import (
     generate_prompt,
     generate_file_map,
     generate_file_contents,
+    generate_file_contents_xml,
     generate_smart_context,
 )
 from core.utils.git_utils import get_git_diffs, get_git_logs
@@ -29,10 +30,17 @@ from core.security_check import (
     format_security_warning,
 )
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
-from services.settings_manager import get_setting
+from services.settings_manager import get_setting, set_setting
 from services.file_watcher import FileWatcher
 from threading import Timer
 from typing import Set
+from config.output_format import (
+    OutputStyle,
+    OUTPUT_FORMATS,
+    get_format_tooltip,
+    get_style_by_id,
+    DEFAULT_OUTPUT_STYLE,
+)
 
 
 class ContextView:
@@ -67,6 +75,10 @@ class ContextView:
 
         # File watcher for auto-refresh
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
+
+        # Output format selection
+        self._selected_output_style: OutputStyle = DEFAULT_OUTPUT_STYLE
+        self.format_dropdown: Optional[ft.Dropdown] = None
 
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
@@ -262,6 +274,21 @@ class ContextView:
                     ft.Container(height=8),
                     self.instructions_field,
                     ft.Container(height=12),
+                    # Output Format Selector với tooltip
+                    ft.Row(
+                        [
+                            ft.Text(
+                                "Output Format:",
+                                size=12,
+                                color=ThemeColors.TEXT_SECONDARY,
+                            ),
+                            ft.Container(width=8),
+                            self._build_format_dropdown(),
+                        ],
+                        alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Container(height=8),
                     # Row 1: Tree Map và Smart Context
                     ft.Row(
                         [
@@ -712,6 +739,63 @@ class ContextView:
         )
         self._token_update_timer.start()
 
+    def _build_format_dropdown(self) -> ft.Dropdown:
+        """
+        Tạo dropdown chọn output format với tooltip hiển thị lợi ích.
+
+        Returns:
+            ft.Dropdown widget
+        """
+        # Load saved format from settings
+        saved_format_id = get_setting("output_format", DEFAULT_OUTPUT_STYLE.value)
+        try:
+            self._selected_output_style = get_style_by_id(saved_format_id)
+        except ValueError:
+            self._selected_output_style = DEFAULT_OUTPUT_STYLE
+
+        self.format_dropdown = ft.Dropdown(
+            options=[
+                ft.dropdown.Option(
+                    key=cfg.id,
+                    text=cfg.name,
+                )
+                for cfg in OUTPUT_FORMATS.values()
+            ],
+            value=self._selected_output_style.value,
+            on_change=self._on_format_changed,
+            width=160,
+            text_size=12,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
+            border_color=ThemeColors.BORDER,
+            focused_border_color=ThemeColors.PRIMARY,
+            bgcolor=ThemeColors.BG_SURFACE,
+            tooltip=get_format_tooltip(self._selected_output_style),
+        )
+        return self.format_dropdown
+
+    def _on_format_changed(self, e):
+        """
+        Handle khi user đổi output format.
+
+        Cập nhật selected style, lưu vào settings, và update tooltip.
+        """
+        if e.control.value:
+            try:
+                self._selected_output_style = get_style_by_id(e.control.value)
+                # Lưu vào settings
+                set_setting("output_format", e.control.value)
+                # Update tooltip để hiển thị benefits của format mới
+                if self.format_dropdown:
+                    self.format_dropdown.tooltip = get_format_tooltip(
+                        self._selected_output_style
+                    )
+                    self.format_dropdown.update()
+                # Show status
+                format_name = OUTPUT_FORMATS[self._selected_output_style].name
+                self._show_status(f"Output format: {format_name}")
+            except ValueError:
+                pass
+
     def _do_update_token_count(self):
         """Execute token count update (called after debounce)"""
         try:
@@ -825,11 +909,15 @@ class ContextView:
 
             if secret_matches:
                 file_map = generate_file_map(self.tree, selected_paths)
-                file_contents = generate_file_contents(selected_paths)
+                # Generate file contents based on selected output style
+                if self._selected_output_style == OutputStyle.XML:
+                    file_contents = generate_file_contents_xml(selected_paths)
+                else:
+                    file_contents = generate_file_contents(selected_paths)
                 assert self.instructions_field is not None
                 instructions = self.instructions_field.value or ""
 
-                # Pass git context here too
+                # Pass git context and output_style here too
                 prompt = generate_prompt(
                     file_map,
                     file_contents,
@@ -837,6 +925,7 @@ class ContextView:
                     include_xml,
                     git_diffs=git_diffs,
                     git_logs=git_logs,
+                    output_style=self._selected_output_style,
                 )
 
                 self._show_security_dialog(
@@ -848,7 +937,11 @@ class ContextView:
 
             # No secrets found
             file_map = generate_file_map(self.tree, selected_paths)
-            file_contents = generate_file_contents(selected_paths)
+            # Generate file contents based on selected output style
+            if self._selected_output_style == OutputStyle.XML:
+                file_contents = generate_file_contents_xml(selected_paths)
+            else:
+                file_contents = generate_file_contents(selected_paths)
             assert self.instructions_field is not None
             instructions = self.instructions_field.value or ""
 
@@ -859,6 +952,7 @@ class ContextView:
                 include_xml,
                 git_diffs=git_diffs,
                 git_logs=git_logs,
+                output_style=self._selected_output_style,
             )
 
             # No secrets found - copy directly

@@ -36,7 +36,7 @@ from services.memory_monitor import (
 )
 
 
-class OverwriteApp:
+class SynapseApp:
     """Main application class"""
 
     def __init__(self, page: ft.Page):
@@ -568,7 +568,7 @@ class OverwriteApp:
 
 def main(page: ft.Page):
     """Entry point"""
-    OverwriteApp(page)
+    SynapseApp(page)
 
 
 if __name__ == "__main__":

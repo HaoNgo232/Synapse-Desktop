@@ -170,9 +170,8 @@ def scan_secrets_in_files(
                 continue
 
             content = path.read_text(encoding="utf-8", errors="replace")
-            file_matches = scan_for_secrets(
-                content, file_path=path.name
-            )  # Use basename for UI
+            # Lưu absolute path để có thể mở file từ preview
+            file_matches = scan_for_secrets(content, file_path=path_str)
             all_matches.extend(file_matches)
 
         except (OSError, IOError):
@@ -241,7 +240,7 @@ def scan_secrets_in_files_cached(
             for path_str, path in files_to_scan:
                 try:
                     content = path.read_text(encoding="utf-8", errors="replace")
-                    file_matches = scan_for_secrets(content, file_path=path.name)
+                    file_matches = scan_for_secrets(content, file_path=path_str)
                     
                     mtime = path.stat().st_mtime
                     _security_scan_cache[path_str] = (mtime, file_matches)
@@ -256,7 +255,7 @@ def scan_secrets_in_files_cached(
                 path_str, path = item
                 try:
                     content = path.read_text(encoding="utf-8", errors="replace")
-                    file_matches = scan_for_secrets(content, file_path=path.name)
+                    file_matches = scan_for_secrets(content, file_path=path_str)
                     mtime = path.stat().st_mtime
                     return (path_str, mtime, file_matches)
                 except Exception:

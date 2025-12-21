@@ -1407,46 +1407,77 @@ class ContextView:
         )
 
         for match in matches:
-            file_info = f" in {match.file_path}" if match.file_path else ""
-            details_col.controls.append(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Row(
-                                [
-                                    ft.Icon(
-                                        ft.Icons.SECURITY,
-                                        size=14,
-                                        color=ThemeColors.WARNING,
-                                    ),
-                                    ft.Text(
-                                        f"{match.secret_type}",
-                                        size=12,
-                                        weight=ft.FontWeight.W_600,
-                                    ),
-                                    ft.Text(
-                                        f"{file_info} (Line {match.line_number})",
-                                        size=12,
-                                        color=ThemeColors.TEXT_SECONDARY,
-                                    ),
-                                ],
-                                spacing=6,
-                            ),
-                            ft.Text(
-                                f"Value: {match.redacted_preview}",
-                                size=11,
-                                color=ThemeColors.TEXT_SECONDARY,
-                                font_family="monospace",
-                                italic=True,
-                            ),
-                        ],
-                        spacing=2,
-                    ),
-                    bgcolor=ThemeColors.BG_SURFACE,
-                    padding=6,
-                    border_radius=4,
-                )
+            # match.file_path giờ là absolute path, lấy basename để hiển thị
+            display_name = Path(match.file_path).name if match.file_path else ""
+            file_info = f" in {display_name}" if display_name else ""
+
+            # Handler để mở preview tại dòng bị cảnh báo
+            def make_preview_handler(abs_file_path: str, line_num: int):
+                def handler(e):
+                    if abs_file_path:
+                        # Đóng dialog security warning trước
+                        dialog.open = False
+                        safe_page_update(self.page)
+                        # Mở preview với absolute path
+                        FilePreviewDialog.show(
+                            page=self.page,
+                            file_path=abs_file_path,
+                            highlight_line=line_num,
+                        )
+
+                return handler
+
+            item_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.SECURITY,
+                                    size=14,
+                                    color=ThemeColors.WARNING,
+                                ),
+                                ft.Text(
+                                    f"{match.secret_type}",
+                                    size=12,
+                                    weight=ft.FontWeight.W_600,
+                                ),
+                                ft.Text(
+                                    f"{file_info} (Line {match.line_number})",
+                                    size=12,
+                                    color=ThemeColors.TEXT_SECONDARY,
+                                ),
+                            ],
+                            spacing=6,
+                        ),
+                        ft.Text(
+                            f"Value: {match.redacted_preview}",
+                            size=11,
+                            color=ThemeColors.TEXT_SECONDARY,
+                            font_family="monospace",
+                            italic=True,
+                        ),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=ThemeColors.BG_SURFACE,
+                padding=6,
+                border_radius=4,
             )
+
+            # Wrap với GestureDetector để click mở preview
+            if match.file_path:
+                clickable_item = ft.GestureDetector(
+                    content=ft.Container(
+                        content=item_container,
+                        ink=True,  # Ripple effect
+                    ),
+                    on_tap=make_preview_handler(match.file_path, match.line_number),
+                    mouse_cursor=ft.MouseCursor.CLICK,
+                )
+                details_col.controls.append(clickable_item)
+            else:
+                details_col.controls.append(item_container)
 
         def copy_results(e):
             # Copy scan results to clipboard for debugging

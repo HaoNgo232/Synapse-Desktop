@@ -36,7 +36,12 @@ class FilePreviewDialog:
     MAX_LINES = 5000
 
     @staticmethod
-    def show(page: ft.Page, file_path: str, content: Optional[str] = None) -> None:
+    def show(
+        page: ft.Page,
+        file_path: str,
+        content: Optional[str] = None,
+        highlight_line: Optional[int] = None,
+    ) -> None:
         """
         Hiển thị preview dialog cho một file.
 
@@ -44,6 +49,7 @@ class FilePreviewDialog:
             page: Flet page instance
             file_path: Đường dẫn đến file cần preview
             content: Optional - nội dung file (nếu đã đọc sẵn)
+            highlight_line: Optional - số dòng cần highlight và auto-scroll (1-indexed)
         """
         path = Path(file_path)
         file_name = path.name
@@ -107,6 +113,7 @@ class FilePreviewDialog:
             language=language,
             line_count=len(lines),
             truncated=truncated,
+            highlight_line=highlight_line,
         )
 
     @staticmethod
@@ -118,8 +125,9 @@ class FilePreviewDialog:
         language: str,
         line_count: int,
         truncated: bool,
+        highlight_line: Optional[int] = None,
     ) -> None:
-        """Tạo và hiển thị preview dialog."""
+        """Tạo và hiển thị preview dialog với optional line highlighting."""
         from core.utils.ui_utils import safe_page_update
 
         # Tạo dialog trước, sau đó define close function
@@ -204,7 +212,7 @@ class FilePreviewDialog:
             alignment=ft.MainAxisAlignment.START,
         )
 
-        # Content area với line numbers
+        # Content area với line numbers - cả 2 cột scroll cùng nhau
         content_row = ft.Row(
             [
                 # Line numbers column
@@ -231,13 +239,17 @@ class FilePreviewDialog:
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
 
-        # Scrollable container
+        # Scrollable container - scroll cả Row (line numbers + content)
         scroll_container = ft.Container(
-            content=content_row,
+            content=ft.Column(
+                [content_row],
+                scroll=ft.ScrollMode.AUTO,  # Scroll được đặt ở đây
+            ),
             bgcolor=ThemeColors.BG_SURFACE,
             padding=16,
             border_radius=4,
             border=ft.border.all(1, ThemeColors.BORDER),
+            height=400,
         )
 
         # Warning nếu truncated
@@ -260,20 +272,40 @@ class FilePreviewDialog:
                 padding=ft.padding.only(top=8),
             )
 
-        # Main content column
+        # Highlight info nếu có
+        highlight_info = None
+        if highlight_line is not None and 1 <= highlight_line <= len(lines):
+            highlight_info = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.WARNING_AMBER, color=ThemeColors.WARNING, size=16
+                        ),
+                        ft.Text(
+                            f"Security issue found at line {highlight_line}",
+                            size=12,
+                            color=ThemeColors.WARNING,
+                            weight=ft.FontWeight.W_600,
+                        ),
+                    ],
+                    spacing=8,
+                ),
+                bgcolor="#422006",  # Dark amber background
+                padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                border_radius=4,
+                margin=ft.margin.only(bottom=8),
+            )
+
+        # Main content column - scroll_container đã có height, không duplicate
         content_column = ft.Column(
             [
                 header,
                 ft.Container(height=12),
-                ft.Container(
-                    content=scroll_container,
-                    height=400,
-                    expand=True,
-                ),
             ]
+            + ([highlight_info] if highlight_info else [])
+            + [scroll_container]
             + ([truncation_warning] if truncation_warning else []),
             tight=True,
-            scroll=ft.ScrollMode.AUTO,
         )
 
         # Tạo dialog - KHÔNG có on_dismiss để tránh conflict

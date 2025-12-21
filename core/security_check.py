@@ -9,7 +9,7 @@ giảm thiểu false positives so với custom regex.
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from pathlib import Path
 import tempfile
 import re
@@ -17,6 +17,35 @@ import re
 from detect_secrets import SecretsCollection
 from detect_secrets.settings import default_settings
 from core.utils.file_utils import is_binary_by_extension
+
+
+# ============================================
+# SECURITY SCAN CACHE
+# Cache based on mtime để tránh scan lại file không thay đổi
+# ============================================
+_security_scan_cache: Dict[str, Tuple[float, List["SecretMatch"]]] = {}
+_MAX_CACHE_SIZE = 500
+
+
+def invalidate_security_cache(path: str):
+    """
+    Xóa cache entry cho một file cụ thể.
+    Gọi khi file watcher phát hiện file thay đổi.
+    """
+    _security_scan_cache.pop(path, None)
+
+
+def clear_security_cache():
+    """Xóa toàn bộ security scan cache."""
+    _security_scan_cache.clear()
+
+
+def get_security_cache_stats() -> Dict[str, int]:
+    """Lấy thống kê cache (cho debugging)."""
+    return {
+        "size": len(_security_scan_cache),
+        "max_size": _MAX_CACHE_SIZE,
+    }
 
 
 @dataclass
@@ -145,6 +174,74 @@ def scan_secrets_in_files(
                 content, file_path=path.name
             )  # Use basename for UI
             all_matches.extend(file_matches)
+
+        except (OSError, IOError):
+            pass
+
+    return all_matches
+
+
+def scan_secrets_in_files_cached(
+    file_paths: set[str], max_file_size: int = 1024 * 1024
+) -> list[SecretMatch]:
+    """
+    Quét secrets với mtime-based cache.
+
+    Chỉ scan lại file khi file thay đổi (mtime khác).
+    Function cũ scan_secrets_in_files() vẫn hoạt động như fallback.
+
+    Args:
+        file_paths: Set các đường dẫn file cần quét
+        max_file_size: Limit size để tránh quét file quá lớn
+
+    Returns:
+        List các SecretMatch được tìm thấy
+    """
+    global _security_scan_cache
+
+    all_matches: list[SecretMatch] = []
+    sorted_paths = sorted(file_paths)
+
+    for path_str in sorted_paths:
+        path = Path(path_str)
+        try:
+            if not path.is_file():
+                continue
+            if is_binary_by_extension(path):
+                continue
+
+            # Get mtime
+            try:
+                stat = path.stat()
+                if stat.st_size > max_file_size:
+                    continue
+                mtime = stat.st_mtime
+            except OSError:
+                continue
+
+            # Check cache
+            cached = _security_scan_cache.get(path_str)
+            if cached is not None and cached[0] == mtime:
+                # Cache hit - use cached results
+                all_matches.extend(cached[1])
+                continue
+
+            # Cache miss - scan file
+            content = path.read_text(encoding="utf-8", errors="replace")
+            file_matches = scan_for_secrets(content, file_path=path.name)
+
+            # Update cache
+            _security_scan_cache[path_str] = (mtime, file_matches)
+            all_matches.extend(file_matches)
+
+            # Cleanup cache if too large
+            if len(_security_scan_cache) > _MAX_CACHE_SIZE:
+                # Remove oldest 20%
+                keys_to_remove = list(_security_scan_cache.keys())[
+                    : _MAX_CACHE_SIZE // 5
+                ]
+                for key in keys_to_remove:
+                    del _security_scan_cache[key]
 
         except (OSError, IOError):
             pass

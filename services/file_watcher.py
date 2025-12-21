@@ -43,6 +43,27 @@ class FileChangeEvent:
     is_directory: bool
 
 
+@dataclass
+class WatcherCallbacks:
+    """
+    Callbacks cho file watcher - cho phép xử lý incremental.
+
+    Nếu on_file_modified/created/deleted được set,
+    sẽ gọi chúng thay vì on_batch_change.
+
+    Attributes:
+        on_file_modified: Callback khi file bị sửa (invalidate cache)
+        on_file_created: Callback khi file mới được tạo
+        on_file_deleted: Callback khi file bị xóa
+        on_batch_change: Fallback callback khi có nhiều thay đổi
+    """
+
+    on_file_modified: Optional[Callable[[str], None]] = None
+    on_file_created: Optional[Callable[[str], None]] = None
+    on_file_deleted: Optional[Callable[[str], None]] = None
+    on_batch_change: Optional[Callable[[], None]] = None
+
+
 class _DebouncedEventHandler(FileSystemEventHandler):
     """
     Event handler với debounce để gom nhiều events liên tiếp.
@@ -69,18 +90,18 @@ class _DebouncedEventHandler(FileSystemEventHandler):
 
     def __init__(
         self,
-        on_change: Callable[[], None],
+        callbacks: WatcherCallbacks,
         debounce_seconds: float = 0.5,
     ):
         """
         Khởi tạo handler.
 
         Args:
-            on_change: Callback được gọi sau khi nhận events (đã debounce)
+            callbacks: WatcherCallbacks với các callback functions
             debounce_seconds: Thời gian chờ trước khi trigger callback
         """
         super().__init__()
-        self._on_change = on_change
+        self._callbacks = callbacks
         self._debounce_seconds = debounce_seconds
         self._timer: Optional[Timer] = None
         self._pending_events: list[FileChangeEvent] = []
@@ -113,17 +134,52 @@ class _DebouncedEventHandler(FileSystemEventHandler):
         self._timer.start()
 
     def _trigger_callback(self):
-        """Thực thi callback sau debounce."""
+        """Thực thi callback sau debounce - hỗ trợ incremental."""
         if not self._pending_events:
             return
 
         log_debug(
             f"[FileWatcher] Triggering callback with {len(self._pending_events)} events"
         )
+
+        # Copy và clear pending events
+        events = self._pending_events.copy()
         self._pending_events.clear()
 
         try:
-            self._on_change()
+            # Nếu có incremental callbacks, xử lý từng event
+            has_incremental = (
+                self._callbacks.on_file_modified
+                or self._callbacks.on_file_created
+                or self._callbacks.on_file_deleted
+            )
+
+            if has_incremental:
+                # Process từng event riêng
+                for event in events:
+                    if event.is_directory:
+                        continue  # Skip directories, only handle files
+
+                    if (
+                        event.event_type == "modified"
+                        and self._callbacks.on_file_modified
+                    ):
+                        self._callbacks.on_file_modified(event.path)
+                    elif (
+                        event.event_type == "created"
+                        and self._callbacks.on_file_created
+                    ):
+                        self._callbacks.on_file_created(event.path)
+                    elif (
+                        event.event_type == "deleted"
+                        and self._callbacks.on_file_deleted
+                    ):
+                        self._callbacks.on_file_deleted(event.path)
+
+            # Luôn gọi batch callback nếu có (để refresh tree)
+            if self._callbacks.on_batch_change:
+                self._callbacks.on_batch_change()
+
         except Exception as e:
             log_error(f"[FileWatcher] Error in callback: {e}")
 
@@ -204,7 +260,8 @@ class FileWatcher:
     def start(
         self,
         path: Path,
-        on_change: Callable[[], None],
+        on_change: Optional[Callable[[], None]] = None,
+        callbacks: Optional[WatcherCallbacks] = None,
         debounce_seconds: float = 0.5,
     ):
         """
@@ -212,9 +269,12 @@ class FileWatcher:
 
         Nếu đang theo dõi thư mục khác, sẽ tự động stop trước.
 
+        Có thể dùng on_change (backward compatible) hoặc callbacks (incremental).
+
         Args:
             path: Đường dẫn thư mục cần theo dõi
-            on_change: Callback khi có thay đổi
+            on_change: Callback legacy khi có thay đổi (backward compatible)
+            callbacks: WatcherCallbacks cho incremental updates
             debounce_seconds: Thời gian debounce (mặc định 0.5s)
         """
         # Stop watcher cũ nếu có
@@ -224,9 +284,13 @@ class FileWatcher:
             log_error(f"[FileWatcher] Invalid path: {path}")
             return
 
+        # Build callbacks - support both old and new API
+        if callbacks is None:
+            callbacks = WatcherCallbacks(on_batch_change=on_change)
+
         try:
             self._handler = _DebouncedEventHandler(
-                on_change=on_change,
+                callbacks=callbacks,
                 debounce_seconds=debounce_seconds,
             )
 

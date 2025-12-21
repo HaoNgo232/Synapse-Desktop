@@ -160,6 +160,20 @@ def clear_token_cache():
     _file_token_cache.clear()
 
 
+def clear_file_from_cache(path: str):
+    """
+    Xóa cache entry cho một file cụ thể.
+
+    Gọi khi file watcher phát hiện file thay đổi,
+    để lần tính token tiếp theo sẽ đọc lại file.
+
+    Args:
+        path: Đường dẫn file cần xóa khỏi cache
+    """
+    global _file_token_cache
+    _file_token_cache.pop(path, None)
+
+
 def _looks_binary(chunk: bytes) -> bool:
     """
     Kiem tra xem data co phai la binary khong.

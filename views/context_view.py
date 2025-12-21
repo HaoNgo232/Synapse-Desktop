@@ -25,7 +25,7 @@ from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
 from core.security_check import (
     scan_for_secrets,
-    scan_secrets_in_files,
+    scan_secrets_in_files_cached,
     format_security_warning,
 )
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
@@ -400,11 +400,18 @@ class ContextView:
             self.file_tree_component.cleanup()
         self._load_tree(workspace_path)
 
-        # Start file watcher for auto-refresh
+        # Start file watcher for auto-refresh with incremental updates
         if self._file_watcher:
+            from services.file_watcher import WatcherCallbacks
+
             self._file_watcher.start(
                 path=workspace_path,
-                on_change=lambda: self._on_file_system_changed(),
+                callbacks=WatcherCallbacks(
+                    on_file_modified=self._on_file_modified,
+                    on_file_created=self._on_file_created,
+                    on_file_deleted=self._on_file_deleted,
+                    on_batch_change=self._on_file_system_changed,
+                ),
                 debounce_seconds=0.5,
             )
 
@@ -625,6 +632,56 @@ class ContextView:
         if workspace:
             self._load_tree(workspace, preserve_selection=True)
 
+    def _on_file_modified(self, path: str):
+        """
+        Callback khi 1 file bị sửa - chỉ invalidate cache cho file đó.
+
+        Không re-scan toàn bộ tree, chỉ xóa cache entries.
+        Tree refresh được xử lý bởi on_batch_change.
+        """
+        from core.token_counter import clear_file_from_cache
+        from core.security_check import invalidate_security_cache
+
+        # Invalidate caches for this specific file
+        clear_file_from_cache(path)
+        invalidate_security_cache(path)
+
+        from core.logging_config import log_debug
+
+        log_debug(f"[ContextView] Invalidated cache for modified file: {path}")
+
+    def _on_file_created(self, path: str):
+        """
+        Callback khi file mới được tạo.
+
+        Hiện tại không cần xử lý đặc biệt vì on_batch_change
+        sẽ refresh tree. Có thể mở rộng sau để add item trực tiếp.
+        """
+        from core.logging_config import log_debug
+
+        log_debug(f"[ContextView] New file created: {path}")
+
+    def _on_file_deleted(self, path: str):
+        """
+        Callback khi file bị xóa.
+
+        Xóa file khỏi cache và selection.
+        """
+        from core.token_counter import clear_file_from_cache
+        from core.security_check import invalidate_security_cache
+
+        # Remove from caches
+        clear_file_from_cache(path)
+        invalidate_security_cache(path)
+
+        # Remove from selection if selected
+        if self.file_tree_component:
+            self.file_tree_component.selected_paths.discard(path)
+
+        from core.logging_config import log_debug
+
+        log_debug(f"[ContextView] File deleted: {path}")
+
     def _on_file_system_changed(self):
         """
         Callback khi FileWatcher phát hiện thay đổi trong workspace.
@@ -751,7 +808,7 @@ class ContextView:
             log_info(f"[SecurityCheck] enable_security_check = {enable_security}")
 
             if enable_security:
-                secret_matches = scan_secrets_in_files(selected_paths)
+                secret_matches = scan_secrets_in_files_cached(selected_paths)
             else:
                 secret_matches = []
 

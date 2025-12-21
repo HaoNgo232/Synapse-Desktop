@@ -203,15 +203,15 @@ def apply_file_actions(
             file_path = _resolve_path(action.path, action.root, workspace_roots)
 
             if action.action == "create":
-                result = _handle_create(action, file_path)
+                result = _handle_create(action, file_path, dry_run)
             elif action.action == "rewrite":
-                result = _handle_rewrite(action, file_path)
+                result = _handle_rewrite(action, file_path, dry_run)
             elif action.action == "modify":
-                result = _handle_modify(action, file_path)
+                result = _handle_modify(action, file_path, dry_run)
             elif action.action == "delete":
-                result = _handle_delete(action, file_path)
+                result = _handle_delete(action, file_path, dry_run)
             elif action.action == "rename":
-                result = _handle_rename(action, file_path, workspace_roots)
+                result = _handle_rename(action, file_path, workspace_roots, dry_run)
             else:
                 result = ActionResult(
                     path=action.path,
@@ -271,10 +271,58 @@ def _resolve_path(
                 return ws_root / path
 
     # Default: dung workspace root dau tien
-    return workspace_roots[0] / path
+    final_path = workspace_roots[0] / path
+
+    # SECURITY CHECK: Path Traversal Protection
+    # Ensure the resolved path is actually inside one of the workspace roots
+    try:
+        resolved_absolute = final_path.resolve()
+        is_safe = False
+
+        # Check against all workspace roots allowed
+        for ws_root in workspace_roots:
+            ws_resolved = ws_root.resolve()
+            # Check if path is inside workspace
+            # Hỗ trợ Python < 3.9 (không có is_relative_to)
+            try:
+                resolved_absolute.relative_to(ws_resolved)
+                is_safe = True
+                break
+            except ValueError:
+                continue
+
+        if not is_safe:
+            log_error(f"Security Alert: Blocked access to {resolved_absolute}")
+            raise ValueError(f"Access denied: Path is outside workspace roots")
+
+    except Exception as e:
+        if "Access denied" in str(e):
+            raise
+        # Nếu resolve thất bại (file chưa tồn tại), ta check parent
+        # Vẫn cần cẩn thận với creation path
+        if not final_path.exists():
+            # Check parent directory instead
+            try:
+                parent_resolved = final_path.parent.resolve()
+                is_safe = False
+                for ws_root in workspace_roots:
+                    try:
+                        parent_resolved.relative_to(ws_root.resolve())
+                        is_safe = True
+                        break
+                    except ValueError:
+                        continue
+                if not is_safe:
+                    raise ValueError(f"Access denied: Path is outside workspace roots")
+            except Exception:
+                pass  # Fallback to allow if explicit parent check fails but path seemed valid structurally
+
+    return final_path
 
 
-def _handle_create(action: FileAction, file_path: Path) -> ActionResult:
+def _handle_create(
+    action: FileAction, file_path: Path, dry_run: bool = False
+) -> ActionResult:
     """Tao file moi"""
     try:
         if not action.changes:
@@ -292,6 +340,14 @@ def _handle_create(action: FileAction, file_path: Path) -> ActionResult:
                 action="create",
                 success=True,
                 message="File already exists (skipped create)",
+            )
+
+        if dry_run:
+            return ActionResult(
+                path=action.path,
+                action="create",
+                success=True,
+                message="Dry Run: File would be created",
             )
 
         # Ghi file
@@ -313,7 +369,9 @@ def _handle_create(action: FileAction, file_path: Path) -> ActionResult:
         )
 
 
-def _handle_rewrite(action: FileAction, file_path: Path) -> ActionResult:
+def _handle_rewrite(
+    action: FileAction, file_path: Path, dry_run: bool = False
+) -> ActionResult:
     """Ghi de toan bo noi dung file"""
     try:
         if not action.changes:
@@ -321,6 +379,14 @@ def _handle_rewrite(action: FileAction, file_path: Path) -> ActionResult:
 
         if not file_path.exists():
             raise FileNotFoundError(f"File does not exist: {file_path}")
+
+        if dry_run:
+            return ActionResult(
+                path=action.path,
+                action="rewrite",
+                success=True,
+                message="Dry Run: File would be rewritten",
+            )
 
         # Create backup before rewrite
         create_backup(file_path)
@@ -341,7 +407,9 @@ def _handle_rewrite(action: FileAction, file_path: Path) -> ActionResult:
         )
 
 
-def _handle_modify(action: FileAction, file_path: Path) -> ActionResult:
+def _handle_modify(
+    action: FileAction, file_path: Path, dry_run: bool = False
+) -> ActionResult:
     """Tim va thay the mot phan trong file"""
     try:
         if not action.changes:
@@ -355,8 +423,9 @@ def _handle_modify(action: FileAction, file_path: Path) -> ActionResult:
         if not file_path.exists():
             raise FileNotFoundError(f"File does not exist: {file_path}")
 
-        # Create backup before modify
-        create_backup(file_path)
+        # Create backup before modify (Skip for dry run)
+        if not dry_run:
+            create_backup(file_path)
 
         # Doc file hien tai
         current_content = file_path.read_text(encoding="utf-8")
@@ -392,12 +461,20 @@ def _handle_modify(action: FileAction, file_path: Path) -> ActionResult:
 
         # Ghi file neu co thay doi thanh cong
         if success_count > 0:
-            file_path.write_text(modified_content, encoding="utf-8")
+            if not dry_run:
+                file_path.write_text(modified_content, encoding="utf-8")
+                modifier_msg_prefix = ""
+            else:
+                modifier_msg_prefix = "Dry Run: "
 
             # Neu chi ap dung duoc mot phan -> coi la that bai de user chu y
             all_applied = success_count == len(action.changes)
 
-            modifier_msg = "Applied" if all_applied else "Partial success: Applied"
+            modifier_msg = (
+                f"{modifier_msg_prefix}Applied"
+                if all_applied
+                else f"{modifier_msg_prefix}Partial success: Applied"
+            )
 
             return ActionResult(
                 path=action.path,
@@ -477,11 +554,21 @@ def _find_nth_occurrence(haystack: str, needle: str, n: int) -> int:
     return idx
 
 
-def _handle_delete(action: FileAction, file_path: Path) -> ActionResult:
+def _handle_delete(
+    action: FileAction, file_path: Path, dry_run: bool = False
+) -> ActionResult:
     """Xoa file"""
     try:
         if not file_path.exists():
             raise FileNotFoundError(f"File does not exist: {file_path}")
+
+        if dry_run:
+            return ActionResult(
+                path=action.path,
+                action="delete",
+                success=True,
+                message="Dry Run: File would be deleted",
+            )
 
         if file_path.is_dir():
             import shutil
@@ -504,7 +591,10 @@ def _handle_delete(action: FileAction, file_path: Path) -> ActionResult:
 
 
 def _handle_rename(
-    action: FileAction, file_path: Path, workspace_roots: Optional[list[Path]]
+    action: FileAction,
+    file_path: Path,
+    workspace_roots: Optional[list[Path]],
+    dry_run: bool = False,
 ) -> ActionResult:
     """Doi ten/di chuyen file"""
     try:
@@ -521,6 +611,15 @@ def _handle_rename(
         new_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Rename/move
+        if dry_run:
+            return ActionResult(
+                path=action.path,
+                action="rename",
+                success=True,
+                message=f"Dry Run: File would be renamed to '{action.new_path}'",
+                new_path=action.new_path,
+            )
+
         file_path.rename(new_path)
 
         return ActionResult(

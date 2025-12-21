@@ -236,7 +236,7 @@ class LogsView:
 
         try:
             # Tìm log file mới nhất
-            log_files = sorted(LOG_DIR.glob("app_*.log"), reverse=True)
+            log_files = sorted(LOG_DIR.glob("app.log*"), reverse=True)
 
             if not log_files:
                 self.logs_column.controls.append(

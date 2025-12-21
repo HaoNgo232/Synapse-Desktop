@@ -81,7 +81,7 @@ def smart_parse(file_path: str, content: str) -> Optional[str]:
         query_string = get_query(ext)
         if query_string:
             try:
-                result = _parse_with_query(language, tree, content, query_string)
+                result = _parse_with_query(language, tree, content, query_string, ext)
                 if result:
                     return result
             except Exception:
@@ -111,42 +111,46 @@ def smart_parse(file_path: str, content: str) -> Optional[str]:
 
 
 def _parse_with_query(
-    language: Language, tree: Tree, content: str, query_string: str
+    language: Language, tree: Tree, content: str, query_string: str, ext: str
 ) -> Optional[str]:
     """
-    Parse using tree-sitter query.
+    Parse using tree-sitter query with Strategy pattern (ported from Repomix).
 
-    This provides higher quality parsing by using queries ported from Repomix.
-    Queries are more precise and capture more information than node-type based parsing.
+    Uses language-specific ParseStrategy for smart extraction.
 
     Args:
         language: Tree-sitter Language object
         tree: Parsed tree
         content: File content as string
         query_string: Tree-sitter query string
+        ext: File extension (to select strategy)
 
     Returns:
         Formatted string with code chunks or None if fails
     """
     try:
-        # Create query from query string using Query constructor (tree-sitter 0.23+)
         from tree_sitter import Query, QueryCursor  # type: ignore
+        from core.smart_context.strategies import get_strategy
+        from core.smart_context.chunk_utils import (
+            filter_duplicated_chunks,
+            merge_adjacent_chunks,
+        )
 
         query = Query(language, query_string)
-
-        # Execute query using QueryCursor
         query_cursor = QueryCursor(query)
         captures = query_cursor.captures(tree.root_node)
 
         if not captures:
             return None
 
-        # Extract chunks from captures (dict format: {capture_name: [nodes]})
-        chunks = []
-        lines = content.split("\n")
+        # Get language config to determine strategy
+        config = get_config_by_extension(ext)
+        lang_name = config.name if config else "default"
+        strategy = get_strategy(lang_name)
 
-        # Track processed nodes to avoid duplicates
-        seen_nodes = set()
+        lines = content.split("\n")
+        captured_chunks: list[dict] = []
+        processed_chunks: set[str] = set()
 
         # Iterate over captures dict
         for capture_name, nodes in captures.items():
@@ -154,34 +158,39 @@ def _parse_with_query(
             if not capture_name.startswith("definition."):
                 continue
 
-            # Process each node for this capture
             for node in nodes:
-                # Skip if already processed
-                node_id = id(node)
-                if node_id in seen_nodes:
-                    continue
+                start_row = node.start_point[0]
+                end_row = node.end_point[0]
 
-                seen_nodes.add(node_id)
+                # Use strategy to extract chunk
+                chunk = strategy.parse_capture(
+                    capture_name, lines, start_row, end_row, processed_chunks
+                )
 
-                # Extract text for this node
-                start_line = node.start_point[0]
-                end_line = node.end_point[0]
+                if chunk:
+                    captured_chunks.append(
+                        {
+                            "content": chunk.strip(),
+                            "start_row": start_row,
+                            "end_row": end_row,
+                        }
+                    )
 
-                # For definitions, extract signature + first few lines (simplified)
-                chunk_lines = lines[start_line : min(end_line + 1, start_line + 5)]
-                chunk = "\n".join(chunk_lines)
-
-                if chunk.strip():
-                    chunks.append(chunk + "\n    ...")
-
-        if not chunks:
+        if not captured_chunks:
             return None
 
-        return f"\n{CHUNK_SEPARATOR}\n".join(chunks)
+        # Post-processing
+        filtered = filter_duplicated_chunks(captured_chunks)
+        merged = merge_adjacent_chunks(filtered)
+
+        return "\n" + f"\n{CHUNK_SEPARATOR}\n".join(c["content"] for c in merged)
 
     except Exception:
-        # Query parsing failed - will fallback to node-type parsing
         return None
+
+
+# ==================== FALLBACK FUNCTIONS (Backward Compatibility) ====================
+# Cac functions nay chi duoc su dung khi query-based parsing fails
 
 
 def _extract_chunks(node: Node, content: str, capture_types: set[str]) -> list[str]:

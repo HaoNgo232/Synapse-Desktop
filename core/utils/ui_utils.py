@@ -27,13 +27,24 @@ def safe_page_update(page: Optional[ft.Page]) -> None:
 
     try:
         page.update()
-    except AssertionError:
+    except AssertionError as e:
         # Control chưa attached hoặc đang invalid state
         # An toàn để ignore - control sẽ update khi được attach đúng cách
-        pass
-    except Exception:
-        # Các lỗi khác cũng nên được ignore để không crash app
-        pass
+        # Log debug để trace nếu cần
+        try:
+            from core.logging_config import log_debug
+
+            log_debug(f"UI Update Warning (AssertionError): {e}")
+        except ImportError:
+            pass
+    except Exception as e:
+        # Các lỗi khác cũng nên được ignore để không crash app, nhưng cần log error
+        try:
+            from core.logging_config import log_error
+
+            log_error(f"UI Update Error: {e}")
+        except ImportError:
+            pass
 
 
 def safe_control_update(control: Optional[ft.Control]) -> None:
@@ -48,7 +59,17 @@ def safe_control_update(control: Optional[ft.Control]) -> None:
 
     try:
         control.update()
-    except AssertionError:
-        pass
-    except Exception:
-        pass
+    except AssertionError as e:
+        try:
+            from core.logging_config import log_debug
+
+            log_debug(f"Control Update Warning (AssertionError): {e}")
+        except ImportError:
+            pass
+    except Exception as e:
+        try:
+            from core.logging_config import log_error
+
+            log_error(f"Control Update Error: {e}")
+        except ImportError:
+            pass

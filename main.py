@@ -64,9 +64,6 @@ class OverwriteApp:
         self.page.window.width = 1500
         self.page.window.height = 1000
 
-        # Keyboard shortcuts
-        self.page.on_keyboard_event = self._on_keyboard_event
-
         # Drag and drop support (Tắt tạm thời do Flet chưa hỗ trợ API này trong version hiện tại)
         # self.page.on_drop = self._on_drop
 
@@ -567,43 +564,6 @@ class OverwriteApp:
         # Chuyển sang Apply tab
         self.tabs.selected_index = 1
         safe_page_update(self.page)
-
-    def _on_keyboard_event(self, e: ft.KeyboardEvent):
-        """
-        Handle keyboard shortcuts.
-
-        Shortcuts:
-        - Ctrl+Shift+C: Copy Context
-        - Ctrl+Shift+O: Copy + OPX
-        - Ctrl+R: Refresh file tree
-        - Ctrl+F: Focus search field
-        - Escape: Clear search
-        """
-        # Let file tree component handle its own keyboard events first
-        if hasattr(self, "context_view") and self.context_view.file_tree_component:
-            if self.context_view.file_tree_component.handle_keyboard_event(e):
-                safe_page_update(self.page)
-                return
-
-        if e.ctrl and e.shift and e.key == "C":
-            # Copy Context
-            if hasattr(self, "context_view"):
-                self.context_view._copy_context(include_xml=False)
-        elif e.ctrl and e.shift and e.key == "O":
-            # Copy + OPX
-            if hasattr(self, "context_view"):
-                self.context_view._copy_context(include_xml=True)
-        elif e.ctrl and e.key == "R":
-            # Refresh tree
-            if hasattr(self, "context_view"):
-                self.context_view._refresh_tree()
-        elif e.ctrl and e.key == "F":
-            # Focus search field
-            if hasattr(self, "context_view") and self.context_view.file_tree_component:
-                search_field = self.context_view.file_tree_component.search_field
-                if search_field:
-                    search_field.focus()
-                    safe_page_update(self.page)
 
 
 def main(page: ft.Page):

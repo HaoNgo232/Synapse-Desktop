@@ -1,11 +1,11 @@
 """
 Repo Manager - Quản lý remote repositories và cache.
 
-Module này cung cấp:
-- Clone remote repo với shallow clone (--depth 1)
-- Cache management tại ~/.synapse/repos/
-- Update existing repos với git pull
-- Cleanup và quản lý disk space
+Module nay cung cap:
+- Clone remote repo voi partial clone (--filter=blob:none)
+- Cache management tai ~/.synapse/repos/
+- Update existing repos voi git pull
+- Cleanup va quan ly disk space
 """
 
 import subprocess
@@ -158,8 +158,8 @@ class RepoManager:
         """
         Clone hoặc update remote repository.
 
-        Nếu repo đã tồn tại trong cache, sẽ chạy git pull để update.
-        Nếu chưa tồn tại, sẽ shallow clone (--depth 1).
+        Neu repo da ton tai trong cache, se chay git pull de update.
+        Neu chua ton tai, se partial clone (--filter=blob:none).
 
         Args:
             url: GitHub URL hoặc shorthand (owner/repo)
@@ -216,10 +216,11 @@ class RepoManager:
         timeout: Optional[int],
     ) -> None:
         """
-        Clone một repo mới với shallow clone.
+        Clone mot repo moi voi partial clone.
 
-        Sử dụng git clone --depth 1 để chỉ lấy commit mới nhất.
-        Sau đó xóa .git folder để tiết kiệm dung lượng.
+        Su dung git clone --filter=blob:none de chi tai metadata truoc.
+        Blobs se duoc tai khi can doc file (lazy loading).
+        Giu nguyen .git folder de co the update/pull sau nay.
         """
         clone_url = build_clone_url(repo_info)
         timeout = timeout or self.DEFAULT_TIMEOUT
@@ -229,8 +230,8 @@ class RepoManager:
             on_progress(CloneProgress(status="Đang clone repository...", percentage=0))
 
         try:
-            # Build clone command
-            cmd = ["git", "clone", "--depth", "1"]
+            # Build clone command - su dung partial clone thay vi shallow
+            cmd = ["git", "clone", "--filter=blob:none"]
 
             # Add branch if specified
             if repo_info.ref:
@@ -263,19 +264,12 @@ class RepoManager:
 
                 raise RepoError(f"Clone failed: {error_msg}")
 
-            # Report progress
-            if on_progress:
-                on_progress(CloneProgress(status="Đang dọn dẹp...", percentage=80))
-
-            # Remove .git folder to save space
-            git_dir = target_path / ".git"
-            if git_dir.exists():
-                shutil.rmtree(git_dir)
-                logger.debug("Removed .git directory")
+            # Giu nguyen .git folder de co the update/pull sau nay
+            logger.debug("Clone completed, .git folder preserved for future updates")
 
             # Report complete
             if on_progress:
-                on_progress(CloneProgress(status="Hoàn thành!", percentage=100))
+                on_progress(CloneProgress(status="Hoan thanh!", percentage=100))
 
         except subprocess.TimeoutExpired:
             # Cleanup partial clone
@@ -306,12 +300,13 @@ class RepoManager:
         git_dir = repo_path / ".git"
 
         if not git_dir.exists():
-            # .git đã bị xóa, không thể update
+            # .git khong ton tai (repo cu truoc khi fix), can reclone
             logger.warning(f"Cannot update repo without .git directory: {repo_path}")
             if on_progress:
                 on_progress(
                     CloneProgress(
-                        status="Repo đã được cache (không cần update)", percentage=100
+                        status="Repo cu khong co .git, can reclone de update",
+                        percentage=100,
                     )
                 )
             return

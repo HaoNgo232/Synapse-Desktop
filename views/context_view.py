@@ -1851,7 +1851,45 @@ class ContextView:
 
                         return handler
 
-                    # Card cho mỗi repo với info và actions
+                    def make_update_handler(path, name):
+                        def handler(e):
+                            import threading
+
+                            assert self._repo_manager is not None
+
+                            # Check if .git exists
+                            git_dir = path / ".git"
+                            if not git_dir.exists():
+                                status_text.value = (
+                                    f"{name}: Khong co .git, can xoa va clone lai"
+                                )
+                                status_text.color = ThemeColors.WARNING
+                                safe_page_update(self.page)
+                                return
+
+                            status_text.value = f"Updating {name}..."
+                            status_text.color = ThemeColors.PRIMARY
+                            safe_page_update(self.page)
+
+                            def do_update():
+                                try:
+                                    # Type assertion: repo_manager is guaranteed non-None by assert above
+                                    repo_mgr = self._repo_manager
+                                    assert repo_mgr is not None
+                                    repo_mgr._update_repo(path, None, None)
+                                    status_text.value = f"Updated: {name}"
+                                    status_text.color = ThemeColors.SUCCESS
+                                except Exception as ex:
+                                    status_text.value = f"Update failed: {ex}"
+                                    status_text.color = ThemeColors.ERROR
+                                refresh_list()
+                                safe_page_update(self.page)
+
+                            threading.Thread(target=do_update, daemon=True).start()
+
+                        return handler
+
+                    # Card cho moi repo voi info va actions
                     repo_card = ft.Container(
                         content=ft.Row(
                             [
@@ -1906,6 +1944,15 @@ class ContextView:
                                                 side=ft.BorderSide(
                                                     1, ThemeColors.PRIMARY
                                                 ),
+                                            ),
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.SYNC,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.SUCCESS,
+                                            tooltip="Update (git pull)",
+                                            on_click=make_update_handler(
+                                                repo.path, repo.name
                                             ),
                                         ),
                                         ft.IconButton(

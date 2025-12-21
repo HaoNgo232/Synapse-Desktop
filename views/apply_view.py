@@ -42,6 +42,7 @@ class ApplyView:
         self.results_column: Optional[ft.Column] = None
         self.status_text: Optional[ft.Text] = None
         self.copy_error_btn: Optional[ft.OutlinedButton] = None
+        self.workspace_indicator: Optional[ft.Text] = None  # NEW: Workspace display
 
         # State for error copying
         self.last_preview_data: Optional[PreviewData] = None
@@ -53,6 +54,24 @@ class ApplyView:
 
     def build(self) -> ft.Container:
         """Build UI cho Apply view voi Swiss Professional styling"""
+
+        # Workspace indicator
+        current_workspace = self.get_workspace()
+        workspace_name = (
+            current_workspace.name if current_workspace else "No workspace selected"
+        )
+
+        self.workspace_indicator = ft.Text(
+            f"📁 {workspace_name}",
+            size=12,
+            color=ThemeColors.PRIMARY if current_workspace else ThemeColors.TEXT_MUTED,
+            weight=ft.FontWeight.W_500,
+            tooltip=(
+                str(current_workspace)
+                if current_workspace
+                else "Please select a workspace"
+            ),
+        )
 
         # OPX Input - Compact de danh khong gian cho Results
         self.opx_input = ft.TextField(
@@ -103,11 +122,18 @@ class ApplyView:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text(
-                                    "OPX Response",
-                                    weight=ft.FontWeight.W_600,
-                                    size=14,
-                                    color=ThemeColors.TEXT_PRIMARY,
+                                ft.Row(
+                                    [
+                                        ft.Text(
+                                            "OPX Response",
+                                            weight=ft.FontWeight.W_600,
+                                            size=14,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Container(expand=True),
+                                        self.workspace_indicator,
+                                    ],
+                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                                 ),
                                 ft.Container(height=8),
                                 self.opx_input,
@@ -226,6 +252,9 @@ class ApplyView:
         # Type assertions - dam bao cac controls da duoc khoi tao
         assert self.opx_input is not None
         assert self.results_column is not None
+
+        # Refresh workspace indicator first
+        self._update_workspace_indicator()
 
         opx_text = self.opx_input.value
         if not opx_text:
@@ -353,6 +382,9 @@ class ApplyView:
 
     def _do_apply_changes(self, opx_text: str):
         """Thực hiện apply changes sau khi confirm"""
+        # Refresh workspace indicator
+        self._update_workspace_indicator()
+
         workspace = self.get_workspace()
         workspace_roots = [workspace] if workspace else None
 
@@ -764,6 +796,27 @@ class ApplyView:
         else:
             self._show_status(result or "Clipboard is empty", is_error=True)
 
+    def _update_workspace_indicator(self):
+        """
+        Update workspace indicator to reflect current workspace.
+        Call this before preview/apply to ensure correct workspace is shown.
+        """
+        if self.workspace_indicator is None:
+            return
+
+        current_workspace = self.get_workspace()
+        workspace_name = (
+            current_workspace.name if current_workspace else "No workspace selected"
+        )
+
+        self.workspace_indicator.value = f"📁 {workspace_name}"
+        self.workspace_indicator.color = (
+            ThemeColors.PRIMARY if current_workspace else ThemeColors.TEXT_MUTED
+        )
+        self.workspace_indicator.tooltip = (
+            str(current_workspace) if current_workspace else "Please select a workspace"
+        )
+
     def _show_status(self, message: str, is_error: bool = False):
         """Hien thi status message"""
         assert self.status_text is not None
@@ -817,13 +870,13 @@ class ApplyView:
 
             # Helper checks timestamp
             def get_time(backup_path):
-                 parts = backup_path.name.rsplit(".", 2)
-                 if len(parts) >= 3:
-                     try:
-                         return datetime.strptime(parts[1], "%Y%m%d_%H%M%S")
-                     except ValueError:
-                         pass
-                 return None
+                parts = backup_path.name.rsplit(".", 2)
+                if len(parts) >= 3:
+                    try:
+                        return datetime.strptime(parts[1], "%Y%m%d_%H%M%S")
+                    except ValueError:
+                        pass
+                return None
 
             # Sort backups by time desc
             backup_data = []
@@ -831,7 +884,7 @@ class ApplyView:
                 t = get_time(b)
                 if t:
                     backup_data.append((b, t))
-            
+
             # list_backups usually sorted, but ensure desc
             backup_data.sort(key=lambda x: x[1], reverse=True)
 
@@ -842,14 +895,14 @@ class ApplyView:
             # Identify latest batch (cluster of backups within 60s of the newest one)
             latest_time = backup_data[0][1]
             batch_backups = []
-            BATCH_THRESHOLD = 60.0 # seconds
+            BATCH_THRESHOLD = 60.0  # seconds
 
             for b, t in backup_data:
                 delta = (latest_time - t).total_seconds()
                 if delta <= BATCH_THRESHOLD:
                     batch_backups.append(b)
                 else:
-                    break # Gap detected, end of batch
+                    break  # Gap detected, end of batch
 
             # Restore batch
             restored_files = set()
@@ -857,13 +910,13 @@ class ApplyView:
             for backup in batch_backups:
                 parts = backup.name.rsplit(".", 2)
                 original_name = parts[0]
-                
+
                 if original_name not in restored_files:
                     target = workspace / original_name
                     if restore_backup(backup, target):
                         count += 1
                     restored_files.add(original_name)
-            
+
             self._show_status(f"Undid changes for {count} files (Last Batch)")
             dialog.open = False
             safe_page_update(self.page)

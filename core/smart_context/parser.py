@@ -14,26 +14,6 @@ from tree_sitter import Parser, Node, Language, Tree  # type: ignore
 from core.smart_context.config import is_supported, get_config_by_extension
 from core.smart_context.loader import get_language, get_query
 
-# Các loại node type cần capture cho Python (FALLBACK ONLY)
-PYTHON_CAPTURE_TYPES = {
-    "class_definition",
-    "function_definition",
-    "decorated_definition",
-    "import_statement",
-    "import_from_statement",
-}
-
-# Các loại node type cần capture cho JavaScript/TypeScript (FALLBACK ONLY)
-JAVASCRIPT_CAPTURE_TYPES = {
-    "class_declaration",
-    "function_declaration",
-    "arrow_function",
-    "method_definition",
-    "import_statement",
-    "export_statement",
-    "lexical_declaration",  # const, let declarations
-}
-
 # Chunk separator giống Repomix
 CHUNK_SEPARATOR = "⋮----"
 
@@ -85,19 +65,12 @@ def smart_parse(file_path: str, content: str) -> Optional[str]:
                 if result:
                     return result
             except Exception:
-                # Query parsing failed, fallback to node-type based
+                # Query parsing failed, fallback below
                 pass
 
-        # FALLBACK: Use old node-type based parsing (backward compatibility)
-        config = get_config_by_extension(ext)
-        if config and config.name == "python":
-            capture_types = PYTHON_CAPTURE_TYPES
-        else:
-            # JavaScript và TypeScript dùng JS capture types
-            capture_types = JAVASCRIPT_CAPTURE_TYPES
-
-        # Thu thập các chunks
-        chunks = _extract_chunks(tree.root_node, content, capture_types)
+        # FALLBACK: Use simple node-based extraction with DefaultParseStrategy
+        # This catches cases where query parsing fails or no query exists
+        chunks = _extract_chunks_simple(tree.root_node, content)
 
         if not chunks:
             return None
@@ -190,94 +163,53 @@ def _parse_with_query(
 
 
 # ==================== FALLBACK FUNCTIONS (Backward Compatibility) ====================
-# Cac functions nay chi duoc su dung khi query-based parsing fails
+# Functions nay duoc su dung khi query-based parsing fails hoac khong co query
 
 
-def _extract_chunks(node: Node, content: str, capture_types: set[str]) -> list[str]:
+def _extract_chunks_simple(node: Node, content: str) -> list[str]:
     """
-    Đệ quy duyệt AST và trích xuất các chunks phù hợp.
-
-    FALLBACK ONLY: Used when query-based parsing fails.
+    Simple fallback extraction - lay dong dau tien cua moi function/class definition.
+    Duoc su dung khi query-based parsing fails.
 
     Args:
-        node: Node hiện tại trong AST
-        content: Nội dung raw của file
-        capture_types: Set các node types cần capture
+        node: Root node cua AST
+        content: Noi dung raw cua file
 
     Returns:
-        List các code chunks đã extract
+        List cac code chunks
     """
     chunks: list[str] = []
-
-    # Kiểm tra node hiện tại có phải loại cần capture không
-    if node.type in capture_types:
-        chunk = _extract_signature(node, content)
-        if chunk:
-            chunks.append(chunk)
-        # Không đệ quy vào children của node đã capture
-        return chunks
-
-    # Đệ quy vào children
-    for child in node.children:
-        chunks.extend(_extract_chunks(child, content, capture_types))
-
-    return chunks
-
-
-def _extract_signature(node: Node, content: str) -> Optional[str]:
-    """
-    Trích xuất signature (header + docstring) từ một node.
-
-    FALLBACK ONLY: Used when query-based parsing fails.
-
-    Args:
-        node: Node cần extract
-        content: Nội dung raw của file
-
-    Returns:
-        String signature hoặc None
-    """
     lines = content.split("\n")
+    processed: set[str] = set()
 
-    # Lấy dòng bắt đầu và kết thúc của node
-    start_line = node.start_point[0]
-    end_line = node.end_point[0]
+    def traverse(n: Node) -> None:
+        """Duyet AST de tim definitions."""
+        # Check common definition node types across languages
+        if any(
+            keyword in n.type
+            for keyword in [
+                "function",
+                "method",
+                "class",
+                "interface",
+                "struct",
+                "enum",
+                "type_alias",
+                "import",
+            ]
+        ):
+            if n.start_point[0] < len(lines):
+                # Chi lay dong dau tien
+                chunk = lines[n.start_point[0]].strip()
+                if chunk and chunk not in processed:
+                    chunks.append(chunk)
+                    processed.add(chunk)
+            # Khong duyet vao children cua definition node
+            return
 
-    # Với import statements: lấy toàn bộ
-    if node.type in ("import_statement", "import_from_statement"):
-        return "\n".join(lines[start_line : end_line + 1])
+        # Duyet recursively vao children
+        for child in n.children:
+            traverse(child)
 
-    # Với decorated definitions (Python): tìm decorator và function bên trong
-    if node.type == "decorated_definition":
-        result_lines = []
-        for child in node.children:
-            if child.type == "decorator":
-                result_lines.append(lines[child.start_point[0]])
-            elif child.type in ("function_definition", "class_definition"):
-                sig = _extract_signature(child, content)
-                if sig:
-                    result_lines.append(sig)
-        return "\n".join(result_lines) if result_lines else None
-
-    # Với function/class: lấy signature (dòng đầu) + docstring
-    result_lines = []
-
-    # Dòng đầu tiên là signature
-    result_lines.append(lines[start_line])
-
-    # Tìm docstring
-    for child in node.children:
-        if child.type == "expression_statement":
-            for subchild in child.children:
-                if subchild.type == "string":
-                    docstring_lines = lines[
-                        subchild.start_point[0] : subchild.end_point[0] + 1
-                    ]
-                    result_lines.extend(["    " + line for line in docstring_lines])
-                    break
-            break
-
-    # Thêm "..." để indicate body is omitted
-    result_lines.append("    ...")
-
-    return "\n".join(result_lines)
+    traverse(node)
+    return chunks

@@ -20,6 +20,8 @@ from core.prompt_generator import (
     generate_file_map,
     generate_file_contents,
     generate_file_contents_xml,
+    generate_file_contents_json,
+    generate_file_contents_plain,
     generate_smart_context,
     calculate_markdown_delimiter,
 )
@@ -194,11 +196,12 @@ class TestGeneratePrompt:
     """Test generate_prompt() function."""
 
     def test_basic_prompt(self):
-        """Basic prompt with file_map and contents."""
-        file_map = "src/main.py"
-        file_contents = "def main(): pass"
-
-        result = generate_prompt(file_map, file_contents)
+        """Basic prompt generation works."""
+        result = generate_prompt(
+            file_map="src/main.py",
+            file_contents="def main(): pass",
+            output_style=OutputStyle.MARKDOWN,  # Explicitly test MARKDOWN structure
+        )
 
         assert "<file_map>" in result
         assert "</file_map>" in result
@@ -436,17 +439,122 @@ class TestRepomixXmlFormat:
         # XML style không dùng <file_contents> wrapper
         assert "<file_map>" not in result
 
-    def test_generate_prompt_default_is_markdown(self):
-        """Default output_style is MARKDOWN."""
+    def test_generate_prompt_default_is_xml(self):
+        """Default output_style is XML."""
         result = generate_prompt(
             file_map="test.py",
             file_contents="code",
         )
 
-        # Markdown style dùng <file_map> và <file_contents>
-        assert "<file_map>" in result
-        assert "<file_contents>" in result
+        # Default is structure XML
+        assert "<directory_structure>" in result
+        assert "<file_map>" not in result
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestJsonFormat:
+    """Test JSON output format."""
+
+    def test_json_output_valid_json(self, tmp_path):
+        """JSON output is valid JSON."""
+        import json
+
+        file_path = tmp_path / "main.py"
+        file_path.write_text("print('hello')")
+
+        result = generate_file_contents_json({str(file_path)})
+
+        data = json.loads(result)
+        assert str(file_path) in data
+        assert data[str(file_path)] == "print('hello')"
+
+    def test_json_output_multiple_files(self, tmp_path):
+        """JSON output contains all files."""
+        import json
+
+        p1 = tmp_path / "a.py"
+        p1.write_text("a")
+        p2 = tmp_path / "b.py"
+        p2.write_text("b")
+
+        result = generate_file_contents_json({str(p1), str(p2)})
+        data = json.loads(result)
+
+        assert len(data) == 2
+        assert data[str(p1)] == "a"
+        assert data[str(p2)] == "b"
+
+    def test_generate_prompt_with_json_style(self):
+        """generate_prompt produces valid JSON for JSON output style."""
+        import json
+
+        file_map = "tree"
+        file_contents = json.dumps({"file.py": "content"})
+
+        result = generate_prompt(
+            file_map=file_map,
+            file_contents=file_contents,
+            output_style=OutputStyle.JSON,
+            user_instructions="instr",
+        )
+
+        data = json.loads(result)
+        assert data["directory_structure"] == "tree"
+        assert data["files"]["file.py"] == "content"
+        assert data["instructions"] == "instr"
+
+    def test_generate_prompt_json_git_context(self):
+        """JSON prompt includes git context."""
+        import json
+
+        git_diffs = GitDiffResult(work_tree_diff="wdiff", staged_diff="sdiff")
+        git_logs = GitLogResult(log_content="logs", commits=[])
+
+        result = generate_prompt(
+            file_map="map",
+            file_contents="{}",
+            output_style=OutputStyle.JSON,
+            git_diffs=git_diffs,
+            git_logs=git_logs,
+        )
+
+        data = json.loads(result)
+        assert data["git_diffs"]["work_tree"] == "wdiff"
+        assert data["git_diffs"]["staged"] == "sdiff"
+        assert data["git_logs"] == "logs"
+
+
+class TestPlainFormat:
+    """Test Plain Text output format."""
+
+    def test_plain_output_structure(self, tmp_path):
+        """Plain output has correct structure."""
+        file_path = tmp_path / "main.py"
+        file_path.write_text("print('hello')")
+
+        result = generate_file_contents_plain({str(file_path)})
+
+        assert f"File: {file_path}" in result
+        assert "print('hello')" in result
+        assert "-" * 16 in result
+
+    def test_generate_prompt_with_plain_style(self):
+        """generate_prompt produces plain text for PLAIN output style."""
+        file_map = "tree"
+        file_contents = "File: main.py\ncode"
+
+        result = generate_prompt(
+            file_map=file_map,
+            file_contents=file_contents,
+            output_style=OutputStyle.PLAIN,
+            user_instructions="instr",
+        )
+
+        assert "Instructions:" in result
+        assert "Directory Structure:" in result
+        assert "File Contents:" in result
+        assert "-" * 32 in result
+        assert "<file_map>" not in result

@@ -17,6 +17,9 @@ from core.prompt_generator import (
     generate_file_map,
     generate_file_contents,
     generate_file_contents_xml,
+    generate_file_contents_xml,
+    generate_file_contents_json,
+    generate_file_contents_plain,
     generate_smart_context,
 )
 from core.utils.git_utils import get_git_diffs, get_git_logs
@@ -912,6 +915,10 @@ class ContextView:
                 # Generate file contents based on selected output style
                 if self._selected_output_style == OutputStyle.XML:
                     file_contents = generate_file_contents_xml(selected_paths)
+                elif self._selected_output_style == OutputStyle.JSON:
+                    file_contents = generate_file_contents_json(selected_paths)
+                elif self._selected_output_style == OutputStyle.PLAIN:
+                    file_contents = generate_file_contents_plain(selected_paths)
                 else:
                     file_contents = generate_file_contents(selected_paths)
                 assert self.instructions_field is not None
@@ -940,6 +947,10 @@ class ContextView:
             # Generate file contents based on selected output style
             if self._selected_output_style == OutputStyle.XML:
                 file_contents = generate_file_contents_xml(selected_paths)
+            elif self._selected_output_style == OutputStyle.JSON:
+                file_contents = generate_file_contents_json(selected_paths)
+            elif self._selected_output_style == OutputStyle.PLAIN:
+                file_contents = generate_file_contents_plain(selected_paths)
             else:
                 file_contents = generate_file_contents(selected_paths)
             assert self.instructions_field is not None

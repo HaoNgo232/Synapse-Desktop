@@ -8,6 +8,7 @@ Hỗ trợ nhiều output formats:
 
 import re
 import html
+import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -269,6 +270,130 @@ def generate_file_contents_xml(
     return "<files>\n" + "\n".join(file_elements) + "\n</files>"
 
 
+def generate_file_contents_json(
+    selected_paths: set[str], max_file_size: int = 1024 * 1024
+) -> str:
+    """
+    Tạo file contents theo JSON format.
+
+    Output format (serialized JSON string):
+    {
+        "path/to/file": "content",
+        "path/to/another": "content"
+    }
+
+    Args:
+        selected_paths: Set các đường dẫn file được tick
+        max_file_size: Maximum file size to include (default 1MB)
+
+    Returns:
+        JSON string containing file paths and contents
+    """
+    sorted_paths = sorted(selected_paths)
+    files_dict = {}
+
+    for path_str in sorted_paths:
+        path = Path(path_str)
+
+        try:
+            if not path.is_file():
+                continue
+
+            # Skip binary files
+            if is_binary_by_extension(path):
+                files_dict[str(path)] = "Binary file (skipped)"
+                continue
+
+            # Skip files that are too large
+            try:
+                file_size = path.stat().st_size
+                if file_size > max_file_size:
+                    files_dict[str(path)] = (
+                        f"File too large ({file_size // 1024}KB) (skipped)"
+                    )
+                    continue
+            except OSError:
+                pass
+
+            # Read content
+            content = path.read_text(encoding="utf-8", errors="replace")
+            files_dict[str(path)] = content
+
+        except (OSError, IOError) as e:
+            files_dict[str(path)] = f"Error reading file: {e}"
+
+    return json.dumps(files_dict, ensure_ascii=False)
+
+
+def generate_file_contents_plain(
+    selected_paths: set[str], max_file_size: int = 1024 * 1024
+) -> str:
+    """
+    Tạo file contents theo định dạng Plain Text.
+
+    Format:
+    File: path/to/file
+    ----------------
+    content
+    ----------------
+
+    Args:
+        selected_paths: Set các đường dẫn file được tick
+        max_file_size: Maximum file size to include (default 1MB)
+
+    Returns:
+        String containing file paths and contents in plain text format
+    """
+    sorted_paths = sorted(selected_paths)
+    file_elements = []
+
+    separator = "-" * 16
+
+    for path_str in sorted_paths:
+        path = Path(path_str)
+
+        try:
+            if not path.is_file():
+                continue
+
+            # Header cho mỗi file
+            file_header = f"File: {path_str}\n{separator}"
+
+            # Content handling
+            content_display = ""
+
+            # Skip binary files
+            if is_binary_by_extension(path):
+                content_display = "Binary file (skipped)"
+            else:
+                # Skip files that are too large
+                try:
+                    file_size = path.stat().st_size
+                    if file_size > max_file_size:
+                        content_display = (
+                            f"File too large ({file_size // 1024}KB) (skipped)"
+                        )
+                    else:
+                        # Read content
+                        content_display = path.read_text(
+                            encoding="utf-8", errors="replace"
+                        ).strip()
+                except OSError:
+                    pass
+
+            file_elements.append(f"{file_header}\n{content_display}\n{separator}")
+
+        except (OSError, IOError) as e:
+            file_elements.append(
+                f"File: {path_str}\n{separator}\nError reading file: {e}\n{separator}"
+            )
+
+    if not file_elements:
+        return "No files selected."
+
+    return "\n\n".join(file_elements)
+
+
 def generate_smart_context(
     selected_paths: set[str], max_file_size: int = 1024 * 1024
 ) -> str:
@@ -388,13 +513,74 @@ def generate_prompt(
     """
     # Tao prompt structure dua vao output_style
     if output_style == OutputStyle.XML:
-        # Repomix XML format - structured tags
+        # XML format - structured tags
         prompt = f"""<directory_structure>
 {file_map}
 </directory_structure>
 
 {file_contents}
 """
+    elif output_style == OutputStyle.JSON:
+        # JSON format
+        # file_contents is already a JSON string of files dict
+        # We construct a full JSON object including metadata
+        try:
+            files_data = json.loads(file_contents)
+        except json.JSONDecodeError:
+            files_data = {}
+
+        prompt_data = {
+            "directory_structure": file_map,
+            "files": files_data,
+        }
+
+        if user_instructions:
+            prompt_data["instructions"] = user_instructions
+
+        # Git data
+        if git_diffs:
+            prompt_data["git_diffs"] = {
+                "work_tree": git_diffs.work_tree_diff,
+                "staged": git_diffs.staged_diff,
+            }
+
+        if git_logs:
+            prompt_data["git_logs"] = git_logs.log_content
+
+        if include_xml_formatting:
+            # For JSON, we might want a different field or explanation,
+            # but let's keep it as text instruction for now if requested
+            prompt_data["formatting_instructions"] = XML_FORMATTING_INSTRUCTIONS
+
+        return json.dumps(prompt_data, ensure_ascii=False, indent=2)
+
+    elif output_style == OutputStyle.PLAIN:
+        # Plain text format
+        # No XML tags, just concatenated data
+        prompt_parts = []
+
+        if user_instructions:
+            prompt_parts.append(f"Instructions:\n{user_instructions}")
+            prompt_parts.append("-" * 32)
+
+        prompt_parts.append(f"Directory Structure:\n{file_map}")
+        prompt_parts.append("-" * 32)
+
+        prompt_parts.append(f"File Contents:\n{file_contents}")
+
+        # Git data
+        if git_diffs:
+            prompt_parts.append("-" * 32)
+            prompt_parts.append(
+                f"Git Diffs:\nWork Tree:\n{git_diffs.work_tree_diff}\n\nStaged:\n{git_diffs.staged_diff}"
+            )
+
+        if git_logs:
+            prompt_parts.append("-" * 32)
+            prompt_parts.append(f"Git Logs:\n{git_logs.log_content}")
+
+        return "\n\n".join(prompt_parts)
+
     else:
         # Markdown format (default) - original behavior
         prompt = f"""<file_map>

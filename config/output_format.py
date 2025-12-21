@@ -22,9 +22,8 @@ class OutputStyle(Enum):
 
     MARKDOWN = "markdown"
     XML = "xml"
-    # Dễ mở rộng trong tương lai:
-    # JSON = "json"
-    # PLAIN = "plain"
+    JSON = "json"
+    PLAIN = "plain"
 
 
 @dataclass(frozen=True)
@@ -74,6 +73,28 @@ OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
             "Tối ưu cho Claude & GPT",
         ],
         file_extension=".xml",
+    ),
+    OutputStyle.JSON: OutputFormatConfig(
+        id="json",
+        name="JSON",
+        description="Dữ liệu dạng JSON thuần túy",
+        benefits=[
+            "Dễ dàng xử lý bằng code (Automation)",
+            "Tối ưu cho các model có JSON Mode",
+            "Cấu trúc chặt chẽ nhất",
+        ],
+        file_extension=".json",
+    ),
+    OutputStyle.PLAIN: OutputFormatConfig(
+        id="plain",
+        name="Plain Text",
+        description="Văn bản thô, tối thiểu định dạng",
+        benefits=[
+            "Tiết kiệm token nhất",
+            "Không có tag hay markdown thừa",
+            "Dành cho model context nhỏ",
+        ],
+        file_extension=".txt",
     ),
 }
 

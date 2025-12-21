@@ -12,6 +12,7 @@ Features:
 
 from pathlib import Path
 from typing import Dict, Callable, Set, Optional
+import threading
 
 from core.utils.file_utils import TreeItem
 from core.token_counter import count_tokens_for_file
@@ -62,6 +63,7 @@ class TokenDisplayService:
 
         # Cache: path -> token count
         self._cache: Dict[str, int] = {}
+        self._lock = threading.Lock()
 
         # Tracking loading state
         self._loading_paths: Set[str] = set()
@@ -69,8 +71,9 @@ class TokenDisplayService:
     def clear_cache(self):
         """Xóa toàn bộ cache (khi reload tree)"""
         stop_token_counting()
-        self._cache.clear()
-        self._loading_paths.clear()
+        with self._lock:
+            self._cache.clear()
+            self._loading_paths.clear()
 
     def stop(self):
         """Stop processing"""
@@ -79,22 +82,25 @@ class TokenDisplayService:
 
     def cleanup_stale_entries(self, valid_paths: set):
         """Xóa các cache entries không còn tồn tại trong tree."""
-        stale_keys = [k for k in self._cache.keys() if k not in valid_paths]
-        for key in stale_keys:
-            del self._cache[key]
+        with self._lock:
+            stale_keys = [k for k in self._cache.keys() if k not in valid_paths]
+            for key in stale_keys:
+                del self._cache[key]
 
     def get_token_count(self, path: str) -> Optional[int]:
         """Lấy token count từ cache. Returns None nếu chưa được tính."""
-        return self._cache.get(path)
+        with self._lock:
+            return self._cache.get(path)
 
     def get_token_display(self, path: str) -> str:
         """Lấy string hiển thị token count. Returns empty string nếu chưa có."""
-        count = self._cache.get(path)
-        if count is None:
-            if path in self._loading_paths:
-                return "..."
-            return ""
-        return self._format_tokens(count)
+        with self._lock:
+            count = self._cache.get(path)
+            if count is None:
+                if path in self._loading_paths:
+                    return "..."
+                return ""
+            return self._format_tokens(count)
 
     def is_loading(self, path: str) -> bool:
         """Check xem path đang được load không"""
@@ -105,8 +111,9 @@ class TokenDisplayService:
         Request tính token count cho file (SYNC).
         Tính ngay lập tức và cache kết quả.
         """
-        if path in self._cache:
-            return
+        with self._lock:
+            if path in self._cache:
+                return
 
         # Chỉ tính cho files
         if Path(path).is_dir():
@@ -118,9 +125,11 @@ class TokenDisplayService:
 
         try:
             tokens = count_tokens_for_file(Path(path))
-            self._cache[path] = tokens
+            with self._lock:
+                self._cache[path] = tokens
         except Exception:
-            self._cache[path] = 0
+            with self._lock:
+                self._cache[path] = 0
 
     def request_tokens_for_tree(
         self,
@@ -147,14 +156,17 @@ class TokenDisplayService:
             if not _is_counting_tokens:
                 break
 
-            if path in self._cache:
-                continue
+            with self._lock:
+                if path in self._cache:
+                    continue
 
             try:
                 tokens = count_tokens_for_file(Path(path))
-                self._cache[path] = tokens
+                with self._lock:
+                    self._cache[path] = tokens
             except Exception:
-                self._cache[path] = 0
+                with self._lock:
+                    self._cache[path] = 0
 
             count += 1
 
@@ -191,7 +203,10 @@ class TokenDisplayService:
 
         if not item.is_dir:
             # Là file - add to list
-            if item.path not in self._cache:
+            with self._lock:
+                cached = item.path in self._cache
+
+            if not cached:
                 result.append(item.path)
         else:
             # Là folder - recurse vào children
@@ -202,11 +217,12 @@ class TokenDisplayService:
 
     def _cleanup_cache_if_needed(self):
         """Remove oldest cache entries nếu cache quá lớn"""
-        if len(self._cache) > self.MAX_CACHE_SIZE:
-            remove_count = len(self._cache) // 5
-            keys_to_remove = list(self._cache.keys())[:remove_count]
-            for key in keys_to_remove:
-                del self._cache[key]
+        with self._lock:
+            if len(self._cache) > self.MAX_CACHE_SIZE:
+                remove_count = len(self._cache) // 5
+                keys_to_remove = list(self._cache.keys())[:remove_count]
+                for key in keys_to_remove:
+                    del self._cache[key]
 
     def get_folder_tokens(self, folder_path: str, tree: TreeItem) -> Optional[int]:
         """Tính tổng tokens của folder từ cache."""
@@ -217,12 +233,15 @@ class TokenDisplayService:
         total = 0
         all_cached = True
 
-        for file_path in self._get_all_file_paths(folder_item):
-            if file_path in self._cache:
-                total += self._cache[file_path]
-            else:
-                all_cached = False
-                break
+        file_paths = self._get_all_file_paths(folder_item)
+
+        with self._lock:
+            for file_path in file_paths:
+                if file_path in self._cache:
+                    total += self._cache[file_path]
+                else:
+                    all_cached = False
+                    break
 
         return total if all_cached else None
 

@@ -58,7 +58,7 @@ The name represents the vital connection between your codebase and AI intelligen
 ## Features
 
 ### Core Features
-- **Copy Context** - Select files and generate LLM-ready prompts with file maps and contents
+- **Copy Context** - Select files and generate LLM-ready prompts in multiple formats (XML, Markdown, JSON, Plain Text)
 - **Copy Tree Map** - Copy only file structure without contents (saves tokens)
 - **Apply OPX** - Paste LLM responses in OPX format and apply changes to your codebase
 - **Preview Changes** - Visual diff preview with +lines/-lines before applying
@@ -91,8 +91,9 @@ The name represents the vital connection between your codebase and AI intelligen
 1. Click **Open Folder** to select your project
 2. Use the file tree to select files (click checkboxes)
 3. Enter instructions in the text area
-4. Click **Copy Context** or **Copy + OPX**
-5. Paste into your LLM chat
+4. Select your preferred **Output Format** (XML, Markdown, JSON, Plain Text)
+5. Click **Copy Context** (for basic context) or **Copy + OPX** (for optimization instructions)
+6. Paste into your LLM chat
 
 ### 2. Apply Changes
 
@@ -118,15 +119,6 @@ The name represents the vital connection between your codebase and AI intelligen
 - **Enable Security Check** - Scan for secrets before copying (prevents accidental API key leaks)
 - **Session** - Clear saved workspace and selections
 
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Shift+C` | Copy Context |
-| `Ctrl+Shift+O` | Copy Context + OPX |
-| `Ctrl+R` | Refresh file tree |
-| `Ctrl+F` | Focus search field |
-| `Escape` | Clear search |
 
 ## Project Structure
 

@@ -94,13 +94,24 @@ class ContextView:
         stop_token_counting()
 
         if self._token_update_timer is not None:
-            self._token_update_timer.cancel()
+            try:
+                self._token_update_timer.cancel()
+            except Exception:
+                pass
             self._token_update_timer = None
+
         if self._selection_update_timer is not None:
-            self._selection_update_timer.cancel()
+            try:
+                self._selection_update_timer.cancel()
+            except Exception:
+                pass
             self._selection_update_timer = None
+
         if self._status_clear_timer is not None:
-            self._status_clear_timer.cancel()
+            try:
+                self._status_clear_timer.cancel()
+            except Exception:
+                pass
             self._status_clear_timer = None
         if self.file_tree_component:
             self.file_tree_component.cleanup()

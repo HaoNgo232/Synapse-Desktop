@@ -332,7 +332,7 @@ class ContextView:
                                     include_xml=False
                                 ),
                                 expand=True,
-                                tooltip="Ctrl+Shift+C",
+                                tooltip="Copy context with basic formatting",
                                 style=ft.ButtonStyle(
                                     color=ThemeColors.TEXT_PRIMARY,
                                     side=ft.BorderSide(1, ThemeColors.BORDER),
@@ -343,7 +343,7 @@ class ContextView:
                                 icon=ft.Icons.CODE,
                                 on_click=lambda _: self._copy_context(include_xml=True),
                                 expand=True,
-                                tooltip="Ctrl+Shift+O",
+                                tooltip="Copy context with OPX optimization instructions",
                                 style=ft.ButtonStyle(
                                     color="#FFFFFF",
                                     bgcolor=ThemeColors.PRIMARY,
@@ -770,7 +770,7 @@ class ContextView:
             width=160,
             text_size=12,
             content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
-            border_color=ThemeColors.BORDER,
+            border_color="#525252",  # Clearer border
             focused_border_color=ThemeColors.PRIMARY,
             bgcolor=ThemeColors.BG_SURFACE,
             # Tooltip chuyen qua icon ben canh

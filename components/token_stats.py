@@ -127,7 +127,7 @@ class TokenStatsPanel:
             width=220,
             text_size=12,
             content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
-            border_color=ThemeColors.BORDER,
+            border_color="#525252",  # Clearer border for visibility
             focused_border_color=ThemeColors.PRIMARY,
             bgcolor=ThemeColors.BG_SURFACE,
         )

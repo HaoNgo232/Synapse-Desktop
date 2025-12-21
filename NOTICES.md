@@ -7,7 +7,7 @@ We are grateful to the authors for their contributions to the open source commun
 - **Author**: kleneway
 - **Repository**: https://github.com/kleneway/pastemax
 - **License**: MIT
-- **Adapted Components**: Language detection logic, file processing strategies, concurrency patterns.
+- **Adapted Components**: Language detection logic, file processing strategies, global cancellation flag pattern for responsive scanning.
 
 ```
 MIT License

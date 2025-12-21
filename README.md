@@ -224,7 +224,7 @@ While Synapse Desktop is a standalone project, I have learned and adapted valuab
 
 ### Pastemax
 - **Advanced Language Detection**: Adapted from Pastemax's extensive language map to ensure perfect syntax highlighting for LLMs.
-- **Concurrent Processing**: Inspired by their parallel file scanning strategies for optimal performance.
+- **Concurrent Processing Pattern**: Adapted their global cancellation flag pattern (`isLoadingDirectory`) for responsive file scanning without race conditions.
 - **Dashboard Aesthetics**: Adopted the modern "Dashboard Metrics" style for clear and beautiful token statistics.
 - **Smart File Filtering**: Implemented robust exclusion logic similar to their ignore management.
 

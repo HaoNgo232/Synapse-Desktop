@@ -82,6 +82,7 @@ class ContextView:
         # Output format selection
         self._selected_output_style: OutputStyle = DEFAULT_OUTPUT_STYLE
         self.format_dropdown: Optional[ft.Dropdown] = None
+        self.format_info_icon: Optional[ft.Icon] = None
 
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
@@ -742,7 +743,7 @@ class ContextView:
         )
         self._token_update_timer.start()
 
-    def _build_format_dropdown(self) -> ft.Dropdown:
+    def _build_format_dropdown(self) -> ft.Control:
         """
         Tạo dropdown chọn output format với tooltip hiển thị lợi ích.
 
@@ -772,9 +773,26 @@ class ContextView:
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
             bgcolor=ThemeColors.BG_SURFACE,
+            # Tooltip chuyen qua icon ben canh
+            # tooltip=get_format_tooltip(self._selected_output_style),
+        )
+
+        self.format_info_icon = ft.Icon(
+            ft.Icons.INFO_OUTLINE,
+            size=16,
+            color=ThemeColors.TEXT_SECONDARY,
             tooltip=get_format_tooltip(self._selected_output_style),
         )
-        return self.format_dropdown
+
+        return ft.Row(
+            [
+                self.format_dropdown,
+                ft.Container(width=4),
+                self.format_info_icon,
+            ],
+            spacing=0,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
 
     def _on_format_changed(self, e):
         """
@@ -787,12 +805,16 @@ class ContextView:
                 self._selected_output_style = get_style_by_id(e.control.value)
                 # Lưu vào settings
                 set_setting("output_format", e.control.value)
-                # Update tooltip để hiển thị benefits của format mới
-                if self.format_dropdown:
-                    self.format_dropdown.tooltip = get_format_tooltip(
+
+                # Update tooltip cua info icon
+                if self.format_info_icon:
+                    self.format_info_icon.tooltip = get_format_tooltip(
                         self._selected_output_style
                     )
-                    self.format_dropdown.update()
+                    # Check if icon is mounted before updating
+                    if self.format_info_icon.page:
+                        self.format_info_icon.update()
+
                 # Show status
                 format_name = OUTPUT_FORMATS[self._selected_output_style].name
                 self._show_status(f"Output format: {format_name}")

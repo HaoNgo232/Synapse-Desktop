@@ -102,6 +102,164 @@ class ContextView:
         # Remote repo manager - quản lý clone và cache repositories
         self._repo_manager: Optional[RepoManager] = None
 
+    def _show_dirty_repo_dialog(
+        self, repo_path: Path, repo_name: str, status_text: ft.Text, refresh_callback
+    ):
+        """
+        Hien thi dialog khi repo co thay doi local chua commit.
+
+        Cho phep user chon: Stash & Pull, Discard & Pull, hoac Cancel.
+        """
+        import threading
+
+        def close_dialog(e=None):
+            dirty_dialog.open = False
+            safe_page_update(self.page)
+
+        def stash_and_pull(e):
+            close_dialog()
+            status_text.value = f"Stashing changes in {repo_name}..."
+            status_text.color = ThemeColors.PRIMARY
+            safe_page_update(self.page)
+
+            def do_stash_pull():
+                try:
+                    assert self._repo_manager is not None
+                    # Stash changes
+                    if not self._repo_manager.stash_changes(repo_path):
+                        status_text.value = f"Failed to stash changes in {repo_name}"
+                        status_text.color = ThemeColors.ERROR
+                        safe_page_update(self.page)
+                        return
+
+                    # Pull
+                    self._repo_manager._update_repo(repo_path, None, None)
+                    status_text.value = f"Updated {repo_name} (changes stashed)"
+                    status_text.color = ThemeColors.SUCCESS
+                except Exception as ex:
+                    status_text.value = f"Update failed: {ex}"
+                    status_text.color = ThemeColors.ERROR
+                refresh_callback()
+                safe_page_update(self.page)
+
+            threading.Thread(target=do_stash_pull, daemon=True).start()
+
+        def discard_and_pull(e):
+            # Show confirmation dialog for discard
+            def confirm_discard(e):
+                confirm_dialog.open = False
+                dirty_dialog.open = False
+                safe_page_update(self.page)
+
+                status_text.value = f"Discarding changes in {repo_name}..."
+                status_text.color = ThemeColors.WARNING
+                safe_page_update(self.page)
+
+                def do_discard_pull():
+                    try:
+                        assert self._repo_manager is not None
+                        # Discard changes
+                        if not self._repo_manager.discard_changes(repo_path):
+                            status_text.value = (
+                                f"Failed to discard changes in {repo_name}"
+                            )
+                            status_text.color = ThemeColors.ERROR
+                            safe_page_update(self.page)
+                            return
+
+                        # Pull
+                        self._repo_manager._update_repo(repo_path, None, None)
+                        status_text.value = f"Updated {repo_name} (changes discarded)"
+                        status_text.color = ThemeColors.SUCCESS
+                    except Exception as ex:
+                        status_text.value = f"Update failed: {ex}"
+                        status_text.color = ThemeColors.ERROR
+                    refresh_callback()
+                    safe_page_update(self.page)
+
+                threading.Thread(target=do_discard_pull, daemon=True).start()
+
+            def cancel_confirm(e):
+                confirm_dialog.open = False
+                safe_page_update(self.page)
+
+            confirm_dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(
+                    "Confirm Discard",
+                    weight=ft.FontWeight.BOLD,
+                    color=ThemeColors.ERROR,
+                ),
+                content=ft.Text(
+                    f"Ban co chac chan muon XOA VINH VIEN tat ca thay doi local trong '{repo_name}'?\n\n"
+                    "Hanh dong nay KHONG THE HOAN TAC!",
+                    color=ThemeColors.TEXT_PRIMARY,
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=cancel_confirm),
+                    ft.TextButton(
+                        "Discard & Pull",
+                        on_click=confirm_discard,
+                        style=ft.ButtonStyle(color=ThemeColors.ERROR),
+                    ),
+                ],
+            )
+            self.page.overlay.append(confirm_dialog)
+            confirm_dialog.open = True
+            safe_page_update(self.page)
+
+        dirty_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Uncommitted Changes",
+                weight=ft.FontWeight.BOLD,
+                color=ThemeColors.WARNING,
+            ),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            f"Repository '{repo_name}' co thay doi local chua commit.",
+                            color=ThemeColors.TEXT_PRIMARY,
+                        ),
+                        ft.Container(height=8),
+                        ft.Text(
+                            "Ban muon lam gi?",
+                            size=13,
+                            color=ThemeColors.TEXT_SECONDARY,
+                        ),
+                    ],
+                    tight=True,
+                ),
+                width=400,
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=close_dialog),
+                ft.OutlinedButton(
+                    "Discard & Pull",
+                    icon=ft.Icons.DELETE_FOREVER,
+                    on_click=discard_and_pull,
+                    style=ft.ButtonStyle(
+                        color=ThemeColors.ERROR,
+                        side=ft.BorderSide(1, ThemeColors.ERROR),
+                    ),
+                ),
+                ft.OutlinedButton(
+                    "Stash & Pull",
+                    icon=ft.Icons.SAVE,
+                    on_click=stash_and_pull,
+                    style=ft.ButtonStyle(
+                        color=ThemeColors.SUCCESS,
+                        side=ft.BorderSide(1, ThemeColors.SUCCESS),
+                    ),
+                ),
+            ],
+        )
+
+        self.page.overlay.append(dirty_dialog)
+        dirty_dialog.open = True
+        safe_page_update(self.page)
+
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
         # RACE CONDITION FIX: Set disposal flag FIRST
@@ -1867,25 +2025,32 @@ class ContextView:
                                 safe_page_update(self.page)
                                 return
 
-                            status_text.value = f"Updating {name}..."
-                            status_text.color = ThemeColors.PRIMARY
-                            safe_page_update(self.page)
-
-                            def do_update():
-                                try:
-                                    # Type assertion: repo_manager is guaranteed non-None by assert above
-                                    repo_mgr = self._repo_manager
-                                    assert repo_mgr is not None
-                                    repo_mgr._update_repo(path, None, None)
-                                    status_text.value = f"Updated: {name}"
-                                    status_text.color = ThemeColors.SUCCESS
-                                except Exception as ex:
-                                    status_text.value = f"Update failed: {ex}"
-                                    status_text.color = ThemeColors.ERROR
-                                refresh_list()
+                            # Check if repo is dirty
+                            repo_mgr = self._repo_manager
+                            if repo_mgr.is_dirty(path):
+                                # Show dirty dialog with options
+                                self._show_dirty_repo_dialog(
+                                    path, name, status_text, refresh_list
+                                )
+                            else:
+                                # Clean repo, proceed with update
+                                status_text.value = f"Updating {name}..."
+                                status_text.color = ThemeColors.PRIMARY
                                 safe_page_update(self.page)
 
-                            threading.Thread(target=do_update, daemon=True).start()
+                                def do_update():
+                                    try:
+                                        assert repo_mgr is not None
+                                        repo_mgr._update_repo(path, None, None)
+                                        status_text.value = f"Updated: {name}"
+                                        status_text.color = ThemeColors.SUCCESS
+                                    except Exception as ex:
+                                        status_text.value = f"Update failed: {ex}"
+                                        status_text.color = ThemeColors.ERROR
+                                    refresh_list()
+                                    safe_page_update(self.page)
+
+                                threading.Thread(target=do_update, daemon=True).start()
 
                         return handler
 

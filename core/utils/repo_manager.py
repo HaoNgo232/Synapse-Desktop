@@ -285,6 +285,93 @@ class RepoManager:
                 shutil.rmtree(target_path)
             raise RepoError(f"Clone failed: {e}")
 
+    def is_dirty(self, repo_path: Path) -> bool:
+        """
+        Kiem tra repo co thay doi local chua commit khong.
+
+        Returns:
+            True neu co thay doi (dirty), False neu sach (clean)
+        """
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo_path), "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            # Neu co output thi dirty, khong co thi clean
+            return bool(result.stdout.strip())
+        except Exception as e:
+            logger.error(f"Failed to check repo status: {e}")
+            return False
+
+    def stash_changes(self, repo_path: Path) -> bool:
+        """
+        Stash tat ca thay doi local (bao gom untracked files).
+
+        Returns:
+            True neu stash thanh cong, False neu that bai
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_path),
+                    "stash",
+                    "push",
+                    "-u",
+                    "-m",
+                    "synapse-auto-stash",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                logger.info("Changes stashed successfully")
+                return True
+            else:
+                logger.error(f"Stash failed: {result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to stash changes: {e}")
+            return False
+
+    def discard_changes(self, repo_path: Path) -> bool:
+        """
+        Discard tat ca thay doi local (hard reset + clean).
+
+        CANH BAO: Thao tac nay se XOA VINH VIEN thay doi local!
+
+        Returns:
+            True neu discard thanh cong, False neu that bai
+        """
+        try:
+            # Reset hard to HEAD
+            result1 = subprocess.run(
+                ["git", "-C", str(repo_path), "reset", "--hard", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            # Clean untracked files
+            result2 = subprocess.run(
+                ["git", "-C", str(repo_path), "clean", "-fd"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result1.returncode == 0 and result2.returncode == 0:
+                logger.info("Changes discarded successfully")
+                return True
+            else:
+                logger.error(f"Discard failed: {result1.stderr} {result2.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to discard changes: {e}")
+            return False
+
     def _update_repo(
         self,
         repo_path: Path,

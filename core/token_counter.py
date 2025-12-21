@@ -267,41 +267,29 @@ def get_worker_count(num_tasks: int) -> int:
 
 def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
     """
-    Dem token cho nhieu files song song (parallel).
+    Đếm token cho nhiều files - SYNC version với global cancellation.
 
-    Su dung ThreadPoolExecutor vi:
-    - File I/O la I/O-bound, release GIL.
-    - Tiktoken la C-extension, release GIL khi encode.
-    - ThreadPool it overhead hon ProcessPool (khong can pickle).
+    Không dùng ThreadPoolExecutor để tránh race condition.
+    Check global flag mỗi file để cancel ngay lập tức.
 
     Args:
-        file_paths: Danh sach duong dan files can dem token.
+        file_paths: Danh sách đường dẫn files cần đếm token.
 
     Returns:
         Dict mapping path string -> token count.
     """
-    num_files = len(file_paths)
+    from services.token_display import is_counting_tokens
 
-    # Khong can parallel cho so luong nho
-    if num_files < MIN_FILES_FOR_PARALLEL:
-        return {str(p): count_tokens_for_file(p) for p in file_paths}
-
-    worker_count = get_worker_count(num_files)
     results: Dict[str, int] = {}
 
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        # Submit tat ca tasks
-        future_to_path = {
-            executor.submit(count_tokens_for_file, path): path for path in file_paths
-        }
+    for path in file_paths:
+        # Check global cancellation flag mỗi file - CRITICAL
+        if not is_counting_tokens():
+            break
 
-        # Thu thap ket qua khi hoan thanh
-        for future in as_completed(future_to_path):
-            path = future_to_path[future]
-            try:
-                results[str(path)] = future.result()
-            except Exception:
-                # Silent fail for individual files
-                results[str(path)] = 0
+        try:
+            results[str(path)] = count_tokens_for_file(path)
+        except Exception:
+            results[str(path)] = 0
 
     return results

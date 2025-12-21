@@ -10,6 +10,7 @@ from typing import Callable, Optional
 import json
 
 from core.theme import ThemeColors
+from core.utils.ui_utils import safe_page_update
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.session_state import clear_session_state, get_session_age_hours
 
@@ -522,7 +523,7 @@ class SettingsView:
         self.gitignore_checkbox.value = True
         self.security_check_checkbox.value = True
         self.git_include_checkbox.value = True
-        self.page.update()
+        safe_page_update(self.page)
 
         self._show_status("Reset to defaults (not saved yet)", is_error=False)
 
@@ -571,7 +572,7 @@ class SettingsView:
             self.gitignore_checkbox.value = imported.get("use_gitignore", True)
             self.git_include_checkbox.value = imported.get("include_git_changes", True)
 
-            self.page.update()
+            safe_page_update(self.page)
             self._show_status("Settings imported! Click Save to apply.")
 
         except json.JSONDecodeError:
@@ -605,7 +606,7 @@ class SettingsView:
                 "# " + preset_name + " preset\n" + preset_content
             )
 
-        self.page.update()
+        safe_page_update(self.page)
         self._show_status(f"Loaded {preset_name} preset (not saved yet)")
 
     def _show_status(self, message: str, is_error: bool = False):
@@ -613,7 +614,7 @@ class SettingsView:
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self.page.update()
+        safe_page_update(self.page)
 
     def _reload_settings(self):
         """
@@ -629,7 +630,7 @@ class SettingsView:
         self.gitignore_checkbox.value = settings.get("use_gitignore", True)
         self.git_include_checkbox.value = settings.get("include_git_changes", True)
 
-        self.page.update()
+        safe_page_update(self.page)
         self._show_status("Settings reloaded from file")
 
     def _mark_changed(self):
@@ -682,18 +683,18 @@ class SettingsView:
 
         def close_and_discard(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
             on_discard()
 
         def close_and_stay(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
             on_cancel()
 
         def save_and_leave(e):
             dialog.open = False
             self._save_settings()
-            self.page.update()
+            safe_page_update(self.page)
             on_discard()
 
         dialog = ft.AlertDialog(
@@ -732,7 +733,7 @@ class SettingsView:
 
         self.page.overlay.append(dialog)
         dialog.open = True
-        self.page.update()
+        safe_page_update(self.page)
 
     def reset_unsaved_state(self):
         """Reset trạng thái unsaved sau khi save hoặc load."""

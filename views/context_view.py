@@ -70,6 +70,13 @@ class ContextView:
 
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
+        # Stop any ongoing operations first
+        from core.utils.file_scanner import stop_scanning
+        from services.token_display import stop_token_counting
+
+        stop_scanning()
+        stop_token_counting()
+
         if self._token_update_timer is not None:
             self._token_update_timer.cancel()
             self._token_update_timer = None
@@ -378,6 +385,16 @@ class ContextView:
 
     def on_workspace_changed(self, workspace_path: Path):
         """Khi user chon folder moi hoac settings thay doi"""
+        # Stop any ongoing scanning
+        from core.utils.file_scanner import stop_scanning
+
+        stop_scanning()
+
+        # Stop token counting
+        from services.token_display import stop_token_counting
+
+        stop_token_counting()
+
         # Cleanup old resources before loading new tree
         if self.file_tree_component:
             self.file_tree_component.cleanup()
@@ -393,7 +410,7 @@ class ContextView:
 
     def _load_tree(self, workspace_path: Path, preserve_selection: bool = False):
         """
-        Load file tree.
+        Load file tree với progress updates.
 
         Args:
             workspace_path: Path to workspace folder
@@ -405,21 +422,33 @@ class ContextView:
             old_selection = self.file_tree_component.get_selected_paths()
 
         # Show loading state
-        self._show_status("Loading...", is_error=False)
+        self._show_status("Scanning...", is_error=False, auto_clear=False)
         if self.token_stats_panel:
             self.token_stats_panel.set_loading(True)
         safe_page_update(self.page)
 
         try:
             from views.settings_view import get_excluded_patterns, get_use_gitignore
+            from core.utils.file_scanner import scan_directory, ScanProgress
 
             excluded_patterns = get_excluded_patterns()
             use_gitignore = get_use_gitignore()
 
+            # Progress callback - chỉ update status text, không gọi page.update()
+            # để tránh race condition với các UI updates khác
+            def on_progress(progress: ScanProgress):
+                if self.status_text:
+                    self.status_text.value = (
+                        f"Scanning: {progress.directories} dirs, {progress.files} files"
+                    )
+                    # Không gọi safe_page_update() ở đây để tránh race condition
+
+            # Scan với progress (sử dụng global cancellation flag)
             self.tree = scan_directory(
                 workspace_path,
                 excluded_patterns=excluded_patterns,
                 use_gitignore=use_gitignore,
+                progress_callback=on_progress,
             )
 
             # Set tree to component
@@ -427,12 +456,17 @@ class ContextView:
             self.file_tree_component.set_tree(
                 self.tree, preserve_selection=preserve_selection
             )
+
+            # Update token count sau khi tree đã set xong
             self._update_token_count()
 
             # Clear loading status
             self._show_status("")
 
         except Exception as e:
+            from core.logging_config import log_error
+
+            log_error(f"[ContextView] Error loading tree: {e}")
             self._show_status(f"Error: {e}", is_error=True)
             # Restore old selection on error if possible
             if preserve_selection and old_selection and self.file_tree_component:
@@ -644,8 +678,11 @@ class ContextView:
         file_paths = [Path(p) for p in selected_paths if Path(p).is_file()]
         file_count = len(file_paths)
 
-        # Su dung parallel batch counting cho hieu suat
+        # Sử dụng batch counting với global cancellation flag
         if file_count > 0:
+            from services.token_display import start_token_counting
+
+            start_token_counting()  # Set global flag trước khi count
             token_results = count_tokens_batch(file_paths)
             file_tokens = sum(token_results.values())
         else:

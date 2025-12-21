@@ -17,6 +17,8 @@ from views.settings_view import SettingsView
 from views.history_view import HistoryView
 from views.logs_view import LogsView
 from core.theme import ThemeColors
+from core.utils.ui_utils import safe_page_update
+from core.utils.threading_utils import shutdown_all, set_active_view
 from services.recent_folders import (
     load_recent_folders,
     add_recent_folder,
@@ -296,7 +298,7 @@ class OverwriteApp:
             add_recent_folder(folder_path)
             self._refresh_recent_folders_menu()
 
-            self.page.update()
+            safe_page_update(self.page)
             self.context_view.on_workspace_changed(self.workspace_path)
 
     def _refresh_recent_folders_menu(self):
@@ -315,7 +317,7 @@ class OverwriteApp:
             add_recent_folder(e.path)
             self._refresh_recent_folders_menu()
 
-            self.page.update()
+            safe_page_update(self.page)
 
             # Notify views
             self.context_view.on_workspace_changed(self.workspace_path)
@@ -370,7 +372,7 @@ class OverwriteApp:
             self.page.window.width = session.window_width
             self.page.window.height = session.window_height
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _save_session(self):
         """Lưu session hiện tại"""
@@ -402,7 +404,17 @@ class OverwriteApp:
         save_session_state(state)
 
     def _on_app_close(self, e):
-        """Xử lý khi đóng app - lưu session và cleanup"""
+        """Xử lý khi đóng app - lưu session và cleanup tất cả"""
+        # Stop all background operations FIRST
+        from core.utils.file_scanner import stop_scanning
+        from services.token_display import stop_token_counting
+
+        stop_scanning()
+        stop_token_counting()
+
+        # Signal threading utils (if still used)
+        shutdown_all()
+
         self._save_session()
 
         # Stop memory monitor
@@ -443,7 +455,7 @@ class OverwriteApp:
                 self._memory_text.color = ThemeColors.TEXT_MUTED
 
             # Update UI (safe call from background thread)
-            self.page.update()
+            safe_page_update(self.page)
         except Exception:
             pass  # Ignore errors during update
 
@@ -475,7 +487,7 @@ class OverwriteApp:
                     ThemeColors.SUCCESS
                 )  # Màu xanh để cho thấy đã clear
 
-            self.page.update()
+            safe_page_update(self.page)
 
             # Log action
             from core.logging_config import log_info
@@ -503,7 +515,7 @@ class OverwriteApp:
     #             add_recent_folder(str(dropped_path))
     #             self._refresh_recent_folders_menu()
 
-    #             self.page.update()
+    #             safe_page_update(self.page)
     #             self.context_view.on_workspace_changed(self.workspace_path)
     #         else:
     #             # If file was dropped, use its parent directory
@@ -516,7 +528,7 @@ class OverwriteApp:
     #                 add_recent_folder(str(parent_dir))
     #                 self._refresh_recent_folders_menu()
 
-    #                 self.page.update()
+    #                 safe_page_update(self.page)
     #                 self.context_view.on_workspace_changed(self.workspace_path)
 
     def _on_tab_changed(self, e):
@@ -536,7 +548,7 @@ class OverwriteApp:
                 def on_cancel():
                     # Revert to Settings tab
                     self.tabs.selected_index = 4
-                    self.page.update()
+                    safe_page_update(self.page)
 
                 self.settings_view.show_unsaved_dialog(on_discard, on_cancel)
 
@@ -554,7 +566,7 @@ class OverwriteApp:
             self.apply_view.opx_input.value = opx_content
         # Chuyển sang Apply tab
         self.tabs.selected_index = 1
-        self.page.update()
+        safe_page_update(self.page)
 
     def _on_keyboard_event(self, e: ft.KeyboardEvent):
         """
@@ -570,7 +582,7 @@ class OverwriteApp:
         # Let file tree component handle its own keyboard events first
         if hasattr(self, "context_view") and self.context_view.file_tree_component:
             if self.context_view.file_tree_component.handle_keyboard_event(e):
-                self.page.update()
+                safe_page_update(self.page)
                 return
 
         if e.ctrl and e.shift and e.key == "C":
@@ -591,7 +603,7 @@ class OverwriteApp:
                 search_field = self.context_view.file_tree_component.search_field
                 if search_field:
                     search_field.focus()
-                    self.page.update()
+                    safe_page_update(self.page)
 
 
 def main(page: ft.Page):

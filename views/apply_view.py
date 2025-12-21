@@ -13,6 +13,7 @@ from services.clipboard_utils import copy_to_clipboard
 from core.file_actions import apply_file_actions, ActionResult
 from services.history_service import add_history_entry
 from core.theme import ThemeColors
+from core.utils.ui_utils import safe_page_update
 from services.preview_analyzer import (
     analyze_file_actions,
     format_change_summary,
@@ -285,7 +286,7 @@ class ApplyView:
         else:
             self._show_status("No actions found in OPX", is_error=True)
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _apply_changes(self):
         """Apply changes to files"""
@@ -320,11 +321,11 @@ class ApplyView:
 
         def close_dialog(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
 
         def confirm_action(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
             on_confirm()
 
         dialog = ft.AlertDialog(
@@ -348,7 +349,7 @@ class ApplyView:
         assert self.page.overlay is not None
         self.page.overlay.append(dialog)
         dialog.open = True
-        self.page.update()
+        safe_page_update(self.page)
 
     def _do_apply_changes(self, opx_text: str):
         """Thực hiện apply changes sau khi confirm"""
@@ -376,12 +377,12 @@ class ApplyView:
             self._show_status("Parse errors occurred", is_error=True)
             # Show copy error button for parse errors
             self.copy_error_btn.visible = True
-            self.page.update()
+            safe_page_update(self.page)
             return
 
         if not parse_result.file_actions:
             self._show_status("No actions found in OPX", is_error=True)
-            self.page.update()
+            safe_page_update(self.page)
             return
 
         # Analyze for preview data (used in error context)
@@ -453,7 +454,7 @@ class ApplyView:
             action_results=action_results_for_history,
         )
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _create_result_row(
         self,
@@ -729,7 +730,7 @@ class ApplyView:
         self.last_opx_text = ""
 
         self._show_status("")
-        self.page.update()
+        safe_page_update(self.page)
 
     def _paste_from_clipboard(self):
         """Paste OPX content từ clipboard vào input field"""
@@ -738,7 +739,7 @@ class ApplyView:
         if success and result:
             assert self.opx_input is not None
             self.opx_input.value = result
-            self.page.update()
+            safe_page_update(self.page)
             self._show_status("Pasted from clipboard")
         else:
             self._show_status(result or "Clipboard is empty", is_error=True)
@@ -748,7 +749,7 @@ class ApplyView:
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self.page.update()
+        safe_page_update(self.page)
 
     def _show_backups_dialog(self):
         """Show dialog to view and restore backups"""
@@ -762,7 +763,7 @@ class ApplyView:
 
         def close_dialog(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
 
         def restore_selected(backup_path: Path):
             # Extract original filename from backup name (format: filename.timestamp.bak)
@@ -780,7 +781,7 @@ class ApplyView:
                     else:
                         self._show_status("Restore failed", is_error=True)
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
 
         def rollback_last_batch(e):
             """Restore files from the most recent backup batch (within 60s window)"""
@@ -845,7 +846,7 @@ class ApplyView:
             
             self._show_status(f"Undid changes for {count} files (Last Batch)")
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
 
         # Build backup list
         backup_items = []
@@ -901,7 +902,7 @@ class ApplyView:
 
         self.page.overlay.append(dialog)
         dialog.open = True
-        self.page.update()
+        safe_page_update(self.page)
 
     def _copy_error_for_ai(self):
         """

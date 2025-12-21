@@ -1,7 +1,9 @@
 """
-UI Update Utilities
+UI Utilities - Safe UI update functions cho Flet
 
-Helper functions để safely update Flet UI controls.
+Xử lý các vấn đề phổ biến với Flet UI:
+- AssertionError khi update controls chưa attached
+- Safe page update từ background threads
 """
 
 import flet as ft
@@ -12,13 +14,13 @@ def safe_page_update(page: Optional[ft.Page]) -> None:
     """
     Safely update page, catching AssertionError if controls not attached.
 
-    Flet raises AssertionError when trying to update controls that:
-    - Haven't been added to page yet
-    - Have been removed from page
-    - Are in invalid state
+    Flet raises AssertionError khi cố update controls mà:
+    - Chưa được add vào page
+    - Đã bị remove khỏi page
+    - Đang ở invalid state
 
     Args:
-        page: Flet Page object to update
+        page: Flet Page object để update
     """
     if not page:
         return
@@ -26,9 +28,27 @@ def safe_page_update(page: Optional[ft.Page]) -> None:
     try:
         page.update()
     except AssertionError:
-        # Control not yet attached to page or in invalid state
-        # This is safe to ignore - the control will update when properly attached
+        # Control chưa attached hoặc đang invalid state
+        # An toàn để ignore - control sẽ update khi được attach đúng cách
         pass
     except Exception:
-        # Other errors should be logged but not crash
+        # Các lỗi khác cũng nên được ignore để không crash app
+        pass
+
+
+def safe_control_update(control: Optional[ft.Control]) -> None:
+    """
+    Safely update một control cụ thể.
+
+    Args:
+        control: Flet Control object để update
+    """
+    if not control:
+        return
+
+    try:
+        control.update()
+    except AssertionError:
+        pass
+    except Exception:
         pass

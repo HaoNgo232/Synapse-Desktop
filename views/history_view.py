@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Optional, Callable, List
 
 from core.theme import ThemeColors
+from core.utils.ui_utils import safe_page_update
 from services.history_service import (
     get_history_entries,
     get_entry_by_id,
@@ -212,7 +213,7 @@ class HistoryView:
             f"{stats['success_rate']:.0f}% success"
         )
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _create_entry_row(self, entry: HistoryEntry) -> ft.Container:
         """Tạo row cho một entry"""
@@ -481,7 +482,7 @@ class HistoryView:
             scroll=ft.ScrollMode.AUTO,
         )
 
-        self.page.update()
+        safe_page_update(self.page)
 
     def _copy_opx(self, entry: HistoryEntry):
         """Copy OPX content to clipboard"""
@@ -518,11 +519,11 @@ class HistoryView:
 
         def close_dialog(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
 
         def confirm_clear(e):
             dialog.open = False
-            self.page.update()
+            safe_page_update(self.page)
             self._clear_all()
 
         dialog = ft.AlertDialog(
@@ -548,7 +549,7 @@ class HistoryView:
 
         self.page.overlay.append(dialog)
         dialog.open = True
-        self.page.update()
+        safe_page_update(self.page)
 
     def _clear_all(self):
         """Xóa toàn bộ lịch sử"""
@@ -570,4 +571,4 @@ class HistoryView:
         assert self.status_text is not None
         self.status_text.value = message
         self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self.page.update()
+        safe_page_update(self.page)

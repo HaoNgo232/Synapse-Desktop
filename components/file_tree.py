@@ -14,6 +14,7 @@ from core.utils.file_utils import TreeItem
 from services.token_display import TokenDisplayService
 from services.line_count_display import LineCountService
 from core.theme import ThemeColors
+from core.utils.ui_utils import safe_page_update
 
 
 class FileTreeComponent:
@@ -83,7 +84,7 @@ class FileTreeComponent:
         if self.loading_indicator:
             self.loading_indicator.visible = is_loading
             if self.page:
-                self.page.update()
+                safe_page_update(self.page)
 
     def build(self) -> ft.Container:
         """Build file tree component UI"""
@@ -312,7 +313,7 @@ class FileTreeComponent:
         # Update clear button visibility immediately
         if self.search_field.suffix:
             self.search_field.suffix.visible = bool(self.search_query)
-            self.page.update()
+            safe_page_update(self.page)
 
         # Cancel previous timer if exists
         if self._search_timer is not None:
@@ -471,7 +472,7 @@ class FileTreeComponent:
         # Safety check: only update if page exists and component is attached
         if self.page and hasattr(self, "tree_container") and self.tree_container:
             try:
-                self.page.update()
+                safe_page_update(self.page)
             except AssertionError:
                 # Control not yet attached to page, skip update
                 pass
@@ -697,7 +698,7 @@ class FileTreeComponent:
             token_text = self._token_service.get_token_display(item.path)
             if not token_text:
                 # Chua co - request va return empty
-                self._token_service.request_token_count(item.path)
+                self._token_service.request_token_count(item.path, self.page)
                 return ft.Container(width=0)
 
         return ft.Container(
@@ -716,7 +717,7 @@ class FileTreeComponent:
         # Su dung page.update thay vi _render_tree de tranh re-render toan bo
         try:
             if self.page:
-                self.page.update()
+                safe_page_update(self.page)
         except Exception as e:
             logging.debug(f"Error updating page from metrics service: {e}")
             pass  # Ignore errors khi page chua san sang
@@ -729,7 +730,10 @@ class FileTreeComponent:
         # Collect visible paths
         visible = self.matched_paths if self.search_query else None
         self._token_service.request_tokens_for_tree(
-            self.tree, visible_only=bool(self.search_query), visible_paths=visible
+            self.tree,
+            page=self.page,
+            visible_only=bool(self.search_query),
+            visible_paths=visible,
         )
 
     def _request_visible_lines(self):

@@ -33,11 +33,13 @@ class FileTreeComponent:
         self,
         page: ft.Page,
         on_selection_changed: Optional[Callable[[Set[str]], None]] = None,
+        on_preview: Optional[Callable[[str], None]] = None,
         show_tokens: bool = True,
         show_lines: bool = True,
     ):
         self.page = page
         self.on_selection_changed = on_selection_changed
+        self.on_preview = on_preview  # Callback khi user muốn preview file
         self.show_tokens = show_tokens
         self.show_lines = show_lines
 
@@ -750,22 +752,52 @@ class FileTreeComponent:
             icon = ft.Icons.INSERT_DRIVE_FILE
             icon_color = ThemeColors.ICON_FILE
 
-        # Text - avoid creating padding object if not needed
-        text_weight = ft.FontWeight.W_500 if is_dir else ft.FontWeight.NORMAL
-        
-        if is_match:
-            label_container = ft.Container(
-                content=ft.Text(
-                    item.label, size=13, color=ThemeColors.TEXT_PRIMARY, weight=text_weight
-                ),
-                bgcolor=ThemeColors.SEARCH_HIGHLIGHT,
-                padding=ft.padding.symmetric(horizontal=4, vertical=1),
-                border_radius=3,
-            )
-        else:
-            label_container = ft.Text(
+        # Text voi highlight
+        text_weight = ft.FontWeight.W_500 if item.is_dir else ft.FontWeight.NORMAL
+        text_bgcolor = ThemeColors.SEARCH_HIGHLIGHT if is_match else None
+
+        label_container = ft.Container(
+            content=ft.Text(
                 item.label, size=13, color=ThemeColors.TEXT_PRIMARY, weight=text_weight
+            ),
+            bgcolor=text_bgcolor,
+            padding=ft.padding.symmetric(horizontal=4, vertical=1) if is_match else 0,
+            border_radius=3 if is_match else 0,
+        )
+
+        # Preview button cho files (khong phai folders)
+        preview_btn: ft.Control = ft.Container(width=0)  # Default empty
+        if not item.is_dir and self.on_preview:
+            # Tao wrapper function de tranh lambda closure warning
+            def make_preview_handler(file_path: str):
+                def handler(e):
+                    self._handle_preview(file_path)
+
+                return handler
+
+            preview_btn = ft.IconButton(
+                icon=ft.Icons.VISIBILITY,
+                icon_size=16,
+                icon_color=ThemeColors.TEXT_MUTED,
+                tooltip="Preview file",
+                width=24,
+                height=24,
+                padding=0,
+                on_click=make_preview_handler(item.path),
             )
+
+        # GestureDetector de xu ly double-click
+        # Tao wrapper function de tranh lambda closure warning
+        def make_double_tap_handler(file_path: str, is_directory: bool):
+            def handler(e):
+                self._handle_double_tap(file_path, is_directory)
+
+            return handler
+
+        label_with_gesture = ft.GestureDetector(
+            content=label_container,
+            on_double_tap=make_double_tap_handler(item.path, item.is_dir),
+        )
 
         # Build row controls list efficiently
         row_controls: list[ft.Control] = [
@@ -773,7 +805,8 @@ class FileTreeComponent:
             expand_icon,
             checkbox,
             ft.Icon(icon, size=18, color=icon_color),
-            label_container,
+            label_with_gesture,
+            preview_btn,
         ]
         
         # Add optional badges only if enabled
@@ -887,6 +920,29 @@ class FileTreeComponent:
             self.expanded_paths.add(item.path)
             for child in item.children:
                 self._collect_all_folder_paths(child)
+
+    # =========================================================================
+    # FILE PREVIEW
+    # =========================================================================
+
+    def _handle_preview(self, file_path: str):
+        """
+        Xu ly khi user click preview button.
+        Goi callback on_preview neu duoc cung cap.
+        """
+        if self.on_preview and not Path(file_path).is_dir():
+            self.on_preview(file_path)
+
+    def _handle_double_tap(self, file_path: str, is_dir: bool):
+        """
+        Xu ly khi user double-click vao item.
+        - Folder: toggle expand/collapse
+        - File: goi preview callback
+        """
+        if is_dir:
+            self._toggle_expand(file_path)
+        elif self.on_preview:
+            self.on_preview(file_path)
 
     # =========================================================================
     # SELECTION

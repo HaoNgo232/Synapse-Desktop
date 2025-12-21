@@ -27,6 +27,7 @@ from core.prompt_generator import (
 from core.utils.git_utils import get_git_diffs, get_git_logs
 from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
+from components.file_preview import FilePreviewDialog
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
 from core.security_check import (
@@ -143,9 +144,11 @@ class ContextView:
     def build(self) -> ft.Container:
         """Build UI cho Context view"""
 
-        # File tree component voi search
+        # File tree component voi search and preview
         self.file_tree_component = FileTreeComponent(
-            page=self.page, on_selection_changed=self._on_selection_changed
+            page=self.page,
+            on_selection_changed=self._on_selection_changed,
+            on_preview=self._preview_file,  # Enable file preview
         )
 
         # Token count display
@@ -759,6 +762,18 @@ class ContextView:
             use_main_thread=True
         )
         self._selection_update_timer.start()
+
+    def _preview_file(self, file_path: str):
+        """
+        Preview noi dung mot file trong dialog.
+
+        Duoc goi khi user double-click hoac click preview icon tren file.
+        Su dung FilePreviewDialog de hien thi noi dung file.
+
+        Args:
+            file_path: Duong dan tuyet doi den file can preview
+        """
+        FilePreviewDialog.show(page=self.page, file_path=file_path)
 
     def _expand_all(self):
         """Expand all folders"""

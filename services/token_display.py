@@ -16,30 +16,50 @@ import threading
 
 from core.utils.file_utils import TreeItem
 from core.token_counter import count_tokens_for_file
+from core.utils.safe_timer import SafeTimer  # RACE CONDITION FIX
 
 
 # ============================================
 # GLOBAL CANCELLATION FLAG
 # Giống isLoadingDirectory trong PasteMax
+# RACE CONDITION FIX: Sử dụng threading.Lock để đảm bảo thread-safe
 # ============================================
+import threading as _token_threading
+
+_token_counting_lock = _token_threading.Lock()
 _is_counting_tokens = False
 
 
 def is_counting_tokens() -> bool:
-    """Check xem có đang counting tokens không"""
-    return _is_counting_tokens
+    """
+    Check xem có đang counting tokens không.
+
+    Thread-safe: Sử dụng lock để đọc giá trị.
+    """
+    with _token_counting_lock:
+        return _is_counting_tokens
 
 
 def stop_token_counting():
-    """Dừng token counting ngay lập tức"""
+    """
+    Dừng token counting ngay lập tức.
+
+    Thread-safe: Sử dụng lock để set giá trị.
+    """
     global _is_counting_tokens
-    _is_counting_tokens = False
+    with _token_counting_lock:
+        _is_counting_tokens = False
 
 
 def start_token_counting():
-    """Bắt đầu token counting"""
+    """
+    Bắt đầu token counting.
+
+    Thread-safe: Sử dụng lock để set giá trị.
+    """
     global _is_counting_tokens
-    _is_counting_tokens = True
+    with _token_counting_lock:
+        _is_counting_tokens = True
 
 
 class TokenDisplayService:
@@ -67,6 +87,12 @@ class TokenDisplayService:
 
         # Tracking loading state
         self._loading_paths: Set[str] = set()
+        
+        # Race condition prevention
+        self._update_lock = threading.Lock()
+        self._pending_updates: Set[str] = set()
+        self._update_timer: Optional[SafeTimer] = None  # RACE CONDITION FIX: Use SafeTimer
+        self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
 
     def clear_cache(self):
         """Xóa toàn bộ cache (khi reload tree)"""
@@ -74,11 +100,28 @@ class TokenDisplayService:
         with self._lock:
             self._cache.clear()
             self._loading_paths.clear()
+        with self._update_lock:
+            self._pending_updates.clear()
+            if self._update_timer:
+                self._update_timer.cancel()
+                self._update_timer = None
 
     def stop(self):
-        """Stop processing"""
+        """
+        Stop processing và cleanup.
+        
+        RACE CONDITION FIX: Set disposal flag TRƯỚC khi cancel timers.
+        """
+        # Set disposal flag FIRST
+        self._is_disposed = True
+        
         stop_token_counting()
         self._loading_paths.clear()
+        with self._update_lock:
+            self._pending_updates.clear()
+            if self._update_timer:
+                self._update_timer.dispose()  # RACE CONDITION FIX: Use dispose instead of cancel
+                self._update_timer = None
 
     def cleanup_stale_entries(self, valid_paths: set):
         """Xóa các cache entries không còn tồn tại trong tree."""
@@ -108,28 +151,40 @@ class TokenDisplayService:
 
     def request_token_count(self, path: str, page=None):
         """
-        Request tính token count cho file (SYNC).
-        Tính ngay lập tức và cache kết quả.
+        Request tính token count cho file - prevent duplicate requests
         """
-        with self._lock:
-            if path in self._cache:
+        with self._update_lock:
+            if path in self._cache or path in self._pending_updates:
                 return
+            self._pending_updates.add(path)
 
         # Chỉ tính cho files
         if Path(path).is_dir():
+            with self._update_lock:
+                self._pending_updates.discard(path)
             return
 
-        # Check cancellation
-        if not _is_counting_tokens:
+        # Check cancellation - RACE CONDITION FIX: Sử dụng thread-safe function
+        if not is_counting_tokens():
+            with self._update_lock:
+                self._pending_updates.discard(path)
             return
 
         try:
             tokens = count_tokens_for_file(Path(path))
             with self._lock:
                 self._cache[path] = tokens
+            with self._update_lock:
+                self._pending_updates.discard(path)
+                
+            # Schedule UI update
+            self._schedule_ui_update()
+                
         except Exception:
             with self._lock:
                 self._cache[path] = 0
+            with self._update_lock:
+                self._pending_updates.discard(path)
 
     def request_tokens_for_tree(
         self,
@@ -142,8 +197,8 @@ class TokenDisplayService:
         Request token counts cho toàn bộ tree.
         Chạy SYNC với global cancellation flag.
         """
-        global _is_counting_tokens
-        _is_counting_tokens = True
+        # RACE CONDITION FIX: Sử dụng thread-safe function
+        start_token_counting()
 
         # Collect all files
         files_to_count = []
@@ -153,7 +208,8 @@ class TokenDisplayService:
         count = 0
         for path in files_to_count:
             # Check cancellation trước mỗi file - CRITICAL
-            if not _is_counting_tokens:
+            # RACE CONDITION FIX: Sử dụng thread-safe function
+            if not is_counting_tokens():
                 break
 
             with self._lock:
@@ -193,8 +249,8 @@ class TokenDisplayService:
         result: list,
     ):
         """Recursive collect files cần tính token"""
-        # Check cancellation
-        if not _is_counting_tokens:
+        # Check cancellation - RACE CONDITION FIX: Sử dụng thread-safe function
+        if not is_counting_tokens():
             return
 
         # Skip nếu visible_only và item không visible
@@ -211,7 +267,8 @@ class TokenDisplayService:
         else:
             # Là folder - recurse vào children
             for child in item.children:
-                if not _is_counting_tokens:
+                # RACE CONDITION FIX: Sử dụng thread-safe function
+                if not is_counting_tokens():
                     break
                 self._collect_files_to_count(child, visible_only, visible_paths, result)
 
@@ -275,3 +332,35 @@ class TokenDisplayService:
             return f"{count / 1000:.1f}k"
         else:
             return f"{count // 1000}k"
+            
+    def _schedule_ui_update(self):
+        """Schedule a debounced UI update - RACE CONDITION SAFE"""
+        with self._update_lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+            
+            # RACE CONDITION FIX: Use SafeTimer instead of Timer
+            self._update_timer = SafeTimer(
+                interval=0.1,
+                callback=self._do_ui_update,
+                page=getattr(self, '_page', None),
+                use_main_thread=True
+            )
+            self._update_timer.start()
+    
+    def _do_ui_update(self):
+        """
+        Actual UI update với disposal check.
+        
+        RACE CONDITION FIX: Check disposal trước khi gọi callback.
+        Timer callback có thể chạy sau khi service đã cleanup.
+        """
+        # Skip nếu đã disposed
+        if self._is_disposed:
+            return
+        
+        if self.on_update:
+            try:
+                self.on_update()
+            except Exception:
+                pass  # Ignore errors - callback có thể fail safely

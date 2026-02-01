@@ -329,7 +329,13 @@ class SynapseApp:
         return self.workspace_path
 
     def _restore_session(self):
-        """Khôi phục session từ lần mở trước"""
+        """
+        Khôi phục session từ lần mở trước.
+
+        RACE CONDITION FIX: Lưu trữ session data để restore SAU KHI tree load xong.
+        Không modify selection/expanded paths ngay sau on_workspace_changed vì
+        tree có thể chưa load xong.
+        """
         session = load_session_state()
         if not session:
             return
@@ -342,25 +348,74 @@ class SynapseApp:
                 self.folder_path_text.value = str(self.workspace_path)
                 self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
 
+                # ========================================
+                # RACE CONDITION FIX: Lưu session data để restore sau
+                # Thay vì modify ngay sau on_workspace_changed
+                # ========================================
+                # Lưu lại session data để context_view có thể restore sau khi load xong
+                self._pending_session_restore = {
+                    "selected_files": session.selected_files,
+                    "expanded_folders": session.expanded_folders,
+                }
+
                 # Notify context view to load tree
+                # Tree sẽ được load, sau đó ta restore selection
                 self.context_view.on_workspace_changed(self.workspace_path)
 
-                # Restore selected files after tree is loaded
-                if session.selected_files and self.context_view.file_tree_component:
-                    self.context_view.file_tree_component.selected_paths = set(
-                        f for f in session.selected_files if Path(f).exists()
-                    )
-                    self.context_view.file_tree_component._render_tree()
-                    self.context_view._update_token_count()
+                # ========================================
+                # RACE CONDITION FIX: Defer restore đến sau khi load xong
+                # Sử dụng run_task để đảm bảo chạy sau khi tree load hoàn tất
+                # ========================================
+                def _restore_selection_after_load():
+                    try:
+                        # Đợi loading hoàn tất
+                        import time
+                        max_wait = 30  # Max 30 giây
+                        waited = 0
+                        while waited < max_wait:
+                            with self.context_view._loading_lock:
+                                if not self.context_view._is_loading:
+                                    break
+                            time.sleep(0.1)
+                            waited += 0.1
 
-                # Restore expanded folders
-                if session.expanded_folders and self.context_view.file_tree_component:
-                    self.context_view.file_tree_component.expanded_paths = set(
-                        f for f in session.expanded_folders if Path(f).exists()
-                    )
-                    self.context_view.file_tree_component._render_tree()
+                        # Restore sau khi load xong
+                        pending = getattr(self, "_pending_session_restore", None)
+                        if pending and self.context_view.file_tree_component:
+                            # Restore selected files
+                            if pending.get("selected_files"):
+                                valid_selected = set(
+                                    f for f in pending["selected_files"]
+                                    if Path(f).exists()
+                                )
+                                self.context_view.file_tree_component.selected_paths = valid_selected
 
-        # Restore instructions
+                            # Restore expanded folders
+                            if pending.get("expanded_folders"):
+                                valid_expanded = set(
+                                    f for f in pending["expanded_folders"]
+                                    if Path(f).exists()
+                                )
+                                # Đảm bảo root luôn expanded
+                                if self.context_view.tree:
+                                    valid_expanded.add(self.context_view.tree.path)
+                                self.context_view.file_tree_component.expanded_paths = valid_expanded
+
+                            # Render tree với restored state
+                            self.context_view.file_tree_component._render_tree()
+                            self.context_view._update_token_count()
+
+                        # Clear pending data
+                        self._pending_session_restore = None
+
+                    except Exception as e:
+                        from core.logging_config import log_error
+                        log_error(f"Error restoring session selection: {e}")
+
+                # Schedule restore sau khi tree load
+                self.page.run_task(_restore_selection_after_load)
+
+        # Restore instructions (không phụ thuộc vào tree loading)
         if session.instructions_text and self.context_view.instructions_field:
             self.context_view.instructions_field.value = session.instructions_text
 

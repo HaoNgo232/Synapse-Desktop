@@ -28,25 +28,44 @@ from core.utils.file_utils import (
 # ============================================
 # GLOBAL CANCELLATION FLAG
 # Giống isLoadingDirectory trong PasteMax
+# RACE CONDITION FIX: Sử dụng threading.Lock để đảm bảo thread-safe
 # ============================================
+import threading
+
+_scanning_lock = threading.Lock()
 _is_scanning = False
 
 
 def is_scanning() -> bool:
-    """Check xem có đang scanning không"""
-    return _is_scanning
+    """
+    Check xem có đang scanning không.
+
+    Thread-safe: Sử dụng lock để đọc giá trị.
+    """
+    with _scanning_lock:
+        return _is_scanning
 
 
 def start_scanning():
-    """Bắt đầu scanning session"""
+    """
+    Bắt đầu scanning session.
+
+    Thread-safe: Sử dụng lock để set giá trị.
+    """
     global _is_scanning
-    _is_scanning = True
+    with _scanning_lock:
+        _is_scanning = True
 
 
 def stop_scanning():
-    """Dừng scanning ngay lập tức"""
+    """
+    Dừng scanning ngay lập tức.
+
+    Thread-safe: Sử dụng lock để set giá trị.
+    """
     global _is_scanning
-    _is_scanning = False
+    with _scanning_lock:
+        _is_scanning = False
 
 
 @dataclass
@@ -118,8 +137,8 @@ class FileScanner:
         Returns:
             TreeItem root chứa toàn bộ cây thư mục
         """
-        global _is_scanning
-        _is_scanning = True
+        # RACE CONDITION FIX: Sử dụng thread-safe function
+        start_scanning()
 
         if config is None:
             config = ScanConfig()
@@ -177,10 +196,10 @@ class FileScanner:
         progress_callback: Optional[ProgressCallback],
     ) -> TreeItem:
         """Scan một directory recursively với progress."""
-        global _is_scanning
+        # RACE CONDITION FIX: Sử dụng thread-safe function thay vì đọc global trực tiếp
 
         # Check global cancellation flag - giống PasteMax
-        if not _is_scanning:
+        if not is_scanning():
             return TreeItem(
                 label=current_path.name or str(current_path),
                 path=str(current_path),
@@ -220,7 +239,8 @@ class FileScanner:
         # Process directories
         for entry in directories:
             # Check cancellation trước mỗi directory
-            if not _is_scanning:
+            # RACE CONDITION FIX: Sử dụng thread-safe function
+            if not is_scanning():
                 break
 
             if is_system_path(entry):
@@ -242,7 +262,8 @@ class FileScanner:
         # Process files
         for entry in files:
             # Check cancellation trước mỗi batch files
-            if not _is_scanning:
+            # RACE CONDITION FIX: Sử dụng thread-safe function
+            if not is_scanning():
                 break
 
             if is_system_path(entry):

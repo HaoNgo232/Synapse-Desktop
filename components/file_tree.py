@@ -6,8 +6,9 @@ Tach ra tu context_view.py de tranh god content.
 
 import flet as ft
 import logging
+import threading
 from pathlib import Path
-from threading import Timer
+from core.utils.safe_timer import SafeTimer
 from typing import Callable, Optional, Set
 
 from core.utils.file_utils import TreeItem
@@ -56,19 +57,41 @@ class FileTreeComponent:
         self.tree_container: Optional[ft.Column] = None
         self.search_field: Optional[ft.TextField] = None
         self.match_count_text: Optional[ft.Text] = None
+        
+        # RACE CONDITION FIX: Selection operations lock
+        import threading
+        self._selection_lock = threading.Lock()
 
         # Debounce timer for search
         self._search_timer: Optional[Timer] = None
         self._search_debounce_ms: float = 150  # 150ms debounce
+        
+        # Race condition prevention
+        self._ui_lock = threading.Lock()
+        self._is_rendering = False
+        self._render_timer: Optional[SafeTimer] = None
+        self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
 
     def cleanup(self):
         """Cleanup resources when component is destroyed"""
+        # Set disposal flag FIRST để prevent race với Timer callbacks
+        self._is_disposed = True
+        
         # Cancel search timer safely
         timer = self._search_timer
         self._search_timer = None
         if timer is not None:
             try:
                 timer.cancel()
+            except Exception:
+                pass
+
+        # Cancel render timer safely
+        render_timer = self._render_timer
+        self._render_timer = None
+        if render_timer is not None:
+            try:
+                render_timer.dispose()  # Use dispose instead of cancel
             except Exception:
                 pass
 
@@ -326,16 +349,42 @@ class FileTreeComponent:
         self._search_timer.start()
 
     def _execute_search(self):
-        """Execute search after debounce delay"""
-        assert self.match_count_text is not None
+        """
+        Execute search after debounce delay.
 
-        if self.search_query:
-            self._perform_search()
+        RACE CONDITION FIX: Method này được gọi từ Timer thread.
+        Phải defer việc render đến main thread thông qua page.run_task().
+        """
+        # ========================================
+        # RACE CONDITION FIX: Defer execution đến main thread
+        # Timer callback chạy trên background thread, không an toàn để
+        # thao tác trực tiếp với UI controls
+        # ========================================
+        def _do_search():
+            try:
+                if self.match_count_text is None:
+                    return
+
+                if self.search_query:
+                    self._perform_search()
+                else:
+                    self.matched_paths.clear()
+                    self.match_count_text.value = ""
+
+                self._render_tree()
+            except Exception as e:
+                import logging
+                logging.debug(f"Error in deferred search: {e}")
+
+        # Nếu có page, defer đến main thread
+        if self.page:
+            try:
+                self.page.run_task(_do_search)
+            except Exception:
+                # Fallback nếu page không hỗ trợ run_task
+                _do_search()
         else:
-            self.matched_paths.clear()
-            self.match_count_text.value = ""
-
-        self._render_tree()
+            _do_search()
 
     def _on_search_submit(self, e):
         """Handle Enter key trong search field - select first match"""
@@ -444,38 +493,94 @@ class FileTreeComponent:
     # =========================================================================
 
     def _render_tree(self):
-        """Render tree vao UI"""
-        assert self.tree_container is not None
-
-        if not self.tree:
+        """
+        Render tree vao UI - thread safe.
+        
+        RACE CONDITION FIX: Sử dụng atomic check-and-set pattern.
+        Check và set _is_rendering trong cùng một critical section.
+        """
+        # ========================================
+        # RACE CONDITION FIX: Atomic check-and-set
+        # Check _is_rendering VÀ set nó trong cùng một lock acquisition
+        # Tránh TOCTOU (Time-of-Check to Time-of-Use) vulnerability
+        # ========================================
+        with self._ui_lock:
+            if self._is_rendering or self._is_disposed:
+                return  # Đang render hoặc đã cleanup, skip
+            self._is_rendering = True
+        
+        # Validate prerequisites NGOÀI lock để tránh hold lock quá lâu
+        if not self.tree_container or not self.tree:
+            with self._ui_lock:
+                self._is_rendering = False
             return
+            
+        try:
+            self.tree_container.controls.clear()
 
-        self.tree_container.controls.clear()
+            # Track rendered count for performance
+            self._rendered_count = 0
+            self._max_render_items = 1000  # Limit for very large trees
 
-        # Track rendered count for performance
-        self._rendered_count = 0
-        self._max_render_items = 1000  # Limit for very large trees
+            self._render_tree_item(self.tree, 0)
 
-        self._render_tree_item(self.tree, 0)
-
-        # Add truncation notice if needed
-        if self._rendered_count >= self._max_render_items:
-            self.tree_container.controls.append(
-                ft.Text(
-                    f"[Showing first {self._max_render_items} items. Use search to find more.]",
-                    color=ThemeColors.TEXT_MUTED,
-                    italic=True,
-                    size=11,
+            # Add truncation notice if needed
+            if self._rendered_count >= self._max_render_items:
+                self.tree_container.controls.append(
+                    ft.Text(
+                        f"[Showing first {self._max_render_items} items. Use search to find more.]",
+                        color=ThemeColors.TEXT_MUTED,
+                        italic=True,
+                        size=11,
+                    )
                 )
-            )
 
-        # Safety check: only update if page exists and component is attached
-        if self.page and hasattr(self, "tree_container") and self.tree_container:
+            # Safety check: only update if page exists and component is attached
+            if self.page and hasattr(self, "tree_container") and self.tree_container:
+                try:
+                    safe_page_update(self.page)
+                except AssertionError:
+                    # Control not yet attached to page, skip update
+                    pass
+        finally:
+            with self._ui_lock:
+                self._is_rendering = False
+
+    def _schedule_render(self):
+        """Schedule a debounced render to prevent multiple rapid renders - RACE CONDITION SAFE"""
+        with self._ui_lock:
+            if self._render_timer:
+                self._render_timer.dispose()
+            
+            # Use SafeTimer instead of Timer
+            self._render_timer = SafeTimer(
+                interval=0.05,  # 50ms debounce
+                callback=self._do_render,
+                page=getattr(self, 'page', None),
+                use_main_thread=True
+            )
+            self._render_timer.start()
+    
+    def _do_render(self):
+        """
+        Actual render - defer to main thread.
+        
+        RACE CONDITION FIX: Method này được gọi từ Timer thread.
+        Phải defer việc render đến main thread qua page.run_task().
+        """
+        # Skip nếu đã disposed
+        if self._is_disposed:
+            return
+        
+        if self.page:
             try:
-                safe_page_update(self.page)
-            except AssertionError:
-                # Control not yet attached to page, skip update
-                pass
+                # Defer đến main thread
+                self.page.run_task(self._render_tree)
+            except Exception:
+                pass  # Page not available
+        else:
+            # Fallback: run trực tiếp (không lý tưởng nhưng tốt hơn không làm gì)
+            self._render_tree()
 
     def _render_tree_item(self, item: TreeItem, depth: int):
         """Render mot item voi search highlighting"""
@@ -587,12 +692,13 @@ class FileTreeComponent:
                 self._render_tree_item(child, depth + 1)
 
     def _toggle_expand(self, path: str):
-        """Toggle expand/collapse"""
-        if path in self.expanded_paths:
-            self.expanded_paths.discard(path)
-        else:
-            self.expanded_paths.add(path)
-        self._render_tree()
+        """Toggle expand/collapse - thread safe"""
+        with self._ui_lock:
+            if path in self.expanded_paths:
+                self.expanded_paths.discard(path)
+            else:
+                self.expanded_paths.add(path)
+        self._schedule_render()
 
     def _collect_all_folder_paths(self, item: TreeItem):
         """Collect all folder paths for expand all"""
@@ -606,19 +712,36 @@ class FileTreeComponent:
     # =========================================================================
 
     def _on_item_toggled(self, e, path: str, is_dir: bool, children: list):
-        """Xu ly khi item duoc tick/untick"""
-        if e.control.value:
-            self.selected_paths.add(path)
-            if is_dir:
-                self._select_all_children(children)
-        else:
-            self.selected_paths.discard(path)
-            if is_dir:
-                self._deselect_all_children(children)
+        """
+        Xu ly khi item duoc tick/untick - thread safe.
+        
+        RACE CONDITION FIX: Sử dụng atomic check pattern.
+        Check _is_rendering VÀ thao tác selection trong cùng một lock.
+        """
+        # ========================================
+        # RACE CONDITION FIX: Atomic check trong lock
+        # Check _is_rendering và _is_disposed BÊN TRONG lock
+        # để tránh TOCTOU vulnerability
+        # ========================================
+        with self._ui_lock:
+            # Skip nếu đang render hoặc đã cleanup
+            if self._is_rendering or self._is_disposed:
+                return
+            
+            # Thực hiện selection changes BÊN TRONG lock
+            if e.control.value:
+                self.selected_paths.add(path)
+                if is_dir:
+                    self._select_all_children(children)
+            else:
+                self.selected_paths.discard(path)
+                if is_dir:
+                    self._deselect_all_children(children)
 
-        self._render_tree()
+        # Schedule render NGOÀI lock để tránh deadlock
+        self._schedule_render()
 
-        # Notify parent
+        # Notify parent NGOÀI lock
         if self.on_selection_changed:
             self.on_selection_changed(self.selected_paths)
 
@@ -712,12 +835,30 @@ class FileTreeComponent:
         )
 
     def _on_metrics_updated(self):
-        """Callback khi TokenService hoac LineService update cache - re-render tree"""
+        """
+        Callback khi TokenService hoac LineService update cache - re-render tree.
+
+        RACE CONDITION FIX: Callback này có thể được gọi từ background context.
+        Sử dụng page.run_task() để đảm bảo UI update trên main thread.
+        """
         # Re-render de cap nhat token/line displays
         # Su dung page.update thay vi _render_tree de tranh re-render toan bo
         try:
             if self.page:
-                safe_page_update(self.page)
+                # ========================================
+                # RACE CONDITION FIX: Defer UI update đến main thread
+                # ========================================
+                def _do_update():
+                    try:
+                        safe_page_update(self.page)
+                    except Exception:
+                        pass
+
+                try:
+                    self.page.run_task(_do_update)
+                except Exception:
+                    # Fallback nếu run_task không khả dụng
+                    safe_page_update(self.page)
         except Exception as e:
             logging.debug(f"Error updating page from metrics service: {e}")
             pass  # Ignore errors khi page chua san sang

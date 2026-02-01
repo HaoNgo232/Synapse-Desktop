@@ -5,6 +5,7 @@ Su dung FileTreeComponent tu components/file_tree.py
 """
 
 import flet as ft
+import threading
 from pathlib import Path
 from typing import Callable, Optional, Set
 
@@ -35,7 +36,7 @@ from core.security_check import (
 from views.settings_view import add_excluded_patterns, remove_excluded_patterns
 from services.settings_manager import get_setting, set_setting
 from services.file_watcher import FileWatcher
-from threading import Timer
+from core.utils.safe_timer import SafeTimer
 from typing import Set
 from config.output_format import (
     OutputStyle,
@@ -67,7 +68,7 @@ class ContextView:
         )
 
         # Selection change debounce
-        self._selection_update_timer: Optional[Timer] = None
+        self._selection_update_timer: Optional[SafeTimer] = None
         self._selection_debounce_ms: float = 50  # 50ms debounce for selection
 
         # Status auto-clear timer
@@ -83,9 +84,26 @@ class ContextView:
         self._selected_output_style: OutputStyle = DEFAULT_OUTPUT_STYLE
         self.format_dropdown: Optional[ft.Dropdown] = None
         self.format_info_icon: Optional[ft.Icon] = None
+        
+        # Race condition prevention
+        self._loading_lock = threading.Lock()
+        self._is_loading = False
+
+        # ========================================
+        # RACE CONDITION FIX: Loading state management
+        # Ngăn chặn multiple concurrent _load_tree calls
+        # ========================================
+        import threading
+        self._loading_lock = threading.Lock()
+        self._is_loading: bool = False
+        self._pending_refresh: bool = False  # Flag để queue refresh request khi đang load
+        self._is_disposed: bool = False  # Disposal flag để prevent callbacks sau cleanup
 
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
+        # RACE CONDITION FIX: Set disposal flag FIRST
+        self._is_disposed = True
+        
         # Stop any ongoing operations first
         from core.utils.file_scanner import stop_scanning
         from services.token_display import stop_token_counting
@@ -102,7 +120,7 @@ class ContextView:
 
         if self._selection_update_timer is not None:
             try:
-                self._selection_update_timer.cancel()
+                self._selection_update_timer.dispose()  # Use dispose instead of cancel
             except Exception:
                 pass
             self._selection_update_timer = None
@@ -461,10 +479,27 @@ class ContextView:
         """
         Load file tree với progress updates.
 
+        RACE CONDITION FIX: Sử dụng loading lock để ngăn concurrent loads.
+        Nếu đang load, request sẽ được queue và thực hiện sau.
+
         Args:
             workspace_path: Path to workspace folder
             preserve_selection: Neu True, giu lai selection hien tai (cho Refresh)
         """
+        # ========================================
+        # RACE CONDITION FIX: Check và acquire loading lock
+        # ========================================
+        with self._loading_lock:
+            if self._is_loading:
+                # Đang load rồi, queue refresh request cho sau
+                self._pending_refresh = True
+                from core.logging_config import log_debug
+                log_debug("[ContextView] Load request queued - another load in progress")
+                return
+            # Mark đang loading
+            self._is_loading = True
+            self._pending_refresh = False
+
         # Save current selection before loading
         old_selection: Set[str] = set()
         if preserve_selection and self.file_tree_component:
@@ -525,20 +560,43 @@ class ContextView:
                 self.token_stats_panel.set_loading(False)
             safe_page_update(self.page)
 
+            # ========================================
+            # RACE CONDITION FIX: Release lock và check pending refresh
+            # ========================================
+            should_refresh = False
+            with self._loading_lock:
+                self._is_loading = False
+                if self._pending_refresh:
+                    should_refresh = True
+                    self._pending_refresh = False
+
+            # Nếu có pending refresh, thực hiện sau khi release lock
+            if should_refresh:
+                from core.logging_config import log_debug
+                log_debug("[ContextView] Executing pending refresh request")
+                # Defer để tránh recursion quá sâu
+                if self.page:
+                    self.page.run_task(
+                        lambda: self._load_tree(workspace_path, preserve_selection=True)
+                    )
+
     def _on_selection_changed(self, selected_paths: Set[str]):
-        """Callback khi selection thay doi - debounced"""
+        """Callback khi selection thay doi - debounced with SafeTimer"""
         # Cancel previous timer if exists
         if self._selection_update_timer is not None:
-            self._selection_update_timer.cancel()
+            self._selection_update_timer.dispose()
 
         # For small selections, update immediately
         if len(selected_paths) < 10:
             self._update_token_count()
             return
 
-        # For larger selections, debounce
-        self._selection_update_timer = Timer(
-            self._selection_debounce_ms / 1000.0, self._do_update_token_count
+        # For larger selections, debounce with SafeTimer
+        self._selection_update_timer = SafeTimer(
+            interval=self._selection_debounce_ms / 1000.0,
+            callback=self._do_update_token_count,
+            page=self.page,
+            use_main_thread=True
         )
         self._selection_update_timer.start()
 
@@ -728,15 +786,31 @@ class ContextView:
         """
         Callback khi FileWatcher phát hiện thay đổi trong workspace.
 
-        Tự động refresh tree và giữ nguyên selection hiện tại.
-        Được gọi từ background thread, nên cần update UI an toàn.
+        RACE CONDITION FIX: Callback này được gọi từ background Timer thread.
+        Phải defer việc load tree đến main thread để tránh race condition.
+
+        Sử dụng page.run_task() để schedule execution trên main thread.
         """
         try:
             workspace = self.get_workspace()
-            if workspace:
-                # Reload tree giữ nguyên selection
-                self._load_tree(workspace, preserve_selection=True)
-                self._show_status("File changes detected - tree updated")
+            if workspace and self.page:
+                # ========================================
+                # RACE CONDITION FIX: Defer đến main thread
+                # Không gọi _load_tree trực tiếp từ Timer thread
+                # ========================================
+                def _do_refresh():
+                    try:
+                        # Double check workspace vẫn còn valid
+                        current_workspace = self.get_workspace()
+                        if current_workspace and current_workspace == workspace:
+                            self._load_tree(workspace, preserve_selection=True)
+                            self._show_status("File changes detected - tree updated")
+                    except Exception as ex:
+                        from core.logging_config import log_error
+                        log_error(f"[ContextView] Error in deferred refresh: {ex}")
+
+                # Schedule trên main thread
+                self.page.run_task(_do_refresh)
         except Exception as e:
             from core.logging_config import log_error
 

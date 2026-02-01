@@ -307,30 +307,13 @@ Application data is stored in `~/.synapse-desktop/`:
 |----------|---------|
 | `SYNAPSE_DEBUG` | Set to `1` to enable verbose debug logging |
 
-## Acknowledgements & Inspirations
+## Acknowledgements
 
-While Synapse Desktop is a standalone project, I have learned and adapted valuable concepts from the open-source community:
+This project was inspired by and adapted concepts from:
 
-### Overwrite
-- **Foundation**: The entire application concept, core workflow, and "Copy Context" + "Apply OPX" cycle are directly ported/adapted from the original [Overwrite](https://github.com/mnismt/overwrite) VS Code extension.
-- **OPX Protocol**: It uses the same OPX (Overwrite Protocol XML) format and system prompts to ensure compatibility with LLMs optimized for this pattern.
-- **UI UX**: The clean, minimal interface and file selection experience are reimplemented to provide the familiar Overwrite feel on desktop.
-
-### Pastemax
-- **Advanced Language Detection**: Adapted from Pastemax's extensive language map to ensure perfect syntax highlighting for LLMs.
-- **Concurrent Processing Pattern**: Adapted their global cancellation flag pattern (`isLoadingDirectory`) for responsive file scanning without race conditions.
-- **Dashboard Aesthetics**: Adopted the modern "Dashboard Metrics" style for clear and beautiful token statistics.
-- **Smart File Filtering**: Implemented robust exclusion logic similar to their ignore management.
-
-### Repomix
-- **Security Check Architecture**: Studied their secret scanning workflow design and integration patterns.
-- **Secret Detection Approach**: Learned from their use of @secretlint for comprehensive secret detection.
-- **User Experience**: Adopted the concept of warning dialogs with detailed secret information for transparency.
-- **Output Format Registry**: Inspired by their extensible output format configuration.
-
-I built this project independently, but it stands on the shoulders of these excellent open-source tools. I studied their logic and adapted their best ideas to creates a unified experience.
-
-See [NOTICES.md](NOTICES.md) for full license details of adapted components.
+- **[Overwrite](https://github.com/mnismt/overwrite)** - Core workflow and OPX protocol
+- **[Pastemax](https://github.com/kleneway/pastemax)** - File processing and concurrency utilities  
+- **[Repomix](https://github.com/yamadashy/repomix)** - Security scanning patterns
 
 ## License
 MIT License

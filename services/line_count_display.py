@@ -124,8 +124,9 @@ class LineCountService:
         if self.on_update:
             try:
                 self.on_update()
-            except Exception:
-                pass
+            except Exception as e:
+                from core.logging_config import log_error
+                log_error(f"Failed to notify UI update: {e}")
 
     def request_lines_for_tree(
         self,
@@ -193,7 +194,9 @@ class LineCountService:
                         if content_bytes.endswith(b"\n")
                         else newline_count + 1
                     )
-                except Exception:
+                except Exception as e:
+                    from core.logging_config import log_error
+                    log_error(f"Failed to read binary file {file_path}: {e}")
                     return 0
 
             # Empty file
@@ -206,8 +209,9 @@ class LineCountService:
             # Return based on whether content ends with newline
             return newline_count if content.endswith("\n") else newline_count + 1
 
-        except Exception:
-            # File read error - return 0
+        except Exception as e:
+            from core.logging_config import log_error
+            log_error(f"Failed to count lines for {file_path}: {e}")
             return 0
 
     def _cleanup_cache_if_needed(self):

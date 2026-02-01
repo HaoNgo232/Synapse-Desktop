@@ -48,6 +48,9 @@ class SynapseApp:
         self._memory_monitor.on_update = self._on_memory_update
         self._memory_text: Optional[ft.Text] = None
 
+        # Track current tab
+        self._current_tab_index = 0
+
         # Apply Swiss Professional Light Theme
         self._apply_theme()
 
@@ -445,7 +448,7 @@ class SynapseApp:
                 if self.context_view.instructions_field
                 else ""
             ),
-            active_tab_index=0,  # TODO: track active tab
+            active_tab_index=self._current_tab_index,
             window_width=(
                 int(self.page.window.width) if self.page.window.width else None
             ),
@@ -586,6 +589,7 @@ class SynapseApp:
     def _on_tab_changed(self, e):
         """Handle tab change - refresh History/Logs khi chọn và check unsaved Settings"""
         new_index = e.control.selected_index
+        self._current_tab_index = new_index
 
         # Check if leaving Settings tab (index 4) with unsaved changes
         if hasattr(self, "_previous_tab_index") and self._previous_tab_index == 4:

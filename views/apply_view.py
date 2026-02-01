@@ -48,6 +48,14 @@ class ApplyView:
         self.last_apply_results: List[ApplyRowResult] = []
         self.last_opx_text: str = ""
 
+    def _detect_cascade_failure(self, action, results):
+        """Detect if this failure might cause cascade failures"""
+        if action.action in ["create", "modify"] and "Permission denied" in str(action.error):
+            return True
+        if action.action == "delete" and len([r for r in results if not r.success]) > 1:
+            return True
+        return False
+
         # State for diff expansion
         self.expanded_diffs: set = set()  # Set of row indices that are expanded
 
@@ -403,7 +411,7 @@ class ApplyView:
                     action=result.action,
                     success=result.success,
                     message=result.message,
-                    is_cascade_failure=False,  # TODO: detect cascade failures
+                    is_cascade_failure=self._detect_cascade_failure(action, results),
                 )
             )
 

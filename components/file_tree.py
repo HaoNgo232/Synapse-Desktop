@@ -82,7 +82,7 @@ class FileTreeComponent:
         self._search_timer = None
         if timer is not None:
             try:
-                timer.cancel()
+                timer.dispose()  # Use dispose for SafeTimer
             except Exception:
                 pass
 

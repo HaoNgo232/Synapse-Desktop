@@ -139,8 +139,8 @@ def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
                     deleted_count += 1
                     backup_files.remove(backup_file)
                     log_debug(f"Deleted old backup: {backup_file.name}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_error(f"Failed to delete old backup: {e}")
 
         # Delete oldest files if count exceeds max_count
         while len(backup_files) > max_count:
@@ -149,8 +149,8 @@ def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
                 oldest.unlink()
                 deleted_count += 1
                 log_debug(f"Deleted excess backup: {oldest.name}")
-            except Exception:
-                pass
+            except Exception as e:
+                log_error(f"Failed to delete excess backup: {e}")
 
         if deleted_count > 0:
             log_info(f"Cleaned up {deleted_count} old backup file(s)")

@@ -820,11 +820,11 @@ class ContextView:
         """Handle instructions field change with debounce"""
         # Cancel previous timer if exists
         if self._token_update_timer is not None:
-            self._token_update_timer.cancel()
+            self._token_update_timer.dispose()  # Use dispose for SafeTimer
 
         # Schedule token update with debounce
-        self._token_update_timer = Timer(
-            self._token_debounce_ms / 1000.0, self._do_update_token_count
+        self._token_update_timer = SafeTimer(
+            self._token_debounce_ms / 1000.0, self._do_update_token_count, page=self.page
         )
         self._token_update_timer.start()
 

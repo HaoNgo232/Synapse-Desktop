@@ -16,50 +16,77 @@ source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+```
 
-# Install tree-sitter language parsers
-# These are included in requirements.txt but may need manual installation
+### Virtual Environment Check
+
+**CRITICAL**: Always verify and activate the virtual environment before running any commands!
+
+```bash
+# Check if virtual environment exists and activate
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+fi
+source .venv/bin/activate
+
+# Verify activation (should show path to .venv)
+echo $VIRTUAL_ENV
 ```
 
 ### Running the Application
+
 ```bash
-# Development with hot reload
+# Development with hot reload (recommended)
 flet run main.py -r
 
 # Standard run
-./start.sh  # Linux
-# OR
 python main.py
+# OR
+./start.sh
 
 # With debug logging
 SYNAPSE_DEBUG=1 python main.py
 ```
 
-### Testing
+### Testing Commands
+
 ```bash
 # Run all tests
 pytest tests/ -v
 
-# Run specific test file
-pytest tests/test_diff_viewer.py -v
+# Run single test file
+pytest tests/test_opx_parser.py -v
 
-# Run specific test class
+# Run single test class
 pytest tests/test_diff_viewer.py::TestGenerateDiffLines -v
 
-# Run specific test method
-pytest tests/test_diff_viewer.py::TestGenerateDiffLines::test_simple_modification -v
+# Run single test method
+pytest tests/test_token_counter.py::TestCountTokens::test_simple_text -v
+
+# Run tests with coverage
+pytest tests/ --cov=core --cov=services --cov=components -v
 
 # Type checking
 pyrefly check
 ```
 
+### Linting & Formatting
+
+```bash
+# Type checking with pyrefly
+pyrefly check
+
+# Check specific file
+pyrefly check main.py
+
+# Show pyrefly configuration
+pyrefly show
+```
+
 ### Building
 ```bash
-# Build AppImage (Linux)
+# Build AppImage (Linux only)
 ./build-appimage.sh
-
-# Check pyrefly configuration
-pyrefly show
 ```
 
 ## Code Style Guidelines

@@ -298,7 +298,7 @@ class SettingsView:
                                                 for name in PRESET_PROFILES.keys()
                                             ],
                                             on_select=lambda e: self._load_preset(
-                                                e.control.value
+                                                e.control.value or ""
                                             ),
                                             hint_text="Select a preset...",
                                             text_size=13,

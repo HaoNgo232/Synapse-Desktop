@@ -76,7 +76,7 @@ class LogsView:
                 ft.dropdown.Option(key="WARNING", text="Warning"),
                 ft.dropdown.Option(key="ERROR", text="Error"),
             ],
-            on_select=lambda e: self._on_filter_changed(e.control.value),
+            on_select=lambda e: self._on_filter_changed(e.control.value or ""),
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
         )
@@ -87,7 +87,7 @@ class LogsView:
             active_color=ThemeColors.PRIMARY,
             check_color="#FFFFFF",
             label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY, size=12),
-            on_change=lambda e: self._on_auto_scroll_changed(e.control.value),
+            on_change=lambda e: self._on_auto_scroll_changed(e.control.value or False),
         )
 
         self.logs_column = ft.Column(
@@ -143,7 +143,7 @@ class LogsView:
                                         color=ThemeColors.TEXT_SECONDARY, size=12
                                     ),
                                     on_change=lambda e: self._toggle_debug_mode(
-                                        e.control.value
+                                        e.control.value or False
                                     ),
                                     tooltip="Enable verbose DEBUG logging (restart may be needed)",
                                 ),

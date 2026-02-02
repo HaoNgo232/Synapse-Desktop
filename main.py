@@ -9,7 +9,7 @@ Theme: Dark Mode OLED (Developer Tools Edition)
 
 import flet as ft
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List
 
 from views.context_view import ContextView
 from views.apply_view import ApplyView
@@ -47,6 +47,9 @@ class SynapseApp:
         self._memory_monitor = get_memory_monitor()
         self._memory_monitor.on_update = self._on_memory_update
         self._memory_text: Optional[ft.Text] = None
+        
+        # Session restore data
+        self._pending_session_restore: Optional[Dict[str, List[str]]] = None
 
         # Track current tab
         self._current_tab_index = 0
@@ -59,7 +62,7 @@ class SynapseApp:
         self.page.padding = 0
 
         # Resize handler for responsive layout
-        self.page.on_resized = self._on_resize
+        # self.page.on_resized = self._on_resize  # Deprecated in newer Flet versions
 
         # Window config
         self.page.window.min_width = 800
@@ -390,7 +393,7 @@ class SynapseApp:
                         import asyncio
                         # Đợi loading hoàn tất
                         max_wait = 30  # Max 30 giây
-                        waited = 0
+                        waited = 0.0  # Use float explicitly
                         while waited < max_wait:
                             with self.context_view._loading_lock:
                                 if not self.context_view._is_loading:
@@ -646,4 +649,4 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(main)

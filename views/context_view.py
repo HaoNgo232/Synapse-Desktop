@@ -8,7 +8,7 @@ import flet as ft
 import threading
 from threading import Timer
 from pathlib import Path
-from typing import Callable, Optional, Set
+from typing import Callable, Optional, Set, Union
 
 from core.utils.file_utils import scan_directory, TreeItem
 from core.utils.ui_utils import safe_page_update
@@ -63,7 +63,7 @@ class ContextView:
         self.token_stats_panel: Optional[TokenStatsPanel] = None
 
         # Debounce timer for token counting
-        self._token_update_timer: Optional[Timer] = None
+        self._token_update_timer: Optional[Union[Timer, SafeTimer]] = None
         self._token_debounce_ms: float = (
             150  # 150ms debounce (reduced for responsiveness)
         )
@@ -809,7 +809,7 @@ class ContextView:
                     try:
                         # Double check workspace vẫn còn valid
                         current_workspace = self.get_workspace()
-                        if current_workspace and current_workspace == workspace:
+                        if current_workspace and current_workspace == workspace and workspace is not None:
                             self._load_tree(workspace, preserve_selection=True)
                             self._show_status("File changes detected - tree updated")
                     except Exception as ex:
@@ -827,7 +827,7 @@ class ContextView:
         """Handle instructions field change with debounce"""
         # Cancel previous timer if exists
         if self._token_update_timer is not None:
-            self._token_update_timer.dispose()  # Use dispose for SafeTimer
+            self._token_update_timer.cancel()  # Use cancel for Timer
 
         # Schedule token update with debounce
         self._token_update_timer = SafeTimer(

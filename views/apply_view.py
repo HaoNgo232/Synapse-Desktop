@@ -47,15 +47,7 @@ class ApplyView:
         self.last_preview_data: Optional[PreviewData] = None
         self.last_apply_results: List[ApplyRowResult] = []
         self.last_opx_text: str = ""
-
-    def _detect_cascade_failure(self, action, results):
-        """Detect if this failure might cause cascade failures"""
-        if action.action in ["create", "modify"] and "Permission denied" in str(action.error):
-            return True
-        if action.action == "delete" and len([r for r in results if not r.success]) > 1:
-            return True
-        return False
-
+        
         # State for diff expansion
         self.expanded_diffs: set = set()  # Set of row indices that are expanded
 
@@ -411,7 +403,7 @@ class ApplyView:
                     action=result.action,
                     success=result.success,
                     message=result.message,
-                    is_cascade_failure=self._detect_cascade_failure(action, results),
+                    is_cascade_failure=self._check_cascade_failure(result, results[:i]),
                 )
             )
 
@@ -463,6 +455,26 @@ class ApplyView:
         )
 
         safe_page_update(self.page)
+
+    def _check_cascade_failure(self, current_result: ActionResult, previous_results: list) -> bool:
+        """
+        Check if failure might be caused by previous operations on same file.
+        
+        Args:
+            current_result: The current failed result
+            previous_results: List of results before this one
+            
+        Returns:
+            True if this looks like a cascade failure
+        """
+        if current_result.success:
+            return False
+            
+        # Check if any previous operation modified the same file
+        for prev in previous_results:
+            if prev.path == current_result.path and prev.success:
+                return True
+        return False
 
     def _create_result_row(
         self,
@@ -889,7 +901,7 @@ class ApplyView:
             title=ft.Text("Backup Files", weight=ft.FontWeight.W_600),
             content=ft.Container(
                 content=ft.Column(
-                    backup_items,
+                    controls=backup_items,
                     scroll=ft.ScrollMode.AUTO,
                     spacing=0,
                 ),

@@ -211,7 +211,7 @@ class LineCountService:
 
         except Exception as e:
             from core.logging_config import log_error
-            log_error(f"Failed to count lines for {file_path}: {e}")
+            log_error(f"Failed to count lines for {path}: {e}")
             return 0
 
     def _cleanup_cache_if_needed(self):

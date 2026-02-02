@@ -120,7 +120,7 @@ def scan_directory(
         ignore_patterns.extend(gitignore_patterns)
 
     # Create pathspec matcher
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", ignore_patterns)
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
 
     # Build tree recursively
     return _build_tree(root_path, root_path, spec)

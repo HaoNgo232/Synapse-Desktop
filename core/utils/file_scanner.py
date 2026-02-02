@@ -108,11 +108,16 @@ class FileScanner:
     """
     File scanner với global cancellation và progress callbacks.
 
-    Simplified version - sync scanning với global flag để cancel.
+    Supports two modes:
+    - Full scan: Recursive scan toàn bộ tree (default)
+    - Lazy scan: Chỉ scan level đầu, lazy load children khi expand
     """
 
     # Constants
     THROTTLE_INTERVAL_MS = 200  # 200ms giữa các progress updates
+    
+    # Lazy scan config
+    LAZY_SCAN_THRESHOLD = 1000  # Files threshold to suggest lazy mode
 
     def __init__(self):
         self._last_progress_time: float = 0
@@ -151,7 +156,7 @@ class FileScanner:
 
         # Build ignore spec
         ignore_patterns = self._build_ignore_patterns(root_path, config)
-        spec = pathspec.PathSpec.from_lines("gitwildmatch", ignore_patterns)
+        spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
 
         try:
             # Scan với progress
@@ -322,6 +327,126 @@ class FileScanner:
                 callback(progress_copy)
             except Exception:
                 pass  # Ignore callback errors
+
+
+def scan_single_level(
+        directory_path: Path,
+        root_path: Path,
+        spec: pathspec.PathSpec,
+    ) -> TreeItem:
+        """
+        Scan chỉ một level của directory (không recursive).
+        
+        Dùng cho lazy loading - scan children khi user expand folder.
+        
+        Args:
+            directory_path: Directory cần scan
+            root_path: Root workspace path (để match ignore patterns)
+            spec: PathSpec cho ignore matching
+            
+        Returns:
+            TreeItem với children là placeholder nếu có subdirs
+        """
+        if not is_scanning():
+            return TreeItem(
+                label=directory_path.name or str(directory_path),
+                path=str(directory_path),
+                is_dir=True,
+            )
+        
+        item = TreeItem(
+            label=directory_path.name or str(directory_path),
+            path=str(directory_path),
+            is_dir=True,
+        )
+        
+        try:
+            entries = list(directory_path.iterdir())
+        except (PermissionError, OSError):
+            return item
+        
+        entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
+        
+        for entry in entries:
+            if not is_scanning():
+                break
+                
+            if is_system_path(entry):
+                continue
+            
+            try:
+                rel_path = entry.relative_to(root_path)
+            except ValueError:
+                continue
+            
+            rel_path_str = str(rel_path)
+            if entry.is_dir():
+                rel_path_str += "/"
+            
+            if spec.match_file(rel_path_str):
+                continue
+            
+            if entry.is_dir():
+                # Tạo placeholder - sẽ load children khi expand
+                child = TreeItem(
+                    label=entry.name,
+                    path=str(entry),
+                    is_dir=True,
+                    children=[],  # Empty - will lazy load
+                )
+                # Mark as not loaded yet
+                child._lazy_loaded = False  # type: ignore
+            else:
+                child = TreeItem(
+                    label=entry.name,
+                    path=str(entry),
+                    is_dir=False,
+                )
+            
+            item.children.append(child)
+        
+        return item
+
+
+def scan_directory_lazy(
+    directory_path: Path,
+    root_path: Path,
+    excluded_patterns: Optional[List[str]] = None,
+    use_gitignore: bool = True,
+    use_default_ignores: bool = True,
+) -> TreeItem:
+    """
+    Lazy scan một directory (chỉ 1 level).
+    
+    Gọi function này khi user expand folder để load children on-demand.
+    
+    Args:
+        directory_path: Directory cần scan
+        root_path: Root workspace path
+        excluded_patterns: Patterns để exclude
+        use_gitignore: Có dùng .gitignore không
+        use_default_ignores: Có dùng default ignores không
+        
+    Returns:
+        TreeItem với immediate children only
+    """
+    config = ScanConfig(
+        excluded_patterns=excluded_patterns,
+        use_gitignore=use_gitignore,
+        use_default_ignores=use_default_ignores,
+    )
+    
+    scanner = FileScanner()
+    
+    # Build ignore spec
+    ignore_patterns = scanner._build_ignore_patterns(root_path, config)
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    
+    start_scanning()
+    try:
+        return scan_single_level(directory_path, root_path, spec)
+    finally:
+        pass  # Don't stop scanning - caller manages this
 
 
 # Convenience function

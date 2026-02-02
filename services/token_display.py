@@ -192,21 +192,36 @@ class TokenDisplayService:
         page=None,
         visible_only: bool = True,
         visible_paths: Optional[set] = None,
+        max_immediate: int = 50,
     ):
         """
         Request token counts cho toàn bộ tree.
-        Chạy SYNC với global cancellation flag.
+        
+        Tối ưu: Chỉ count ngay lập tức cho max_immediate files đầu tiên.
+        Files còn lại sẽ được count incrementally khi UI idle.
+        
+        Args:
+            tree: Root TreeItem
+            page: Flet page
+            visible_only: Chỉ count visible files
+            visible_paths: Set paths đang visible
+            max_immediate: Số files count ngay (default 50)
         """
         # RACE CONDITION FIX: Sử dụng thread-safe function
         start_token_counting()
+        self._page = page  # Store for UI updates
 
         # Collect all files
         files_to_count = []
         self._collect_files_to_count(tree, visible_only, visible_paths, files_to_count)
+        
+        # Split into immediate và deferred
+        immediate_files = files_to_count[:max_immediate]
+        deferred_files = files_to_count[max_immediate:]
 
-        # Count tokens sync với progress updates
+        # Count immediate files sync
         count = 0
-        for path in files_to_count:
+        for path in immediate_files:
             # Check cancellation trước mỗi file - CRITICAL
             # RACE CONDITION FIX: Sử dụng thread-safe function
             if not is_counting_tokens():
@@ -234,12 +249,74 @@ class TokenDisplayService:
                     except Exception:
                         pass
 
-        # Final update
+        # Final update for immediate files
         if self.on_update:
             try:
                 self.on_update()
             except Exception:
                 pass
+        
+        # Schedule deferred files counting if any
+        if deferred_files and is_counting_tokens():
+            self._schedule_deferred_counting(deferred_files)
+    
+    def _schedule_deferred_counting(self, files: list):
+        """
+        Schedule counting cho deferred files.
+        
+        Count từng batch nhỏ với delay để không block UI.
+        """
+        if not files or not is_counting_tokens():
+            return
+        
+        BATCH_SIZE = 20
+        BATCH_DELAY = 0.05  # 50ms between batches
+        
+        def count_batch(batch_files):
+            if not is_counting_tokens() or self._is_disposed:
+                return
+            
+            for path in batch_files:
+                if not is_counting_tokens():
+                    break
+                
+                with self._lock:
+                    if path in self._cache:
+                        continue
+                
+                try:
+                    tokens = count_tokens_for_file(Path(path))
+                    with self._lock:
+                        self._cache[path] = tokens
+                except Exception:
+                    with self._lock:
+                        self._cache[path] = 0
+            
+            # Update UI after batch
+            if self.on_update and not self._is_disposed:
+                try:
+                    self.on_update()
+                except Exception:
+                    pass
+        
+        # Process in batches
+        for i in range(0, len(files), BATCH_SIZE):
+            if not is_counting_tokens():
+                break
+            
+            batch = files[i:i + BATCH_SIZE]
+            
+            # Use SafeTimer for thread-safe deferred execution
+            def create_batch_callback(batch_data):
+                return lambda: count_batch(batch_data)
+            
+            timer = SafeTimer(
+                interval=BATCH_DELAY * (i // BATCH_SIZE + 1),
+                callback=create_batch_callback(batch),
+                page=self._page,
+                use_main_thread=False,  # Count in background
+            )
+            timer.start()
 
     def _collect_files_to_count(
         self,

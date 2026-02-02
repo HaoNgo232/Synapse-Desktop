@@ -83,7 +83,7 @@ class FileTreeComponent:
         self._search_timer = None
         if timer is not None:
             try:
-                timer.dispose()  # Use dispose for SafeTimer
+                timer.cancel()  # Use cancel for Timer
             except Exception:
                 pass
 
@@ -374,7 +374,7 @@ class FileTreeComponent:
         self.search_query = (e.control.value or "").lower().strip()
 
         # Update clear button visibility immediately
-        if self.search_field.suffix:
+        if self.search_field.suffix and hasattr(self.search_field.suffix, 'visible'):
             self.search_field.suffix.visible = bool(self.search_query)
             safe_page_update(self.page)
 
@@ -454,7 +454,7 @@ class FileTreeComponent:
         self.search_query = ""
         self.matched_paths.clear()
         self.match_count_text.value = ""
-        if self.search_field.suffix:
+        if self.search_field.suffix and hasattr(self.search_field.suffix, 'visible'):
             self.search_field.suffix.visible = False
         self._render_tree()
 
@@ -751,13 +751,84 @@ class FileTreeComponent:
                 self._render_tree_item(child, depth + 1)
 
     def _toggle_expand(self, path: str):
-        """Toggle expand/collapse - thread safe"""
+        """Toggle expand/collapse - thread safe với lazy loading support"""
         with self._ui_lock:
             if path in self.expanded_paths:
                 self.expanded_paths.discard(path)
             else:
                 self.expanded_paths.add(path)
+                # Check if folder needs lazy loading
+                self._maybe_lazy_load(path)
         self._schedule_render()
+    
+    def _maybe_lazy_load(self, folder_path: str):
+        """
+        Lazy load children của folder nếu chưa được load.
+        
+        Kiểm tra xem folder có attribute _lazy_loaded = False không.
+        Nếu có, trigger load children on-demand.
+        """
+        if not self.tree:
+            return
+        
+        folder_item = self._find_item_by_path(self.tree, folder_path)
+        if not folder_item or not folder_item.is_dir:
+            return
+        
+        # Check lazy load flag
+        if hasattr(folder_item, '_lazy_loaded') and not folder_item._lazy_loaded:
+            self._load_folder_children(folder_item)
+    
+    def _load_folder_children(self, folder_item: TreeItem):
+        """
+        Load children của folder on-demand.
+        
+        Gọi từ _maybe_lazy_load khi user expand folder chưa được load.
+        """
+        from pathlib import Path
+        from core.utils.file_scanner import scan_directory_lazy, start_scanning, stop_scanning
+        from views.settings_view import get_excluded_patterns, get_use_gitignore
+        
+        folder_path = Path(folder_item.path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return
+        
+        # Get root path từ tree
+        root_path = Path(self.tree.path) if self.tree else folder_path
+        
+        try:
+            start_scanning()
+            
+            excluded = get_excluded_patterns()
+            use_gitignore = get_use_gitignore()
+            
+            loaded_item = scan_directory_lazy(
+                folder_path,
+                root_path,
+                excluded_patterns=excluded,
+                use_gitignore=use_gitignore,
+            )
+            
+            # Update children
+            folder_item.children = loaded_item.children
+            folder_item._lazy_loaded = True  # type: ignore
+            
+            # Request tokens cho newly loaded children
+            if self.show_tokens:
+                for child in folder_item.children:
+                    if not child.is_dir:
+                        self._token_service.request_token_count(child.path, self.page)
+            
+            if self.show_lines:
+                for child in folder_item.children:
+                    if not child.is_dir:
+                        self._line_service.request_line_count(child.path)
+                        
+        except Exception as e:
+            from core.logging_config import log_error
+            log_error(f"[FileTree] Lazy load failed for {folder_path}: {e}")
+        finally:
+            stop_scanning()
 
     def _collect_all_folder_paths(self, item: TreeItem):
         """Collect all folder paths for expand all"""

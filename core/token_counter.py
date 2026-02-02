@@ -285,6 +285,8 @@ def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
 
     Không dùng ThreadPoolExecutor để tránh race condition.
     Check global flag mỗi file để cancel ngay lập tức.
+    
+    PERFORMANCE FIX: Return early on cancellation, don't process remaining files.
 
     Args:
         file_paths: Danh sách đường dẫn files cần đếm token.
@@ -295,15 +297,23 @@ def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
     from services.token_display import is_counting_tokens
 
     results: Dict[str, int] = {}
+    
+    # Check cancellation before starting
+    if not is_counting_tokens():
+        return results
 
-    for path in file_paths:
-        # Check global cancellation flag mỗi file - CRITICAL
+    for i, path in enumerate(file_paths):
+        # Check global cancellation flag EVERY file - CRITICAL for responsiveness
         if not is_counting_tokens():
-            break
+            return results  # Return immediately with partial results
 
         try:
             results[str(path)] = count_tokens_for_file(path)
         except Exception:
             results[str(path)] = 0
+        
+        # Extra cancellation check every 3 files for even faster response
+        if i > 0 and i % 3 == 0 and not is_counting_tokens():
+            return results
 
     return results

@@ -440,23 +440,53 @@ class ContextView:
 
     def on_workspace_changed(self, workspace_path: Path):
         """Khi user chon folder moi hoac settings thay doi"""
-        # Stop any ongoing scanning
+        from core.logging_config import log_info, log_debug
+        
+        log_info(f"[ContextView] Workspace changing to: {workspace_path}")
+        
+        # ========================================
+        # AGGRESSIVE CLEANUP: Stop ALL operations IMMEDIATELY
+        # Phải stop triệt để trước khi load folder mới
+        # KHÔNG CẦN YIELD - các operations phải tự check cancellation flag
+        # ========================================
         from core.utils.file_scanner import stop_scanning
-
-        stop_scanning()
-
-        # Stop token counting
         from services.token_display import stop_token_counting
 
+        # Stop scanning and token counting FIRST
+        stop_scanning()
         stop_token_counting()
 
+        # Cancel any pending timers IMMEDIATELY
+        if self._token_update_timer is not None:
+            try:
+                self._token_update_timer.cancel()
+            except Exception:
+                pass
+            self._token_update_timer = None
+        
+        if self._selection_update_timer is not None:
+            try:
+                self._selection_update_timer.dispose()
+            except Exception:
+                pass
+            self._selection_update_timer = None
+
+        # Stop file watcher for old folder IMMEDIATELY
+        if self._file_watcher:
+            self._file_watcher.stop()
+
         # Cleanup old resources before loading new tree
-        # Chỉ clear caches, không dispose component vì nó sẽ được reuse
+        # reset_for_new_tree() sẽ cancel tất cả deferred timers
         if self.file_tree_component:
             self.file_tree_component.reset_for_new_tree()
+        
+        # NO YIELD NEEDED - background tasks check cancellation flags
+        # Yield chỉ làm chậm folder switching
+        
+        # Load new tree (will handle its own loading state)
         self._load_tree(workspace_path)
 
-        # Start file watcher for auto-refresh with incremental updates
+        # Start file watcher for new folder AFTER tree is loaded
         if self._file_watcher:
             from services.file_watcher import WatcherCallbacks
 
@@ -477,11 +507,15 @@ class ContextView:
 
         RACE CONDITION FIX: Sử dụng loading lock để ngăn concurrent loads.
         Nếu đang load, request sẽ được queue và thực hiện sau.
+        
+        PERFORMANCE FIX: KHÔNG tự động count tokens - lazy load khi user select files.
 
         Args:
             workspace_path: Path to workspace folder
             preserve_selection: Neu True, giu lai selection hien tai (cho Refresh)
         """
+        from core.logging_config import log_info, log_error, log_debug
+        
         # ========================================
         # RACE CONDITION FIX: Check và acquire loading lock
         # ========================================
@@ -489,7 +523,6 @@ class ContextView:
             if self._is_loading:
                 # Đang load rồi, queue refresh request cho sau
                 self._pending_refresh = True
-                from core.logging_config import log_debug
                 log_debug("[ContextView] Load request queued - another load in progress")
                 return
             # Mark đang loading
@@ -501,21 +534,57 @@ class ContextView:
         if preserve_selection and self.file_tree_component:
             old_selection = self.file_tree_component.get_selected_paths()
 
-        # Show loading state
-        self._show_status("Scanning...", is_error=False, auto_clear=False)
+        # ========================================
+        # AGGRESSIVE CLEANUP: Stop ALL background operations IMMEDIATELY
+        # This is CRITICAL for fast folder switching
+        # ========================================
+        from core.utils.file_scanner import stop_scanning
+        from services.token_display import stop_token_counting
+        
+        stop_scanning()
+        stop_token_counting()
+        
+        # Cancel any pending token update timers
+        if self._token_update_timer is not None:
+            try:
+                self._token_update_timer.cancel()
+            except Exception:
+                pass
+            self._token_update_timer = None
+        
+        if self._selection_update_timer is not None:
+            try:
+                self._selection_update_timer.dispose()
+            except Exception:
+                pass
+            self._selection_update_timer = None
+
+        # Show loading state IMMEDIATELY
+        self._show_status("Loading...", is_error=False, auto_clear=False)
+        
+        # Reset token display to show clean state (no loading spinner)
+        if self.token_count_text:
+            self.token_count_text.value = "0 tokens"
         if self.token_stats_panel:
-            self.token_stats_panel.set_loading(True)
+            self.token_stats_panel.set_loading(False)
+            # Reset stats to 0 immediately for visual feedback
+            self.token_stats_panel.update_stats(
+                file_count=0,
+                file_tokens=0,
+                instruction_tokens=0,
+            )
+        
+        # Force UI update BEFORE scanning
         safe_page_update(self.page)
 
         try:
             from views.settings_view import get_excluded_patterns, get_use_gitignore
-            from core.utils.file_scanner import scan_directory, ScanProgress
+            from core.utils.file_scanner import scan_directory, ScanProgress, start_scanning
 
             excluded_patterns = get_excluded_patterns()
             use_gitignore = get_use_gitignore()
 
-            # Progress callback - chỉ update status text, không gọi page.update()
-            # để tránh race condition với các UI updates khác
+            # Progress callback - update status text
             def on_progress(progress: ScanProgress):
                 if self.status_text:
                     self.status_text.value = (
@@ -524,7 +593,6 @@ class ContextView:
                     # Không gọi safe_page_update() ở đây để tránh race condition
 
             # Scan với progress (sử dụng global cancellation flag)
-            from core.logging_config import log_info
             log_info(f"[ContextView] Starting scan for: {workspace_path}")
             
             self.tree = scan_directory(
@@ -536,7 +604,7 @@ class ContextView:
             
             log_info(f"[ContextView] Scan complete. Tree: {self.tree.label if self.tree else 'None'}")
 
-            # Set tree to component
+            # Set tree to component - NO TOKEN COUNTING HERE
             assert self.file_tree_component is not None
             log_info(f"[ContextView] Setting tree to component...")
             self.file_tree_component.set_tree(
@@ -544,16 +612,16 @@ class ContextView:
             )
             log_info(f"[ContextView] Tree set complete")
 
-            # Update token count sau khi tree đã set xong
-            self._update_token_count()
-
-            # Clear loading status
+            # ========================================
+            # LAZY LOADING: NO automatic token counting
+            # Tokens will be counted ONLY when user selects files
+            # This makes folder switching INSTANT
+            # ========================================
             self._show_status("")
-            log_info(f"[ContextView] Load tree finished successfully")
+            safe_page_update(self.page)
+            log_info(f"[ContextView] Load tree finished successfully (no token counting)")
 
         except Exception as e:
-            from core.logging_config import log_error
-
             log_error(f"[ContextView] Error loading tree: {e}")
             self._show_status(f"Error: {e}", is_error=True)
             # Restore old selection on error if possible
@@ -576,10 +644,8 @@ class ContextView:
 
             # Nếu có pending refresh, thực hiện sau khi release lock
             if should_refresh:
-                from core.logging_config import log_debug
                 log_debug("[ContextView] Executing pending refresh request")
                 # Defer để tránh recursion quá sâu
-                # Flet 0.80.5+ yêu cầu async function cho run_task
                 if self.page:
                     async def _deferred_refresh():
                         self._load_tree(workspace_path, preserve_selection=True)

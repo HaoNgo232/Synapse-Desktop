@@ -11,7 +11,7 @@ Features:
 """
 
 from pathlib import Path
-from typing import Dict, Callable, Set, Optional
+from typing import Dict, Callable, Set, Optional, List
 import threading
 
 from core.utils.file_utils import TreeItem
@@ -93,35 +93,92 @@ class TokenDisplayService:
         self._pending_updates: Set[str] = set()
         self._update_timer: Optional[SafeTimer] = None  # RACE CONDITION FIX: Use SafeTimer
         self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
+        
+        # Track all deferred timers để cancel khi stop
+        self._deferred_timers: List[SafeTimer] = []
+        self._deferred_timers_lock = threading.Lock()
 
     def clear_cache(self):
         """Xóa toàn bộ cache (khi reload tree)"""
+        from core.logging_config import log_debug
+        log_debug("[TokenDisplayService] clear_cache() called")
+        
+        # Stop global counting flag FIRST
         stop_token_counting()
+        
+        # Cancel ALL deferred timers IMMEDIATELY
+        self._cancel_all_deferred_timers()
+        
         with self._lock:
             self._cache.clear()
             self._loading_paths.clear()
         with self._update_lock:
             self._pending_updates.clear()
             if self._update_timer:
-                self._update_timer.cancel()
+                try:
+                    self._update_timer.dispose()
+                except Exception:
+                    pass
                 self._update_timer = None
+        
+        log_debug("[TokenDisplayService] clear_cache() complete")
 
     def stop(self):
         """
-        Stop processing và cleanup.
+        Stop processing và cleanup IMMEDIATELY.
         
         RACE CONDITION FIX: Set disposal flag TRƯỚC khi cancel timers.
+        Cancel ALL deferred timers để đảm bảo không có background work còn chạy.
         """
-        # Set disposal flag FIRST
+        from core.logging_config import log_debug
+        log_debug("[TokenDisplayService] stop() called - cancelling all operations")
+        
+        # Set disposal flag FIRST - this causes all callbacks to exit early
         self._is_disposed = True
         
+        # Stop global token counting flag IMMEDIATELY
         stop_token_counting()
+        
+        # Cancel ALL deferred timers - CRITICAL for folder switch
+        self._cancel_all_deferred_timers()
+        
+        # Clear all state
         self._loading_paths.clear()
         with self._update_lock:
             self._pending_updates.clear()
             if self._update_timer:
-                self._update_timer.dispose()  # RACE CONDITION FIX: Use dispose instead of cancel
+                try:
+                    self._update_timer.dispose()
+                except Exception:
+                    pass
                 self._update_timer = None
+        
+        # Also clear cache to prevent stale data
+        with self._lock:
+            self._cache.clear()
+        
+        log_debug("[TokenDisplayService] stop() complete")
+
+    def _cancel_all_deferred_timers(self):
+        """
+        Cancel tất cả deferred timers đang pending.
+        
+        CRITICAL: Gọi method này khi switch folder hoặc stop service
+        để đảm bảo không có background token counting còn chạy.
+        """
+        from core.logging_config import log_debug
+        
+        with self._deferred_timers_lock:
+            timer_count = len(self._deferred_timers)
+            if timer_count > 0:
+                log_debug(f"[TokenDisplayService] Cancelling {timer_count} deferred timers")
+            
+            for timer in self._deferred_timers:
+                try:
+                    timer.dispose()
+                except Exception:
+                    pass
+            self._deferred_timers.clear()
 
     def cleanup_stale_entries(self, valid_paths: set):
         """Xóa các cache entries không còn tồn tại trong tree."""
@@ -192,7 +249,7 @@ class TokenDisplayService:
         page=None,
         visible_only: bool = True,
         visible_paths: Optional[set] = None,
-        max_immediate: int = 50,
+        max_immediate: int = 20,  # Reduced from 50 for faster UI response
     ):
         """
         Request token counts cho toàn bộ tree.
@@ -200,13 +257,19 @@ class TokenDisplayService:
         Tối ưu: Chỉ count ngay lập tức cho max_immediate files đầu tiên.
         Files còn lại sẽ được count incrementally khi UI idle.
         
+        PERFORMANCE FIX: Reduced max_immediate to 20 for faster initial UI response.
+        
         Args:
             tree: Root TreeItem
             page: Flet page
             visible_only: Chỉ count visible files
             visible_paths: Set paths đang visible
-            max_immediate: Số files count ngay (default 50)
+            max_immediate: Số files count ngay (default 20)
         """
+        # Check if already cancelled before starting
+        if not is_counting_tokens():
+            return
+            
         # RACE CONDITION FIX: Sử dụng thread-safe function
         start_token_counting()
         self._page = page  # Store for UI updates
@@ -215,17 +278,20 @@ class TokenDisplayService:
         files_to_count = []
         self._collect_files_to_count(tree, visible_only, visible_paths, files_to_count)
         
+        # Check cancellation after collecting files
+        if not is_counting_tokens():
+            return
+        
         # Split into immediate và deferred
         immediate_files = files_to_count[:max_immediate]
         deferred_files = files_to_count[max_immediate:]
 
-        # Count immediate files sync
+        # Count immediate files sync - with frequent cancellation checks
         count = 0
         for path in immediate_files:
             # Check cancellation trước mỗi file - CRITICAL
-            # RACE CONDITION FIX: Sử dụng thread-safe function
             if not is_counting_tokens():
-                break
+                return  # Exit immediately
 
             with self._lock:
                 if path in self._cache:
@@ -241,8 +307,11 @@ class TokenDisplayService:
 
             count += 1
 
-            # Progress update mỗi N files
-            if count % self.PROGRESS_INTERVAL == 0:
+            # Progress update mỗi 10 files (reduced from 20 for more responsive UI)
+            if count % 10 == 0:
+                # Check cancellation before UI update
+                if not is_counting_tokens():
+                    return
                 if self.on_update:
                     try:
                         self.on_update()
@@ -250,13 +319,13 @@ class TokenDisplayService:
                         pass
 
         # Final update for immediate files
-        if self.on_update:
+        if is_counting_tokens() and self.on_update:
             try:
                 self.on_update()
             except Exception:
                 pass
         
-        # Schedule deferred files counting if any
+        # Schedule deferred files counting if any and not cancelled
         if deferred_files and is_counting_tokens():
             self._schedule_deferred_counting(deferred_files)
     
@@ -265,20 +334,36 @@ class TokenDisplayService:
         Schedule counting cho deferred files.
         
         Count từng batch nhỏ với delay để không block UI.
+        
+        PERFORMANCE FIX: Smaller batches and more frequent cancellation checks.
+        FOLDER SWITCH FIX: Track all timers để cancel khi switch folder.
         """
-        if not files or not is_counting_tokens():
+        from core.logging_config import log_debug
+        
+        # Early exit checks
+        if not files:
+            return
+        if not is_counting_tokens():
+            log_debug("[TokenDisplayService] _schedule_deferred_counting skipped - not counting")
+            return
+        if self._is_disposed:
+            log_debug("[TokenDisplayService] _schedule_deferred_counting skipped - disposed")
             return
         
-        BATCH_SIZE = 20
+        BATCH_SIZE = 5  # Very small batches for responsive cancellation
         BATCH_DELAY = 0.05  # 50ms between batches
         
         def count_batch(batch_files):
+            # Check cancellation FIRST - before doing ANY work
             if not is_counting_tokens() or self._is_disposed:
+                log_debug("[TokenDisplayService] count_batch cancelled at start")
                 return
             
             for path in batch_files:
-                if not is_counting_tokens():
-                    break
+                # Check cancellation for EACH file - CRITICAL
+                if not is_counting_tokens() or self._is_disposed:
+                    log_debug("[TokenDisplayService] count_batch cancelled mid-batch")
+                    return  # Exit immediately
                 
                 with self._lock:
                     if path in self._cache:
@@ -292,17 +377,26 @@ class TokenDisplayService:
                     with self._lock:
                         self._cache[path] = 0
             
-            # Update UI after batch
-            if self.on_update and not self._is_disposed:
+            # Update UI after batch only if not cancelled
+            if is_counting_tokens() and self.on_update and not self._is_disposed:
                 try:
                     self.on_update()
                 except Exception:
                     pass
         
-        # Process in batches
+        # Clear old deferred timers before scheduling new ones
+        self._cancel_all_deferred_timers()
+        
+        # Check cancellation again after clearing
+        if not is_counting_tokens() or self._is_disposed:
+            return
+        
+        # Process in batches - check cancellation before each batch
         for i in range(0, len(files), BATCH_SIZE):
-            if not is_counting_tokens():
-                break
+            # Check cancellation before scheduling each batch
+            if not is_counting_tokens() or self._is_disposed:
+                log_debug(f"[TokenDisplayService] batch scheduling cancelled at batch {i}")
+                return
             
             batch = files[i:i + BATCH_SIZE]
             
@@ -316,6 +410,15 @@ class TokenDisplayService:
                 page=self._page,
                 use_main_thread=False,  # Count in background
             )
+            
+            # Track timer để cancel later
+            with self._deferred_timers_lock:
+                # Final check before adding
+                if self._is_disposed:
+                    timer.dispose()
+                    return
+                self._deferred_timers.append(timer)
+            
             timer.start()
 
     def _collect_files_to_count(

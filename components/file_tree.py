@@ -109,7 +109,17 @@ class FileTreeComponent:
         
         Khác với cleanup(), method này không set _is_disposed = True,
         cho phép component tiếp tục sử dụng cho tree mới.
+        
+        AGGRESSIVE CLEANUP: Stop ALL background operations IMMEDIATELY.
         """
+        from services.token_display import stop_token_counting
+        from core.logging_config import log_info, log_debug
+        
+        log_info("[FileTree] reset_for_new_tree START - aggressive cleanup")
+        
+        # Stop global token counting FIRST - this sets the cancellation flag
+        stop_token_counting()
+        
         # Cancel search timer safely
         timer = self._search_timer
         self._search_timer = None
@@ -128,19 +138,34 @@ class FileTreeComponent:
             except Exception:
                 pass
 
-        # Stop token service and clear caches
+        # Stop token service COMPLETELY - this cancels ALL deferred timers
+        # CRITICAL: Phải gọi stop() để cancel tất cả pending operations
         self._token_service.stop()
-        self._token_service.clear_cache()
+        
+        # Reset disposed flag vì service sẽ được reuse cho tree mới
+        self._token_service._is_disposed = False
 
-        # Clear line count service
+        # Clear line count service cache
         self._line_service.clear_cache()
 
-        # Reset rendering state
+        # Reset rendering state - prevent any pending render operations
         with self._ui_lock:
             self._is_rendering = False
         
-        # Đảm bảo component chưa bị disposed
+        # Clear all selection state for clean slate
+        with self._selection_lock:
+            self.selected_paths.clear()
+            self.expanded_paths.clear()
+            self.matched_paths.clear()
+        
+        # Reset search state
+        self.search_query = ""
+        self.tree = None
+        
+        # Ensure component is not disposed (will be reused)
         self._is_disposed = False
+        
+        log_info("[FileTree] reset_for_new_tree COMPLETE")
 
     def set_loading(self, is_loading: bool):
         """Set loading state của file tree"""
@@ -232,6 +257,9 @@ class FileTreeComponent:
         """
         Set tree data va render.
 
+        LAZY LOADING: KHÔNG tự động request tokens/lines.
+        Tokens/lines sẽ được count khi user select files.
+
         Args:
             tree: TreeItem root moi
             preserve_selection: Neu True, giu lai cac selected paths van ton tai trong tree moi
@@ -267,16 +295,19 @@ class FileTreeComponent:
         else:
             self.selected_paths.clear()
 
-        # Clear token cache va request tokens cho visible files
+        # Clear token cache - DO NOT request tokens automatically
+        # Tokens will be counted LAZILY when user selects files
         self._token_service.clear_cache()
         self._line_service.clear_cache()
+        
+        # Render tree immediately - no token/line counting
         self._render_tree()
 
-        # Request tokens va lines sau khi render
-        if self.show_tokens:
-            self._request_visible_tokens()
-        if self.show_lines:
-            self._request_visible_lines()
+        # ========================================
+        # LAZY LOADING: NO automatic token/line counting
+        # This makes folder switching INSTANT
+        # Tokens/lines will be displayed as user selects files
+        # ========================================
 
     def get_selected_paths(self) -> Set[str]:
         """

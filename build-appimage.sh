@@ -42,9 +42,11 @@ pyinstaller \
     --add-data "$SCRIPT_DIR/assets:assets" \
     --hidden-import flet \
     --hidden-import flet.core \
+    --hidden-import flet_desktop \
     --hidden-import tiktoken_ext \
     --hidden-import tiktoken_ext.openai_public \
     --collect-all flet \
+    --collect-all flet_desktop \
     --collect-all tiktoken_ext \
     --distpath "$BUILD_DIR/dist" \
     --workpath "$BUILD_DIR/work" \

@@ -7,6 +7,7 @@ Tach ra tu context_view.py de tranh god content.
 import flet as ft
 import logging
 import threading
+from threading import Timer
 from pathlib import Path
 from core.utils.safe_timer import SafeTimer
 from typing import Callable, Optional, Set
@@ -101,6 +102,45 @@ class FileTreeComponent:
 
         # Clear line count service
         self._line_service.clear_cache()
+
+    def reset_for_new_tree(self):
+        """
+        Reset component để load tree mới mà không dispose.
+        
+        Khác với cleanup(), method này không set _is_disposed = True,
+        cho phép component tiếp tục sử dụng cho tree mới.
+        """
+        # Cancel search timer safely
+        timer = self._search_timer
+        self._search_timer = None
+        if timer is not None:
+            try:
+                timer.cancel()
+            except Exception:
+                pass
+
+        # Cancel render timer safely
+        render_timer = self._render_timer
+        self._render_timer = None
+        if render_timer is not None:
+            try:
+                render_timer.dispose()
+            except Exception:
+                pass
+
+        # Stop token service and clear caches
+        self._token_service.stop()
+        self._token_service.clear_cache()
+
+        # Clear line count service
+        self._line_service.clear_cache()
+
+        # Reset rendering state
+        with self._ui_lock:
+            self._is_rendering = False
+        
+        # Đảm bảo component chưa bị disposed
+        self._is_disposed = False
 
     def set_loading(self, is_loading: bool):
         """Set loading state của file tree"""
@@ -359,8 +399,9 @@ class FileTreeComponent:
         # RACE CONDITION FIX: Defer execution đến main thread
         # Timer callback chạy trên background thread, không an toàn để
         # thao tác trực tiếp với UI controls
+        # Flet 0.80.5+ yêu cầu async function cho run_task
         # ========================================
-        def _do_search():
+        async def _do_search():
             try:
                 if self.match_count_text is None:
                     return
@@ -382,9 +423,10 @@ class FileTreeComponent:
                 self.page.run_task(_do_search)
             except Exception:
                 # Fallback nếu page không hỗ trợ run_task
-                _do_search()
+                pass
         else:
-            _do_search()
+            # Không có page, skip search
+            pass
 
     def _on_search_submit(self, e):
         """Handle Enter key trong search field - select first match"""
@@ -504,18 +546,24 @@ class FileTreeComponent:
         # Check _is_rendering VÀ set nó trong cùng một lock acquisition
         # Tránh TOCTOU (Time-of-Check to Time-of-Use) vulnerability
         # ========================================
+        from core.logging_config import log_info, log_error
+        log_info(f"[FileTree] _render_tree START - tree_container={self.tree_container is not None}, tree={self.tree is not None}")
+        
         with self._ui_lock:
             if self._is_rendering or self._is_disposed:
+                log_info(f"[FileTree] _render_tree SKIP - is_rendering={self._is_rendering}, is_disposed={self._is_disposed}")
                 return  # Đang render hoặc đã cleanup, skip
             self._is_rendering = True
         
         # Validate prerequisites NGOÀI lock để tránh hold lock quá lâu
         if not self.tree_container or not self.tree:
+            log_info(f"[FileTree] _render_tree SKIP - missing tree_container or tree")
             with self._ui_lock:
                 self._is_rendering = False
             return
             
         try:
+            log_info(f"[FileTree] Clearing controls, current count: {len(self.tree_container.controls)}")
             self.tree_container.controls.clear()
 
             # Track rendered count for performance
@@ -523,6 +571,8 @@ class FileTreeComponent:
             self._max_render_items = 1000  # Limit for very large trees
 
             self._render_tree_item(self.tree, 0)
+            
+            log_info(f"[FileTree] Rendered {self._rendered_count} items, controls count: {len(self.tree_container.controls)}")
 
             # Add truncation notice if needed
             if self._rendered_count >= self._max_render_items:
@@ -538,10 +588,14 @@ class FileTreeComponent:
             # Safety check: only update if page exists and component is attached
             if self.page and hasattr(self, "tree_container") and self.tree_container:
                 try:
+                    log_info(f"[FileTree] Calling safe_page_update...")
                     safe_page_update(self.page)
-                except AssertionError:
+                    log_info(f"[FileTree] safe_page_update completed")
+                except AssertionError as e:
                     # Control not yet attached to page, skip update
-                    pass
+                    log_error(f"[FileTree] AssertionError in page update: {e}")
+        except Exception as ex:
+            log_error(f"[FileTree] Error in _render_tree: {ex}")
         finally:
             with self._ui_lock:
                 self._is_rendering = False
@@ -567,15 +621,20 @@ class FileTreeComponent:
         
         RACE CONDITION FIX: Method này được gọi từ Timer thread.
         Phải defer việc render đến main thread qua page.run_task().
+        Flet 0.80.5+ yêu cầu async function cho run_task.
         """
         # Skip nếu đã disposed
         if self._is_disposed:
             return
         
+        # Tạo async wrapper cho _render_tree
+        async def _async_render():
+            self._render_tree()
+        
         if self.page:
             try:
-                # Defer đến main thread
-                self.page.run_task(self._render_tree)
+                # Defer đến main thread với async function
+                self.page.run_task(_async_render)
             except Exception:
                 pass  # Page not available
         else:
@@ -847,8 +906,9 @@ class FileTreeComponent:
             if self.page:
                 # ========================================
                 # RACE CONDITION FIX: Defer UI update đến main thread
+                # Flet 0.80.5+ yêu cầu async function cho run_task
                 # ========================================
-                def _do_update():
+                async def _do_update():
                     try:
                         safe_page_update(self.page)
                     except Exception:

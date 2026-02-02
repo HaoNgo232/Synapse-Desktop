@@ -143,8 +143,13 @@ class SafeTimer:
         # Execute callback
         if self._use_main_thread and self._page:
             try:
+                # Flet 0.80.5+ yêu cầu async function cho run_task()
+                # Tạo async wrapper để wrap _safe_callback
+                async def _async_callback():
+                    self._safe_callback()
+                
                 # Defer đến main thread via page.run_task()
-                self._page.run_task(self._safe_callback)
+                self._page.run_task(_async_callback)
             except Exception:
                 # Page không available hoặc đã closed
                 pass

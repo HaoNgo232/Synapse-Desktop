@@ -450,8 +450,9 @@ class ContextView:
         stop_token_counting()
 
         # Cleanup old resources before loading new tree
+        # Chỉ clear caches, không dispose component vì nó sẽ được reuse
         if self.file_tree_component:
-            self.file_tree_component.cleanup()
+            self.file_tree_component.reset_for_new_tree()
         self._load_tree(workspace_path)
 
         # Start file watcher for auto-refresh with incremental updates
@@ -522,24 +523,32 @@ class ContextView:
                     # Không gọi safe_page_update() ở đây để tránh race condition
 
             # Scan với progress (sử dụng global cancellation flag)
+            from core.logging_config import log_info
+            log_info(f"[ContextView] Starting scan for: {workspace_path}")
+            
             self.tree = scan_directory(
                 workspace_path,
                 excluded_patterns=excluded_patterns,
                 use_gitignore=use_gitignore,
                 progress_callback=on_progress,
             )
+            
+            log_info(f"[ContextView] Scan complete. Tree: {self.tree.label if self.tree else 'None'}")
 
             # Set tree to component
             assert self.file_tree_component is not None
+            log_info(f"[ContextView] Setting tree to component...")
             self.file_tree_component.set_tree(
                 self.tree, preserve_selection=preserve_selection
             )
+            log_info(f"[ContextView] Tree set complete")
 
             # Update token count sau khi tree đã set xong
             self._update_token_count()
 
             # Clear loading status
             self._show_status("")
+            log_info(f"[ContextView] Load tree finished successfully")
 
         except Exception as e:
             from core.logging_config import log_error
@@ -569,10 +578,11 @@ class ContextView:
                 from core.logging_config import log_debug
                 log_debug("[ContextView] Executing pending refresh request")
                 # Defer để tránh recursion quá sâu
+                # Flet 0.80.5+ yêu cầu async function cho run_task
                 if self.page:
-                    self.page.run_task(
-                        lambda: self._load_tree(workspace_path, preserve_selection=True)
-                    )
+                    async def _deferred_refresh():
+                        self._load_tree(workspace_path, preserve_selection=True)
+                    self.page.run_task(_deferred_refresh)
 
     def _on_selection_changed(self, selected_paths: Set[str]):
         """Callback khi selection thay doi - debounced with SafeTimer"""
@@ -784,6 +794,7 @@ class ContextView:
         Phải defer việc load tree đến main thread để tránh race condition.
 
         Sử dụng page.run_task() để schedule execution trên main thread.
+        Flet 0.80.5+ yêu cầu async function cho run_task.
         """
         try:
             workspace = self.get_workspace()
@@ -791,8 +802,9 @@ class ContextView:
                 # ========================================
                 # RACE CONDITION FIX: Defer đến main thread
                 # Không gọi _load_tree trực tiếp từ Timer thread
+                # Flet 0.80.5+ yêu cầu async function cho run_task
                 # ========================================
-                def _do_refresh():
+                async def _do_refresh():
                     try:
                         # Double check workspace vẫn còn valid
                         current_workspace = self.get_workspace()

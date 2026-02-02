@@ -6,6 +6,7 @@ Su dung FileTreeComponent tu components/file_tree.py
 
 import flet as ft
 import threading
+from threading import Timer
 from pathlib import Path
 from typing import Callable, Optional, Set
 

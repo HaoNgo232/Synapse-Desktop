@@ -777,6 +777,9 @@ class FileTreeComponent:
         RACE CONDITION FIX: Sử dụng atomic check pattern.
         Check _is_rendering VÀ thao tác selection trong cùng một lock.
         """
+        from core.logging_config import log_info
+        log_info(f"[FileTree] _on_item_toggled: path={path}, is_dir={is_dir}, value={e.control.value}")
+        
         # ========================================
         # RACE CONDITION FIX: Atomic check trong lock
         # Check _is_rendering và _is_disposed BÊN TRONG lock
@@ -785,6 +788,7 @@ class FileTreeComponent:
         with self._ui_lock:
             # Skip nếu đang render hoặc đã cleanup
             if self._is_rendering or self._is_disposed:
+                log_info(f"[FileTree] _on_item_toggled SKIP - is_rendering={self._is_rendering}, is_disposed={self._is_disposed}")
                 return
             
             # Thực hiện selection changes BÊN TRONG lock
@@ -796,6 +800,8 @@ class FileTreeComponent:
                 self.selected_paths.discard(path)
                 if is_dir:
                     self._deselect_all_children(children)
+        
+        log_info(f"[FileTree] Selection updated. Total selected: {len(self.selected_paths)}")
 
         # Schedule render NGOÀI lock để tránh deadlock
         self._schedule_render()

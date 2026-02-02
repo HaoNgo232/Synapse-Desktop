@@ -652,19 +652,36 @@ class ContextView:
                     self.page.run_task(_deferred_refresh)
 
     def _on_selection_changed(self, selected_paths: Set[str]):
-        """Callback khi selection thay doi - debounced with SafeTimer"""
+        """Callback khi selection thay doi - smart debouncing based on selection size"""
         # Cancel previous timer if exists
         if self._selection_update_timer is not None:
             self._selection_update_timer.dispose()
+            self._selection_update_timer = None
 
-        # For small selections, update immediately
-        if len(selected_paths) < 10:
+        selection_size = len(selected_paths)
+        
+        # Adaptive debounce based on selection size
+        if selection_size == 0:
+            # No selection - update immediately to show zero
             self._update_token_count()
             return
+        elif selection_size < 5:
+            # Very small - update immediately
+            self._update_token_count()
+            return
+        elif selection_size < 20:
+            # Small - short debounce
+            debounce_ms = 50
+        elif selection_size < 100:
+            # Medium - moderate debounce
+            debounce_ms = 100
+        else:
+            # Large - longer debounce
+            debounce_ms = 200
 
-        # For larger selections, debounce with SafeTimer
+        # Debounce with SafeTimer
         self._selection_update_timer = SafeTimer(
-            interval=self._selection_debounce_ms / 1000.0,
+            interval=debounce_ms / 1000.0,
             callback=self._do_update_token_count,
             page=self.page,
             use_main_thread=True

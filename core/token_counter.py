@@ -5,6 +5,7 @@ Don gian hoa dang ke vi tiktoken la Python native library (OpenAI official).
 """
 
 import os
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
 from functools import lru_cache
@@ -18,8 +19,23 @@ _encoder: Optional[tiktoken.Encoding] = None
 MAX_BYTES = 5 * 1024 * 1024
 
 # File content cache: path -> (mtime, token_count)
-_file_token_cache: Dict[str, Tuple[float, int]] = {}
-_MAX_CACHE_SIZE = 1000
+# Using OrderedDict for LRU eviction
+from collections import OrderedDict
+
+_file_token_cache: OrderedDict[str, Tuple[float, int]] = OrderedDict()
+_MAX_CACHE_SIZE = 2000  # Increased for better hit rate
+_cache_lock = threading.Lock()
+
+# Pre-compiled patterns for binary detection
+_BINARY_SIGNATURES = [
+    (b'\xFF\xD8\xFF', "JPEG"),
+    (b'\x89PNG', "PNG"),
+    (b'GIF8', "GIF"),
+    (b'%PDF', "PDF"),
+    (b'PK\x03\x04', "ZIP"),
+    (b'\x7FELF', "ELF"),
+    (b'MZ', "PE/EXE"),
+]
 
 
 def _get_encoder() -> Optional[tiktoken.Encoding]:
@@ -97,7 +113,7 @@ def count_tokens_for_file(file_path: Path) -> int:
     - Skip files qua lon (> 5MB)
     - Skip binary files
     - Return 0 neu khong doc duoc
-    - Uses mtime-based caching for performance
+    - Uses LRU mtime-based caching for performance
 
     Args:
         file_path: Duong dan den file
@@ -115,43 +131,79 @@ def count_tokens_for_file(file_path: Path) -> int:
         if not file_path.is_file():
             return 0
 
-        # Check file size
+        # Check file size first (cheap operation)
         stat = file_path.stat()
         if stat.st_size > MAX_BYTES:
-            # File too large, skip silently (expected behavior)
+            return 0
+        
+        # Empty files
+        if stat.st_size == 0:
             return 0
 
-        # Check cache with mtime
         path_str = str(file_path)
-        cached = _file_token_cache.get(path_str)
-        if cached is not None:
-            cached_mtime, cached_count = cached
-            if cached_mtime == stat.st_mtime:
-                return cached_count
+        
+        # Check cache with LRU management
+        with _cache_lock:
+            cached = _file_token_cache.get(path_str)
+            if cached is not None:
+                cached_mtime, cached_count = cached
+                if cached_mtime == stat.st_mtime:
+                    # Move to end for LRU
+                    _file_token_cache.move_to_end(path_str)
+                    return cached_count
 
-        # Check if binary (read first 8KB)
+        # Check if binary using optimized detection
         with open(file_path, "rb") as f:
             chunk = f.read(8000)
 
-        if _looks_binary(chunk):
+        if _looks_binary_fast(chunk):
             return 0
 
         # Read and count
         content = file_path.read_text(encoding="utf-8", errors="replace")
         token_count = count_tokens(content)
 
-        # Update cache (with size limit)
-        if len(_file_token_cache) >= _MAX_CACHE_SIZE:
-            # Remove oldest entries (first 20%)
-            keys_to_remove = list(_file_token_cache.keys())[: _MAX_CACHE_SIZE // 5]
-            for key in keys_to_remove:
-                del _file_token_cache[key]
-
-        _file_token_cache[path_str] = (stat.st_mtime, token_count)
+        # Update cache with LRU eviction
+        with _cache_lock:
+            # Evict oldest if at capacity
+            while len(_file_token_cache) >= _MAX_CACHE_SIZE:
+                _file_token_cache.popitem(last=False)  # Remove oldest
+            
+            _file_token_cache[path_str] = (stat.st_mtime, token_count)
+        
         return token_count
 
     except (OSError, IOError):
         return 0
+
+
+def _looks_binary_fast(chunk: bytes) -> bool:
+    """
+    Optimized binary detection using pre-compiled signatures.
+    """
+    if len(chunk) == 0:
+        return False
+    
+    # Check magic signatures first (fast path)
+    for sig, _ in _BINARY_SIGNATURES:
+        if chunk.startswith(sig):
+            return True
+    
+    # Sample-based analysis for large chunks
+    sample_size = min(len(chunk), 1000)
+    sample = chunk[:sample_size]
+    
+    # Count null bytes and non-printable
+    null_count = sample.count(b'\x00')
+    if null_count > sample_size * 0.01:
+        return True
+    
+    # Fast non-printable check using bytes translation
+    non_printable = sum(1 for b in sample if b < 32 and b not in (9, 10, 13) or b > 126)
+    if non_printable > sample_size * 0.3:
+        return True
+    
+    return False
 
 
 def clear_token_cache():

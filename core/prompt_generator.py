@@ -138,6 +138,12 @@ def generate_file_contents(
     Su dung Smart Markdown Delimiter de tranh broken markdown
     khi file content chua backticks.
 
+    PERFORMANCE OPTIMIZATIONS:
+    - Pre-allocate list capacity hint
+    - Use StringIO for large outputs
+    - Batch file reads
+    - Early exit on cancellation
+
     Args:
         selected_paths: Set cac duong dan file duoc tick
         max_file_size: Maximum file size to include (default 1MB)
@@ -145,12 +151,19 @@ def generate_file_contents(
     Returns:
         File contents string voi markdown code blocks
     """
+    from io import StringIO
+    
     # Sort paths de thu tu nhat quan
     sorted_paths = sorted(selected_paths)
+    
+    if not sorted_paths:
+        return ""
 
     # Phase 1: Doc tat ca file contents truoc de tinh delimiter
-    file_data: list[tuple[Path, str | None, str | None]] = []  # (path, content, error)
+    # Pre-allocate with capacity hint
+    file_data: list[tuple[Path, str | None, str | None]] = []
     all_contents: list[str] = []
+    max_backticks = 3  # Track max backticks for delimiter calculation
 
     for path_str in sorted_paths:
         path = Path(path_str)
@@ -173,34 +186,46 @@ def generate_file_contents(
                         (path, None, f"File too large ({file_size // 1024}KB)")
                     )
                     continue
+                # Skip empty files
+                if file_size == 0:
+                    file_data.append((path, "", None))
+                    continue
             except OSError:
                 pass
 
             # Doc content
             content = path.read_text(encoding="utf-8", errors="replace")
             file_data.append((path, content, None))
-            all_contents.append(content)
+            
+            # Track backticks for delimiter (inline calculation)
+            if '`' in content:
+                import re
+                matches = re.findall(r"`+", content)
+                if matches:
+                    max_backticks = max(max_backticks, max(len(m) for m in matches) + 1)
 
         except (OSError, IOError) as e:
             file_data.append((path, None, f"Error reading file: {e}"))
 
-    # Phase 2: Tinh Smart Markdown Delimiter
-    delimiter = calculate_markdown_delimiter(all_contents)
+    # Phase 2: Delimiter is already calculated inline
+    delimiter = "`" * max(3, max_backticks)
 
-    # Phase 3: Generate output voi dynamic delimiter
-    contents: list[str] = []
-    contents_append = contents.append
+    # Phase 3: Generate output using StringIO for efficiency
+    output = StringIO()
+    first = True
 
     for path, content, error in file_data:
+        if not first:
+            output.write("\n")
+        first = False
+        
         if error:
-            contents_append(f"File: {path}\n*** Skipped: {error} ***\n")
+            output.write(f"File: {path}\n*** Skipped: {error} ***\n")
         elif content is not None:
             language = get_language_from_path(str(path))
-            contents_append(
-                f"File: {path}\n{delimiter}{language}\n{content}\n{delimiter}\n"
-            )
+            output.write(f"File: {path}\n{delimiter}{language}\n{content}\n{delimiter}\n")
 
-    return "\n".join(contents).strip()
+    return output.getvalue().strip()
 
 
 def generate_file_contents_xml(

@@ -669,8 +669,18 @@ class FileTreeComponent:
             # Fallback: run trực tiếp (không lý tưởng nhưng tốt hơn không làm gì)
             self._render_tree()
 
+    # Reusable empty container to reduce allocations
+    _EMPTY_CONTAINER = None
+    
+    @classmethod
+    def _get_empty_container(cls) -> ft.Container:
+        """Get cached empty container to reduce allocations."""
+        if cls._EMPTY_CONTAINER is None:
+            cls._EMPTY_CONTAINER = ft.Container(width=0)
+        return cls._EMPTY_CONTAINER
+
     def _render_tree_item(self, item: TreeItem, depth: int):
-        """Render mot item voi search highlighting"""
+        """Render mot item voi search highlighting - optimized version"""
 
         # Check render limit
         if (
@@ -683,21 +693,27 @@ class FileTreeComponent:
         if self.search_query and item.path not in self.matched_paths:
             return
 
+        # Pre-compute commonly used values
         indent = depth * 16
+        is_selected = item.path in self.selected_paths
         is_expanded = item.path in self.expanded_paths
-        has_children = item.is_dir and len(item.children) > 0
+        is_dir = item.is_dir
+        has_children = is_dir and len(item.children) > 0
         is_match = self.search_query and self.search_query in item.label.lower()
+        
+        # Cache item path for closures (avoid repeated attribute access)
+        item_path = item.path
+        item_children = item.children
 
-        # Expand/Collapse arrow
+        # Expand/Collapse arrow - optimized
+        expand_icon: ft.Control
         if has_children:
-            # Count visible children when searching
-            visible_children = len(item.children)
+            # Only count visible children if searching (lazy evaluation)
+            has_visible = True
             if self.search_query:
-                visible_children = sum(
-                    1 for c in item.children if c.path in self.matched_paths
-                )
+                has_visible = any(c.path in self.matched_paths for c in item_children)
 
-            if visible_children > 0:
+            if has_visible:
                 expand_icon = ft.IconButton(
                     icon=(
                         ft.Icons.KEYBOARD_ARROW_DOWN
@@ -709,62 +725,69 @@ class FileTreeComponent:
                     width=24,
                     height=24,
                     padding=0,
-                    on_click=lambda e: self._toggle_expand(item.path),
+                    on_click=lambda e, p=item_path: self._toggle_expand(p),
                 )
             else:
                 expand_icon = ft.Container(width=24)
         else:
             expand_icon = ft.Container(width=24)
 
-        # Checkbox
+        # Checkbox with captured path
         checkbox = ft.Checkbox(
-            value=item.path in self.selected_paths,
+            value=is_selected,
             active_color=ThemeColors.PRIMARY,
             check_color="#FFFFFF",
-            on_change=lambda e: self._on_item_toggled(
-                e, item.path, item.is_dir, item.children
+            on_change=lambda e, p=item_path, d=is_dir, c=item_children: self._on_item_toggled(
+                e, p, d, c
             ),
         )
 
-        # Icon
-        if item.is_dir:
+        # Icon selection
+        if is_dir:
             icon = ft.Icons.FOLDER_OPEN if is_expanded else ft.Icons.FOLDER
             icon_color = ThemeColors.ICON_FOLDER
         else:
             icon = ft.Icons.INSERT_DRIVE_FILE
             icon_color = ThemeColors.ICON_FILE
 
-        # Text voi highlight
-        text_weight = ft.FontWeight.W_500 if item.is_dir else ft.FontWeight.NORMAL
-        text_bgcolor = ThemeColors.SEARCH_HIGHLIGHT if is_match else None
-
-        label_container = ft.Container(
-            content=ft.Text(
-                item.label, size=13, color=ThemeColors.TEXT_PRIMARY, weight=text_weight
-            ),
-            bgcolor=text_bgcolor,
-            padding=ft.padding.symmetric(horizontal=4, vertical=1) if is_match else 0,
-            border_radius=3 if is_match else 0,
-        )
-
-        row = ft.Row(
-            [
-                ft.Container(width=indent),
-                expand_icon,
-                checkbox,
-                ft.Icon(icon, size=18, color=icon_color),
-                label_container,
-                # Line count display (cho ca files va folders)
-                (
-                    self._create_line_count_badge(item)
-                    if self.show_lines
-                    else ft.Container()
+        # Text - avoid creating padding object if not needed
+        text_weight = ft.FontWeight.W_500 if is_dir else ft.FontWeight.NORMAL
+        
+        if is_match:
+            label_container = ft.Container(
+                content=ft.Text(
+                    item.label, size=13, color=ThemeColors.TEXT_PRIMARY, weight=text_weight
                 ),
-                # Token count display (cho ca files va folders)
-                self._create_token_badge(item) if self.show_tokens else ft.Container(),
-            ],
-            spacing=2,
-        )
+                bgcolor=ThemeColors.SEARCH_HIGHLIGHT,
+                padding=ft.padding.symmetric(horizontal=4, vertical=1),
+                border_radius=3,
+            )
+        else:
+            label_container = ft.Text(
+                item.label, size=13, color=ThemeColors.TEXT_PRIMARY, weight=text_weight
+            )
+
+        # Build row controls list efficiently
+        row_controls: list[ft.Control] = [
+            ft.Container(width=indent),
+            expand_icon,
+            checkbox,
+            ft.Icon(icon, size=18, color=icon_color),
+            label_container,
+        ]
+        
+        # Add optional badges only if enabled
+        if self.show_lines:
+            line_badge = self._create_line_count_badge(item)
+            if line_badge:
+                row_controls.append(line_badge)
+        
+        if self.show_tokens:
+            token_badge = self._create_token_badge(item)
+            if token_badge:
+                row_controls.append(token_badge)
+
+        row = ft.Row(row_controls, spacing=2)
 
         assert self.tree_container is not None
         self.tree_container.controls.append(row)

@@ -50,8 +50,8 @@ class MemoryMonitor:
     WARNING_THRESHOLD_MB = 500
     CRITICAL_THRESHOLD_MB = 1000
 
-    # Update interval (seconds)
-    UPDATE_INTERVAL = 5.0
+    # Update interval (seconds) - increased to reduce overhead
+    UPDATE_INTERVAL = 10.0
 
     def __init__(self, on_update: Optional[Callable[[MemoryStats], None]] = None):
         """

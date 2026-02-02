@@ -162,7 +162,10 @@ class LineCountService:
 
     def _count_file_lines(self, path: str) -> int:
         """
-        Count lines cho mot file (port tu Repomix logic).
+        Count lines cho mot file - optimized version.
+
+        Uses mmap for large files to avoid loading entire content into memory.
+        Falls back to regular read for small files.
 
         Logic:
         - Empty file: 0 lines
@@ -170,48 +173,86 @@ class LineCountService:
         - If ends with newline: newline_count
         - Else: newline_count + 1
         """
+        import mmap
+        
         try:
             file_path = Path(path)
-
-            # Read file content
-            # Try multiple encodings
-            content = None
-            for encoding in ["utf-8", "latin-1", "cp1252"]:
-                try:
-                    content = file_path.read_text(encoding=encoding)
-                    break
-                except UnicodeDecodeError:
-                    continue
-
-            if content is None:
-                # Binary file or unknown encoding - try reading as binary
-                try:
-                    content_bytes = file_path.read_bytes()
-                    # Count newlines in binary
-                    newline_count = content_bytes.count(b"\n")
-                    return (
-                        newline_count
-                        if content_bytes.endswith(b"\n")
-                        else newline_count + 1
-                    )
-                except Exception as e:
-                    from core.logging_config import log_error
-                    log_error(f"Failed to read binary file {file_path}: {e}")
-                    return 0
-
+            file_size = file_path.stat().st_size
+            
             # Empty file
-            if len(content) == 0:
+            if file_size == 0:
                 return 0
-
-            # Count newlines
-            newline_count = content.count("\n")
-
-            # Return based on whether content ends with newline
-            return newline_count if content.endswith("\n") else newline_count + 1
+            
+            # For large files (>1MB), use mmap for memory efficiency
+            if file_size > 1024 * 1024:
+                return self._count_lines_mmap(file_path)
+            
+            # For small files, read directly (faster due to less overhead)
+            return self._count_lines_direct(file_path)
 
         except Exception as e:
-            from core.logging_config import log_error
-            log_error(f"Failed to count lines for {path}: {e}")
+            from core.logging_config import log_debug
+            log_debug(f"Failed to count lines for {path}: {e}")
+            return 0
+    
+    def _count_lines_mmap(self, file_path: Path) -> int:
+        """Count lines using memory-mapped file (efficient for large files)."""
+        import mmap
+        
+        try:
+            with open(file_path, 'rb') as f:
+                # Memory map the file
+                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                    newline_count = 0
+                    # Count newlines in chunks
+                    chunk_size = 1024 * 1024  # 1MB chunks
+                    pos = 0
+                    file_size = mm.size()
+                    
+                    while pos < file_size:
+                        end = min(pos + chunk_size, file_size)
+                        chunk = mm[pos:end]
+                        newline_count += chunk.count(b'\n')
+                        pos = end
+                    
+                    # Check if ends with newline
+                    ends_with_newline = mm[-1:] == b'\n' if file_size > 0 else False
+                    
+                    return newline_count if ends_with_newline else newline_count + 1
+        except Exception:
+            # Fallback to direct read
+            return self._count_lines_direct(file_path)
+    
+    def _count_lines_direct(self, file_path: Path) -> int:
+        """Count lines by reading file directly (efficient for small files)."""
+        try:
+            # Try reading as binary first (fastest)
+            content_bytes = file_path.read_bytes()
+            
+            # Check for null bytes (binary file indicator)
+            if b'\x00' in content_bytes[:1000]:
+                # Binary file - just count newlines
+                newline_count = content_bytes.count(b'\n')
+                return newline_count if content_bytes.endswith(b'\n') else newline_count + 1
+            
+            # Text file - decode and count
+            try:
+                content = content_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    content = content_bytes.decode('latin-1')
+                except UnicodeDecodeError:
+                    # Fallback to binary count
+                    newline_count = content_bytes.count(b'\n')
+                    return newline_count if content_bytes.endswith(b'\n') else newline_count + 1
+            
+            if len(content) == 0:
+                return 0
+            
+            newline_count = content.count('\n')
+            return newline_count if content.endswith('\n') else newline_count + 1
+            
+        except Exception:
             return 0
 
     def _cleanup_cache_if_needed(self):

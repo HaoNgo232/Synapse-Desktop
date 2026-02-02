@@ -188,7 +188,7 @@ def scan_secrets_in_files_cached(
     Quét secrets với mtime-based cache.
 
     Chỉ scan lại file khi file thay đổi (mtime khác).
-    Function cũ scan_secrets_in_files() vẫn hoạt động như fallback.
+    Uses batch processing for better performance with many files.
 
     Args:
         file_paths: Set các đường dẫn file cần quét
@@ -200,8 +200,10 @@ def scan_secrets_in_files_cached(
     global _security_scan_cache
 
     all_matches: list[SecretMatch] = []
+    files_to_scan: list[tuple[str, Path]] = []
     sorted_paths = sorted(file_paths)
 
+    # Phase 1: Check cache and collect files to scan
     for path_str in sorted_paths:
         path = Path(path_str)
         try:
@@ -210,10 +212,11 @@ def scan_secrets_in_files_cached(
             if is_binary_by_extension(path):
                 continue
 
-            # Get mtime
             try:
                 stat = path.stat()
                 if stat.st_size > max_file_size:
+                    continue
+                if stat.st_size == 0:
                     continue
                 mtime = stat.st_mtime
             except OSError:
@@ -222,29 +225,60 @@ def scan_secrets_in_files_cached(
             # Check cache
             cached = _security_scan_cache.get(path_str)
             if cached is not None and cached[0] == mtime:
-                # Cache hit - use cached results
                 all_matches.extend(cached[1])
                 continue
 
-            # Cache miss - scan file
-            content = path.read_text(encoding="utf-8", errors="replace")
-            file_matches = scan_for_secrets(content, file_path=path.name)
-
-            # Update cache
-            _security_scan_cache[path_str] = (mtime, file_matches)
-            all_matches.extend(file_matches)
-
-            # Cleanup cache if too large
-            if len(_security_scan_cache) > _MAX_CACHE_SIZE:
-                # Remove oldest 20%
-                keys_to_remove = list(_security_scan_cache.keys())[
-                    : _MAX_CACHE_SIZE // 5
-                ]
-                for key in keys_to_remove:
-                    del _security_scan_cache[key]
+            # Need to scan this file
+            files_to_scan.append((path_str, path))
 
         except (OSError, IOError):
             pass
+
+    # Phase 2: Batch scan uncached files
+    if files_to_scan:
+        # For small batches, scan sequentially
+        if len(files_to_scan) <= 5:
+            for path_str, path in files_to_scan:
+                try:
+                    content = path.read_text(encoding="utf-8", errors="replace")
+                    file_matches = scan_for_secrets(content, file_path=path.name)
+                    
+                    mtime = path.stat().st_mtime
+                    _security_scan_cache[path_str] = (mtime, file_matches)
+                    all_matches.extend(file_matches)
+                except (OSError, IOError):
+                    pass
+        else:
+            # For larger batches, use ThreadPoolExecutor
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            def scan_single_file(item: tuple[str, Path]) -> tuple[str, float, list[SecretMatch]]:
+                path_str, path = item
+                try:
+                    content = path.read_text(encoding="utf-8", errors="replace")
+                    file_matches = scan_for_secrets(content, file_path=path.name)
+                    mtime = path.stat().st_mtime
+                    return (path_str, mtime, file_matches)
+                except Exception:
+                    return (path_str, 0.0, [])
+            
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = [executor.submit(scan_single_file, item) for item in files_to_scan]
+                
+                for future in as_completed(futures):
+                    try:
+                        path_str, mtime, file_matches = future.result()
+                        if mtime > 0:
+                            _security_scan_cache[path_str] = (mtime, file_matches)
+                        all_matches.extend(file_matches)
+                    except Exception:
+                        pass
+
+    # Cleanup cache if too large (use LRU-style eviction)
+    if len(_security_scan_cache) > _MAX_CACHE_SIZE:
+        keys_to_remove = list(_security_scan_cache.keys())[: _MAX_CACHE_SIZE // 5]
+        for key in keys_to_remove:
+            del _security_scan_cache[key]
 
     return all_matches
 

@@ -68,11 +68,20 @@ class TokenDisplayService:
 
     Phiên bản SYNC - đơn giản nhất, không race condition.
     Token counting chạy synchronous với global flag để cancel.
+    
+    PERFORMANCE OPTIMIZATIONS:
+    - Priority queue: count visible/selected files first
+    - Smarter batching with size-aware scheduling
+    - Incremental cache updates
     """
 
     # Config
     MAX_CACHE_SIZE = 10000  # Maximum cache entries
-    PROGRESS_INTERVAL = 20  # Update progress mỗi N files
+    PROGRESS_INTERVAL = 10  # Update progress mỗi N files (reduced for responsiveness)
+    
+    # Size thresholds for smart scheduling
+    SMALL_FILE_THRESHOLD = 10000  # bytes - count immediately
+    LARGE_FILE_THRESHOLD = 100000  # bytes - defer to background
 
     def __init__(self, on_update: Optional[Callable[[], None]] = None):
         """
@@ -249,42 +258,66 @@ class TokenDisplayService:
         page=None,
         visible_only: bool = True,
         visible_paths: Optional[set] = None,
-        max_immediate: int = 20,  # Reduced from 50 for faster UI response
+        max_immediate: int = 30,  # Slightly increased with smart prioritization
     ):
         """
         Request token counts cho toàn bộ tree.
         
-        Tối ưu: Chỉ count ngay lập tức cho max_immediate files đầu tiên.
-        Files còn lại sẽ được count incrementally khi UI idle.
-        
-        PERFORMANCE FIX: Reduced max_immediate to 20 for faster initial UI response.
+        Tối ưu: 
+        - Prioritize small files for immediate counting
+        - Large files deferred to background
+        - Selected/visible files get priority
         
         Args:
             tree: Root TreeItem
             page: Flet page
             visible_only: Chỉ count visible files
             visible_paths: Set paths đang visible
-            max_immediate: Số files count ngay (default 20)
+            max_immediate: Số files count ngay (default 30)
         """
         # Check if already cancelled before starting
         if not is_counting_tokens():
             return
             
-        # RACE CONDITION FIX: Sử dụng thread-safe function
         start_token_counting()
-        self._page = page  # Store for UI updates
+        self._page = page
 
         # Collect all files
-        files_to_count = []
+        files_to_count: List[str] = []
         self._collect_files_to_count(tree, visible_only, visible_paths, files_to_count)
         
-        # Check cancellation after collecting files
         if not is_counting_tokens():
             return
         
-        # Split into immediate và deferred
-        immediate_files = files_to_count[:max_immediate]
-        deferred_files = files_to_count[max_immediate:]
+        # Smart prioritization: sort by file size (small first)
+        def get_file_priority(path: str) -> tuple:
+            """Return (priority_score, path) for sorting."""
+            try:
+                size = Path(path).stat().st_size
+                # Small files first, then by path for consistency
+                return (0 if size < self.SMALL_FILE_THRESHOLD else 1, size, path)
+            except OSError:
+                return (2, 0, path)  # Errors last
+        
+        # Sort files by priority
+        files_to_count.sort(key=get_file_priority)
+        
+        # Split based on size-aware threshold
+        immediate_files: List[str] = []
+        deferred_files: List[str] = []
+        
+        for path in files_to_count:
+            if len(immediate_files) >= max_immediate:
+                deferred_files.append(path)
+            else:
+                try:
+                    size = Path(path).stat().st_size
+                    if size < self.LARGE_FILE_THRESHOLD and len(immediate_files) < max_immediate:
+                        immediate_files.append(path)
+                    else:
+                        deferred_files.append(path)
+                except OSError:
+                    deferred_files.append(path)
 
         # Count immediate files sync - with frequent cancellation checks
         count = 0

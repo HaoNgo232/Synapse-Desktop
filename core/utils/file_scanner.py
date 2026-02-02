@@ -10,6 +10,7 @@ Features:
 - Gitignore và default ignore patterns support
 """
 
+import os
 import time
 from pathlib import Path
 from typing import Callable, Optional, List
@@ -200,10 +201,8 @@ class FileScanner:
         spec: pathspec.PathSpec,
         progress_callback: Optional[ProgressCallback],
     ) -> TreeItem:
-        """Scan một directory recursively với progress."""
-        # RACE CONDITION FIX: Sử dụng thread-safe function thay vì đọc global trực tiếp
-
-        # Check global cancellation flag - giống PasteMax
+        """Scan một directory recursively với progress - optimized version."""
+        # Check global cancellation flag
         if not is_scanning():
             return TreeItem(
                 label=current_path.name or str(current_path),
@@ -220,39 +219,51 @@ class FileScanner:
         if not current_path.is_dir():
             return item
 
-        # Update progress - directory count
+        # Update progress
         self._progress.directories += 1
         self._progress.current_path = str(current_path)
-
-        # Throttled progress callback
         self._emit_progress(progress_callback)
 
         try:
-            entries = list(current_path.iterdir())
-        except PermissionError:
-            return item
-        except OSError:
+            # Use scandir for better performance than iterdir
+            with os.scandir(current_path) as entries_iter:
+                # Separate dirs and files in single pass
+                directories: List[os.DirEntry] = []
+                files: List[os.DirEntry] = []
+                
+                for entry in entries_iter:
+                    if not is_scanning():
+                        break
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            directories.append(entry)
+                        elif entry.is_file(follow_symlinks=False):
+                            files.append(entry)
+                    except OSError:
+                        continue
+                
+        except (PermissionError, OSError):
             return item
 
-        # Sort: directories first, then alphabetically
-        entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
+        if not is_scanning():
+            return item
 
-        # Separate files and directories
-        directories = [e for e in entries if e.is_dir()]
-        files = [e for e in entries if e.is_file()]
+        # Sort: alphabetically (is_dir separation already done)
+        directories.sort(key=lambda e: e.name.lower())
+        files.sort(key=lambda e: e.name.lower())
 
         # Process directories
         for entry in directories:
-            # Check cancellation trước mỗi directory
-            # RACE CONDITION FIX: Sử dụng thread-safe function
             if not is_scanning():
                 break
 
-            if is_system_path(entry):
+            entry_path = Path(entry.path)
+            
+            if is_system_path(entry_path):
                 continue
 
             try:
-                rel_path = entry.relative_to(root_path)
+                rel_path = entry_path.relative_to(root_path)
             except ValueError:
                 continue
 
@@ -261,21 +272,24 @@ class FileScanner:
             if spec.match_file(rel_path_str):
                 continue
 
-            child = self._scan_directory(entry, root_path, spec, progress_callback)
+            child = self._scan_directory(entry_path, root_path, spec, progress_callback)
             item.children.append(child)
 
-        # Process files
+        # Process files in batches for better cancellation responsiveness
+        BATCH_SIZE = 50
+        file_count = 0
+        
         for entry in files:
-            # Check cancellation trước mỗi batch files
-            # RACE CONDITION FIX: Sử dụng thread-safe function
-            if not is_scanning():
+            if file_count % BATCH_SIZE == 0 and not is_scanning():
                 break
 
-            if is_system_path(entry):
+            entry_path = Path(entry.path)
+            
+            if is_system_path(entry_path):
                 continue
 
             try:
-                rel_path = entry.relative_to(root_path)
+                rel_path = entry_path.relative_to(root_path)
             except ValueError:
                 continue
 
@@ -284,14 +298,14 @@ class FileScanner:
             if spec.match_file(rel_path_str):
                 continue
 
-            # Update progress - file count
             self._progress.files += 1
+            file_count += 1
 
             item.children.append(
-                TreeItem(label=entry.name, path=str(entry), is_dir=False)
+                TreeItem(label=entry.name, path=str(entry_path), is_dir=False)
             )
 
-        # Emit final progress for this directory
+        # Emit final progress
         self._emit_progress(progress_callback, force=True)
 
         return item

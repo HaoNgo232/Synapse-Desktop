@@ -297,7 +297,7 @@ class SettingsView:
                                                 ft.dropdown.Option(key=name, text=name)
                                                 for name in PRESET_PROFILES.keys()
                                             ],
-                                            on_change=lambda e: self._load_preset(
+                                            on_select=lambda e: self._load_preset(
                                                 e.control.value
                                             ),
                                             hint_text="Select a preset...",

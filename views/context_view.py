@@ -93,9 +93,6 @@ class ContextView:
         # RACE CONDITION FIX: Loading state management
         # Ngăn chặn multiple concurrent _load_tree calls
         # ========================================
-        import threading
-        self._loading_lock = threading.Lock()
-        self._is_loading: bool = False
         self._pending_refresh: bool = False  # Flag để queue refresh request khi đang load
         self._is_disposed: bool = False  # Disposal flag để prevent callbacks sau cleanup
 
@@ -432,16 +429,13 @@ class ContextView:
                     ft.Container(
                         content=self.right_panel,
                         expand=1,
-                        alignment=ft.alignment.top_center,
+                        alignment=ft.Alignment.TOP_CENTER,
                     ),
                 ],
                 expand=True,
                 spacing=16,
                 vertical_alignment=ft.CrossAxisAlignment.START,
             )
-
-        if self.layout_container.page:
-            self.layout_container.update()
 
     def on_workspace_changed(self, workspace_path: Path):
         """Khi user chon folder moi hoac settings thay doi"""
@@ -851,7 +845,7 @@ class ContextView:
                 for cfg in OUTPUT_FORMATS.values()
             ],
             value=self._selected_output_style.value,
-            on_change=self._on_format_changed,
+            on_select=self._on_format_changed,
             width=160,
             text_size=12,
             content_padding=ft.padding.symmetric(horizontal=10, vertical=0),

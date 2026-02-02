@@ -76,7 +76,7 @@ class LogsView:
                 ft.dropdown.Option(key="WARNING", text="Warning"),
                 ft.dropdown.Option(key="ERROR", text="Error"),
             ],
-            on_change=lambda e: self._on_filter_changed(e.control.value),
+            on_select=lambda e: self._on_filter_changed(e.control.value),
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
         )

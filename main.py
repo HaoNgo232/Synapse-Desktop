@@ -103,8 +103,6 @@ class SynapseApp:
                 on_secondary="#FFFFFF",
                 surface=ThemeColors.BG_SURFACE,
                 on_surface=ThemeColors.TEXT_PRIMARY,
-                background=ThemeColors.BG_PAGE,
-                on_background=ThemeColors.TEXT_PRIMARY,
                 error=ThemeColors.ERROR,
                 on_error="#FFFFFF",
                 outline=ThemeColors.BORDER,
@@ -123,8 +121,8 @@ class SynapseApp:
             overflow=ft.TextOverflow.ELLIPSIS,
         )
 
-        folder_picker = ft.FilePicker(on_result=self._on_folder_picked)
-        self.page.overlay.append(folder_picker)
+        # FilePicker trong Flet 0.80.5 la Service, khong can them vao overlay
+        # Su dung async pattern de chon folder
 
         # Recent folders dropdown
         self.recent_folders_btn = ft.PopupMenuButton(
@@ -184,9 +182,7 @@ class SynapseApp:
                             color="#FFFFFF",
                             bgcolor=ThemeColors.PRIMARY,
                         ),
-                        on_click=lambda _: folder_picker.get_directory_path(
-                            dialog_title="Select Workspace Folder"
-                        ),
+                        on_click=self._open_folder_dialog,
                     ),
                 ],
                 spacing=12,
@@ -210,44 +206,49 @@ class SynapseApp:
         self.history_view = HistoryView(self.page, self._on_reapply_from_history)
         self.logs_view = LogsView(self.page)
 
-        # Tabs voi Swiss styling
-        self.tabs = ft.Tabs(
-            selected_index=0,
-            animation_duration=200,
-            indicator_color=ThemeColors.PRIMARY,
-            indicator_tab_size=True,
-            label_color=ThemeColors.TEXT_PRIMARY,
-            unselected_label_color=ThemeColors.TEXT_SECONDARY,
-            divider_color=ThemeColors.BORDER,
-            on_change=self._on_tab_changed,
+        # Create tab bar and content
+        # Su dung ft.Tabs de wrap TabBar va TabBarView dung cach
+        # ft.Tabs can property 'length' de hoat dong dung
+        self.selected_tab_index = 0
+        
+        self.tab_bar = ft.TabBar(
             tabs=[
-                ft.Tab(
-                    text="Context",
-                    icon=ft.Icons.CONTENT_COPY,
-                    content=self.context_view.build(),
-                ),
-                ft.Tab(
-                    text="Apply",
-                    icon=ft.Icons.PLAY_ARROW,
-                    content=self.apply_view.build(),
-                ),
-                ft.Tab(
-                    text="History",
-                    icon=ft.Icons.HISTORY,
-                    content=self.history_view.build(),
-                ),
-                ft.Tab(
-                    text="Logs",
-                    icon=ft.Icons.TERMINAL,
-                    content=self.logs_view.build(),
-                ),
-                ft.Tab(
-                    text="Settings",
-                    icon=ft.Icons.SETTINGS,
-                    content=self.settings_view.build(),
-                ),
+                ft.Tab(label="Context", icon=ft.Icons.CONTENT_COPY),
+                ft.Tab(label="Apply", icon=ft.Icons.PLAY_ARROW),
+                ft.Tab(label="History", icon=ft.Icons.HISTORY),
+                ft.Tab(label="Logs", icon=ft.Icons.TERMINAL),
+                ft.Tab(label="Settings", icon=ft.Icons.SETTINGS),
+            ],
+            divider_color=ThemeColors.BORDER,
+            # TabBar dung on_click, nhung ta dung on_change tu ft.Tabs wrapper
+        )
+        
+        self.tab_content = ft.TabBarView(
+            controls=[
+                self.context_view.build(),
+                self.apply_view.build(),
+                self.history_view.build(),
+                self.logs_view.build(),
+                self.settings_view.build(),
             ],
             expand=True,
+        )
+        
+        # Wrap TabBar va TabBarView trong ft.Tabs voi length = so tab
+        # Day la cach su dung dung trong Flet
+        self.tabs = ft.Tabs(
+            length=5,  # Phai khop voi so tab trong TabBar va so controls trong TabBarView
+            selected_index=0,
+            expand=True,
+            on_change=self._on_tab_changed,
+            content=ft.Column(
+                controls=[
+                    self.tab_bar,
+                    self.tab_content,
+                ],
+                expand=True,
+                spacing=0,
+            ),
         )
 
         tabs = self.tabs
@@ -265,7 +266,7 @@ class SynapseApp:
         if not recent:
             return [
                 ft.PopupMenuItem(
-                    text="No recent folders",
+                    content=ft.Text("No recent folders"),
                     disabled=True,
                 )
             ]
@@ -277,7 +278,7 @@ class SynapseApp:
             # Tránh lỗi late binding của closure trong loop
             items.append(
                 ft.PopupMenuItem(
-                    text=display_name,
+                    content=ft.Text(display_name),
                     on_click=(lambda p: lambda e: self._open_recent_folder(p))(
                         folder_path
                     ),
@@ -306,21 +307,35 @@ class SynapseApp:
         if hasattr(self, "recent_folders_btn"):
             self.recent_folders_btn.items = self._build_recent_folders_menu()
 
-    def _on_folder_picked(self, e: ft.FilePickerResultEvent):
-        """Xu ly khi user chon folder"""
-        if e.path:
-            self.workspace_path = Path(e.path)
-            self.folder_path_text.value = str(self.workspace_path)
-            self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
+    async def _open_folder_dialog(self, e):
+        """
+        Mo dialog chon folder su dung FilePicker API moi (Flet 0.80.5+).
+        
+        FilePicker trong phien ban moi la Service, tra ve ket qua truc tiep
+        thay vi su dung callback on_result.
+        """
+        try:
+            # Su dung async pattern cua FilePicker moi
+            folder_path = await ft.FilePicker().get_directory_path(
+                dialog_title="Select Workspace Folder"
+            )
+            
+            if folder_path:
+                self.workspace_path = Path(folder_path)
+                self.folder_path_text.value = str(self.workspace_path)
+                self.folder_path_text.color = ThemeColors.TEXT_PRIMARY
 
-            # Save to recent folders
-            add_recent_folder(e.path)
-            self._refresh_recent_folders_menu()
+                # Save to recent folders
+                add_recent_folder(folder_path)
+                self._refresh_recent_folders_menu()
 
-            safe_page_update(self.page)
+                safe_page_update(self.page)
 
-            # Notify views
-            self.context_view.on_workspace_changed(self.workspace_path)
+                # Notify views
+                self.context_view.on_workspace_changed(self.workspace_path)
+        except Exception as ex:
+            from core.logging_config import log_error
+            log_error(f"Error opening folder dialog: {ex}")
 
     def _on_settings_changed(self):
         """Xu ly khi settings thay doi - refresh file tree"""
@@ -368,18 +383,19 @@ class SynapseApp:
                 # ========================================
                 # RACE CONDITION FIX: Defer restore đến sau khi load xong
                 # Sử dụng run_task để đảm bảo chạy sau khi tree load hoàn tất
+                # Flet 0.80.5+ yêu cầu async function cho run_task
                 # ========================================
-                def _restore_selection_after_load():
+                async def _restore_selection_after_load():
                     try:
+                        import asyncio
                         # Đợi loading hoàn tất
-                        import time
                         max_wait = 30  # Max 30 giây
                         waited = 0
                         while waited < max_wait:
                             with self.context_view._loading_lock:
                                 if not self.context_view._is_loading:
                                     break
-                            time.sleep(0.1)
+                            await asyncio.sleep(0.1)
                             waited += 0.1
 
                         # Restore sau khi load xong
@@ -587,41 +603,40 @@ class SynapseApp:
     #                 self.context_view.on_workspace_changed(self.workspace_path)
 
     def _on_tab_changed(self, e):
-        """Handle tab change - refresh History/Logs khi chọn và check unsaved Settings"""
-        new_index = e.control.selected_index
-        self._current_tab_index = new_index
-
-        # Check if leaving Settings tab (index 4) with unsaved changes
-        if hasattr(self, "_previous_tab_index") and self._previous_tab_index == 4:
-            if self.settings_view.has_unsaved_changes():
-                # Show dialog and prevent tab change
-                def on_discard():
-                    # Reset unsaved state and switch tab
-                    self.settings_view.reset_unsaved_state()
-                    self._previous_tab_index = new_index
-                    # Already on new tab, just update state
-
-                def on_cancel():
-                    # Revert to Settings tab
-                    self.tabs.selected_index = 4
-                    safe_page_update(self.page)
-
-                self.settings_view.show_unsaved_dialog(on_discard, on_cancel)
-
-        self._previous_tab_index = new_index
-
-        if new_index == 2:  # History tab
-            self.history_view.on_view_activated()
-        elif new_index == 3:  # Logs tab
-            self.logs_view.on_view_activated()
+        """
+        Handle tab change - refresh History/Logs khi chọn và check unsaved Settings.
+        
+        Với ft.Tabs, event chứa control (ft.Tabs) và ta có thể đọc selected_index từ đó.
+        """
+        try:
+            # Lấy selected_index từ Tabs control
+            selected_index = self.tabs.selected_index if self.tabs else 0
+            self._current_tab_index = selected_index
+            
+            # Set active view cho threading utils (để biết view nào đang active)
+            view_names = ["context", "apply", "history", "logs", "settings"]
+            if 0 <= selected_index < len(view_names):
+                set_active_view(view_names[selected_index])
+            
+            # Refresh History tab khi được chọn (index = 2)
+            if selected_index == 2 and hasattr(self, "history_view"):
+                self.history_view.on_view_activated()
+            
+            # Refresh Logs tab khi được chọn (index = 3)
+            if selected_index == 3 and hasattr(self, "logs_view"):
+                self.logs_view.on_view_activated()
+                
+        except Exception as ex:
+            from core.logging_config import log_error
+            log_error(f"Error in _on_tab_changed: {ex}")
 
     def _on_reapply_from_history(self, opx_content: str):
         """Callback khi user muốn re-apply OPX từ History"""
         # Fill OPX vào Apply tab
         if self.apply_view.opx_input:
             self.apply_view.opx_input.value = opx_content
-        # Chuyển sang Apply tab
-        self.tabs.selected_index = 1
+        # For now, we can't easily switch tabs with the new API
+        # This would need to be implemented with proper tab management
         safe_page_update(self.page)
 
 

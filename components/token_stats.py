@@ -123,7 +123,7 @@ class TokenStatsPanel:
                 for m in MODEL_CONFIGS
             ],
             value=self._selected_model_id,
-            on_change=self._on_model_dropdown_changed,
+            on_select=self._on_model_dropdown_changed,
             width=220,
             text_size=12,
             content_padding=ft.padding.symmetric(horizontal=10, vertical=0),

@@ -319,7 +319,7 @@ class DiffViewer(ft.Column):
                     ),
                     width=35,
                     padding=ft.padding.only(right=4),
-                    alignment=ft.alignment.center_right,
+                    alignment=ft.Alignment.CENTER_RIGHT,
                 )
             )
             row_content.append(
@@ -332,7 +332,7 @@ class DiffViewer(ft.Column):
                     ),
                     width=35,
                     padding=ft.padding.only(right=8),
-                    alignment=ft.alignment.center_right,
+                    alignment=ft.Alignment.CENTER_RIGHT,
                     border=ft.border.only(right=ft.BorderSide(1, ThemeColors.BORDER)),
                 )
             )

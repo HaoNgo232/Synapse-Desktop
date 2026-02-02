@@ -51,6 +51,15 @@ from core.utils.safe_timer import (
     DebouncedCallback,
 )
 
+from core.utils.background_processor import (
+    BackgroundProcessor,
+    BatchProcessor,
+    TaskHandle,
+    TaskPriority,
+    get_background_processor,
+    shutdown_background_processor,
+)
+
 __all__ = [
     # file_utils
     "TreeItem",
@@ -81,4 +90,11 @@ __all__ = [
     # safe_timer
     "SafeTimer",
     "DebouncedCallback",
+    # background_processor
+    "BackgroundProcessor",
+    "BatchProcessor",
+    "TaskHandle",
+    "TaskPriority",
+    "get_background_processor",
+    "shutdown_background_processor",
 ]

@@ -186,8 +186,9 @@ class FileTreeComponent:
             visible=False,
         )
 
-        # Tree container
-        self.tree_container = ft.Column(
+        # Tree container - sử dụng ListView với virtual scrolling
+        # build_controls_on_demand=True chỉ render items trong viewport
+        self.tree_container = ft.ListView(
             controls=[
                 ft.Text(
                     "Open a folder to see files",
@@ -196,8 +197,12 @@ class FileTreeComponent:
                     size=14,
                 )
             ],
-            scroll=ft.ScrollMode.AUTO,
+            spacing=0,
+            padding=0,
             expand=True,
+            item_extent=32,  # Fixed height cho virtual scrolling
+            build_controls_on_demand=True,  # KEY: Chỉ render visible items
+            cache_extent=200,  # Pre-render 200px trước/sau viewport
         )
 
         return ft.Container(
@@ -536,45 +541,41 @@ class FileTreeComponent:
 
     def _render_tree(self):
         """
-        Render tree vao UI - thread safe.
+        Render tree vao UI - thread safe với virtual scrolling support.
+        
+        Với ListView.build_controls_on_demand=True, Flet sẽ chỉ thực sự
+        render những controls trong viewport. Ta vẫn cần tạo tất cả
+        controls nhưng chúng sẽ được lazy-built.
         
         RACE CONDITION FIX: Sử dụng atomic check-and-set pattern.
-        Check và set _is_rendering trong cùng một critical section.
         """
-        # ========================================
-        # RACE CONDITION FIX: Atomic check-and-set
-        # Check _is_rendering VÀ set nó trong cùng một lock acquisition
-        # Tránh TOCTOU (Time-of-Check to Time-of-Use) vulnerability
-        # ========================================
-        from core.logging_config import log_info, log_error
-        log_info(f"[FileTree] _render_tree START - tree_container={self.tree_container is not None}, tree={self.tree is not None}")
+        from core.logging_config import log_info, log_error, log_debug
+        log_debug(f"[FileTree] _render_tree START")
         
         with self._ui_lock:
             if self._is_rendering or self._is_disposed:
-                log_info(f"[FileTree] _render_tree SKIP - is_rendering={self._is_rendering}, is_disposed={self._is_disposed}")
-                return  # Đang render hoặc đã cleanup, skip
+                log_debug(f"[FileTree] _render_tree SKIP - is_rendering={self._is_rendering}")
+                return
             self._is_rendering = True
         
-        # Validate prerequisites NGOÀI lock để tránh hold lock quá lâu
         if not self.tree_container or not self.tree:
-            log_info(f"[FileTree] _render_tree SKIP - missing tree_container or tree")
+            log_debug(f"[FileTree] _render_tree SKIP - missing tree_container or tree")
             with self._ui_lock:
                 self._is_rendering = False
             return
             
         try:
-            log_info(f"[FileTree] Clearing controls, current count: {len(self.tree_container.controls)}")
             self.tree_container.controls.clear()
 
-            # Track rendered count for performance
+            # Track rendered count - với virtual scrolling có thể tăng limit
             self._rendered_count = 0
-            self._max_render_items = 1000  # Limit for very large trees
+            self._max_render_items = 50000  # Tăng limit vì virtual scrolling
 
             self._render_tree_item(self.tree, 0)
             
-            log_info(f"[FileTree] Rendered {self._rendered_count} items, controls count: {len(self.tree_container.controls)}")
+            log_debug(f"[FileTree] Created {self._rendered_count} controls (virtual scroll enabled)")
 
-            # Add truncation notice if needed
+            # Add truncation notice if still exceeds
             if self._rendered_count >= self._max_render_items:
                 self.tree_container.controls.append(
                     ft.Text(
@@ -585,15 +586,11 @@ class FileTreeComponent:
                     )
                 )
 
-            # Safety check: only update if page exists and component is attached
-            if self.page and hasattr(self, "tree_container") and self.tree_container:
+            if self.page and self.tree_container:
                 try:
-                    log_info(f"[FileTree] Calling safe_page_update...")
                     safe_page_update(self.page)
-                    log_info(f"[FileTree] safe_page_update completed")
                 except AssertionError as e:
-                    # Control not yet attached to page, skip update
-                    log_error(f"[FileTree] AssertionError in page update: {e}")
+                    log_debug(f"[FileTree] AssertionError in page update: {e}")
         except Exception as ex:
             log_error(f"[FileTree] Error in _render_tree: {ex}")
         finally:

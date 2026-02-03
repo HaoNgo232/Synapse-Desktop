@@ -37,7 +37,7 @@ class FilePreviewDialog:
     MAX_LINES = 5000
     
     # Số dòng tối đa cho syntax highlighting (để tránh chậm)
-    MAX_HIGHLIGHT_LINES = 1000
+    MAX_HIGHLIGHT_LINES = 10000
 
     @staticmethod
     def show(

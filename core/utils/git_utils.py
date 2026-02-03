@@ -5,7 +5,7 @@ Git Utilities - Handle git operations (diff, log, status)
 import subprocess
 import shutil
 from pathlib import Path
-from dataclasses import dataclass, field, field
+from dataclasses import dataclass, field
 from typing import Optional, List
 import logging
 

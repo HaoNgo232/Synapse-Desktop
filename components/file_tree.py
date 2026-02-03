@@ -57,7 +57,7 @@ class FileTreeComponent:
         self._line_service = LineCountService(on_update=self._on_metrics_updated)
 
         # UI elements
-        self.tree_container: Optional[ft.Column] = None
+        self.tree_container: Optional[ft.ListView] = None
         self.search_field: Optional[ft.TextField] = None
         self.match_count_text: Optional[ft.Text] = None
         
@@ -439,8 +439,10 @@ class FileTreeComponent:
         self.search_query = (e.control.value or "").lower().strip()
 
         # Update clear button visibility immediately
-        if self.search_field.suffix and hasattr(self.search_field.suffix, 'visible'):
-            self.search_field.suffix.visible = bool(self.search_query)
+        # Type safe: suffix có thể là str | Control | None
+        suffix = self.search_field.suffix
+        if suffix is not None and hasattr(suffix, 'visible'):
+            suffix.visible = bool(self.search_query)  # type: ignore[union-attr]
             safe_page_update(self.page)
 
         # Cancel previous timer if exists
@@ -519,8 +521,10 @@ class FileTreeComponent:
         self.search_query = ""
         self.matched_paths.clear()
         self.match_count_text.value = ""
-        if self.search_field.suffix and hasattr(self.search_field.suffix, 'visible'):
-            self.search_field.suffix.visible = False
+        # Type safe: suffix có thể là str | Control | None
+        suffix = self.search_field.suffix
+        if suffix is not None and hasattr(suffix, 'visible'):
+            suffix.visible = False  # type: ignore[union-attr]
         self._render_tree()
 
     def _on_search_blur(self, e):
@@ -698,6 +702,28 @@ class FileTreeComponent:
         else:
             # Fallback: run trực tiếp (không lý tưởng nhưng tốt hơn không làm gì)
             self._render_tree()
+    
+    def _make_toggle_handler(self, path: str):
+        """
+        Tạo handler function cho expand/collapse button.
+        
+        TYPE FIX: Pyrefly yêu cầu on_click chỉ nhận 1 argument (event).
+        Dùng closure để capture path.
+        """
+        def handler(e):
+            self._toggle_expand(path)
+        return handler
+    
+    def _make_toggle_item_handler(self, path: str, is_dir: bool, children: list):
+        """
+        Tạo handler function cho checkbox on_change.
+        
+        TYPE FIX: Pyrefly yêu cầu on_change chỉ nhận 1 argument (event).
+        Dùng closure để capture path, is_dir, children.
+        """
+        def handler(e):
+            self._on_item_toggled(e, path, is_dir, children)
+        return handler
 
     # Reusable empty container to reduce allocations
     _EMPTY_CONTAINER = None
@@ -757,7 +783,8 @@ class FileTreeComponent:
                     width=24,
                     height=24,
                     padding=0,
-                    on_click=lambda e, p=item_path: self._toggle_expand(p),
+                    # TYPE FIX: Wrapper function để tránh closure issue với lambda multi-params
+                    on_click=self._make_toggle_handler(item_path),
                 )
             else:
                 expand_icon = ft.Container(width=24)
@@ -769,9 +796,8 @@ class FileTreeComponent:
             value=is_selected,
             active_color=ThemeColors.PRIMARY,
             check_color="#FFFFFF",
-            on_change=lambda e, p=item_path, d=is_dir, c=item_children: self._on_item_toggled(
-                e, p, d, c
-            ),
+            # TYPE FIX: Wrapper function để tránh closure issue với lambda multi-params
+            on_change=self._make_toggle_item_handler(item_path, is_dir, item_children),
         )
 
         # Icon selection

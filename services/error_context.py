@@ -238,6 +238,8 @@ def _build_focused_error_context(
         sections.append("</edit>")
         sections.append("```")
         sections.append("")
+    
+    return sections
 
 
 def _build_success_section(

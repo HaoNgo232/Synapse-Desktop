@@ -39,12 +39,13 @@ Synapse Desktop is **not tied to any specific AI provider**. Since it generates 
 - Grok (xAI)
 - DeepSeek Chat
 - Perplexity
+- ...
 
 **Paid/API Services:**
 - ChatGPT Plus/Pro
 - Claude Pro
 - Gemini Advanced
-- Any OpenAI/Anthropic/Google API client
+- ...
 
 **Local LLMs:**
 - Ollama
@@ -52,6 +53,7 @@ Synapse Desktop is **not tied to any specific AI provider**. Since it generates 
 - Jan
 - GPT4All
 - Text Generation WebUI
+- ...
 
 **Why This Matters:**
 - **Zero LLM subscription cost**: Use free tiers with large context windows (Gemini: 1M tokens, Claude: 200K tokens)

@@ -1,319 +1,264 @@
 # Synapse Desktop
-A lightweight AI-assisted code editing tool for desktop.
 
-**Synapse Desktop** is a desktop application designed to capture code context for LLMs. Built with Python & Flet, it reimplement the **Overwrite** extension workflow as a standalone tool, incorporating processing logic adapted from **Pastemax**.
+**Synapse Desktop** is a lightweight desktop application (Python + Flet) designed to **extract context from your codebase for LLMs** (ChatGPT, Claude, Gemini, etc.) and **safely apply LLM-suggested changes** to your project with full control.
 
-- **Workflow**: Ported from the [Overwrite](https://github.com/mnismt/overwrite) VS Code extension.
-- **Engine**: File processing and concurrency utility functions adapted from [Pastemax](https://github.com/kleneway/pastemax).
+The goal of Synapse Desktop is to make the development loop:
 
-## Getting Started
+> Select Files → Generate optimized prompt → Send to LLM → Receive Patch → Preview Diff → Apply → Backup/Undo
 
-### Prerequisites
+**fast, secure, and free from path hallucinations.**
 
+---
+
+## Why Synapse Desktop?
+
+When working with LLMs on large codebases, you often face several challenges:
+
+- **Context Selection**: Hard to decide which files to send. Too few and the LLM lacks understanding; too many and you **waste tokens**.
+- **Hallucinations**: LLMs frequently hallucinate file paths or project structures if the context is unclear.
+- **Manual Applying**: Copy-pasting patches manually is error-prone (wrong indentation, missing segments, applying to the wrong file).
+- **Security Risks**: Accidental exposure of **secrets** (API keys, tokens, credentials) when copying code to LLMs.
+
+Synapse Desktop solves these problems by providing:
+- An intuitive file tree for selection.
+- Optimized prompt generation formats for LLMs.
+- "Smart Context" mode to drastically reduce token usage.
+- The "Apply OPX" system with diff preview, backups, and undo functionality.
+
+---
+
+## Works with Any AI Chat
+
+Synapse Desktop is **not tied to any specific AI provider**. Since it generates structured text (XML, Markdown, JSON, or Plain Text), you can copy and paste the output into **any AI chat interface**:
+
+**Free Chat UIs (Save Money!):**
+- ChatGPT Free (OpenAI)
+- Gemini (Google) - 1M+ token context window
+- Claude Free (Anthropic)
+- Microsoft Copilot (Bing Chat)
+- Grok (xAI)
+- DeepSeek Chat
+- Perplexity
+
+**Paid/API Services:**
+- ChatGPT Plus/Pro
+- Claude Pro
+- Gemini Advanced
+- Any OpenAI/Anthropic/Google API client
+
+**Local LLMs:**
+- Ollama
+- LM Studio
+- Jan
+- GPT4All
+- Text Generation WebUI
+
+**Why This Matters:**
+- **Zero LLM subscription cost**: Use free tiers with large context windows (Gemini: 1M tokens, Claude: 200K tokens)
+- **Multi-model comparison**: Send the same context to GPT-4, Claude, and Gemini to get "second opinions"
+- **No vendor lock-in**: Switch between models freely based on your needs
+- **Future-proof**: Works with any new AI chat that accepts text input
+
+---
+
+## When to Use Synapse Desktop
+
+### Synapse vs. IDE AI Assistants (Copilot, Cursor, Cody)
+
+| Aspect | IDE AI (Copilot/Cursor) | Synapse Desktop |
+|--------|-------------------------|-----------------|
+| **Cost** | $10-20/month subscription | Free (uses free chat UIs) |
+| **Model choice** | Locked to provider's model | Any model you want |
+| **Context control** | Auto-detect (may miss files) | Manual selection with token count |
+| **Secret scanning** | Often sends automatically | Scans BEFORE you copy |
+| **Preview changes** | Usually applies directly | Full diff preview |
+| **Undo changes** | Depends on git/IDE undo | Automatic backup + 1-click undo |
+| **Inline completion** | Yes | No (different use case) |
+
+### Use Synapse Desktop When:
+
+1. **Saving Money**: You don't want to pay for Copilot/Cursor subscription. Use Synapse + Gemini/ChatGPT Free instead.
+
+2. **Multi-Model Review**: You want to compare solutions from GPT-4, Claude, and Gemini before choosing the best one.
+
+3. **Precise Context Control**: You need to send exactly the right files with known token count, not rely on auto-detection.
+
+4. **Security-First Workflow**: You work with sensitive code and need to scan for secrets BEFORE sending context.
+
+5. **Safe Code Changes**: You want to preview diffs and have automatic backups before applying any changes.
+
+6. **Legacy/Restricted Environments**: Your IDE doesn't have AI extensions, or company policy restricts AI integrations.
+
+7. **Complex Refactoring**: Multi-file changes that need careful review before application.
+
+### Use IDE AI When:
+
+- You need **inline code completion** as you type
+- You have a subscription and are satisfied with the default model
+- Simple, single-file edits that don't need preview
+
+**Note**: Synapse Desktop and IDE AI can work **together**. Use IDE AI for quick completions, and Synapse for complex tasks requiring context control, multi-model comparison, or safe application.
+
+---
+
+## Key Features
+
+### 1) Copy Context (Prompt Preparation)
+- Select files/folders from the visual tree.
+- Enter "User Instructions" for the task.
+- Export prompts in multiple formats:
+  - **XML (Default, Repomix-style)**: Highly structured, minimizes hallucinations.
+  - **Markdown**: Human-readable and widely supported.
+  - **JSON**: Ideal for automation or JSON-mode interactions.
+  - **Plain Text**: Minimalist and token-efficient.
+
+### 2) Copy Tree Map (Folder Structure Only)
+- Copies the **file structure** without file contents.
+- Useful for:
+  - Discussing architecture.
+  - Low token budgets.
+  - Initial planning before the LLM needs to read specific code.
+
+### 3) Copy Smart Context (Token Saving via Tree-sitter)
+- Instead of sending full source code, Smart Context extracts:
+  - Signatures (classes/functions/methods).
+  - Imports.
+  - Relevant docstrings and comments.
+- Helps the LLM understand the structure while significantly reducing token consumption.
+
+**Currently Supported Languages for Smart Context:**
+Python, JavaScript, TypeScript, Rust, Go, Java, C#, C, C++, Ruby, PHP, Swift, CSS/SCSS/LESS, Solidity.
+
+### 4) Git Integration (Recently Changed Context)
+- Options to include:
+  - `git diff` (working tree / staged changes).
+  - `git log` (recent commit history).
+- Includes a **Copy Diff Only** mode: perfect for code reviews or incremental updates.
+
+### 5) Security Check (Secret Leak Prevention)
+- Scans for secrets before copying (powered by **detect-secrets**).
+- Displays alerts and provides a redacted preview.
+- Allows opening the file preview directly at the suspicious line.
+
+### 6) Apply OPX (Controlled Patch Application)
+Synapse Desktop supports applying LLM responses using the **OPX (Overwrite Patch XML)** format:
+
+- `new` → Create a new file.
+- `patch` → Search & replace within a specific region (safer than full file overwrites).
+- `replace` → Overwrite the entire file content.
+- `remove` → Delete a file.
+- `move` → Rename or move a file.
+
+**Before Applying:**
+- Use the **Preview** tab to see a clear diff (+/-) for every affected file.
+
+**When Applying:**
+- Automatically creates a **backup** before any modification.
+- Features a one-click **Undo Last Apply** from Backups/History.
+
+### 7) History & Session Restore
+- The History tab logs all apply operations (success/fail, action summaries).
+- Automatically restores your workspace and file selections after restarting the app.
+
+---
+
+## Recommended Workflow
+
+### A. Sending Context to LLM
+1. **Open Folder** → Select your workspace.
+2. Tick the files needed for context.
+3. Enter your instructions (what you want the LLM to do).
+4. Select the **Output Format** (XML is recommended).
+5. Click:
+   - **Copy Context** (for standard context packing).
+   - **Copy + OPX** (includes instructions for the LLM to reply with an OPX patch).
+
+### B. Applying LLM Changes
+1. LLM provides an OPX XML block.
+2. Go to the **Apply** tab.
+3. Paste the OPX content → Click **Preview** to review the diff.
+4. Click **Apply Changes**.
+5. If something goes wrong: **View Backups → Undo Last Apply**.
+
+---
+
+## Installation & Setup
+
+### Requirements
 - Python 3.10+
 - pip
 
-### Installation
-
-#### Linux
-
+### Installation (Linux)
 ```bash
-# Clone the repository
 git clone https://github.com/HaoNgo232/synapse-desktop.git
 cd synapse-desktop
 
-# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the application
 ./start.sh
-# OR
+# or
 python main.py
-```
-
-### Build from Source
-
-To build a standalone AppImage (Linux):
-
-```bash
-# Ensure dependencies are installed
-pip install pyinstaller
-
-# Run build script
-./build-appimage.sh
-
-# The AppImage will be in build/Synapse-Desktop-1.0.0-x86_64.AppImage
 ```
 
 ---
 
-## Why "Synapse"?
-
-The name represents the vital connection between your codebase and AI intelligence. Just like a synapse transmits signals between neurons, **Synapse Desktop** transmits precise code context to LLMs and applies their intelligence back to your project.
-
-## Motivation
-
-I created **Synapse Desktop** to support my thesis work, as the original tool I relied on was no longer maintained. I am sharing this project in the hope that it can be useful to others who need a simple, reliable way to prepare code context for LLMs.
-
-## Features
-
-### Core Features
-- **Copy Context** - Select files and generate LLM-ready prompts in multiple formats
-- **Copy Tree Map** - Copy only file structure without contents (saves tokens)
-- **Copy Smart Context** - Extract code signatures and docstrings using Tree-sitter (reduces tokens while preserving structure)
-- **Apply OPX** - Paste LLM responses in OPX format and apply changes to your codebase
-- **Preview Changes** - Visual diff preview with +lines/-lines before applying
-
-### Output Formats
-Choose from multiple output formats optimized for different use cases:
-- **XML** (Default) - Structured format optimized for Claude & GPT, reduces hallucination
-- **Markdown** - Code blocks with syntax highlighting, human-readable
-- **JSON** - Pure data format for automation and JSON Mode models
-- **Plain Text** - Minimal formatting, saves the most tokens
-
-### File Tree
-- **Collapsible File Tree** - Navigate large codebases with expand/collapse folders
-- **Search/Filter** - Quick search to find files in large projects
-- **Token Counter** - Track token usage per file and folder
-- **Line Counter** - Display line counts for files and folders
-- **Gitignore Support** - Respect `.gitignore` patterns automatically
-- **Excluded Folders** - Configure custom exclusion patterns
-- **Ignore & Undo** - Quickly add files to ignore list and undo if needed
-- **Auto-refresh** - Automatically detect file changes and update tree
-
-### Smart Context (Tree-sitter)
-Extract code structure instead of full content to save tokens while preserving understanding.
-
-**Supported Languages:**
-- Python (.py, .pyw)
-- JavaScript (.js, .jsx, .mjs, .cjs)
-- TypeScript (.ts, .tsx, .mts, .cts)
-- Rust (.rs)
-- Go (.go)
-- Java (.java)
-- C# (.cs)
-- C (.c, .h)
-- C++ (.cpp, .hpp, .cc, .cxx)
-- Ruby (.rb, .rake, .gemspec)
-- PHP (.php, .phtml)
-- Swift (.swift)
-- CSS (.css, .scss, .less)
-- Solidity (.sol)
-
-### Git Integration
-- **Include Git Diff** - Optionally include working tree and staged changes in context
-- **Include Git Log** - Add recent commit history for better understanding
-- **Toggle in Settings** - Enable/disable git context as needed
-
-### Security
-- **Secret Detection** - Scan for API keys, tokens, and credentials before copying (powered by detect-secrets)
-- **Warning Dialog** - Review detected secrets with redacted previews
-- **Toggle in Settings** - Enable/disable security scanning
-
-### History & Backup
-- **History Tab** - View all previous OPX operations with success/fail stats
-- **Auto Backup** - Automatic file backups before modifications
-- **Undo Last Apply** - Rollback the last batch of changes
-- **Re-apply from History** - Copy or re-apply previous OPX operations
-
-### Developer Tools
-- **Logs Tab** - View application logs for debugging
-- **Debug Mode** - Enable verbose logging when needed
-- **Memory Monitor** - Track memory usage and cache stats
-- **Session Restore** - Automatically restore workspace and selections on restart
-
-### Supported LLM Models
-Token stats panel supports context limits for popular models:
-- **OpenAI**: GPT-5.1, GPT-5.1 Thinking (200k context)
-- **Anthropic**: Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 (200k context)
-- **Google**: Gemini 3 Pro, Gemini 3 Flash (1M context)
-- **DeepSeek**: DeepSeek V3.1, DeepSeek R1 (128k context)
-- **xAI**: Grok 4 (256k context)
-- **Alibaba**: Qwen3 235B (256k context)
-- **Meta**: Llama 4 Scout (10M context)
-
-## Usage
-
-### 1. Copy Context
-
-1. Click **Open Folder** to select your project
-2. Use the file tree to select files (click checkboxes)
-3. Enter instructions in the text area
-4. Select your preferred **Output Format** (XML, Markdown, JSON, Plain Text)
-5. Click **Copy Context** (for basic context) or **Copy + OPX** (for optimization instructions)
-6. Paste into your LLM chat
-
-### 2. Copy Smart Context
-
-1. Select files containing code you want to analyze
-2. Click **Copy Smart** to extract only code signatures and docstrings
-3. Smart Context uses Tree-sitter to parse and extract structure
-4. Significantly reduces token count while preserving code understanding
-
-### 3. Apply Changes
-
-1. Get OPX response from LLM
-2. Go to **Apply** tab
-3. Paste the OPX XML response (or click **Paste** button)
-4. Click **Preview** to see changes with visual diff
-5. Click **Apply Changes** to execute
-6. Use **View Backups** → **Undo Last Apply** if you need to revert
-
-### 4. History
-
-1. Go to **History** tab to see all previous operations
-2. Click an entry to view details
-3. Use **Copy OPX** to copy the original OPX
-4. Use **Re-apply** to send OPX to Apply tab
-
-### 5. Settings
-
-- **Excluded Folders** - Add patterns like `node_modules`, `dist`
-- **Presets** - Quick load common patterns (Python, Node.js, Rust, Go, Java, General)
-- **Respect .gitignore** - Toggle to include/exclude gitignored files
-- **Enable Security Check** - Scan for secrets before copying
-- **Include Git Diff/Log** - Add git changes to context
-- **Session** - Clear saved workspace and selections
-- **Export/Import** - Share settings via JSON
-
-
-## Project Structure
-
-```text
-synapse-desktop/
-├── main.py                 # App entry point
-├── requirements.txt        # Python dependencies
-├── start.sh                # Linux start script
-├── build-appimage.sh       # AppImage build script
-│
-├── assets/                 # Static assets
-│   └── icon.png
-│
-├── components/             # Reusable UI components
-│   ├── file_tree.py        # File tree with search, tokens, lines
-│   ├── diff_viewer.py      # Visual diff display
-│   └── token_stats.py      # Token statistics panel
-│
-├── config/                 # Configuration modules
-│   ├── model_config.py     # LLM model definitions
-│   ├── output_format.py    # Output format registry (XML, MD, JSON, Plain)
-│   └── paths.py            # Application paths (~/.synapse-desktop/)
-│
-├── core/                   # Business logic
-│   ├── constants/          # File patterns, binary extensions
-│   │   └── file_patterns.py
-│   │
-│   ├── smart_context/      # Tree-sitter code parsing
-│   │   ├── config.py       # Language configurations
-│   │   ├── loader.py       # Language loader with caching
-│   │   ├── parser.py       # Smart parse implementation
-│   │   └── queries/        # Tree-sitter queries per language
-│   │       ├── python.py
-│   │       ├── javascript.py
-│   │       ├── typescript.py
-│   │       └── ... (14 languages)
-│   │
-│   ├── utils/              # Utility modules
-│   │   ├── file_utils.py   # File tree scanning
-│   │   ├── file_scanner.py # Async scanner with progress
-│   │   ├── git_utils.py    # Git diff/log operations
-│   │   ├── language_utils.py # Language detection
-│   │   ├── ui_utils.py     # Safe UI updates
-│   │   ├── threading_utils.py # Thread management
-│   │   ├── batch_updater.py # Debounced UI updates
-│   │   └── async_queue.py  # Async task queue
-│   │
-│   ├── opx_parser.py       # OPX XML parser
-│   ├── opx_instruction.py  # OPX system prompt for LLMs
-│   ├── file_actions.py     # File operations (create, modify, delete)
-│   ├── token_counter.py    # Token counting with tiktoken
-│   ├── prompt_generator.py # Generate LLM prompts (multi-format)
-│   ├── tree_map_generator.py # Tree-only prompts
-│   ├── security_check.py   # Secret scanning with detect-secrets
-│   ├── theme.py            # Dark mode OLED theme
-│   └── logging_config.py   # Logging setup with rotation
-│
-├── services/               # Background services
-│   ├── clipboard_utils.py  # Clipboard operations
-│   ├── file_watcher.py     # Auto-refresh on file changes
-│   ├── history_service.py  # History storage
-│   ├── session_state.py    # Session persistence
-│   ├── recent_folders.py   # Recent folders
-│   ├── settings_manager.py # Settings persistence
-│   ├── memory_monitor.py   # Memory tracking
-│   ├── token_display.py    # Token cache service
-│   ├── line_count_display.py # Line count service
-│   ├── preview_analyzer.py # Diff analysis
-│   └── error_context.py    # Error context for AI
-│
-├── views/                  # App views/tabs
-│   ├── context_view.py     # File selection tab
-│   ├── apply_view.py       # Apply changes tab
-│   ├── history_view.py     # History tab
-│   ├── logs_view.py        # Logs tab
-│   └── settings_view.py    # Settings tab
-│
-├── stubs/                  # Type stubs for tree-sitter
-│   └── tree_sitter_*/      # Per-language type hints
-│
-├── tests/                  # Unit tests
-│   ├── test_opx_parser.py
-│   ├── test_prompt_generator.py
-│   ├── test_diff_viewer.py
-│   ├── test_token_counter.py
-│   ├── test_git_utils.py
-│   ├── test_file_actions_security.py
-│   └── ...
-│
-└── docs/                   # Documentation
-```
-
-## Development
-
+## Build AppImage (Linux)
 ```bash
-# Run tests
-pytest tests/ -v
-
-# Run with hot reload (development)
-flet run main.py -r
-
-# Enable debug logging
-SYNAPSE_DEBUG=1 python main.py
-
-# Type checking
-pyrefly check
+pip install pyinstaller
+./build-appimage.sh
 ```
+
+---
 
 ## Data Storage
+Synapse Desktop stores data at:
 
-Application data is stored in `~/.synapse-desktop/`:
+`~/.synapse-desktop/`
 
-| File | Purpose |
-|------|---------|
-| `settings.json` | Excluded folders, model preferences, security settings |
-| `recent_folders.json` | Recently opened folders |
-| `session.json` | Last session state (workspace, selections, window size) |
-| `history.json` | Apply operation history |
-| `logs/app.log` | Application logs (with rotation) |
-| `backups/` | File backups before modifications |
+| File/Folder | Purpose |
+|---|---|
+| `settings.json` | Excluded folders, model settings, security, git options. |
+| `session.json` | Workspace path, selections, and window state. |
+| `history.json` | History of OPX apply operations. |
+| `logs/app.log` | Application logs (rotated). |
+| `backups/` | Automated file backups created before any modification. |
 
-## Environment Variables
+---
 
-| Variable | Purpose |
-|----------|---------|
-| `SYNAPSE_DEBUG` | Set to `1` to enable verbose debug logging |
+## What is OPX? (Quick Summary)
+OPX (Overwrite Patch XML) is an XML-based patch format for describing file operations.
+
+Example patch:
+```xml
+<edit file="src/app.py" op="patch">
+  <find occurrence="first">
+<<<
+print("hello")
+>>>
+  </find>
+  <put>
+<<<
+print("hello world")
+>>>
+  </put>
+</edit>
+```
+
+Benefits:
+- Automated preview and application.
+- Targeted search & replace minimizes errors.
+- Reduced risk compared to full file replacements.
+
+---
 
 ## Acknowledgements
+- Workflow inspired by **Overwrite** (VS Code extension).
+- Logic and concurrency adapted from **Pastemax**.
+- Security scan patterns inspired by **Repomix**.
 
-This project was inspired by and adapted concepts from:
-
-- **[Overwrite](https://github.com/mnismt/overwrite)** - Core workflow and OPX protocol
-- **[Pastemax](https://github.com/kleneway/pastemax)** - File processing and concurrency utilities  
-- **[Repomix](https://github.com/yamadashy/repomix)** - Security scanning patterns
+---
 
 ## License
-MIT License
+MIT

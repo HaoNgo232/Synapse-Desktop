@@ -842,17 +842,20 @@ class ContextView:
                     )
                     # Không gọi safe_page_update() ở đây để tránh race condition
 
-            # Scan với progress (sử dụng global cancellation flag)
-            log_info(f"[ContextView] Starting scan for: {workspace_path}")
+            # LAZY LOADING: Scan CHỈ depth=1 (immediate children)
+            # Folders sẽ có is_loaded=False, load on-demand khi user click
+            log_info(f"[ContextView] Starting SHALLOW scan (depth=1) for: {workspace_path}")
             
-            self.tree = scan_directory(
+            from core.utils.file_utils import scan_directory_shallow
+            
+            self.tree = scan_directory_shallow(
                 workspace_path,
+                depth=1,  # Chỉ scan immediate children
                 excluded_patterns=excluded_patterns,
                 use_gitignore=use_gitignore,
-                progress_callback=on_progress,
             )
             
-            log_info(f"[ContextView] Scan complete. Tree: {self.tree.label if self.tree else 'None'}")
+            log_info(f"[ContextView] Shallow scan complete. Tree: {self.tree.label if self.tree else 'None'}")
 
             # Set tree to component - NO TOKEN COUNTING HERE
             assert self.file_tree_component is not None

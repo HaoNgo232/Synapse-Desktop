@@ -22,12 +22,16 @@ class TreeItem:
     """
     Mot item trong file tree (file hoac folder).
     Tuong duong VscodeTreeItem trong TypeScript.
+    
+    is_loaded: True nếu children đã được scan (cho lazy loading).
+               False = folder chưa được scan, children = []
     """
 
     label: str  # Ten hien thi (filename/dirname)
     path: str  # Duong dan tuyet doi
     is_dir: bool = False
     children: list["TreeItem"] = field(default_factory=list)
+    is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
 
 
 def is_binary_by_extension(file_path: Path) -> bool:
@@ -124,6 +128,124 @@ def scan_directory(
 
     # Build tree recursively
     return _build_tree(root_path, root_path, spec)
+
+
+def scan_directory_shallow(
+    root_path: Path,
+    depth: int = 1,
+    excluded_patterns: Optional[list[str]] = None,
+    use_gitignore: bool = True,
+    use_default_ignores: bool = True,
+) -> TreeItem:
+    """
+    Scan directory CHỈ đến depth cấp (cho lazy loading).
+    
+    depth=1: Chỉ scan immediate children, không đệ quy vào folders.
+             Folders sẽ có is_loaded=False.
+    depth=2: Scan 2 levels, etc.
+    
+    Args:
+        root_path: Thư mục gốc cần scan
+        depth: Số cấp cần scan (1 = chỉ immediate children)
+        excluded_patterns: Patterns để exclude
+        use_gitignore: Có đọc .gitignore không
+        use_default_ignores: Có dùng EXTENDED_IGNORE_PATTERNS không
+    
+    Returns:
+        TreeItem root với children chỉ scan đến depth cấp
+    """
+    root_path = root_path.resolve()
+
+    # Build ignore spec (giống scan_directory)
+    ignore_patterns: list[str] = []
+    ignore_patterns.extend([".git", ".hg", ".svn"])
+    
+    if use_default_ignores:
+        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
+    
+    if excluded_patterns:
+        ignore_patterns.extend(excluded_patterns)
+    
+    if use_gitignore:
+        gitignore_patterns = _read_gitignore(root_path)
+        ignore_patterns.extend(gitignore_patterns)
+    
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    
+    # Build tree với depth limit
+    # current_depth=1 vì root là level 1, children là level 2
+    return _build_tree_shallow(root_path, root_path, spec, current_depth=1, max_depth=depth)
+
+
+def _build_tree_shallow(
+    current_path: Path,
+    root_path: Path,
+    spec: pathspec.PathSpec,
+    current_depth: int,
+    max_depth: int,
+) -> TreeItem:
+    """Build tree structure với depth limit (cho lazy loading)"""
+    item = TreeItem(
+        label=current_path.name or str(current_path),
+        path=str(current_path),
+        is_dir=current_path.is_dir(),
+        is_loaded=True,  # Root luôn loaded
+    )
+
+    if not current_path.is_dir():
+        return item
+
+    try:
+        entries = list(current_path.iterdir())
+    except PermissionError:
+        return item
+
+    # Sort: directories first, then alphabetically
+    entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
+
+    for entry in entries:
+        # Check system path first
+        if is_system_path(entry):
+            continue
+
+        # Get relative path for ignore matching
+        try:
+            rel_path = entry.relative_to(root_path)
+        except ValueError:
+            continue
+
+        rel_path_str = str(rel_path)
+        if entry.is_dir():
+            rel_path_str += "/"
+
+        # Check if should be ignored
+        if spec.match_file(rel_path_str):
+            continue
+
+        # Xử lý directories
+        if entry.is_dir():
+            if current_depth < max_depth:
+                # Còn trong depth limit → recurse
+                child = _build_tree_shallow(entry, root_path, spec, current_depth + 1, max_depth)
+                item.children.append(child)
+            else:
+                # Vượt depth limit → tạo placeholder với is_loaded=False
+                child = TreeItem(
+                    label=entry.name,
+                    path=str(entry),
+                    is_dir=True,
+                    children=[],
+                    is_loaded=False,  # Chưa scan children
+                )
+                item.children.append(child)
+        else:
+            # Files luôn được thêm
+            item.children.append(
+                TreeItem(label=entry.name, path=str(entry), is_dir=False, is_loaded=True)
+            )
+
+    return item
+
 
 
 def _build_tree(
@@ -298,3 +420,127 @@ def get_selected_file_paths(tree: TreeItem, selected_paths: set[str]) -> list[Pa
 
     _walk(tree)
     return result
+
+
+def load_folder_children(
+    folder_item: TreeItem,
+    excluded_patterns: Optional[list[str]] = None,
+    use_gitignore: bool = True,
+    use_default_ignores: bool = True,
+) -> None:
+    """
+    Load children cho folder chưa được scan (is_loaded=False).
+    Hàm này MUTATE folder_item.children và set is_loaded=True.
+    
+    Dùng khi user click checkbox hoặc expand folder lần đầu.
+    
+    Args:
+        folder_item: TreeItem folder cần load children
+        excluded_patterns: Patterns để exclude
+        use_gitignore: Có đọc .gitignore không
+        use_default_ignores: Có dùng EXTENDED_IGNORE_PATTERNS không
+    """
+    if not folder_item.is_dir:
+        return  # Không phải folder
+    
+    if folder_item.is_loaded:
+        return  # Đã loaded rồi
+    
+    folder_path = Path(folder_item.path)
+    
+    # Build ignore spec
+    ignore_patterns: list[str] = []
+    ignore_patterns.extend([".git", ".hg", ".svn"])
+    
+    if use_default_ignores:
+        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
+    
+    if excluded_patterns:
+        ignore_patterns.extend(excluded_patterns)
+    
+    if use_gitignore:
+        # Tìm root path để đọc .gitignore
+        # Giả sử .gitignore ở parent directories
+        root_path = folder_path
+        while root_path.parent != root_path:
+            if (root_path / ".git").exists():
+                break
+            root_path = root_path.parent
+        
+        gitignore_patterns = _read_gitignore(root_path)
+        ignore_patterns.extend(gitignore_patterns)
+    
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    
+    # Scan children
+    try:
+        entries = list(folder_path.iterdir())
+    except PermissionError:
+        folder_item.is_loaded = True
+        return
+    
+    # Sort: directories first, then alphabetically
+    entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
+    
+    # Get root path for relative path calculation
+    root_path = folder_path
+    while root_path.parent != root_path:
+        if (root_path / ".git").exists():
+            break
+        root_path = root_path.parent
+    
+    for entry in entries:
+        # Check system path
+        if is_system_path(entry):
+            continue
+        
+        # IGNORE MATCHING: Check both relative path AND entry name
+        # Vì patterns như "node_modules" cần match cả khi ở subfolder
+        entry_name = entry.name
+        
+        # Quick check cho common ignore patterns
+        # Không cần relative path matching cho các patterns phổ biến
+        if entry_name in ("node_modules", ".next", "dist", "__pycache__", 
+                          ".venv", "venv", "coverage", ".git", ".hg", ".svn",
+                          "build", "target", ".cache", ".parcel-cache"):
+            continue
+        
+        # Check với spec cho các patterns khác
+        try:
+            rel_path = entry.relative_to(root_path)
+            rel_path_str = str(rel_path)
+        except ValueError:
+            rel_path_str = entry_name
+        
+        if entry.is_dir():
+            rel_path_str += "/"
+            # Cũng check entry name với trailing slash
+            if spec.match_file(entry_name + "/"):
+                continue
+        
+        # Check if should be ignored
+        if spec.match_file(rel_path_str):
+            continue
+        
+        # Add child
+        if entry.is_dir():
+            child = TreeItem(
+                label=entry.name,
+                path=str(entry),
+                is_dir=True,
+                children=[],
+                is_loaded=False,  # Children chưa scan
+            )
+            folder_item.children.append(child)
+        else:
+            child = TreeItem(
+                label=entry.name,
+                path=str(entry),
+                is_dir=False,
+                is_loaded=True,
+            )
+            folder_item.children.append(child)
+    
+    # Mark as loaded
+    folder_item.is_loaded = True
+

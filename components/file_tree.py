@@ -849,8 +849,8 @@ class FileTreeComponent:
         """
         Lazy load children của folder nếu chưa được load.
         
-        Kiểm tra xem folder có attribute _lazy_loaded = False không.
-        Nếu có, trigger load children on-demand.
+        Kiểm tra TreeItem.is_loaded flag.
+        Nếu False, trigger load children on-demand.
         """
         if not self.tree:
             return
@@ -859,9 +859,13 @@ class FileTreeComponent:
         if not folder_item or not folder_item.is_dir:
             return
         
-        # Check lazy load flag
-        if hasattr(folder_item, '_lazy_loaded') and not folder_item._lazy_loaded:
-            self._load_folder_children(folder_item)
+        # Check is_loaded flag
+        if not folder_item.is_loaded:
+            from core.logging_config import log_info
+            log_info(f"[FileTree] Lazy loading children for expand: {folder_path}")
+            from core.utils.file_utils import load_folder_children
+            load_folder_children(folder_item)
+            log_info(f"[FileTree] Loaded {len(folder_item.children)} children")
     
     def _load_folder_children(self, folder_item: TreeItem):
         """
@@ -954,9 +958,23 @@ class FileTreeComponent:
         
         RACE CONDITION FIX: Sử dụng atomic check pattern.
         Check _is_rendering VÀ thao tác selection trong cùng một lock.
+        
+        LAZY LOADING: Khi check folder, lazy load children nếu chưa loaded.
         """
         from core.logging_config import log_info
         log_info(f"[FileTree] _on_item_toggled: path={path}, is_dir={is_dir}, value={e.control.value}")
+        
+        # LAZY LOADING: Nếu check folder chưa loaded, load children trước
+        if e.control.value and is_dir:
+            # Tìm item trong tree
+            item = self._find_item_by_path(self.tree, path) if self.tree else None
+            if item and not item.is_loaded:
+                log_info(f"[FileTree] Lazy loading children for: {path}")
+                from core.utils.file_utils import load_folder_children
+                load_folder_children(item)
+                # Update children reference
+                children = item.children
+                log_info(f"[FileTree] Loaded {len(children)} children")
         
         # ========================================
         # RACE CONDITION FIX: Atomic check trong lock
@@ -981,17 +999,30 @@ class FileTreeComponent:
         
         log_info(f"[FileTree] Selection updated. Total selected: {len(self.selected_paths)}")
 
-        # Schedule render NGOÀI lock để tránh deadlock
-        self._schedule_render()
+        # KHÔNG cần render lại tree khi toggle checkbox
+        # Flet đã update checkbox state trực tiếp
+        # Chỉ render khi expand/collapse folder (xem _toggle_expand)
 
         # Notify parent NGOÀI lock
         if self.on_selection_changed:
             self.on_selection_changed(self.selected_paths)
 
     def _select_all_children(self, children: list):
-        """Chon tat ca children recursively"""
+        """
+        Chon tat ca children recursively.
+        
+        LAZY LOADING: Nếu folder chưa loaded, load trước rồi mới select.
+        """
+        from core.utils.file_utils import load_folder_children
+        
         for child in children:
             self.selected_paths.add(child.path)
+            
+            # Nếu là folder chưa loaded → load children trước
+            if child.is_dir and not child.is_loaded:
+                load_folder_children(child)
+            
+            # Recurse vào children (đã loaded)
             if child.children:
                 self._select_all_children(child.children)
 

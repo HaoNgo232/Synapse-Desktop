@@ -700,7 +700,9 @@ class FileTreeComponent:
         is_selected = item.path in self.selected_paths
         is_expanded = item.path in self.expanded_paths
         is_dir = item.is_dir
-        has_children = is_dir and len(item.children) > 0
+        # LAZY LOADING FIX: Hiển thị mũi tên cho folders chưa loaded
+        # Folder có is_loaded=False có thể có children chưa được scan
+        has_children = is_dir and (len(item.children) > 0 or not item.is_loaded)
         is_match = self.search_query and self.search_query in item.label.lower()
         
         # Cache item path for closures (avoid repeated attribute access)
@@ -999,9 +1001,15 @@ class FileTreeComponent:
         
         log_info(f"[FileTree] Selection updated. Total selected: {len(self.selected_paths)}")
 
-        # KHÔNG cần render lại tree khi toggle checkbox
-        # Flet đã update checkbox state trực tiếp
-        # Chỉ render khi expand/collapse folder (xem _toggle_expand)
+        # LAZY LOADING + TOKEN DISPLAY FIX:
+        # Khi check folder, cần re-render để hiển thị:
+        # 1. Mũi tên expand (vì children đã được loaded)
+        # 2. Token count cho folder
+        if is_dir and e.control.value:
+            # Trigger token counting cho files trong folder đã loaded
+            self._trigger_folder_token_counting_for_selected(path)
+            # Re-render để hiển thị mũi tên và tokens
+            self._schedule_render()
 
         # Notify parent NGOÀI lock
         if self.on_selection_changed:
@@ -1166,32 +1174,113 @@ class FileTreeComponent:
         
         collect_and_request(folder_item)
 
+    def _trigger_folder_token_counting_for_selected(self, folder_path: str):
+        """
+        Trigger token counting cho folder được check.
+        
+        Khác với _trigger_folder_token_counting, method này:
+        1. Tìm folder trong tree theo path
+        2. Đếm tokens cho tất cả files đã loaded trong folder
+        3. Dùng parallel counting để nhanh hơn
+        
+        Args:
+            folder_path: Path của folder được check
+        """
+        from core.logging_config import log_info
+        from services.token_display import start_token_counting, is_counting_tokens
+        from core.token_counter import count_tokens_batch_parallel
+        from pathlib import Path
+        
+        if not self.tree:
+            return
+        
+        folder_item = self._find_item_by_path(self.tree, folder_path)
+        if not folder_item or not folder_item.is_dir:
+            return
+        
+        # Collect all files trong folder đã loaded
+        files_to_count: list[str] = []
+        
+        def collect_files(item: TreeItem):
+            for child in item.children:
+                if child.is_dir:
+                    # Recurse vào folder đã loaded
+                    if child.is_loaded:
+                        collect_files(child)
+                else:
+                    # Chỉ add files chưa có trong cache
+                    if self._token_service.get_token_count(child.path) is None:
+                        files_to_count.append(child.path)
+        
+        collect_files(folder_item)
+        
+        if not files_to_count:
+            log_info(f"[FileTree] No files to count for folder: {folder_path}")
+            return
+        
+        log_info(f"[FileTree] Counting tokens for {len(files_to_count)} files in {folder_path}")
+        
+        # Start counting
+        start_token_counting()
+        
+        # Count in background để không block UI
+        def do_count():
+            if not is_counting_tokens():
+                return
+            
+            # Parallel counting
+            file_paths = [Path(p) for p in files_to_count]
+            results = count_tokens_batch_parallel(file_paths, max_workers=4)
+            
+            # Update cache
+            if results and is_counting_tokens():
+                with self._token_service._lock:
+                    self._token_service._cache.update(results)
+                
+                # Trigger UI update
+                if self._token_service.on_update:
+                    self._token_service.on_update()
+        
+        # Run in background thread
+        import threading
+        thread = threading.Thread(target=do_count, daemon=True)
+        thread.start()
+
+
     def _on_metrics_updated(self):
         """
         Callback khi TokenService hoac LineService update cache - re-render tree.
 
         RACE CONDITION FIX: Callback này có thể được gọi từ background context.
         Sử dụng page.run_task() để đảm bảo UI update trên main thread.
+        
+        TOKEN BADGE FIX: Cần re-render tree để cập nhật token badges,
+        không chỉ page update.
         """
-        # Re-render de cap nhat token/line displays
-        # Su dung page.update thay vi _render_tree de tranh re-render toan bo
+        # Skip nếu đã disposed
+        if self._is_disposed:
+            return
+        
+        # Re-render tree để cập nhật token/line badges
+        # _schedule_render đã handle debouncing và thread safety
         try:
             if self.page:
                 # ========================================
                 # RACE CONDITION FIX: Defer UI update đến main thread
                 # Flet 0.80.5+ yêu cầu async function cho run_task
                 # ========================================
-                async def _do_update():
+                async def _do_render():
                     try:
-                        safe_page_update(self.page)
+                        # Re-render tree để update badges
+                        self._render_tree()
                     except Exception:
                         pass
 
                 try:
-                    self.page.run_task(_do_update)
+                    self.page.run_task(_do_render)
                 except Exception:
                     # Fallback nếu run_task không khả dụng
-                    safe_page_update(self.page)
+                    self._schedule_render()
         except Exception as e:
             logging.debug(f"Error updating page from metrics service: {e}")
             pass  # Ignore errors khi page chua san sang

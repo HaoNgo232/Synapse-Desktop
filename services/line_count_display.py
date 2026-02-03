@@ -269,24 +269,57 @@ class LineCountService:
     def get_folder_lines(self, folder_path: str, tree: TreeItem) -> Optional[int]:
         """
         Tinh tong lines cua folder tu cache.
-        Returns None neu chua tinh xong het.
+        
+        UPDATED: Return partial sum ngay ca khi chua cache het.
+        Returns None chi khi chua co bat ky file nao duoc cache.
         """
         folder_item = self._find_item_by_path(tree, folder_path)
         if not folder_item:
             return None
 
         total = 0
-        all_cached = True
+        file_paths = self._get_all_file_paths(folder_item)
+        
+        # Neu khong co files, return None
+        if not file_paths:
+            return None
 
-        for file_path in self._get_all_file_paths(folder_item):
-            with self._lock:
+        with self._lock:
+            for file_path in file_paths:
+                if file_path in self._cache:
+                    total += self._cache[file_path]
+
+        # Return partial sum, chi return None neu chua co file nao duoc cache
+        return total if total > 0 else None
+    
+    def get_folder_lines_status(self, folder_path: str, tree: TreeItem) -> tuple[int, bool]:
+        """
+        Lay line count va status complete cua folder.
+        
+        Returns:
+            Tuple (total_lines, is_complete)
+            - total_lines: Tong so lines da cache (co the la partial)
+            - is_complete: True neu tat ca files trong folder da duoc cache
+        """
+        folder_item = self._find_item_by_path(tree, folder_path)
+        if not folder_item:
+            return (0, True)
+
+        total = 0
+        all_cached = True
+        file_paths = self._get_all_file_paths(folder_item)
+        
+        if not file_paths:
+            return (0, True)
+
+        with self._lock:
+            for file_path in file_paths:
                 if file_path in self._cache:
                     total += self._cache[file_path]
                 else:
                     all_cached = False
-                    break
 
-        return total if all_cached else None
+        return (total, all_cached)
 
     def _get_all_file_paths(self, item: TreeItem) -> list:
         """Lay tat ca file paths trong item"""

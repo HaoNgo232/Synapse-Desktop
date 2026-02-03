@@ -954,19 +954,27 @@ class FileTreeComponent:
         """
         Tao badge hien thi line count cho file hoac folder.
         - File: hien thi line count cua file
-        - Folder: hien thi tong lines cua tat ca files ben trong
+        - Folder: hien thi tong lines cua tat ca files ben trong (co the la partial)
+        
+        UPDATED: Hien thi partial sum cho folders voi indicator "~" neu chua complete.
         """
         if item.is_dir:
-            # Folder: tinh tong tu children
+            # Folder: lay tong va status tu service
             assert self.tree is not None
-            folder_lines = self._line_service.get_folder_lines(item.path, self.tree)
-            if folder_lines is None:
-                # Chua tinh xong - return empty
-                return ft.Container(width=0)
+            folder_lines, is_complete = self._line_service.get_folder_lines_status(
+                item.path, self.tree
+            )
+            
             if folder_lines == 0:
-                # Empty folder hoac chi chua folders
+                # Empty folder hoac chua co files nao duoc cache
+                # Trigger line counting cho folder neu chua co
+                self._trigger_folder_line_counting(item)
                 return ft.Container(width=0)
+            
+            # Format line text voi indicator "~" neu chua complete
             line_text = self._line_service._format_lines(folder_lines)
+            if not is_complete:
+                line_text = f"~{line_text}"  # ~ chi partial sum
         else:
             # File: lay tu cache
             line_text = self._line_service.get_line_display(item.path)
@@ -975,34 +983,63 @@ class FileTreeComponent:
                 self._line_service.request_line_count(item.path)
                 return ft.Container(width=0)
 
-        # Format với suffix "L" để dễ phân biệt với tokens
+        # Format voi suffix "lines" de de phan biet voi tokens
         return ft.Container(
             content=ft.Text(
-                f"{line_text} lines",  # L = Lines
+                f"{line_text} lines",  # lines suffix
                 size=11,
-                color=ThemeColors.PRIMARY,  # Màu xanh dương để phân biệt với token (SUCCESS - xanh lá)
+                color=ThemeColors.PRIMARY,  # Mau xanh duong de phan biet voi token (SUCCESS - xanh la)
                 weight=ft.FontWeight.W_500,
             ),
             margin=ft.margin.only(left=8),
         )
+    
+    def _trigger_folder_line_counting(self, folder_item: TreeItem):
+        """
+        Trigger line counting cho tat ca files trong folder.
+        
+        Goi khi folder hien thi nhung chua co lines cached.
+        Chi request cho files chua duoc cached.
+        """
+        if not folder_item.is_dir:
+            return
+        
+        # Collect all files in folder va request counting
+        def collect_and_request(item: TreeItem):
+            for child in item.children:
+                if child.is_dir:
+                    collect_and_request(child)
+                else:
+                    # Request line count cho file
+                    self._line_service.request_line_count(child.path)
+        
+        collect_and_request(folder_item)
 
     def _create_token_badge(self, item: TreeItem) -> ft.Container:
         """
         Tao badge hien thi token count cho file hoac folder.
         - File: hien thi token count cua file
-        - Folder: hien thi tong tokens cua tat ca files ben trong
+        - Folder: hien thi tong tokens cua tat ca files ben trong (co the la partial)
+        
+        UPDATED: Hien thi partial sum cho folders voi indicator "+" neu chua complete.
         """
         if item.is_dir:
-            # Folder: tinh tong tu children
+            # Folder: lay tong va status tu service
             assert self.tree is not None
-            folder_tokens = self._token_service.get_folder_tokens(item.path, self.tree)
-            if folder_tokens is None:
-                # Chua tinh xong - return empty
-                return ft.Container(width=0)
+            folder_tokens, is_complete = self._token_service.get_folder_tokens_status(
+                item.path, self.tree
+            )
+            
             if folder_tokens == 0:
-                # Empty folder hoac chi chua folders
+                # Empty folder hoac chua co files nao duoc cache
+                # Trigger token counting cho folder neu chua co
+                self._trigger_folder_token_counting(item)
                 return ft.Container(width=0)
+            
+            # Format token text voi indicator "+" neu chua complete
             token_text = self._token_service._format_tokens(folder_tokens)
+            if not is_complete:
+                token_text = f"~{token_text}"  # ~ chi partial sum
         else:
             # File: lay tu cache
             token_text = self._token_service.get_token_display(item.path)
@@ -1020,6 +1057,27 @@ class FileTreeComponent:
             ),
             margin=ft.margin.only(left=8),
         )
+    
+    def _trigger_folder_token_counting(self, folder_item: TreeItem):
+        """
+        Trigger token counting cho tat ca files trong folder.
+        
+        Goi khi folder hien thi nhung chua co tokens cached.
+        Chi request cho files chua duoc cached.
+        """
+        if not folder_item.is_dir:
+            return
+        
+        # Collect all files in folder va request counting
+        def collect_and_request(item: TreeItem):
+            for child in item.children:
+                if child.is_dir:
+                    collect_and_request(child)
+                else:
+                    # Request token count cho file
+                    self._token_service.request_token_count(child.path, self.page)
+        
+        collect_and_request(folder_item)
 
     def _on_metrics_updated(self):
         """

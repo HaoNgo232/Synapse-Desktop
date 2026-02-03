@@ -495,15 +495,51 @@ class TokenDisplayService:
                     del self._cache[key]
 
     def get_folder_tokens(self, folder_path: str, tree: TreeItem) -> Optional[int]:
-        """Tính tổng tokens của folder từ cache."""
+        """
+        Tinh tong tokens cua folder tu cache.
+        
+        Return partial sum ngay ca khi chua cache het de hien thi cho user.
+        Truoc day tra ve None neu chua complete - nay tra ve partial sum.
+        """
         folder_item = self._find_item_by_path(tree, folder_path)
         if not folder_item:
             return None
 
         total = 0
-        all_cached = True
-
         file_paths = self._get_all_file_paths(folder_item)
+        
+        # Neu khong co files, return None de UI khong hien thi badge
+        if not file_paths:
+            return None
+
+        with self._lock:
+            for file_path in file_paths:
+                if file_path in self._cache:
+                    total += self._cache[file_path]
+
+        # Return partial sum ngay ca khi chua hoan thanh
+        # Chi return None neu chua co bat ky file nao duoc cache
+        return total if total > 0 else None
+    
+    def get_folder_tokens_status(self, folder_path: str, tree: TreeItem) -> tuple[int, bool]:
+        """
+        Lay token count va status complete cua folder.
+        
+        Returns:
+            Tuple (total_tokens, is_complete)
+            - total_tokens: Tong so tokens da cache (co the la partial)
+            - is_complete: True neu tat ca files trong folder da duoc cache
+        """
+        folder_item = self._find_item_by_path(tree, folder_path)
+        if not folder_item:
+            return (0, True)
+
+        total = 0
+        all_cached = True
+        file_paths = self._get_all_file_paths(folder_item)
+        
+        if not file_paths:
+            return (0, True)
 
         with self._lock:
             for file_path in file_paths:
@@ -511,9 +547,8 @@ class TokenDisplayService:
                     total += self._cache[file_path]
                 else:
                     all_cached = False
-                    break
 
-        return total if all_cached else None
+        return (total, all_cached)
 
     def _get_all_file_paths(self, item: TreeItem) -> list:
         """Lấy tất cả file paths trong item"""

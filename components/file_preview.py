@@ -12,6 +12,7 @@ from typing import Optional
 from core.theme import ThemeColors
 from core.utils.language_utils import get_language_from_path
 from core.utils.file_utils import is_binary_by_extension
+from core.utils.syntax_highlight import create_highlighted_text
 
 
 class FilePreviewDialog:
@@ -34,6 +35,9 @@ class FilePreviewDialog:
 
     # Số dòng tối đa hiển thị
     MAX_LINES = 5000
+    
+    # Số dòng tối đa cho syntax highlighting (để tránh chậm)
+    MAX_HIGHLIGHT_LINES = 1000
 
     @staticmethod
     def show(
@@ -114,6 +118,7 @@ class FilePreviewDialog:
             line_count=len(lines),
             truncated=truncated,
             highlight_line=highlight_line,
+            enable_highlighting=(len(lines) <= FilePreviewDialog.MAX_HIGHLIGHT_LINES),
         )
 
     @staticmethod
@@ -126,6 +131,7 @@ class FilePreviewDialog:
         line_count: int,
         truncated: bool,
         highlight_line: Optional[int] = None,
+        enable_highlighting: bool = True,
     ) -> None:
         """Tạo và hiển thị preview dialog với optional line highlighting."""
         from core.utils.ui_utils import safe_page_update
@@ -213,63 +219,98 @@ class FilePreviewDialog:
         )
 
         # Content area với line numbers - cả 2 cột scroll cùng nhau
+        # Tạo highlighted text với Pygments + Dracula theme (nếu file không quá lớn)
+        if enable_highlighting:
+            highlighted_text = create_highlighted_text(
+                content=content,
+                language=language,
+                file_path=file_path,
+            )
+        else:
+            # Fallback to plain text cho file lớn
+            highlighted_text = ft.Text(
+                content,
+                size=13,
+                color="#f8f8f2",  # Dracula foreground
+                font_family="monospace",
+                selectable=True,
+            )
+        
         content_row = ft.Row(
             [
                 # Line numbers column
                 ft.Container(
                     content=ft.Text(
                         line_numbers,
-                        size=12,
+                        size=13,  # Tăng từ 12 lên 13
                         color=ThemeColors.TEXT_MUTED,
                         font_family="monospace",
                     ),
                     padding=ft.padding.only(right=12),
                     border=ft.border.only(right=ft.BorderSide(1, ThemeColors.BORDER)),
                 ),
-                # Code content
-                ft.Text(
-                    content,
-                    size=12,
-                    color=ThemeColors.TEXT_PRIMARY,
-                    font_family="monospace",
-                    selectable=True,
-                ),
+                # Code content với syntax highlighting
+                highlighted_text,
             ],
             spacing=12,
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
 
         # Scrollable container - scroll cả Row (line numbers + content)
+        # Chiều cao vừa phải để không tràn màn hình
         scroll_container = ft.Container(
             content=ft.Column(
                 [content_row],
                 scroll=ft.ScrollMode.AUTO,  # Scroll được đặt ở đây
             ),
-            bgcolor=ThemeColors.BG_SURFACE,
+            bgcolor="#282a36",  # Dracula background
             padding=16,
             border_radius=4,
             border=ft.border.all(1, ThemeColors.BORDER),
-            height=400,
+            height=550,  # Vừa phải, không tràn màn hình
         )
 
-        # Warning nếu truncated
-        truncation_warning = None
+        # Warning nếu truncated hoặc không có highlighting
+        warnings = []
+        
         if truncated:
-            truncation_warning = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(
-                            ft.Icons.WARNING_AMBER, color=ThemeColors.WARNING, size=16
-                        ),
-                        ft.Text(
-                            f"Showing first {FilePreviewDialog.MAX_LINES} lines only",
-                            size=12,
-                            color=ThemeColors.WARNING,
-                        ),
-                    ],
-                    spacing=8,
-                ),
-                padding=ft.padding.only(top=8),
+            warnings.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.WARNING_AMBER, color=ThemeColors.WARNING, size=16
+                            ),
+                            ft.Text(
+                                f"Showing first {FilePreviewDialog.MAX_LINES} lines only",
+                                size=12,
+                                color=ThemeColors.WARNING,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                    padding=ft.padding.only(top=8),
+                )
+            )
+        
+        if not enable_highlighting:
+            warnings.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.INFO_OUTLINE, color=ThemeColors.PRIMARY, size=16
+                            ),
+                            ft.Text(
+                                f"Syntax highlighting disabled for large files ({line_count} lines)",
+                                size=12,
+                                color=ThemeColors.TEXT_SECONDARY,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                    padding=ft.padding.only(top=8),
+                )
             )
 
         # Highlight info nếu có
@@ -296,7 +337,7 @@ class FilePreviewDialog:
                 margin=ft.margin.only(bottom=8),
             )
 
-        # Main content column - scroll_container đã có height, không duplicate
+        # Main content column
         content_column = ft.Column(
             [
                 header,
@@ -304,7 +345,7 @@ class FilePreviewDialog:
             ]
             + ([highlight_info] if highlight_info else [])
             + [scroll_container]
-            + ([truncation_warning] if truncation_warning else []),
+            + warnings,
             tight=True,
         )
 
@@ -314,8 +355,8 @@ class FilePreviewDialog:
             title=ft.Text("File Preview", weight=ft.FontWeight.BOLD),
             content=ft.Container(
                 content=content_column,
-                width=800,
-                height=500,
+                width=1200,  # Tăng từ 800 lên 1200
+                height=650,  # Vừa phải, không tràn màn hình
             ),
             actions=[
                 ft.TextButton(

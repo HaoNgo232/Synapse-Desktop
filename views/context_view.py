@@ -46,6 +46,7 @@ from config.output_format import (
     get_style_by_id,
     DEFAULT_OUTPUT_STYLE,
 )
+from core.utils.repo_manager import RepoManager, CloneProgress
 
 
 class ContextView:
@@ -96,6 +97,9 @@ class ContextView:
         # ========================================
         self._pending_refresh: bool = False  # Flag để queue refresh request khi đang load
         self._is_disposed: bool = False  # Disposal flag để prevent callbacks sau cleanup
+
+        # Remote repo manager - quản lý clone và cache repositories
+        self._repo_manager: Optional[RepoManager] = None
 
     def cleanup(self):
         """Cleanup resources when view is destroyed"""
@@ -231,6 +235,74 @@ class ContextView:
                                     icon_color=ThemeColors.TEXT_SECONDARY,
                                     tooltip="Refresh",
                                     on_click=lambda _: self._refresh_tree(),
+                                ),
+                                # Separator
+                                ft.Container(
+                                    width=1,
+                                    height=20,
+                                    bgcolor=ThemeColors.BORDER,
+                                    margin=ft.margin.symmetric(horizontal=4),
+                                ),
+                                # Remote Repos Menu (Dropdown) - Clone va quan ly remote repositories
+                                ft.PopupMenuButton(
+                                    content=ft.Row(
+                                        [
+                                            ft.Icon(
+                                                ft.Icons.CLOUD,
+                                                size=18,
+                                                color=ThemeColors.PRIMARY,
+                                            ),
+                                            ft.Text(
+                                                "Remote Repos",
+                                                size=13,
+                                                color=ThemeColors.TEXT_PRIMARY,
+                                                weight=ft.FontWeight.W_500,
+                                            ),
+                                            ft.Icon(
+                                                ft.Icons.ARROW_DROP_DOWN,
+                                                size=18,
+                                                color=ThemeColors.TEXT_SECONDARY,
+                                            ),
+                                        ],
+                                        spacing=4,
+                                    ),
+                                    items=[
+                                        ft.PopupMenuItem(
+                                            content=ft.Row(
+                                                [
+                                                    ft.Icon(
+                                                        ft.Icons.CLOUD_DOWNLOAD,
+                                                        size=16,
+                                                        color=ThemeColors.PRIMARY,
+                                                    ),
+                                                    ft.Text(
+                                                        "Clone Repository",
+                                                        size=13,
+                                                    ),
+                                                ],
+                                                spacing=8,
+                                            ),
+                                            on_click=lambda _: self._open_remote_repo_dialog(),
+                                        ),
+                                        ft.PopupMenuItem(
+                                            content=ft.Row(
+                                                [
+                                                    ft.Icon(
+                                                        ft.Icons.FOLDER_OPEN,
+                                                        size=16,
+                                                        color=ThemeColors.TEXT_SECONDARY,
+                                                    ),
+                                                    ft.Text(
+                                                        "Manage Cache",
+                                                        size=13,
+                                                    ),
+                                                ],
+                                                spacing=8,
+                                            ),
+                                            on_click=lambda _: self._open_cache_management_dialog(),
+                                        ),
+                                    ],
+                                    tooltip="Remote Repository Actions",
                                 ),
                                 # Separator
                                 ft.Container(
@@ -1483,3 +1555,416 @@ class ContextView:
 
             self._status_clear_timer = Timer(3.0, clear_status)
             self._status_clear_timer.start()
+
+    # ========================================
+    # REMOTE REPO DIALOGS
+    # Các dialog để clone và quản lý remote repositories
+    # ========================================
+
+    def _open_remote_repo_dialog(self):
+        """
+        Mở dialog để nhập GitHub URL và clone repository.
+
+        Dialog bao gồm:
+        - TextField cho URL input (hỗ trợ owner/repo hoặc full URL)
+        - Clone button với progress indicator
+        - Error handling và feedback
+        """
+        # State cho dialog
+        url_field = ft.TextField(
+            label="GitHub URL",
+            hint_text="owner/repo hoặc https://github.com/owner/repo",
+            autofocus=True,
+            expand=True,
+            border_color=ThemeColors.BORDER,
+            focused_border_color=ThemeColors.PRIMARY,
+            label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
+            text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY),
+        )
+
+        progress_ring = ft.ProgressRing(
+            width=20,
+            height=20,
+            stroke_width=2,
+            color=ThemeColors.PRIMARY,
+            visible=False,
+        )
+
+        status_text = ft.Text(
+            "",
+            size=12,
+            color=ThemeColors.TEXT_SECONDARY,
+        )
+
+        clone_button = ft.ElevatedButton(
+            "Clone",
+            icon=ft.Icons.DOWNLOAD,
+            style=ft.ButtonStyle(
+                color="#FFFFFF",
+                bgcolor=ThemeColors.PRIMARY,
+            ),
+        )
+
+        def close_dialog(e=None):
+            dialog.open = False
+            safe_page_update(self.page)
+
+        def on_clone_click(e):
+            url = url_field.value
+            if not url or not url.strip():
+                status_text.value = "Vui lòng nhập GitHub URL"
+                status_text.color = ThemeColors.ERROR
+                safe_page_update(self.page)
+                return
+
+            # Show progress
+            progress_ring.visible = True
+            clone_button.disabled = True
+            status_text.value = "Đang clone..."
+            status_text.color = ThemeColors.TEXT_SECONDARY
+            safe_page_update(self.page)
+
+            # Clone in background
+            import threading
+
+            def do_clone():
+                try:
+                    # Initialize repo manager if needed
+                    if self._repo_manager is None:
+                        self._repo_manager = RepoManager()
+
+                    # Progress callback - cập nhật UI với tiến trình clone
+                    def on_progress(progress: CloneProgress):
+                        status_text.value = progress.status
+                        if progress.percentage is not None and status_text.value:
+                            status_text.value = (
+                                status_text.value + f" ({progress.percentage}%)"
+                            )
+                        safe_page_update(self.page)
+
+                    # Clone repository
+                    repo_path = self._repo_manager.clone_repo(
+                        url.strip() if url else "",
+                        on_progress=on_progress,
+                    )
+
+                    # Success - close dialog và switch workspace
+                    def switch_workspace():
+                        close_dialog()
+                        self._show_status(f"Cloned: {repo_path.name}")
+                        # Trigger workspace change
+                        self.on_workspace_changed(repo_path)
+
+                    self.page.run_thread(switch_workspace)
+
+                except Exception as ex:
+                    # Show error - capture exception message trước
+                    error_msg = str(ex)
+
+                    def show_error():
+                        progress_ring.visible = False
+                        clone_button.disabled = False
+                        status_text.value = error_msg
+                        status_text.color = ThemeColors.ERROR
+                        safe_page_update(self.page)
+
+                    self.page.run_thread(show_error)
+
+            threading.Thread(target=do_clone, daemon=True).start()
+
+        clone_button.on_click = on_clone_click
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Open Remote Repository",
+                weight=ft.FontWeight.BOLD,
+                color=ThemeColors.TEXT_PRIMARY,
+            ),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Nhập GitHub URL hoặc shorthand (owner/repo) để clone repository.",
+                            size=13,
+                            color=ThemeColors.TEXT_SECONDARY,
+                        ),
+                        ft.Container(height=12),
+                        url_field,
+                        ft.Container(height=8),
+                        ft.Row(
+                            [
+                                progress_ring,
+                                status_text,
+                            ],
+                            spacing=8,
+                        ),
+                    ],
+                    tight=True,
+                ),
+                width=450,
+                height=180,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    on_click=close_dialog,
+                    style=ft.ButtonStyle(color=ThemeColors.TEXT_SECONDARY),
+                ),
+                clone_button,
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        safe_page_update(self.page)
+
+    def _open_cache_management_dialog(self):
+        """
+        Mở dialog quản lý cached repositories.
+
+        Hiển thị list các repos đã clone với:
+        - Tên repo và kích thước
+        - Thời gian clone
+        - Button Open và Delete cho từng repo
+        - Button Clear All để xóa tất cả
+        """
+        # Initialize repo manager if needed
+        if self._repo_manager is None:
+            self._repo_manager = RepoManager()
+
+        # Get cached repos
+        cached_repos = self._repo_manager.get_cached_repos()
+
+        # Status text cho feedback
+        status_text = ft.Text(
+            "",
+            size=12,
+            color=ThemeColors.TEXT_SECONDARY,
+        )
+
+        # Build repo list container
+        repo_list = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            spacing=8,
+        )
+
+        def refresh_list():
+            """Refresh danh sách repos sau khi delete."""
+            assert self._repo_manager is not None
+            repo_list.controls.clear()
+            cached_repos = self._repo_manager.get_cached_repos()
+
+            if not cached_repos:
+                repo_list.controls.append(
+                    ft.Container(
+                        content=ft.Text(
+                            "Chưa có repository nào được clone.",
+                            size=13,
+                            color=ThemeColors.TEXT_SECONDARY,
+                            italic=True,
+                        ),
+                        padding=20,
+                        alignment=ft.alignment.center,
+                    )
+                )
+            else:
+                for repo in cached_repos:
+                    # Format size thành human-readable
+                    size_str = self._repo_manager.format_size(repo.size_bytes)
+
+                    # Format thời gian
+                    time_str = ""
+                    if repo.last_modified:
+                        time_str = repo.last_modified.strftime("%Y-%m-%d %H:%M")
+
+                    # Handler cho Open button - closure để capture path
+                    def make_open_handler(path):
+                        def handler(e):
+                            dialog.open = False
+                            safe_page_update(self.page)
+                            self.on_workspace_changed(path)
+                            self._show_status(f"Opened: {path.name}")
+
+                        return handler
+
+                    # Handler cho Delete button - closure để capture name
+                    def make_delete_handler(name):
+                        def handler(e):
+                            assert self._repo_manager is not None
+                            if self._repo_manager.delete_repo(name):
+                                status_text.value = f"Deleted: {name}"
+                                status_text.color = ThemeColors.SUCCESS
+                                refresh_list()
+                                safe_page_update(self.page)
+                            else:
+                                status_text.value = f"Failed to delete: {name}"
+                                status_text.color = ThemeColors.ERROR
+                                safe_page_update(self.page)
+
+                        return handler
+
+                    # Card cho mỗi repo với info và actions
+                    repo_card = ft.Container(
+                        content=ft.Row(
+                            [
+                                # Repo info column
+                                ft.Column(
+                                    [
+                                        ft.Text(
+                                            repo.name,
+                                            size=14,
+                                            weight=ft.FontWeight.W_600,
+                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Row(
+                                            [
+                                                ft.Icon(
+                                                    ft.Icons.FOLDER,
+                                                    size=12,
+                                                    color=ThemeColors.TEXT_SECONDARY,
+                                                ),
+                                                ft.Text(
+                                                    size_str,
+                                                    size=12,
+                                                    color=ThemeColors.TEXT_SECONDARY,
+                                                ),
+                                                ft.Container(width=8),
+                                                ft.Icon(
+                                                    ft.Icons.ACCESS_TIME,
+                                                    size=12,
+                                                    color=ThemeColors.TEXT_SECONDARY,
+                                                ),
+                                                ft.Text(
+                                                    time_str,
+                                                    size=12,
+                                                    color=ThemeColors.TEXT_SECONDARY,
+                                                ),
+                                            ],
+                                            spacing=4,
+                                        ),
+                                    ],
+                                    spacing=4,
+                                    expand=True,
+                                ),
+                                # Action buttons
+                                ft.Row(
+                                    [
+                                        ft.OutlinedButton(
+                                            "Open",
+                                            icon=ft.Icons.FOLDER_OPEN,
+                                            on_click=make_open_handler(repo.path),
+                                            style=ft.ButtonStyle(
+                                                color=ThemeColors.PRIMARY,
+                                                side=ft.BorderSide(
+                                                    1, ThemeColors.PRIMARY
+                                                ),
+                                            ),
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.DELETE_OUTLINE,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.ERROR,
+                                            tooltip="Delete",
+                                            on_click=make_delete_handler(repo.name),
+                                        ),
+                                    ],
+                                    spacing=8,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        padding=12,
+                        border=ft.border.all(1, ThemeColors.BORDER),
+                        border_radius=8,
+                        bgcolor=ThemeColors.BG_SURFACE,
+                    )
+
+                    repo_list.controls.append(repo_card)
+
+            safe_page_update(self.page)
+
+        # Initial load
+        refresh_list()
+
+        # Calculate total cache size
+        total_size = self._repo_manager.get_cache_size()
+        total_size_str = self._repo_manager.format_size(total_size)
+
+        def close_dialog(e=None):
+            dialog.open = False
+            safe_page_update(self.page)
+
+        def clear_all(e):
+            """Xóa tất cả cached repos."""
+            assert self._repo_manager is not None
+            count = self._repo_manager.clear_cache()
+            status_text.value = f"Cleared {count} repositories"
+            status_text.color = ThemeColors.SUCCESS
+            refresh_list()
+            safe_page_update(self.page)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Row(
+                [
+                    ft.Text(
+                        "Cached Repositories",
+                        weight=ft.FontWeight.BOLD,
+                        color=ThemeColors.TEXT_PRIMARY,
+                    ),
+                    ft.Container(expand=True),
+                    ft.Text(
+                        f"Total: {total_size_str}",
+                        size=13,
+                        color=ThemeColors.TEXT_SECONDARY,
+                    ),
+                ],
+            ),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            f"Cached repositories: {len(cached_repos)}",
+                            size=13,
+                            color=ThemeColors.TEXT_SECONDARY,
+                        ),
+                        ft.Container(height=8),
+                        ft.Container(
+                            content=repo_list,
+                            height=400,
+                            border=ft.border.all(1, ThemeColors.BORDER),
+                            border_radius=4,
+                            padding=8,
+                        ),
+                        ft.Container(height=8),
+                        status_text,
+                    ],
+                    tight=True,
+                ),
+                width=600,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Close",
+                    on_click=close_dialog,
+                    style=ft.ButtonStyle(color=ThemeColors.TEXT_SECONDARY),
+                ),
+                ft.OutlinedButton(
+                    "Clear All",
+                    icon=ft.Icons.DELETE_SWEEP,
+                    on_click=clear_all,
+                    style=ft.ButtonStyle(
+                        color=ThemeColors.ERROR,
+                        side=ft.BorderSide(1, ThemeColors.ERROR),
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        safe_page_update(self.page)
+

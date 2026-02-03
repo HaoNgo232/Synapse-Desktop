@@ -35,7 +35,7 @@ class FileTreeComponent:
         on_selection_changed: Optional[Callable[[Set[str]], None]] = None,
         on_preview: Optional[Callable[[str], None]] = None,
         show_tokens: bool = True,
-        show_lines: bool = True,
+        show_lines: bool = False,  # PERFORMANCE: Disabled by default - đếm lines tốn I/O
     ):
         self.page = page
         self.on_selection_changed = on_selection_changed
@@ -74,10 +74,12 @@ class FileTreeComponent:
         self._is_rendering = False
         self._render_timer: Optional[SafeTimer] = None
         
-        # PERFORMANCE: Throttle metrics updates để tránh re-render spam với project lớn
+        # PERFORMANCE: Throttle metrics updates để tránh re-render spam với project lớn (700+ files)
         self._last_metrics_update_time: float = 0.0
-        self._metrics_update_interval: float = 0.5  # 500ms minimum between updates (tăng từ 300ms)
+        self._metrics_update_interval: float = 1.5  # 1500ms minimum between updates
         self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
+        self._pending_metrics_render: bool = False  # Flag để coalesce multiple updates
+        self._metrics_render_scheduled: bool = False  # Prevent multiple scheduled renders
         
         # PERFORMANCE: Path to TreeItem index cho O(1) lookup
         self._path_index: Dict[str, TreeItem] = {}
@@ -662,9 +664,9 @@ class FileTreeComponent:
                 self._render_timer.dispose()
             
             # Use SafeTimer instead of Timer
-            # PERFORMANCE: Tăng debounce lên 150ms để giảm render spam với project lớn
+            # PERFORMANCE: Tăng debounce lên 250ms để giảm render spam với project lớn (700+ files)
             self._render_timer = SafeTimer(
-                interval=0.15,  # 150ms debounce (tăng từ 50ms)
+                interval=0.25,  # 250ms debounce (tăng từ 150ms)
                 callback=self._do_render,
                 page=getattr(self, 'page', None),
                 use_main_thread=True
@@ -1318,26 +1320,43 @@ class FileTreeComponent:
 
         RACE CONDITION FIX: Callback này có thể được gọi từ background context.
         
-        PERFORMANCE FIX v2: 
-        - KHÔNG render ngay lập tức
-        - Chỉ schedule debounced render
-        - Giảm main thread blocking đáng kể với project lớn
+        PERFORMANCE FIX v4: 
+        - Coalesce multiple updates với pending flag
+        - Chỉ schedule 1 render cho nhiều metric updates
+        - Giảm main thread blocking đáng kể với project lớn (700+ files)
+        - KHÔNG render ngay - chỉ schedule deferred render
         """
         import time
+        import threading
         
         # Skip nếu đã disposed
         if self._is_disposed:
             return
         
-        # PERFORMANCE: Throttle - chỉ schedule nếu đủ thời gian từ lần update trước
+        # PERFORMANCE: Throttle với coalescing - KHÔNG render ngay
         current_time = time.time()
-        if current_time - self._last_metrics_update_time < self._metrics_update_interval:
-            return  # Skip hoàn toàn - đã có pending render
+        time_since_last = current_time - self._last_metrics_update_time
+        
+        if time_since_last < self._metrics_update_interval:
+            # Mark pending và schedule deferred render nếu chưa có
+            self._pending_metrics_render = True
+            if not self._metrics_render_scheduled:
+                self._metrics_render_scheduled = True
+                def deferred_metrics_render():
+                    self._metrics_render_scheduled = False
+                    if self._pending_metrics_render and not self._is_disposed:
+                        self._pending_metrics_render = False
+                        self._last_metrics_update_time = time.time()
+                        self._schedule_render()
+                timer = threading.Timer(self._metrics_update_interval, deferred_metrics_render)
+                timer.daemon = True
+                timer.start()
+            return
         
         self._last_metrics_update_time = current_time
+        self._pending_metrics_render = False
         
-        # PERFORMANCE FIX: Chỉ schedule render, không render ngay
-        # Debounced render sẽ coalesce multiple updates
+        # Schedule debounced render (không render trực tiếp)
         self._schedule_render()
 
     def _request_visible_tokens(self):

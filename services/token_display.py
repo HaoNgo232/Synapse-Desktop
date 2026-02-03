@@ -392,9 +392,9 @@ class TokenDisplayService:
             log_debug("[TokenDisplayService] _schedule_deferred_counting skipped - disposed")
             return
         
-        # PERFORMANCE: Tăng batch size cho project lớn, giảm số lần schedule
-        BATCH_SIZE = 20  # Tăng từ 5 lên 20 để giảm overhead
-        BATCH_DELAY = 0.1  # 100ms between batches (tăng từ 50ms)
+        # PERFORMANCE: Tăng batch size và delay cho project lớn (700+ files)
+        BATCH_SIZE = 100  # Tăng lên 100 để giảm số lần schedule
+        BATCH_DELAY = 0.5  # 500ms between batches - giảm UI blocking
         
         def count_batch(batch_files):
             # Check cancellation FIRST - before doing ANY work
@@ -420,9 +420,8 @@ class TokenDisplayService:
                     with self._lock:
                         self._cache[path] = 0
             
-            # Update UI after batch only if not cancelled
-            # PERFORMANCE: Không gọi on_update cho mỗi batch nhỏ
-            # UI sẽ được update bởi throttled callback từ FileTreeComponent
+            # PERFORMANCE: Chỉ notify UI sau batch cuối cùng
+            # Tránh spam re-render với project lớn
             pass
         
         # Clear old deferred timers before scheduling new ones

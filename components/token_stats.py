@@ -84,9 +84,11 @@ class TokenStatsPanel:
         self.is_loading: bool = False
         self.on_model_changed = on_model_changed
         
-        # PERFORMANCE: Throttle UI updates - tăng lên cho project lớn
+        # PERFORMANCE: Throttle UI updates - tăng lên cho project lớn (700+ files)
         self._last_ui_update_time: float = 0.0
-        self._min_update_interval: float = 0.25  # 250ms minimum between UI updates (tăng từ 100ms)
+        self._min_update_interval: float = 1.0  # 1000ms minimum between UI updates
+        self._pending_update: bool = False  # Flag để batch updates
+        self._update_scheduled: bool = False  # Prevent multiple scheduled updates
 
         # Load saved model or default
         saved_model_id = get_setting("model_id", DEFAULT_MODEL_ID)
@@ -300,15 +302,39 @@ class TokenStatsPanel:
     def _refresh_ui(self):
         """Refresh visuals based on data - với throttling để tránh spam"""
         import time
+        import threading
         
         if not self._selected_model:
             return
         
-        # PERFORMANCE: Throttle UI updates
+        # PERFORMANCE: Throttle UI updates với coalescing
         current_time = time.time()
-        if current_time - self._last_ui_update_time < self._min_update_interval:
-            return  # Skip update nếu chưa đủ thời gian
+        time_since_last = current_time - self._last_ui_update_time
+        
+        if time_since_last < self._min_update_interval:
+            # Mark pending và schedule deferred update nếu chưa có
+            self._pending_update = True
+            if not self._update_scheduled:
+                self._update_scheduled = True
+                def deferred_refresh():
+                    self._update_scheduled = False
+                    if self._pending_update:
+                        self._pending_update = False
+                        self._last_ui_update_time = time.time()
+                        self._do_refresh_ui()
+                timer = threading.Timer(self._min_update_interval, deferred_refresh)
+                timer.daemon = True
+                timer.start()
+            return
+        
         self._last_ui_update_time = current_time
+        self._pending_update = False
+        self._do_refresh_ui()
+    
+    def _do_refresh_ui(self):
+        """Actual UI refresh logic - extracted for deferred calls"""
+        if not self._selected_model:
+            return
 
         context_limit = self._selected_model.context_length
         total_tokens = self.stats.total_tokens
@@ -353,8 +379,12 @@ class TokenStatsPanel:
                 self.warning_banner.visible = False
                 self.container.border = ft.border.all(1, ThemeColors.BORDER)
 
+        # Batch update - chỉ gọi 1 lần
         if self.container and self.container.page:
-            self.container.update()
+            try:
+                self.container.update()
+            except Exception:
+                pass  # Ignore update errors
 
     def set_loading(self, is_loading: bool):
         self.is_loading = is_loading

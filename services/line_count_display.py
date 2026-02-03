@@ -14,7 +14,7 @@ Line counting logic port tu Repomix:
 """
 
 from pathlib import Path
-from typing import Dict, Optional, Set, Callable
+from typing import Dict, List, Optional, Set, Callable
 from dataclasses import dataclass
 from threading import Lock
 
@@ -133,16 +133,68 @@ class LineCountService:
         tree: TreeItem,
         visible_only: bool = True,
         visible_paths: Optional[Set[str]] = None,
+        max_immediate: int = 100,
     ):
         """
         Request line counts cho toan bo tree.
+        
+        PERFORMANCE: Giới hạn số files count ngay để tránh block UI.
 
         Args:
             tree: Root TreeItem
             visible_only: Chi tinh cho files dang hien thi
             visible_paths: Set cac paths dang hien thi (neu visible_only=True)
+            max_immediate: Max files to count immediately (default 100)
         """
-        self._collect_files_to_count(tree, visible_only, visible_paths)
+        # Collect files to count
+        files_to_count: List[str] = []
+        self._collect_files_to_count_list(tree, visible_only, visible_paths, files_to_count)
+        
+        # Count immediate batch (won't block too much)
+        immediate = files_to_count[:max_immediate]
+        for path in immediate:
+            self.request_line_count(path)
+        
+        # Schedule deferred counting for remaining files
+        remaining = files_to_count[max_immediate:]
+        if remaining:
+            self._schedule_deferred_line_counting(remaining)
+    
+    def _collect_files_to_count_list(
+        self,
+        item: TreeItem,
+        visible_only: bool,
+        visible_paths: Optional[Set[str]],
+        result: List[str],
+    ):
+        """Collect files into list for batch processing"""
+        if visible_only and visible_paths and item.path not in visible_paths:
+            return
+        
+        if not item.is_dir:
+            if item.path not in self._cache:
+                result.append(item.path)
+        else:
+            for child in item.children:
+                self._collect_files_to_count_list(child, visible_only, visible_paths, result)
+    
+    def _schedule_deferred_line_counting(self, files: List[str]):
+        """Schedule line counting for remaining files in background"""
+        import threading
+        
+        BATCH_SIZE = 100  # Tăng batch size
+        BATCH_DELAY = 0.3  # 300ms - tăng delay để giảm UI pressure
+        
+        def count_batch(batch):
+            for path in batch:
+                self.request_line_count(path)
+        
+        for i in range(0, len(files), BATCH_SIZE):
+            batch = files[i:i + BATCH_SIZE]
+            delay = BATCH_DELAY * (i // BATCH_SIZE + 1)
+            timer = threading.Timer(delay, count_batch, args=[batch])
+            timer.daemon = True
+            timer.start()
 
     def _collect_files_to_count(
         self, item: TreeItem, visible_only: bool, visible_paths: Optional[Set[str]]

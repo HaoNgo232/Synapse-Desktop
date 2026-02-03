@@ -486,7 +486,7 @@ def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
 
 def count_tokens_batch_parallel(
     file_paths: List[Path],
-    max_workers: int = 4,
+    max_workers: int = 2,  # Giảm từ 4 xuống 2 để tránh overload
     update_cache: bool = True
 ) -> Dict[str, int]:
     """

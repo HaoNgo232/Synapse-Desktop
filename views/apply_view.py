@@ -971,14 +971,20 @@ class ApplyView:
         Bao gom context day du: errors, search patterns, instructions.
         """
         try:
+            # Get workspace path for file content reading
+            workspace = self.get_workspace()
+            workspace_path = str(workspace) if workspace else None
+            
             # Build error context
             if self.last_preview_data and self.last_apply_results:
-                # Full context from apply results
+                # Full context from apply results with file content
                 context = build_error_context_for_ai(
                     preview_data=self.last_preview_data,
                     row_results=self.last_apply_results,
                     original_opx=self.last_opx_text,
                     include_opx=True,
+                    workspace_path=workspace_path,
+                    include_file_content=True,
                 )
             else:
                 # Fallback for parse errors or other errors

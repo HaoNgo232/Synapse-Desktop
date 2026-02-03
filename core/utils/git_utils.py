@@ -5,7 +5,7 @@ Git Utilities - Handle git operations (diff, log, status)
 import subprocess
 import shutil
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, field
 from typing import Optional, List
 import logging
 
@@ -43,6 +43,7 @@ class DiffOnlyResult:
     insertions: int
     deletions: int
     commits_included: int
+    changed_files: List[str] = field(default_factory=list)  # List of changed file paths
     error: Optional[str] = None
 
 

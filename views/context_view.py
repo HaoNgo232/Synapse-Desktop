@@ -303,10 +303,13 @@ class ContextView:
         """Build UI cho Context view"""
 
         # File tree component voi search and preview
+        # PERFORMANCE: Disable line counting mặc định - giảm 50% I/O operations
         self.file_tree_component = FileTreeComponent(
             page=self.page,
             on_selection_changed=self._on_selection_changed,
             on_preview=self._preview_file,  # Enable file preview
+            show_tokens=True,
+            show_lines=False,  # Disabled for performance with large projects (700+ files)
         )
 
         # Token count display
@@ -1302,10 +1305,11 @@ class ContextView:
         Update token count display va token stats panel.
         Su dung visible paths khi dang search de hien thi chinh xac.
         
-        PERFORMANCE FIX v2: 
+        PERFORMANCE FIX v3: 
         - Sử dụng cache từ TokenDisplayService
-        - Giới hạn immediate counting để không block UI
+        - Giới hạn immediate counting để không block UI (max 20 files)
         - Hiển thị estimate với indicator "~" khi đang count background
+        - KHÔNG gọi count_tokens_batch_parallel cho large selections
         """
         from core.logging_config import log_debug
         import time
@@ -1326,72 +1330,50 @@ class ContextView:
         is_estimate = False  # Flag để hiện "~" prefix
         
         if file_count > 0:
-            from services.token_display import start_token_counting
-            
             token_service = self.file_tree_component._token_service
             cached_total = 0
-            uncached_paths: list[Path] = []
+            uncached_count = 0
             
-            # Cache lookup - O(n)
+            # Cache lookup only - KHÔNG count ngay
             for fp in file_paths:
                 cached = token_service.get_token_count(str(fp))
                 if cached is not None:
                     cached_total += cached
                 else:
-                    uncached_paths.append(fp)
+                    uncached_count += 1
             
-            uncached_count = len(uncached_paths)
+            # PERFORMANCE FIX: Với >50 uncached files, chỉ hiển thị estimate
+            # Background counting sẽ update sau
+            MAX_IMMEDIATE = 20  # Giảm từ 30 xuống 20 để không block
             
-            # PERFORMANCE: Với project lớn (>700 files), giảm immediate counting
-            if file_count > 500:
-                MAX_IMMEDIATE = 30  # Giảm để không block
-            elif file_count > 200:
-                MAX_IMMEDIATE = 50
-            else:
-                MAX_IMMEDIATE = 100
-            
-            uncached_total = 0
-            
-            if uncached_paths:
-                start_token_counting()
-                
+            if uncached_count > 0:
                 if uncached_count <= MAX_IMMEDIATE:
-                    # Count tất cả ngay
-                    token_results = count_tokens_batch_parallel(uncached_paths, max_workers=4)
-                    uncached_total = sum(token_results.values())
+                    # Ít files - count ngay nhưng async
+                    from services.token_display import start_token_counting
+                    start_token_counting()
+                    
+                    uncached_paths = [fp for fp in file_paths if token_service.get_token_count(str(fp)) is None]
+                    token_results = count_tokens_batch_parallel(uncached_paths, max_workers=2)  # Giảm workers
                     
                     with token_service._lock:
                         token_service._cache.update(token_results)
+                    
+                    file_tokens = cached_total + sum(token_results.values())
                 else:
-                    # LARGE PROJECT: Count batch nhỏ, estimate phần còn lại
+                    # LARGE PROJECT: Chỉ hiển thị cached + estimate
                     is_estimate = True
                     
-                    immediate_paths = uncached_paths[:MAX_IMMEDIATE]
-                    deferred_paths = uncached_paths[MAX_IMMEDIATE:]
+                    # Estimate: ~150 tokens/file (average cho code files)
+                    estimated_uncached = uncached_count * 150
+                    file_tokens = cached_total + estimated_uncached
                     
-                    token_results = count_tokens_batch_parallel(immediate_paths, max_workers=4)
-                    immediate_total = sum(token_results.values())
-                    
-                    with token_service._lock:
-                        token_service._cache.update(token_results)
-                    
-                    # Estimate: dùng average từ immediate + cached
-                    total_counted = cached_total + immediate_total
-                    counted_files = file_count - len(deferred_paths)
-                    
-                    if counted_files > 0:
-                        avg_tokens = total_counted / counted_files
-                        estimated_deferred = int(avg_tokens * len(deferred_paths))
-                    else:
-                        # Fallback estimate: ~200 tokens/file
-                        estimated_deferred = len(deferred_paths) * 200
-                    
-                    uncached_total = immediate_total + estimated_deferred
-                    
-                    # Schedule background counting
-                    token_service._schedule_deferred_counting([str(p) for p in deferred_paths])
-            
-            file_tokens = cached_total + uncached_total
+                    # Schedule background counting (sẽ update UI sau)
+                    uncached_paths = [str(fp) for fp in file_paths if token_service.get_token_count(str(fp)) is None]
+                    from services.token_display import start_token_counting
+                    start_token_counting()
+                    token_service._schedule_deferred_counting(uncached_paths)
+            else:
+                file_tokens = cached_total
 
         # Update display với estimate indicator
         assert self.token_count_text is not None
@@ -1854,6 +1836,9 @@ class ContextView:
         - Số commits cần include (0 = chỉ uncommitted)
         - Include staged changes
         - Include unstaged changes
+        - Include changed file content (full content của files bị thay đổi)
+        - Include tree structure
+        - Filter by file pattern (NEW)
         """
         workspace = self.get_workspace()
         if not workspace:
@@ -1881,6 +1866,32 @@ class ContextView:
             label="Include unstaged changes", 
             value=True,
             active_color=ThemeColors.PRIMARY,
+        )
+        
+        # NEW: Option to include full content of changed files
+        include_file_content = ft.Checkbox(
+            label="Include changed file content",
+            value=False,
+            active_color=ThemeColors.WARNING,
+            tooltip="Include full content of modified files for better AI context",
+        )
+        
+        # NEW: Option to include tree structure
+        include_tree = ft.Checkbox(
+            label="Include project tree structure",
+            value=False,
+            active_color=ThemeColors.PRIMARY,
+            tooltip="Include file tree to help AI understand project structure",
+        )
+        
+        # NEW: File pattern filter
+        file_pattern = ft.TextField(
+            value="",
+            label="Filter files (optional)",
+            hint_text="e.g., *.py, src/*.ts",
+            width=200,
+            border_color=ThemeColors.BORDER,
+            focused_border_color=ThemeColors.PRIMARY,
         )
         
         status_text = ft.Text("", size=12, color=ThemeColors.TEXT_SECONDARY)
@@ -1924,7 +1935,13 @@ class ContextView:
             assert self.instructions_field is not None
             instructions = self.instructions_field.value or ""
             
-            prompt = self._build_diff_only_prompt(result, instructions)
+            # NEW: Build enhanced prompt with optional file content and tree
+            prompt = self._build_diff_only_prompt(
+                result, 
+                instructions,
+                include_changed_content=include_file_content.value or False,
+                include_tree_structure=include_tree.value or False,
+            )
             
             # Copy to clipboard
             success, message = copy_to_clipboard(prompt)
@@ -1964,16 +1981,25 @@ class ContextView:
                             italic=True,
                         ),
                         ft.Container(height=16),
-                        num_commits,
+                        ft.Row([num_commits, file_pattern], spacing=16),
                         ft.Container(height=8),
                         include_staged,
                         include_unstaged,
+                        ft.Divider(height=16, color=ThemeColors.BORDER),
+                        ft.Text(
+                            "Enhanced context (larger output):",
+                            size=12,
+                            weight=ft.FontWeight.W_500,
+                            color=ThemeColors.TEXT_SECONDARY,
+                        ),
+                        include_file_content,
+                        include_tree,
                         ft.Container(height=12),
                         status_text,
                     ],
                     tight=True,
                 ),
-                width=350,
+                width=450,  # Tăng width để chứa 2 fields
             ),
             actions=[
                 ft.TextButton(
@@ -1998,13 +2024,21 @@ class ContextView:
         dialog.open = True
         safe_page_update(self.page)
     
-    def _build_diff_only_prompt(self, diff_result, instructions: str) -> str:
+    def _build_diff_only_prompt(
+        self, 
+        diff_result, 
+        instructions: str,
+        include_changed_content: bool = False,
+        include_tree_structure: bool = False,
+    ) -> str:
         """
         Build prompt cho Copy Diff Only - optimized for AI review.
         
         Args:
             diff_result: DiffOnlyResult từ get_diff_only()
             instructions: User instructions
+            include_changed_content: Include full content of changed files
+            include_tree_structure: Include project tree structure
         
         Returns:
             Formatted prompt string
@@ -2025,10 +2059,54 @@ class ContextView:
         parts.extend([
             "</diff_context>",
             "",
+        ])
+        
+        # Optional: Include tree structure for project context
+        if include_tree_structure and self.tree and self.file_tree_component:
+            selected_paths = self.file_tree_component.get_selected_paths()
+            if selected_paths:
+                file_map = generate_file_map(self.tree, selected_paths)
+                parts.extend([
+                    "<project_structure>",
+                    file_map,
+                    "</project_structure>",
+                    "",
+                ])
+        
+        # Git diff content
+        parts.extend([
             "<git_diff>",
             diff_result.diff_content,
             "</git_diff>",
         ])
+        
+        # Optional: Include full content of changed files
+        if include_changed_content and diff_result.changed_files:
+            parts.extend([
+                "",
+                "<changed_files_content>",
+            ])
+            
+            for file_path in diff_result.changed_files[:20]:  # Limit to 20 files
+                full_path = workspace / file_path if workspace else Path(file_path)
+                if full_path.exists() and full_path.is_file():
+                    try:
+                        content = full_path.read_text(encoding='utf-8', errors='replace')
+                        # Limit file size to 50KB
+                        if len(content) <= 50000:
+                            from core.utils.language_utils import get_language_from_path
+                            lang = get_language_from_path(str(full_path))
+                            parts.extend([
+                                f"<file path=\"{file_path}\">",
+                                f"```{lang}",
+                                content,
+                                "```",
+                                "</file>",
+                            ])
+                    except Exception:
+                        pass
+            
+            parts.append("</changed_files_content>")
         
         if instructions.strip():
             parts.extend([

@@ -74,6 +74,7 @@ class TokenDisplayService:
     - Priority queue: count visible/selected files first
     - Smarter batching with size-aware scheduling
     - Incremental cache updates
+    - Folder token cache: cache tổng tokens cho folders để tránh tính lại
     """
 
     # Config
@@ -94,6 +95,11 @@ class TokenDisplayService:
         # Cache: path -> token count
         self._cache: Dict[str, int] = {}
         self._lock = threading.Lock()
+        
+        # Folder token cache: folder_path -> (total_tokens, is_complete, file_count)
+        # Giúp tránh tính toán lại tổng tokens cho folders mỗi lần render
+        self._folder_cache: Dict[str, tuple[int, bool, int]] = {}
+        self._folder_cache_lock = threading.Lock()
 
         # Tracking loading state
         self._loading_paths: Set[str] = set()
@@ -122,6 +128,11 @@ class TokenDisplayService:
         with self._lock:
             self._cache.clear()
             self._loading_paths.clear()
+        
+        # Clear folder cache
+        with self._folder_cache_lock:
+            self._folder_cache.clear()
+        
         with self._update_lock:
             self._pending_updates.clear()
             if self._update_timer:
@@ -243,6 +254,9 @@ class TokenDisplayService:
                 self._cache[path] = tokens
             with self._update_lock:
                 self._pending_updates.discard(path)
+            
+            # Invalidate folder cache vì file token đã thay đổi
+            self.invalidate_folder_cache(path)
                 
             # Schedule UI update
             self._schedule_ui_update()
@@ -378,8 +392,9 @@ class TokenDisplayService:
             log_debug("[TokenDisplayService] _schedule_deferred_counting skipped - disposed")
             return
         
-        BATCH_SIZE = 5  # Very small batches for responsive cancellation
-        BATCH_DELAY = 0.05  # 50ms between batches
+        # PERFORMANCE: Tăng batch size cho project lớn, giảm số lần schedule
+        BATCH_SIZE = 20  # Tăng từ 5 lên 20 để giảm overhead
+        BATCH_DELAY = 0.1  # 100ms between batches (tăng từ 50ms)
         
         def count_batch(batch_files):
             # Check cancellation FIRST - before doing ANY work
@@ -406,11 +421,9 @@ class TokenDisplayService:
                         self._cache[path] = 0
             
             # Update UI after batch only if not cancelled
-            if is_counting_tokens() and self.on_update and not self._is_disposed:
-                try:
-                    self.on_update()
-                except Exception:
-                    pass
+            # PERFORMANCE: Không gọi on_update cho mỗi batch nhỏ
+            # UI sẽ được update bởi throttled callback từ FileTreeComponent
+            pass
         
         # Clear old deferred timers before scheduling new ones
         self._cancel_all_deferred_timers()
@@ -520,11 +533,21 @@ class TokenDisplayService:
         """
         Lay token count va status complete cua folder.
         
+        OPTIMIZED: Sử dụng folder cache để tránh tính toán lại.
+        Cache được invalidate khi file cache thay đổi.
+        
         Returns:
             Tuple (total_tokens, is_complete)
             - total_tokens: Tong so tokens da cache (co the la partial)
             - is_complete: True neu tat ca files trong folder da duoc cache
         """
+        # Check folder cache first
+        with self._folder_cache_lock:
+            if folder_path in self._folder_cache:
+                total, is_complete, _ = self._folder_cache[folder_path]
+                return (total, is_complete)
+        
+        # Cache miss - calculate
         folder_item = self._find_item_by_path(tree, folder_path)
         if not folder_item:
             return (0, True)
@@ -543,7 +566,31 @@ class TokenDisplayService:
                 else:
                     all_cached = False
 
+        # Cache the result
+        with self._folder_cache_lock:
+            self._folder_cache[folder_path] = (total, all_cached, len(file_paths))
+
         return (total, all_cached)
+    
+    def invalidate_folder_cache(self, file_path: str):
+        """
+        Invalidate folder cache khi một file được update.
+        
+        Xóa cache của tất cả folders chứa file này.
+        
+        Args:
+            file_path: Path của file vừa được update
+        """
+        with self._folder_cache_lock:
+            # Xóa cache của tất cả folders có thể chứa file này
+            # Bằng cách check prefix
+            folders_to_remove = []
+            for folder_path in self._folder_cache:
+                if file_path.startswith(folder_path + "/") or file_path.startswith(folder_path + "\\"):
+                    folders_to_remove.append(folder_path)
+            
+            for folder in folders_to_remove:
+                del self._folder_cache[folder]
 
     def _get_all_file_paths(self, item: TreeItem) -> list:
         """Lấy tất cả file paths trong item"""

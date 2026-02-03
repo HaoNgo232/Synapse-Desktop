@@ -10,7 +10,7 @@ import threading
 from threading import Timer
 from pathlib import Path
 from core.utils.safe_timer import SafeTimer
-from typing import Callable, Optional, Set
+from typing import Callable, Optional, Set, Dict
 
 from core.utils.file_utils import TreeItem
 from services.token_display import TokenDisplayService
@@ -73,7 +73,14 @@ class FileTreeComponent:
         self._ui_lock = threading.Lock()
         self._is_rendering = False
         self._render_timer: Optional[SafeTimer] = None
+        
+        # PERFORMANCE: Throttle metrics updates để tránh re-render spam
+        self._last_metrics_update_time: float = 0.0
+        self._metrics_update_interval: float = 0.3  # 300ms minimum between updates
         self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
+        
+        # PERFORMANCE: Path to TreeItem index cho O(1) lookup
+        self._path_index: Dict[str, TreeItem] = {}
 
     def cleanup(self):
         """Cleanup resources when component is destroyed"""
@@ -283,10 +290,14 @@ class FileTreeComponent:
         self.expanded_paths = {tree.path}
         self.search_query = ""
         self.matched_paths.clear()
+        
+        # PERFORMANCE: Build path index cho O(1) lookup
+        self._path_index.clear()
+        self._build_path_index(tree)
 
         if preserve_selection:
-            # Lay tat ca paths trong tree moi
-            valid_paths = self._get_all_paths_in_tree(tree)
+            # Lay tat ca paths trong tree moi - dùng path_index thay vì traverse
+            valid_paths = set(self._path_index.keys())
 
             # Giu lai cac paths van ton tai
             self.selected_paths = old_selected & valid_paths
@@ -310,6 +321,16 @@ class FileTreeComponent:
         # This makes folder switching INSTANT
         # Tokens/lines will be displayed as user selects files
         # ========================================
+    
+    def _build_path_index(self, item: TreeItem):
+        """
+        Build path -> TreeItem index cho O(1) lookup.
+        
+        Gọi khi set_tree() hoặc khi lazy load children.
+        """
+        self._path_index[item.path] = item
+        for child in item.children:
+            self._build_path_index(child)
 
     def get_selected_paths(self) -> Set[str]:
         """
@@ -326,7 +347,11 @@ class FileTreeComponent:
         - Neu CO search query: chi tra ve selected paths nam trong matched_paths
 
         Dung method nay khi copy context de chi copy files dang hien thi.
+        
+        PERFORMANCE: Sử dụng os.path.isdir thay vì Path.is_dir() để nhanh hơn.
         """
+        import os
+        
         if not self.search_query:
             # Khong co search -> tra ve tat ca (behavior goc)
             return self.selected_paths.copy()
@@ -338,8 +363,8 @@ class FileTreeComponent:
         for path in self.selected_paths:
             # Path phai nam trong matched_paths (dang hien thi)
             if path in self.matched_paths:
-                # Neu la file, them vao
-                if not Path(path).is_dir():
+                # PERFORMANCE: Dùng os.path.isdir thay vì Path().is_dir()
+                if not os.path.isdir(path):
                     visible_selected.add(path)
                 else:
                     # Neu la folder, chi them cac files con dang hien thi
@@ -637,8 +662,9 @@ class FileTreeComponent:
                 self._render_timer.dispose()
             
             # Use SafeTimer instead of Timer
+            # PERFORMANCE: Tăng debounce lên 150ms để giảm render spam với project lớn
             self._render_timer = SafeTimer(
-                interval=0.05,  # 50ms debounce
+                interval=0.15,  # 150ms debounce (tăng từ 50ms)
                 callback=self._do_render,
                 page=getattr(self, 'page', None),
                 use_main_thread=True
@@ -812,13 +838,14 @@ class FileTreeComponent:
         ]
         
         # Add optional badges only if enabled
+        # PERFORMANCE: Truyền depth để chỉ hiển thị badges cho root level
         if self.show_lines:
-            line_badge = self._create_line_count_badge(item)
+            line_badge = self._create_line_count_badge(item, depth)
             if line_badge:
                 row_controls.append(line_badge)
         
         if self.show_tokens:
-            token_badge = self._create_token_badge(item)
+            token_badge = self._create_token_badge(item, depth)
             if token_badge:
                 row_controls.append(token_badge)
 
@@ -868,6 +895,10 @@ class FileTreeComponent:
             from core.utils.file_utils import load_folder_children
             load_folder_children(folder_item)
             log_info(f"[FileTree] Loaded {len(folder_item.children)} children")
+            
+            # PERFORMANCE: Update path index với newly loaded children
+            for child in folder_item.children:
+                self._build_path_index(child)
     
     def _load_folder_children(self, folder_item: TreeItem):
         """
@@ -1020,40 +1051,60 @@ class FileTreeComponent:
         Chon tat ca children recursively.
         
         LAZY LOADING: Nếu folder chưa loaded, load trước rồi mới select.
+        PERFORMANCE: Dùng iteration thay vì recursion để tránh stack overflow với folder sâu.
         """
         from core.utils.file_utils import load_folder_children
         
-        for child in children:
+        # PERFORMANCE: Dùng stack-based iteration thay vì recursion
+        stack = list(children)
+        
+        while stack:
+            child = stack.pop()
             self.selected_paths.add(child.path)
             
             # Nếu là folder chưa loaded → load children trước
             if child.is_dir and not child.is_loaded:
                 load_folder_children(child)
             
-            # Recurse vào children (đã loaded)
+            # Add children vào stack (đã loaded)
             if child.children:
-                self._select_all_children(child.children)
+                stack.extend(child.children)
 
     def _deselect_all_children(self, children: list):
-        """Bo chon tat ca children recursively"""
-        for child in children:
+        """Bo chon tat ca children - stack-based để tránh stack overflow"""
+        # PERFORMANCE: Dùng stack-based iteration thay vì recursion
+        stack = list(children)
+        
+        while stack:
+            child = stack.pop()
             self.selected_paths.discard(child.path)
             if child.children:
-                self._deselect_all_children(child.children)
+                stack.extend(child.children)
 
     # =========================================================================
     # LINE COUNT & TOKEN DISPLAY
     # =========================================================================
 
-    def _create_line_count_badge(self, item: TreeItem) -> ft.Container:
+    def _create_line_count_badge(self, item: TreeItem, depth: int = 0) -> ft.Container:
         """
         Tao badge hien thi line count cho file hoac folder.
         - File: hien thi line count cua file
         - Folder: hien thi tong lines cua tat ca files ben trong (co the la partial)
         
-        UPDATED: Hien thi partial sum cho folders voi indicator "~" neu chua complete.
+        OPTIMIZED:
+        - Chỉ hiển thị line badge cho root level (depth <= 1) folders
+        - Folders sâu hơn chỉ hiện badge khi được expand
         """
         if item.is_dir:
+            # PERFORMANCE: Chỉ tính và hiển thị lines cho:
+            # 1. Root level items (depth <= 1)
+            # 2. Folders đang được expand
+            is_expanded = item.path in self.expanded_paths
+            should_show_folder_lines = depth <= 1 or is_expanded
+            
+            if not should_show_folder_lines:
+                return ft.Container(width=0)
+            
             # Folder: lay tong va status tu service
             assert self.tree is not None
             folder_lines, is_complete = self._line_service.get_folder_lines_status(
@@ -1062,8 +1113,9 @@ class FileTreeComponent:
             
             if folder_lines == 0:
                 # Empty folder hoac chua co files nao duoc cache
-                # Trigger line counting cho folder neu chua co
-                self._trigger_folder_line_counting(item)
+                # Chỉ trigger counting cho root level hoặc expanded folders
+                if should_show_folder_lines:
+                    self._trigger_folder_line_counting(item)
                 return ft.Container(width=0)
             
             # Format line text voi indicator "~" neu chua complete
@@ -1110,16 +1162,28 @@ class FileTreeComponent:
         
         collect_and_request(folder_item)
 
-    def _create_token_badge(self, item: TreeItem) -> ft.Container:
+    def _create_token_badge(self, item: TreeItem, depth: int = 0) -> ft.Container:
         """
         Tao badge hien thi token count cho file hoac folder.
         - File: hien thi token count cua file
         - Folder: hien thi tong tokens cua tat ca files ben trong (co the la partial)
         
-        UPDATED: Hien thi partial sum cho folders voi indicator "+" neu chua complete.
+        OPTIMIZED: 
+        - Chỉ hiển thị token badge cho root level (depth <= 1) folders
+        - Folders sâu hơn chỉ hiện badge khi được expand
+        - Sử dụng folder cache để tránh tính toán lại
         """
         if item.is_dir:
-            # Folder: lay tong va status tu service
+            # PERFORMANCE: Chỉ tính và hiển thị tokens cho:
+            # 1. Root level items (depth <= 1)
+            # 2. Folders đang được expand
+            is_expanded = item.path in self.expanded_paths
+            should_show_folder_tokens = depth <= 1 or is_expanded
+            
+            if not should_show_folder_tokens:
+                return ft.Container(width=0)
+            
+            # Folder: lay tong va status tu service (sử dụng cache)
             assert self.tree is not None
             folder_tokens, is_complete = self._token_service.get_folder_tokens_status(
                 item.path, self.tree
@@ -1127,11 +1191,12 @@ class FileTreeComponent:
             
             if folder_tokens == 0:
                 # Empty folder hoac chua co files nao duoc cache
-                # Trigger token counting cho folder neu chua co
-                self._trigger_folder_token_counting(item)
+                # Chỉ trigger counting cho root level hoặc expanded folders
+                if should_show_folder_tokens:
+                    self._trigger_folder_token_counting(item)
                 return ft.Container(width=0)
             
-            # Format token text voi indicator "+" neu chua complete
+            # Format token text voi indicator "~" neu chua complete
             token_text = self._token_service._format_tokens(folder_tokens)
             if not is_complete:
                 token_text = f"~{token_text}"  # ~ chi partial sum
@@ -1256,22 +1321,29 @@ class FileTreeComponent:
         
         TOKEN BADGE FIX: Cần re-render tree để cập nhật token badges,
         không chỉ page update.
+        
+        PERFORMANCE FIX: Throttle updates để tránh re-render spam với project lớn.
         """
+        import time
+        
         # Skip nếu đã disposed
         if self._is_disposed:
             return
         
+        # PERFORMANCE: Throttle - chỉ update nếu đủ thời gian từ lần update trước
+        current_time = time.time()
+        if current_time - self._last_metrics_update_time < self._metrics_update_interval:
+            # Chưa đủ thời gian, schedule delayed update thay vì skip hoàn toàn
+            self._schedule_render()
+            return
+        
+        self._last_metrics_update_time = current_time
+        
         # Re-render tree để cập nhật token/line badges
-        # _schedule_render đã handle debouncing và thread safety
         try:
             if self.page:
-                # ========================================
-                # RACE CONDITION FIX: Defer UI update đến main thread
-                # Flet 0.80.5+ yêu cầu async function cho run_task
-                # ========================================
                 async def _do_render():
                     try:
-                        # Re-render tree để update badges
                         self._render_tree()
                     except Exception:
                         pass
@@ -1279,11 +1351,10 @@ class FileTreeComponent:
                 try:
                     self.page.run_task(_do_render)
                 except Exception:
-                    # Fallback nếu run_task không khả dụng
                     self._schedule_render()
         except Exception as e:
             logging.debug(f"Error updating page from metrics service: {e}")
-            pass  # Ignore errors khi page chua san sang
+            pass
 
     def _request_visible_tokens(self):
         """Request tokens cho cac files dang hien thi"""
@@ -1344,18 +1415,15 @@ class FileTreeComponent:
     ) -> Optional[TreeItem]:
         """
         Tim TreeItem theo path trong tree.
+        
+        OPTIMIZED: Sử dụng path_index cho O(1) lookup.
 
         Args:
-            item: TreeItem hien tai
+            item: TreeItem hien tai (ignored, kept for backward compatibility)
             target_path: Path can tim
 
         Returns:
             TreeItem neu tim thay, None neu khong
         """
-        if item.path == target_path:
-            return item
-        for child in item.children:
-            found = self._find_item_by_path(child, target_path)
-            if found:
-                return found
-        return None
+        # PERFORMANCE: O(1) lookup từ index
+        return self._path_index.get(target_path)

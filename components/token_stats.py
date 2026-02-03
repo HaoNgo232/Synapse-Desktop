@@ -75,6 +75,7 @@ class TokenStatsPanel:
     - Stats Grid: Metrics (Big) & Details (Small)
     - Warning Banner: Hiển thị khi Critical
     - Preserves selected model in settings
+    - PERFORMANCE: Throttled UI updates để tránh spam với project lớn
     """
 
     def __init__(self, on_model_changed: Optional[Callable[[str], None]] = None):
@@ -82,6 +83,10 @@ class TokenStatsPanel:
         self.skipped_files: List[SkippedFile] = []
         self.is_loading: bool = False
         self.on_model_changed = on_model_changed
+        
+        # PERFORMANCE: Throttle UI updates
+        self._last_ui_update_time: float = 0.0
+        self._min_update_interval: float = 0.1  # 100ms minimum between UI updates
 
         # Load saved model or default
         saved_model_id = get_setting("model_id", DEFAULT_MODEL_ID)
@@ -293,9 +298,17 @@ class TokenStatsPanel:
         self._refresh_skipped_ui()
 
     def _refresh_ui(self):
-        """Refresh visuals based on data"""
+        """Refresh visuals based on data - với throttling để tránh spam"""
+        import time
+        
         if not self._selected_model:
             return
+        
+        # PERFORMANCE: Throttle UI updates
+        current_time = time.time()
+        if current_time - self._last_ui_update_time < self._min_update_interval:
+            return  # Skip update nếu chưa đủ thời gian
+        self._last_ui_update_time = current_time
 
         context_limit = self._selected_model.context_length
         total_tokens = self.stats.total_tokens

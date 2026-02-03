@@ -917,6 +917,7 @@ class ContextView:
         log_info(f"[ContextView] _on_selection_changed: {selection_size} paths selected")
         
         # Adaptive debounce based on selection size
+        # PERFORMANCE: Tăng debounce cho project lớn để tránh spam
         if selection_size == 0:
             # No selection - update immediately to show zero
             log_info("[ContextView] Calling _update_token_count (0 selection)")
@@ -929,13 +930,16 @@ class ContextView:
             return
         elif selection_size < 20:
             # Small - short debounce
-            debounce_ms = 50
+            debounce_ms = 100  # Tăng từ 50ms
         elif selection_size < 100:
             # Medium - moderate debounce
-            debounce_ms = 100
-        else:
+            debounce_ms = 200  # Tăng từ 100ms
+        elif selection_size < 500:
             # Large - longer debounce
-            debounce_ms = 200
+            debounce_ms = 300  # Tăng từ 200ms
+        else:
+            # Very large (700+ files) - much longer debounce
+            debounce_ms = 500
 
         log_info(f"[ContextView] Scheduling _update_token_count in {debounce_ms}ms")
         
@@ -1279,9 +1283,11 @@ class ContextView:
         """
         Update token count display va token stats panel.
         Su dung visible paths khi dang search de hien thi chinh xac.
-        Su dung parallel batch counting cho hieu suat tot hon.
+        
+        PERFORMANCE FIX: Sử dụng cache từ TokenDisplayService thay vì recount toàn bộ.
+        Chỉ count files chưa có trong cache.
         """
-        from core.logging_config import log_info
+        from core.logging_config import log_info, log_debug
         import time
         
         total_start = time.perf_counter()
@@ -1293,7 +1299,7 @@ class ContextView:
         step1_start = time.perf_counter()
         selected_paths = self.file_tree_component.get_visible_selected_paths()
         step1_time = time.perf_counter() - step1_start
-        log_info(f"[TIMING] get_visible_selected_paths: {step1_time:.3f}s ({len(selected_paths)} paths)")
+        log_debug(f"[TIMING] get_visible_selected_paths: {step1_time:.3f}s ({len(selected_paths)} paths)")
 
         # STEP 2: Filter files only (use os.path.isfile - faster than Path.is_file)
         import os
@@ -1301,25 +1307,73 @@ class ContextView:
         file_paths = [Path(p) for p in selected_paths if os.path.isfile(p)]
         file_count = len(file_paths)
         step2_time = time.perf_counter() - step2_start
-        log_info(f"[TIMING] filter files: {step2_time:.3f}s ({file_count} files)")
+        log_debug(f"[TIMING] filter files: {step2_time:.3f}s ({file_count} files)")
 
-        # STEP 3: Token counting
+        # STEP 3: Token counting - SỬ DỤNG CACHE TRƯỚC
+        file_tokens = 0
         if file_count > 0:
             from services.token_display import start_token_counting
-
-            start_token_counting()
+            
+            # PERFORMANCE: Check cache trước, chỉ count files chưa có
+            token_service = self.file_tree_component._token_service
+            cached_total = 0
+            uncached_paths: list[Path] = []
             
             step3_start = time.perf_counter()
-            token_results = count_tokens_batch_parallel(file_paths, max_workers=4)
-            step3_time = time.perf_counter() - step3_start
+            for fp in file_paths:
+                cached = token_service.get_token_count(str(fp))
+                if cached is not None:
+                    cached_total += cached
+                else:
+                    uncached_paths.append(fp)
             
-            file_tokens = sum(token_results.values())
-            log_info(f"[TIMING] token counting: {step3_time:.3f}s ({file_tokens:,} tokens)")
-        else:
-            file_tokens = 0
+            cache_check_time = time.perf_counter() - step3_start
+            log_debug(f"[TIMING] cache check: {cache_check_time:.3f}s ({file_count - len(uncached_paths)} cached, {len(uncached_paths)} uncached)")
+            
+            # Chỉ count files chưa có trong cache
+            if uncached_paths:
+                start_token_counting()
+                
+                count_start = time.perf_counter()
+                # Giới hạn số files count cùng lúc để tránh block quá lâu
+                MAX_IMMEDIATE_COUNT = 50
+                if len(uncached_paths) <= MAX_IMMEDIATE_COUNT:
+                    token_results = count_tokens_batch_parallel(uncached_paths, max_workers=4)
+                    uncached_total = sum(token_results.values())
+                    
+                    # Update cache
+                    with token_service._lock:
+                        token_service._cache.update(token_results)
+                else:
+                    # Với >50 files chưa cache, count batch đầu tiên và defer phần còn lại
+                    immediate_paths = uncached_paths[:MAX_IMMEDIATE_COUNT]
+                    deferred_paths = uncached_paths[MAX_IMMEDIATE_COUNT:]
+                    
+                    token_results = count_tokens_batch_parallel(immediate_paths, max_workers=4)
+                    uncached_total = sum(token_results.values())
+                    
+                    # Update cache
+                    with token_service._lock:
+                        token_service._cache.update(token_results)
+                    
+                    # Defer counting cho remaining files (sẽ update UI sau)
+                    if deferred_paths:
+                        token_service._schedule_deferred_counting([str(p) for p in deferred_paths])
+                        # Estimate tokens cho deferred files (rough estimate)
+                        # Dùng average tokens/file từ cached results
+                        if token_results:
+                            avg_tokens = sum(token_results.values()) / len(token_results)
+                            uncached_total += int(avg_tokens * len(deferred_paths))
+                
+                count_time = time.perf_counter() - count_start
+                log_debug(f"[TIMING] token counting: {count_time:.3f}s ({uncached_total:,} tokens from {len(uncached_paths)} files)")
+            else:
+                uncached_total = 0
+            
+            file_tokens = cached_total + uncached_total
 
         total_time = time.perf_counter() - total_start
-        log_info(f"[TIMING] TOTAL _update_token_count: {total_time:.3f}s")
+        log_debug(f"[TIMING] TOTAL _update_token_count: {total_time:.3f}s ({file_tokens:,} tokens)")
 
         # Hien thi indicator khi dang filter
         assert self.token_count_text is not None

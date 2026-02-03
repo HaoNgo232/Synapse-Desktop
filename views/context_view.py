@@ -24,7 +24,7 @@ from core.prompt_generator import (
     generate_file_contents_plain,
     generate_smart_context,
 )
-from core.utils.git_utils import get_git_diffs, get_git_logs
+from core.utils.git_utils import get_git_diffs, get_git_logs, get_diff_only
 from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
 from components.file_preview import FilePreviewDialog
@@ -553,6 +553,24 @@ class ContextView:
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                     ft.Container(height=8),
+                    # Row 0: Copy Diff Only - Chỉ copy git changes
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                "Copy Diff Only",
+                                icon=ft.Icons.DIFFERENCE,
+                                on_click=lambda _: self._show_diff_only_dialog(),
+                                expand=True,
+                                tooltip="Copy only git diff (uncommitted + recent commits)",
+                                style=ft.ButtonStyle(
+                                    color="#FFFFFF",
+                                    bgcolor="#8B5CF6",  # Purple
+                                ),
+                            ),
+                        ],
+                        spacing=12,
+                    ),
+                    ft.Container(height=8),
                     # Row 1: Tree Map và Smart Context
                     ft.Row(
                         [
@@ -930,16 +948,16 @@ class ContextView:
             return
         elif selection_size < 20:
             # Small - short debounce
-            debounce_ms = 100  # Tăng từ 50ms
+            debounce_ms = 150
         elif selection_size < 100:
             # Medium - moderate debounce
-            debounce_ms = 200  # Tăng từ 100ms
+            debounce_ms = 250
         elif selection_size < 500:
             # Large - longer debounce
-            debounce_ms = 300  # Tăng từ 200ms
+            debounce_ms = 400
         else:
             # Very large (700+ files) - much longer debounce
-            debounce_ms = 500
+            debounce_ms = 700
 
         log_info(f"[ContextView] Scheduling _update_token_count in {debounce_ms}ms")
         
@@ -1284,42 +1302,37 @@ class ContextView:
         Update token count display va token stats panel.
         Su dung visible paths khi dang search de hien thi chinh xac.
         
-        PERFORMANCE FIX: Sử dụng cache từ TokenDisplayService thay vì recount toàn bộ.
-        Chỉ count files chưa có trong cache.
+        PERFORMANCE FIX v2: 
+        - Sử dụng cache từ TokenDisplayService
+        - Giới hạn immediate counting để không block UI
+        - Hiển thị estimate với indicator "~" khi đang count background
         """
-        from core.logging_config import log_info, log_debug
+        from core.logging_config import log_debug
         import time
-        
-        total_start = time.perf_counter()
         
         if not self.file_tree_component:
             return
 
-        # STEP 1: Get selected paths
-        step1_start = time.perf_counter()
+        # STEP 1: Get selected paths - O(n) với n = số selected
         selected_paths = self.file_tree_component.get_visible_selected_paths()
-        step1_time = time.perf_counter() - step1_start
-        log_debug(f"[TIMING] get_visible_selected_paths: {step1_time:.3f}s ({len(selected_paths)} paths)")
 
         # STEP 2: Filter files only (use os.path.isfile - faster than Path.is_file)
         import os
-        step2_start = time.perf_counter()
         file_paths = [Path(p) for p in selected_paths if os.path.isfile(p)]
         file_count = len(file_paths)
-        step2_time = time.perf_counter() - step2_start
-        log_debug(f"[TIMING] filter files: {step2_time:.3f}s ({file_count} files)")
 
-        # STEP 3: Token counting - SỬ DỤNG CACHE TRƯỚC
+        # STEP 3: Token counting - OPTIMIZED cho project lớn
         file_tokens = 0
+        is_estimate = False  # Flag để hiện "~" prefix
+        
         if file_count > 0:
             from services.token_display import start_token_counting
             
-            # PERFORMANCE: Check cache trước, chỉ count files chưa có
             token_service = self.file_tree_component._token_service
             cached_total = 0
             uncached_paths: list[Path] = []
             
-            step3_start = time.perf_counter()
+            # Cache lookup - O(n)
             for fp in file_paths:
                 cached = token_service.get_token_count(str(fp))
                 if cached is not None:
@@ -1327,60 +1340,67 @@ class ContextView:
                 else:
                     uncached_paths.append(fp)
             
-            cache_check_time = time.perf_counter() - step3_start
-            log_debug(f"[TIMING] cache check: {cache_check_time:.3f}s ({file_count - len(uncached_paths)} cached, {len(uncached_paths)} uncached)")
+            uncached_count = len(uncached_paths)
             
-            # Chỉ count files chưa có trong cache
+            # PERFORMANCE: Với project lớn (>700 files), giảm immediate counting
+            if file_count > 500:
+                MAX_IMMEDIATE = 30  # Giảm để không block
+            elif file_count > 200:
+                MAX_IMMEDIATE = 50
+            else:
+                MAX_IMMEDIATE = 100
+            
+            uncached_total = 0
+            
             if uncached_paths:
                 start_token_counting()
                 
-                count_start = time.perf_counter()
-                # Giới hạn số files count cùng lúc để tránh block quá lâu
-                MAX_IMMEDIATE_COUNT = 50
-                if len(uncached_paths) <= MAX_IMMEDIATE_COUNT:
+                if uncached_count <= MAX_IMMEDIATE:
+                    # Count tất cả ngay
                     token_results = count_tokens_batch_parallel(uncached_paths, max_workers=4)
                     uncached_total = sum(token_results.values())
                     
-                    # Update cache
                     with token_service._lock:
                         token_service._cache.update(token_results)
                 else:
-                    # Với >50 files chưa cache, count batch đầu tiên và defer phần còn lại
-                    immediate_paths = uncached_paths[:MAX_IMMEDIATE_COUNT]
-                    deferred_paths = uncached_paths[MAX_IMMEDIATE_COUNT:]
+                    # LARGE PROJECT: Count batch nhỏ, estimate phần còn lại
+                    is_estimate = True
+                    
+                    immediate_paths = uncached_paths[:MAX_IMMEDIATE]
+                    deferred_paths = uncached_paths[MAX_IMMEDIATE:]
                     
                     token_results = count_tokens_batch_parallel(immediate_paths, max_workers=4)
-                    uncached_total = sum(token_results.values())
+                    immediate_total = sum(token_results.values())
                     
-                    # Update cache
                     with token_service._lock:
                         token_service._cache.update(token_results)
                     
-                    # Defer counting cho remaining files (sẽ update UI sau)
-                    if deferred_paths:
-                        token_service._schedule_deferred_counting([str(p) for p in deferred_paths])
-                        # Estimate tokens cho deferred files (rough estimate)
-                        # Dùng average tokens/file từ cached results
-                        if token_results:
-                            avg_tokens = sum(token_results.values()) / len(token_results)
-                            uncached_total += int(avg_tokens * len(deferred_paths))
-                
-                count_time = time.perf_counter() - count_start
-                log_debug(f"[TIMING] token counting: {count_time:.3f}s ({uncached_total:,} tokens from {len(uncached_paths)} files)")
-            else:
-                uncached_total = 0
+                    # Estimate: dùng average từ immediate + cached
+                    total_counted = cached_total + immediate_total
+                    counted_files = file_count - len(deferred_paths)
+                    
+                    if counted_files > 0:
+                        avg_tokens = total_counted / counted_files
+                        estimated_deferred = int(avg_tokens * len(deferred_paths))
+                    else:
+                        # Fallback estimate: ~200 tokens/file
+                        estimated_deferred = len(deferred_paths) * 200
+                    
+                    uncached_total = immediate_total + estimated_deferred
+                    
+                    # Schedule background counting
+                    token_service._schedule_deferred_counting([str(p) for p in deferred_paths])
             
             file_tokens = cached_total + uncached_total
 
-        total_time = time.perf_counter() - total_start
-        log_debug(f"[TIMING] TOTAL _update_token_count: {total_time:.3f}s ({file_tokens:,} tokens)")
-
-        # Hien thi indicator khi dang filter
+        # Update display với estimate indicator
         assert self.token_count_text is not None
+        prefix = "~" if is_estimate else ""
+        
         if self.file_tree_component.is_searching():
-            self.token_count_text.value = f"{file_tokens:,} tokens (filtered)"
+            self.token_count_text.value = f"{prefix}{file_tokens:,} tokens (filtered)"
         else:
-            self.token_count_text.value = f"{file_tokens:,} tokens"
+            self.token_count_text.value = f"{prefix}{file_tokens:,} tokens"
 
         # Update token stats panel
         instruction_tokens = 0
@@ -1825,6 +1845,200 @@ class ContextView:
         self.page.overlay.append(dialog)
         dialog.open = True
         safe_page_update(self.page)
+
+    def _show_diff_only_dialog(self):
+        """
+        Hiển thị dialog để chọn options cho Copy Diff Only.
+        
+        Options:
+        - Số commits cần include (0 = chỉ uncommitted)
+        - Include staged changes
+        - Include unstaged changes
+        """
+        workspace = self.get_workspace()
+        if not workspace:
+            self._show_status("No workspace selected", is_error=True)
+            return
+        
+        # State variables
+        num_commits = ft.TextField(
+            value="0",
+            label="Recent commits to include",
+            hint_text="0 = uncommitted only",
+            width=200,
+            keyboard_type=ft.KeyboardType.NUMBER,
+            border_color=ThemeColors.BORDER,
+            focused_border_color=ThemeColors.PRIMARY,
+        )
+        
+        include_staged = ft.Checkbox(
+            label="Include staged changes",
+            value=True,
+            active_color=ThemeColors.PRIMARY,
+        )
+        
+        include_unstaged = ft.Checkbox(
+            label="Include unstaged changes", 
+            value=True,
+            active_color=ThemeColors.PRIMARY,
+        )
+        
+        status_text = ft.Text("", size=12, color=ThemeColors.TEXT_SECONDARY)
+        
+        def close_dialog(e=None):
+            dialog.open = False
+            safe_page_update(self.page)
+        
+        def do_copy(e):
+            try:
+                commits = int(num_commits.value or "0")
+                if commits < 0:
+                    commits = 0
+            except ValueError:
+                commits = 0
+            
+            status_text.value = "Getting diff..."
+            safe_page_update(self.page)
+            
+            # Get diff
+            result = get_diff_only(
+                workspace,
+                num_commits=commits,
+                include_staged=include_staged.value or False,
+                include_unstaged=include_unstaged.value or False,
+            )
+            
+            if result.error:
+                status_text.value = f"Error: {result.error}"
+                status_text.color = ThemeColors.ERROR
+                safe_page_update(self.page)
+                return
+            
+            if not result.diff_content.strip():
+                status_text.value = "No changes found"
+                status_text.color = ThemeColors.WARNING
+                safe_page_update(self.page)
+                return
+            
+            # Build context for AI
+            assert self.instructions_field is not None
+            instructions = self.instructions_field.value or ""
+            
+            prompt = self._build_diff_only_prompt(result, instructions)
+            
+            # Copy to clipboard
+            success, message = copy_to_clipboard(prompt)
+            
+            if success:
+                close_dialog()
+                token_count = count_tokens(prompt)
+                self._show_status(
+                    f"Diff copied! ({token_count:,} tokens, "
+                    f"+{result.insertions}/-{result.deletions} lines, "
+                    f"{result.files_changed} files)"
+                )
+            else:
+                status_text.value = f"Copy failed: {message}"
+                status_text.color = ThemeColors.ERROR
+                safe_page_update(self.page)
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Copy Diff Only",
+                weight=ft.FontWeight.BOLD,
+                color=ThemeColors.TEXT_PRIMARY,
+            ),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Copy only git changes instead of full source code.",
+                            size=13,
+                            color=ThemeColors.TEXT_SECONDARY,
+                        ),
+                        ft.Text(
+                            "Ideal for: code review, bug fixing, feature validation.",
+                            size=12,
+                            color=ThemeColors.TEXT_MUTED,
+                            italic=True,
+                        ),
+                        ft.Container(height=16),
+                        num_commits,
+                        ft.Container(height=8),
+                        include_staged,
+                        include_unstaged,
+                        ft.Container(height=12),
+                        status_text,
+                    ],
+                    tight=True,
+                ),
+                width=350,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    on_click=close_dialog,
+                    style=ft.ButtonStyle(color=ThemeColors.TEXT_SECONDARY),
+                ),
+                ft.ElevatedButton(
+                    "Copy Diff",
+                    icon=ft.Icons.CONTENT_COPY,
+                    on_click=do_copy,
+                    style=ft.ButtonStyle(
+                        color="#FFFFFF",
+                        bgcolor="#8B5CF6",
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        safe_page_update(self.page)
+    
+    def _build_diff_only_prompt(self, diff_result, instructions: str) -> str:
+        """
+        Build prompt cho Copy Diff Only - optimized for AI review.
+        
+        Args:
+            diff_result: DiffOnlyResult từ get_diff_only()
+            instructions: User instructions
+        
+        Returns:
+            Formatted prompt string
+        """
+        workspace = self.get_workspace()
+        workspace_name = workspace.name if workspace else "unknown"
+        
+        parts = [
+            "<diff_context>",
+            f"Project: {workspace_name}",
+            f"Files changed: {diff_result.files_changed}",
+            f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
+        ]
+        
+        if diff_result.commits_included > 0:
+            parts.append(f"Commits included: {diff_result.commits_included}")
+        
+        parts.extend([
+            "</diff_context>",
+            "",
+            "<git_diff>",
+            diff_result.diff_content,
+            "</git_diff>",
+        ])
+        
+        if instructions.strip():
+            parts.extend([
+                "",
+                "<user_instructions>",
+                instructions.strip(),
+                "</user_instructions>",
+            ])
+        
+        return "\n".join(parts)
 
     def _show_status(
         self, message: str, is_error: bool = False, auto_clear: bool = True

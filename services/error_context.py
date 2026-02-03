@@ -33,15 +33,20 @@ def build_error_context_for_ai(
     row_results: List[ApplyRowResult],
     original_opx: str = "",
     include_opx: bool = True,
+    focused_mode: bool = True,
 ) -> str:
     """
     Build context day du de AI hieu va fix loi.
+    
+    FOCUSED MODE (default): Chỉ cung cấp thông tin cần thiết để fix,
+    giảm context không liên quan để AI tập trung hơn.
 
     Args:
         preview_data: Preview data tu analyzer
         row_results: Ket qua apply cac rows
         original_opx: OPX goc (optional)
         include_opx: Co bao gom OPX instructions khong
+        focused_mode: Neu True, chi hien thi thong tin can thiet de fix
 
     Returns:
         String context cho AI
@@ -51,7 +56,15 @@ def build_error_context_for_ai(
     # Header summary
     success_count = sum(1 for r in row_results if r.success)
     failed_count = sum(1 for r in row_results if not r.success)
+    
+    # FOCUSED MODE: Ngắn gọn, đi thẳng vào vấn đề
+    if focused_mode and failed_count > 0:
+        sections.extend(_build_focused_error_context(
+            row_results, preview_data, original_opx, include_opx
+        ))
+        return "\n".join(sections)
 
+    # FULL MODE: Chi tiết đầy đủ (legacy behavior)
     sections.extend(
         [
             "## Apply Results Summary",
@@ -94,6 +107,93 @@ def build_error_context_for_ai(
     sections.extend(_build_fix_instructions(include_opx))
 
     return "\n".join(sections)
+
+
+def _build_focused_error_context(
+    row_results: List[ApplyRowResult],
+    preview_data: PreviewData,
+    original_opx: str,
+    include_opx: bool,
+) -> List[str]:
+    """
+    Build focused error context - chỉ thông tin cần thiết để fix.
+    
+    Format tối ưu cho AI:
+    1. WHAT FAILED: File + action + error message
+    2. SEARCH BLOCK that failed (exact text)
+    3. HINT: Possible cause
+    4. ACTION REQUIRED: Cụ thể cần làm gì
+    """
+    sections: List[str] = []
+    failed_rows = [r for r in row_results if not r.success]
+    
+    sections.append("# OPX APPLY FAILED - FIX REQUIRED")
+    sections.append("")
+    sections.append(f"**{len(failed_rows)} operation(s) failed.**")
+    sections.append("")
+    
+    for i, result in enumerate(failed_rows, 1):
+        row = _find_preview_row(preview_data, result.row_index)
+        
+        sections.append(f"## Error {i}: {result.action.upper()} `{result.path}`")
+        sections.append("")
+        
+        # Error message - làm nổi bật
+        sections.append(f"**ERROR:** `{result.message}`")
+        sections.append("")
+        
+        # Cascade failure hint
+        if result.is_cascade_failure:
+            sections.append("⚠️ **CASCADE FAILURE**: A previous operation modified this file.")
+            sections.append("The search pattern may no longer match the current file content.")
+            sections.append("")
+        
+        # Show search block that failed
+        if row and row.change_blocks:
+            for j, block in enumerate(row.change_blocks):
+                search = block.get("search")
+                if search:
+                    sections.append(f"**Search block that FAILED to match:**")
+                    sections.append("```")
+                    # Chỉ hiện 10 dòng đầu nếu quá dài
+                    search_lines = search.split("\n")
+                    if len(search_lines) > 10:
+                        sections.append("\n".join(search_lines[:10]))
+                        sections.append(f"... ({len(search_lines) - 10} more lines)")
+                    else:
+                        sections.append(search)
+                    sections.append("```")
+                    sections.append("")
+                    
+                    # Intended replacement
+                    content = block.get("content", "")
+                    if content:
+                        sections.append("**Intended replacement:**")
+                        sections.append("```")
+                        content_lines = content.split("\n")
+                        if len(content_lines) > 10:
+                            sections.append("\n".join(content_lines[:10]))
+                            sections.append(f"... ({len(content_lines) - 10} more lines)")
+                        else:
+                            sections.append(content)
+                        sections.append("```")
+                        sections.append("")
+        
+        sections.append("---")
+        sections.append("")
+    
+    # Action required - cụ thể
+    sections.append("# ACTION REQUIRED")
+    sections.append("")
+    sections.append("1. **Read the current file content** to see what changed")
+    sections.append("2. **Update the `<find>` block** to match the CURRENT file state")
+    sections.append("3. **Regenerate OPX** with corrected search patterns")
+    sections.append("")
+    
+    if include_opx:
+        sections.append("Generate corrected OPX. Use `op=\"patch\"` with updated `<find>` blocks.")
+    
+    return sections
 
 
 def _build_success_section(

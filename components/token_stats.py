@@ -84,9 +84,9 @@ class TokenStatsPanel:
         self.is_loading: bool = False
         self.on_model_changed = on_model_changed
         
-        # PERFORMANCE: Throttle UI updates
+        # PERFORMANCE: Throttle UI updates - tăng lên cho project lớn
         self._last_ui_update_time: float = 0.0
-        self._min_update_interval: float = 0.1  # 100ms minimum between UI updates
+        self._min_update_interval: float = 0.25  # 250ms minimum between UI updates (tăng từ 100ms)
 
         # Load saved model or default
         saved_model_id = get_setting("model_id", DEFAULT_MODEL_ID)

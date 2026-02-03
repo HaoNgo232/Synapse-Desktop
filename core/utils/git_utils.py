@@ -31,6 +31,19 @@ class GitCommit:
 class GitLogResult:
     commits: List[GitCommit] = field(default_factory=list)
     log_content: str = ""
+    commit_count: int = 0
+    error: Optional[str] = None
+
+
+@dataclass
+class DiffOnlyResult:
+    """Kết quả cho Copy Diff Only feature"""
+    diff_content: str
+    files_changed: int
+    insertions: int
+    deletions: int
+    commits_included: int
+    error: Optional[str] = None
 
 
 def is_git_installed() -> bool:
@@ -183,3 +196,205 @@ def _parse_git_log(raw_output: str, separator: str) -> List[GitCommit]:
         )
 
     return commits
+
+
+def get_diff_only(
+    workspace_path: Path,
+    num_commits: int = 1,
+    include_staged: bool = True,
+    include_unstaged: bool = True,
+) -> DiffOnlyResult:
+    """
+    Lấy chỉ git diff - không bao gồm source code đầy đủ.
+    
+    Mục đích: Cho AI review các thay đổi gần đây mà không cần context toàn bộ project.
+    
+    Args:
+        workspace_path: Path đến workspace
+        num_commits: Số commits gần nhất cần include (0 = chỉ uncommitted changes)
+        include_staged: Bao gồm staged changes
+        include_unstaged: Bao gồm unstaged changes
+    
+    Returns:
+        DiffOnlyResult với diff content và statistics
+    """
+    if not is_git_repo(workspace_path):
+        return DiffOnlyResult(
+            diff_content="",
+            files_changed=0,
+            insertions=0,
+            deletions=0,
+            commits_included=0,
+            error="Not a git repository"
+        )
+    
+    diff_parts: list[str] = []
+    total_files = 0
+    total_insertions = 0
+    total_deletions = 0
+    
+    try:
+        # 1. Uncommitted changes (staged + unstaged)
+        if include_unstaged:
+            # Unstaged changes (working tree vs index)
+            result = subprocess.run(
+                ["git", "diff", "--stat"],
+                cwd=workspace_path,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                unstaged_diff = subprocess.run(
+                    ["git", "diff"],
+                    cwd=workspace_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if unstaged_diff.stdout.strip():
+                    diff_parts.append("# Unstaged Changes (Working Tree)\n")
+                    diff_parts.append(unstaged_diff.stdout)
+                    # Parse stats
+                    stats = _parse_diff_stats(result.stdout)
+                    total_files += stats[0]
+                    total_insertions += stats[1]
+                    total_deletions += stats[2]
+        
+        if include_staged:
+            # Staged changes (index vs HEAD)
+            result = subprocess.run(
+                ["git", "diff", "--cached", "--stat"],
+                cwd=workspace_path,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                staged_diff = subprocess.run(
+                    ["git", "diff", "--cached"],
+                    cwd=workspace_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if staged_diff.stdout.strip():
+                    diff_parts.append("\n# Staged Changes (Ready to Commit)\n")
+                    diff_parts.append(staged_diff.stdout)
+                    stats = _parse_diff_stats(result.stdout)
+                    total_files += stats[0]
+                    total_insertions += stats[1]
+                    total_deletions += stats[2]
+        
+        # 2. Recent commits diff
+        commits_included = 0
+        if num_commits > 0:
+            # Get diff of last N commits
+            result = subprocess.run(
+                ["git", "log", f"-{num_commits}", "--oneline"],
+                cwd=workspace_path,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                commit_lines = result.stdout.strip().split("\n")
+                commits_included = len(commit_lines)
+                
+                # Get combined diff
+                diff_result = subprocess.run(
+                    ["git", "diff", f"HEAD~{num_commits}..HEAD"],
+                    cwd=workspace_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if diff_result.returncode == 0 and diff_result.stdout.strip():
+                    diff_parts.append(f"\n# Recent Commits ({commits_included} commits)\n")
+                    diff_parts.append("# Commits:\n")
+                    for line in commit_lines:
+                        diff_parts.append(f"#   {line}\n")
+                    diff_parts.append("\n")
+                    diff_parts.append(diff_result.stdout)
+                    
+                    # Get stats
+                    stat_result = subprocess.run(
+                        ["git", "diff", "--stat", f"HEAD~{num_commits}..HEAD"],
+                        cwd=workspace_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    if stat_result.returncode == 0:
+                        stats = _parse_diff_stats(stat_result.stdout)
+                        total_files += stats[0]
+                        total_insertions += stats[1]
+                        total_deletions += stats[2]
+        
+        diff_content = "".join(diff_parts)
+        
+        return DiffOnlyResult(
+            diff_content=diff_content,
+            files_changed=total_files,
+            insertions=total_insertions,
+            deletions=total_deletions,
+            commits_included=commits_included,
+            error=None
+        )
+        
+    except subprocess.TimeoutExpired:
+        return DiffOnlyResult(
+            diff_content="",
+            files_changed=0,
+            insertions=0,
+            deletions=0,
+            commits_included=0,
+            error="Git command timed out"
+        )
+    except Exception as e:
+        return DiffOnlyResult(
+            diff_content="",
+            files_changed=0,
+            insertions=0,
+            deletions=0,
+            commits_included=0,
+            error=str(e)
+        )
+
+
+def _parse_diff_stats(stat_output: str) -> tuple[int, int, int]:
+    """
+    Parse git diff --stat output để lấy files changed, insertions, deletions.
+    
+    Returns:
+        (files_changed, insertions, deletions)
+    """
+    import re
+    
+    # Last line format: "X files changed, Y insertions(+), Z deletions(-)"
+    lines = stat_output.strip().split("\n")
+    if not lines:
+        return (0, 0, 0)
+    
+    last_line = lines[-1]
+    
+    files = 0
+    insertions = 0
+    deletions = 0
+    
+    # Parse files changed
+    files_match = re.search(r"(\d+) files? changed", last_line)
+    if files_match:
+        files = int(files_match.group(1))
+    
+    # Parse insertions
+    ins_match = re.search(r"(\d+) insertions?\(\+\)", last_line)
+    if ins_match:
+        insertions = int(ins_match.group(1))
+    
+    # Parse deletions
+    del_match = re.search(r"(\d+) deletions?\(-\)", last_line)
+    if del_match:
+        deletions = int(del_match.group(1))
+    
+    return (files, insertions, deletions)

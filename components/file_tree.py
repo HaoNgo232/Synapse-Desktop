@@ -74,9 +74,9 @@ class FileTreeComponent:
         self._is_rendering = False
         self._render_timer: Optional[SafeTimer] = None
         
-        # PERFORMANCE: Throttle metrics updates để tránh re-render spam
+        # PERFORMANCE: Throttle metrics updates để tránh re-render spam với project lớn
         self._last_metrics_update_time: float = 0.0
-        self._metrics_update_interval: float = 0.3  # 300ms minimum between updates
+        self._metrics_update_interval: float = 0.5  # 500ms minimum between updates (tăng từ 300ms)
         self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
         
         # PERFORMANCE: Path to TreeItem index cho O(1) lookup
@@ -1314,15 +1314,14 @@ class FileTreeComponent:
 
     def _on_metrics_updated(self):
         """
-        Callback khi TokenService hoac LineService update cache - re-render tree.
+        Callback khi TokenService hoac LineService update cache.
 
         RACE CONDITION FIX: Callback này có thể được gọi từ background context.
-        Sử dụng page.run_task() để đảm bảo UI update trên main thread.
         
-        TOKEN BADGE FIX: Cần re-render tree để cập nhật token badges,
-        không chỉ page update.
-        
-        PERFORMANCE FIX: Throttle updates để tránh re-render spam với project lớn.
+        PERFORMANCE FIX v2: 
+        - KHÔNG render ngay lập tức
+        - Chỉ schedule debounced render
+        - Giảm main thread blocking đáng kể với project lớn
         """
         import time
         
@@ -1330,31 +1329,16 @@ class FileTreeComponent:
         if self._is_disposed:
             return
         
-        # PERFORMANCE: Throttle - chỉ update nếu đủ thời gian từ lần update trước
+        # PERFORMANCE: Throttle - chỉ schedule nếu đủ thời gian từ lần update trước
         current_time = time.time()
         if current_time - self._last_metrics_update_time < self._metrics_update_interval:
-            # Chưa đủ thời gian, schedule delayed update thay vì skip hoàn toàn
-            self._schedule_render()
-            return
+            return  # Skip hoàn toàn - đã có pending render
         
         self._last_metrics_update_time = current_time
         
-        # Re-render tree để cập nhật token/line badges
-        try:
-            if self.page:
-                async def _do_render():
-                    try:
-                        self._render_tree()
-                    except Exception:
-                        pass
-
-                try:
-                    self.page.run_task(_do_render)
-                except Exception:
-                    self._schedule_render()
-        except Exception as e:
-            logging.debug(f"Error updating page from metrics service: {e}")
-            pass
+        # PERFORMANCE FIX: Chỉ schedule render, không render ngay
+        # Debounced render sẽ coalesce multiple updates
+        self._schedule_render()
 
     def _request_visible_tokens(self):
         """Request tokens cho cac files dang hien thi"""

@@ -1,8 +1,10 @@
 """
 File Scanner - File tree scanning với global cancellation
 
-Simplified version - không dùng threading, chạy sync trong async context.
-Dùng global cancellation flag giống isLoadingDirectory trong PasteMax.
+PERFORMANCE: Sử dụng scandir-rs (Rust) thay vì os.scandir khi có thể.
+- Linux: 3-11x nhanh hơn
+- Windows: 6-70x nhanh hơn
+Fallback về os.scandir nếu scandir-rs không được cài đặt.
 
 Features:
 - Global cancellation flag để stop ngay lập tức
@@ -24,6 +26,13 @@ from core.utils.file_utils import (
     is_system_path,
     _read_gitignore,
 )
+
+# Try import scandir_rs (Rust-based, much faster)
+try:
+    from scandir_rs import Walk as RustWalk
+    HAS_SCANDIR_RS = True
+except ImportError:
+    HAS_SCANDIR_RS = False
 
 
 # ============================================
@@ -133,7 +142,7 @@ class FileScanner:
         """
         Scan directory với progress updates.
 
-        Sử dụng global _is_scanning flag để cancel.
+        PERFORMANCE: Sử dụng scandir-rs (Rust) khi có thể, fallback về os.scandir.
 
         Args:
             root_path: Directory root để scan
@@ -160,17 +169,143 @@ class FileScanner:
         spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
 
         try:
-            # Scan với progress
-            return self._scan_directory(
-                root_path,
-                root_path,
-                spec,
-                progress_callback,
-            )
+            # Ưu tiên dùng Rust scanner nếu có
+            if HAS_SCANDIR_RS:
+                return self._scan_with_rust(
+                    root_path,
+                    spec,
+                    progress_callback,
+                )
+            else:
+                # Fallback về Python scanner
+                return self._scan_directory(
+                    root_path,
+                    root_path,
+                    spec,
+                    progress_callback,
+                )
         finally:
             # Không reset _is_scanning ở đây
             # để caller có thể check trạng thái
             pass
+    
+    def _scan_with_rust(
+        self,
+        root_path: Path,
+        spec: pathspec.PathSpec,
+        progress_callback: Optional[ProgressCallback],
+    ) -> TreeItem:
+        """
+        Scan sử dụng scandir-rs (Rust) - nhanh hơn 3-11x so với Python.
+        
+        Rust scanner chạy trong background thread và release GIL,
+        cho phép Python code khác chạy song song.
+        
+        NOTE: RustWalk trả về relative paths, không phải absolute paths!
+        """
+        from core.logging_config import log_info
+        log_info("[FileScanner] Using scandir-rs (Rust) for fast scanning")
+        
+        root_path_str = str(root_path)
+        
+        # Root item
+        root_item = TreeItem(
+            label=root_path.name or root_path_str,
+            path=root_path_str,
+            is_dir=True,
+        )
+        
+        # Dict để build tree structure: absolute path -> TreeItem
+        path_to_item: dict[str, TreeItem] = {root_path_str: root_item}
+        
+        try:
+            # Dùng Walk từ scandir-rs - tương tự os.walk() nhưng nhanh hơn nhiều
+            # NOTE: RustWalk trả về (rel_dirpath, dirs, files) với rel_dirpath là relative path
+            for rel_dirpath, dirs, files in RustWalk(root_path_str):
+                if not is_scanning():
+                    break
+                
+                # Convert relative path to absolute path
+                # RustWalk: '' = root, 'subdir' = subdir, etc.
+                if rel_dirpath == '' or rel_dirpath == '.':
+                    abs_dirpath = root_path_str
+                else:
+                    abs_dirpath = os.path.join(root_path_str, rel_dirpath)
+                
+                # Update progress
+                self._progress.directories += 1
+                self._progress.current_path = abs_dirpath
+                self._emit_progress(progress_callback)
+                
+                # Get parent item
+                parent_item = path_to_item.get(abs_dirpath)
+                if parent_item is None:
+                    # Parent không có trong tree - có thể bị ignore
+                    continue
+                
+                # Sort dirs và files
+                dirs_sorted = sorted(dirs, key=str.lower)
+                files_sorted = sorted(files, key=str.lower)
+                
+                # Process directories
+                for dir_name in dirs_sorted:
+                    if not is_scanning():
+                        break
+                    
+                    abs_dir_path = os.path.join(abs_dirpath, dir_name)
+                    
+                    # Check system path
+                    if is_system_path(Path(abs_dir_path)):
+                        continue
+                    
+                    # Check ignore patterns using relative path
+                    try:
+                        rel_path = Path(abs_dir_path).relative_to(root_path)
+                        rel_path_str = str(rel_path) + "/"
+                        if spec.match_file(rel_path_str):
+                            continue
+                    except ValueError:
+                        continue
+                    
+                    child = TreeItem(label=dir_name, path=abs_dir_path, is_dir=True)
+                    parent_item.children.append(child)
+                    path_to_item[abs_dir_path] = child
+                
+                # Process files
+                for file_name in files_sorted:
+                    if not is_scanning():
+                        break
+                    
+                    abs_file_path = os.path.join(abs_dirpath, file_name)
+                    
+                    # Check system path
+                    if is_system_path(Path(abs_file_path)):
+                        continue
+                    
+                    # Check ignore patterns
+                    try:
+                        rel_path = Path(abs_file_path).relative_to(root_path)
+                        rel_path_str = str(rel_path)
+                        if spec.match_file(rel_path_str):
+                            continue
+                    except ValueError:
+                        continue
+                    
+                    self._progress.files += 1
+                    parent_item.children.append(
+                        TreeItem(label=file_name, path=abs_file_path, is_dir=False)
+                    )
+            
+            # Final progress
+            self._emit_progress(progress_callback, force=True)
+            
+        except Exception as e:
+            from core.logging_config import log_error
+            log_error(f"[FileScanner] Rust scanner error: {e}, falling back to Python")
+            # Fallback nếu Rust scanner lỗi
+            return self._scan_directory(root_path, root_path, spec, progress_callback)
+        
+        return root_item
 
     def _build_ignore_patterns(self, root_path: Path, config: ScanConfig) -> List[str]:
         """Build list các ignore patterns từ config."""

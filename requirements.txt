@@ -25,3 +25,5 @@ tree-sitter-swift>=0.0.1
 tree-sitter-css>=0.23.0
 tree-sitter-solidity>=1.0.0
 rapidfuzz>=3.0.0
+scandir-rs>=2.9.0
+rs-bpe>=0.1.0

@@ -13,9 +13,10 @@ Features:
 from pathlib import Path
 from typing import Dict, Callable, Set, Optional, List
 import threading
+import time
 
 from core.utils.file_utils import TreeItem
-from core.token_counter import count_tokens_for_file
+from core.token_counter import count_tokens_for_file, count_tokens_batch_parallel
 from core.utils.safe_timer import SafeTimer  # RACE CONDITION FIX
 
 
@@ -275,12 +276,13 @@ class TokenDisplayService:
             visible_paths: Set paths đang visible
             max_immediate: Số files count ngay (default 30)
         """
-        # Check if already cancelled before starting
-        if not is_counting_tokens():
-            return
-            
+        # Bắt đầu token counting (set flag = True)
         start_token_counting()
         self._page = page
+        
+        # Check if disposed hoặc có vấn đề
+        if self._is_disposed:
+            return
 
         # Collect all files
         files_to_count: List[str] = []
@@ -319,44 +321,37 @@ class TokenDisplayService:
                 except OSError:
                     deferred_files.append(path)
 
-        # Count immediate files sync - with frequent cancellation checks
-        count = 0
-        for path in immediate_files:
-            # Check cancellation trước mỗi file - CRITICAL
-            if not is_counting_tokens():
-                return  # Exit immediately
-
-            with self._lock:
-                if path in self._cache:
-                    continue
-
-            try:
-                tokens = count_tokens_for_file(Path(path))
+        # Count immediate files PARALLEL - sử dụng ThreadPoolExecutor + mmap
+        # AN TOÀN: count_tokens_batch_parallel() đã xử lý race condition
+        if immediate_files and is_counting_tokens():
+            from core.logging_config import log_info
+            
+            # PERFORMANCE TRACKING: Bắt đầu đếm
+            start_time = time.perf_counter()
+            log_info(f"[TokenCounter] START counting {len(immediate_files)} files (parallel)")
+            
+            # Convert to Path list
+            immediate_paths = [Path(p) for p in immediate_files]
+            
+            # Parallel counting - nhanh hơn 3-4x
+            results = count_tokens_batch_parallel(immediate_paths, max_workers=4)
+            
+            # PERFORMANCE TRACKING: Kết thúc đếm
+            elapsed = time.perf_counter() - start_time
+            total_tokens = sum(results.values()) if results else 0
+            log_info(f"[TokenCounter] COMPLETE: {len(results)} files, {total_tokens:,} tokens in {elapsed:.3f}s ({len(results)/elapsed:.1f} files/sec)")
+            
+            # Update cache MỘT LẦN (batch update, không lock từng file)
+            if results and is_counting_tokens():
                 with self._lock:
-                    self._cache[path] = tokens
-            except Exception:
-                with self._lock:
-                    self._cache[path] = 0
-
-            count += 1
-
-            # Progress update mỗi 10 files (reduced from 20 for more responsive UI)
-            if count % 10 == 0:
-                # Check cancellation before UI update
-                if not is_counting_tokens():
-                    return
+                    self._cache.update(results)
+                
+                # UI update
                 if self.on_update:
                     try:
                         self.on_update()
                     except Exception:
                         pass
-
-        # Final update for immediate files
-        if is_counting_tokens() and self.on_update:
-            try:
-                self.on_update()
-            except Exception:
-                pass
         
         # Schedule deferred files counting if any and not cancelled
         if deferred_files and is_counting_tokens():

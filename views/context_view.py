@@ -13,7 +13,7 @@ from typing import Callable, Optional, Set, Union
 from core.utils.file_utils import scan_directory, TreeItem
 from core.utils.ui_utils import safe_page_update
 from services.clipboard_utils import copy_to_clipboard
-from core.token_counter import count_tokens_batch, count_tokens
+from core.token_counter import count_tokens_batch_parallel, count_tokens
 from core.prompt_generator import (
     generate_prompt,
     generate_file_map,
@@ -903,20 +903,25 @@ class ContextView:
 
     def _on_selection_changed(self, selected_paths: Set[str]):
         """Callback khi selection thay doi - smart debouncing based on selection size"""
+        from core.logging_config import log_info
+        
         # Cancel previous timer if exists
         if self._selection_update_timer is not None:
             self._selection_update_timer.dispose()
             self._selection_update_timer = None
 
         selection_size = len(selected_paths)
+        log_info(f"[ContextView] _on_selection_changed: {selection_size} paths selected")
         
         # Adaptive debounce based on selection size
         if selection_size == 0:
             # No selection - update immediately to show zero
+            log_info("[ContextView] Calling _update_token_count (0 selection)")
             self._update_token_count()
             return
         elif selection_size < 5:
             # Very small - update immediately
+            log_info(f"[ContextView] Calling _update_token_count ({selection_size} files, no debounce)")
             self._update_token_count()
             return
         elif selection_size < 20:
@@ -929,6 +934,8 @@ class ContextView:
             # Large - longer debounce
             debounce_ms = 200
 
+        log_info(f"[ContextView] Scheduling _update_token_count in {debounce_ms}ms")
+        
         # Debounce with SafeTimer
         self._selection_update_timer = SafeTimer(
             interval=debounce_ms / 1000.0,
@@ -1271,25 +1278,45 @@ class ContextView:
         Su dung visible paths khi dang search de hien thi chinh xac.
         Su dung parallel batch counting cho hieu suat tot hon.
         """
+        from core.logging_config import log_info
+        import time
+        
+        total_start = time.perf_counter()
+        
         if not self.file_tree_component:
             return
 
-        # Su dung visible paths de hien thi chinh xac khi dang search
+        # STEP 1: Get selected paths
+        step1_start = time.perf_counter()
         selected_paths = self.file_tree_component.get_visible_selected_paths()
+        step1_time = time.perf_counter() - step1_start
+        log_info(f"[TIMING] get_visible_selected_paths: {step1_time:.3f}s ({len(selected_paths)} paths)")
 
-        # Loc chi cac files (khong phai directories)
-        file_paths = [Path(p) for p in selected_paths if Path(p).is_file()]
+        # STEP 2: Filter files only (use os.path.isfile - faster than Path.is_file)
+        import os
+        step2_start = time.perf_counter()
+        file_paths = [Path(p) for p in selected_paths if os.path.isfile(p)]
         file_count = len(file_paths)
+        step2_time = time.perf_counter() - step2_start
+        log_info(f"[TIMING] filter files: {step2_time:.3f}s ({file_count} files)")
 
-        # Sử dụng batch counting với global cancellation flag
+        # STEP 3: Token counting
         if file_count > 0:
             from services.token_display import start_token_counting
 
-            start_token_counting()  # Set global flag trước khi count
-            token_results = count_tokens_batch(file_paths)
+            start_token_counting()
+            
+            step3_start = time.perf_counter()
+            token_results = count_tokens_batch_parallel(file_paths, max_workers=4)
+            step3_time = time.perf_counter() - step3_start
+            
             file_tokens = sum(token_results.values())
+            log_info(f"[TIMING] token counting: {step3_time:.3f}s ({file_tokens:,} tokens)")
         else:
             file_tokens = 0
+
+        total_time = time.perf_counter() - total_start
+        log_info(f"[TIMING] TOTAL _update_token_count: {total_time:.3f}s")
 
         # Hien thi indicator khi dang filter
         assert self.token_count_text is not None

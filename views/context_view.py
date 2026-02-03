@@ -672,8 +672,25 @@ class ContextView:
             )
 
     def on_workspace_changed(self, workspace_path: Path):
-        """Khi user chon folder moi hoac settings thay doi"""
+        """
+        Khi user chon folder moi hoac settings thay doi.
+        
+        DEBOUNCE: Tránh gọi liên tiếp khi startup.
+        """
         from core.logging_config import log_info, log_debug
+        import time
+        
+        # Debounce: Nếu cùng workspace và gọi trong vòng 1 giây, bỏ qua
+        current_time = time.time()
+        if (hasattr(self, '_last_workspace_change_time') and 
+            hasattr(self, '_last_workspace_path') and
+            self._last_workspace_path == str(workspace_path) and
+            current_time - self._last_workspace_change_time < 1.0):
+            log_debug(f"[ContextView] Debouncing workspace change for: {workspace_path}")
+            return
+        
+        self._last_workspace_change_time = current_time
+        self._last_workspace_path = str(workspace_path)
         
         log_info(f"[ContextView] Workspace changing to: {workspace_path}")
         

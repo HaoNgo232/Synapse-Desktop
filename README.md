@@ -3,7 +3,7 @@
 > Extract codebase context for LLMs and apply changes
 
 **Workflow:**
-> Select Files → Generate optimized prompt → Send to LLM → Receive Patch → Preview Diff → Apply → Backup/Undo (optional)
+> Select Files/Folders → Generate optimized prompt → Send to LLM → Receive Review/Patch → Preview Diff → Apply → Backup/Undo (optional)
 
 ## Quick Start
 

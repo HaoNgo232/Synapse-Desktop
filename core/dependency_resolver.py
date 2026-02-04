@@ -38,10 +38,14 @@ IMPORT_QUERIES: Dict[str, str] = {
             module_name: (relative_import) @import.relative)
     """,
     
-    # JavaScript/TypeScript (Phase 2 - sẽ implement sau)
+    # JavaScript/TypeScript
     "javascript": """
         ; ES6 import: import x from 'module'
         (import_statement
+            source: (string) @import.source)
+        
+        ; ES6 re-export: export { x } from 'module' hoặc export * from 'module'
+        (export_statement
             source: (string) @import.source)
         
         ; CommonJS require: require('module')
@@ -54,6 +58,15 @@ IMPORT_QUERIES: Dict[str, str] = {
         ; ES6 import: import x from 'module'
         (import_statement
             source: (string) @import.source)
+        
+        ; ES6 re-export: export { x } from 'module' hoặc export * from 'module'
+        (export_statement
+            source: (string) @import.source)
+        
+        ; CommonJS require: require('module') - also used in some TS codebases
+        (call_expression
+            function: (identifier) @func (#eq? @func "require")
+            arguments: (arguments (string) @import.source))
     """,
 }
 
@@ -80,6 +93,11 @@ class DependencyResolver:
         self.workspace_root = workspace_root.resolve()
         self._file_index: Dict[str, Path] = {}
         self._module_index: Dict[str, Path] = {}  # module_name -> file_path
+        
+        # Alias support cho JS/TS (từ tsconfig.json/jsconfig.json)
+        self._ts_paths: Dict[str, List[str]] = {}  # alias pattern -> list of paths
+        self._ts_base_url: Optional[Path] = None
+        self._ts_config_loaded: bool = False
     
     def build_file_index(self, tree: Optional[TreeItem]) -> None:
         """
@@ -92,12 +110,89 @@ class DependencyResolver:
         Args:
             tree: TreeItem root của file tree
         """
+        # Load tsconfig/jsconfig for alias support (luôn load, không phụ thuộc tree)
+        self._load_ts_config()
+        
         if not tree:
             return
         
         self._file_index.clear()
         self._module_index.clear()
         self._index_recursive(tree)
+    
+    def _load_ts_config(self) -> None:
+        """
+        Load tsconfig.json hoặc jsconfig.json để lấy path aliases.
+        
+        Đọc compilerOptions.paths và compilerOptions.baseUrl.
+        Tìm kiếm trong root và các subfolder phổ biến (frontend/, src/, app/).
+        Kết quả được cache để không phải đọc lại.
+        """
+        if self._ts_config_loaded:
+            return
+        
+        self._ts_config_loaded = True
+        
+        # Tìm config file - ưu tiên root, sau đó các subfolder phổ biến
+        config_names = ["tsconfig.json", "jsconfig.json"]
+        search_dirs = [
+            self.workspace_root,
+            self.workspace_root / "frontend",
+            self.workspace_root / "src",
+            self.workspace_root / "app",
+            self.workspace_root / "client",
+            self.workspace_root / "web",
+        ]
+        
+        config_path = None
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+            for name in config_names:
+                candidate = search_dir / name
+                if candidate.exists():
+                    config_path = candidate
+                    break
+            if config_path:
+                break
+        
+        if not config_path:
+            return
+        
+        try:
+            import json
+            with open(config_path, "r", encoding="utf-8") as f:
+                # Handle JSON with comments (trailing commas, // comments)
+                content = f.read()
+                # Simple cleanup: remove single-line comments
+                import re
+                content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
+                # Remove trailing commas before } or ]
+                content = re.sub(r',(\s*[}\]])', r'\1', content)
+                
+                config = json.loads(content)
+            
+            compiler_options = config.get("compilerOptions", {})
+            
+            # Extract baseUrl - nếu không có thì dùng thư mục chứa tsconfig
+            base_url = compiler_options.get("baseUrl", ".")
+            self._ts_base_url = (config_path.parent / base_url).resolve()
+            
+            # Extract paths và normalize (bỏ ./ prefix nếu có)
+            paths = compiler_options.get("paths", {})
+            for alias_pattern, target_paths in paths.items():
+                if isinstance(target_paths, list):
+                    # Normalize: bỏ ./ prefix
+                    normalized_paths = []
+                    for p in target_paths:
+                        if p.startswith("./"):
+                            p = p[2:]
+                        normalized_paths.append(p)
+                    self._ts_paths[alias_pattern] = normalized_paths
+        
+        except Exception:
+            # Nếu parse lỗi thì bỏ qua, không break flow
+            pass
     
     def _index_recursive(self, item: TreeItem) -> None:
         """Recursively index all files trong tree."""
@@ -384,8 +479,11 @@ class DependencyResolver:
         """
         Resolve JavaScript/TypeScript import thành file path.
         
-        Note: MVP - chỉ handle relative imports.
-        Node modules và aliases chưa được hỗ trợ.
+        Hỗ trợ:
+        1. Relative imports: ./module, ../module
+        2. Path aliases từ tsconfig.json/jsconfig.json: @/components, @utils
+        
+        Node modules (lodash, react, etc.) không được resolve.
         
         Args:
             import_path: Import path (relative hoặc absolute)
@@ -394,24 +492,104 @@ class DependencyResolver:
         Returns:
             Resolved Path hoặc None
         """
-        # Skip node_modules imports
-        if not import_path.startswith("."):
-            return None
-        
-        # Handle relative imports
         possible_extensions = [".ts", ".tsx", ".js", ".jsx", ""]
         
-        for ext in possible_extensions:
-            candidate = (source_dir / (import_path + ext)).resolve()
-            if candidate.exists() and candidate.is_file():
-                return candidate
+        # 1. Handle relative imports
+        if import_path.startswith("."):
+            for ext in possible_extensions:
+                candidate = (source_dir / (import_path + ext)).resolve()
+                if candidate.exists() and candidate.is_file():
+                    return candidate
+                
+                # Try index file
+                if ext == "":
+                    for index_name in ["index.ts", "index.tsx", "index.js", "index.jsx"]:
+                        index_candidate = (source_dir / import_path / index_name).resolve()
+                        if index_candidate.exists():
+                            return index_candidate
+            return None
+        
+        # 2. Handle path aliases (từ tsconfig.json/jsconfig.json)
+        if self._ts_paths and self._ts_base_url:
+            resolved = self._resolve_ts_alias(import_path, possible_extensions)
+            if resolved:
+                return resolved
+        
+        # 3. Non-relative, non-alias imports (node_modules) - skip
+        return None
+    
+    def _resolve_ts_alias(
+        self, 
+        import_path: str, 
+        extensions: list
+    ) -> Optional[Path]:
+        """
+        Resolve import path sử dụng path aliases từ tsconfig.json.
+        
+        Ví dụ:
+        - "@/components/Button" với paths {"@/*": ["src/*"]} 
+          -> src/components/Button.tsx
+        
+        Args:
+            import_path: Import path (e.g., "@/components/Button")
+            extensions: List of extensions to try
+        
+        Returns:
+            Resolved Path hoặc None
+        """
+        import fnmatch
+        
+        for alias_pattern, target_paths in self._ts_paths.items():
+            # Chuyển đổi TypeScript pattern sang glob-style
+            # "@/*" -> "@/*" (giữ nguyên cho fnmatch)
+            # Kiểm tra xem import_path có match pattern không
             
-            # Try index file
-            if ext == "":
-                for index_name in ["index.ts", "index.tsx", "index.js", "index.jsx"]:
-                    index_candidate = (source_dir / import_path / index_name).resolve()
-                    if index_candidate.exists():
-                        return index_candidate
+            # Tạo regex-like check
+            if alias_pattern.endswith("/*"):
+                # Wildcard pattern: @/* matches @/anything
+                prefix = alias_pattern[:-2]  # Bỏ /*
+                if import_path.startswith(prefix + "/"):
+                    # Match! Extract phần sau prefix
+                    suffix = import_path[len(prefix) + 1:]
+                    
+                    # Try each target path
+                    for target in target_paths:
+                        if target.endswith("/*"):
+                            target_prefix = target[:-2]
+                        else:
+                            target_prefix = target
+                        
+                        # Build full path
+                        if self._ts_base_url:
+                            base = self._ts_base_url / target_prefix / suffix
+                        else:
+                            base = self.workspace_root / target_prefix / suffix
+                        
+                        # Try with extensions
+                        for ext in extensions:
+                            candidate = Path(str(base) + ext)
+                            if candidate.exists() and candidate.is_file():
+                                return candidate
+                            
+                            # Try index file
+                            if ext == "":
+                                for index_name in ["index.ts", "index.tsx", "index.js", "index.jsx"]:
+                                    index_candidate = base / index_name
+                                    if index_candidate.exists():
+                                        return index_candidate
+            
+            elif alias_pattern == import_path:
+                # Exact match (không có wildcard)
+                for target in target_paths:
+                    if self._ts_base_url:
+                        candidate = self._ts_base_url / target
+                    else:
+                        candidate = self.workspace_root / target
+                    
+                    for ext in extensions:
+                        full_candidate = Path(str(candidate) + ext)
+                        if full_candidate.exists() and full_candidate.is_file():
+                            return full_candidate
         
         return None
     

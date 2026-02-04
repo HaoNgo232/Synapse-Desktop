@@ -230,6 +230,7 @@ def get_diff_only(
         )
     
     diff_parts: list[str] = []
+    changed_files: list[str] = []  # Track changed file paths
     total_files = 0
     total_insertions = 0
     total_deletions = 0
@@ -261,6 +262,8 @@ def get_diff_only(
                     total_files += stats[0]
                     total_insertions += stats[1]
                     total_deletions += stats[2]
+                    # Collect changed files
+                    changed_files.extend(_extract_changed_files(result.stdout))
         
         if include_staged:
             # Staged changes (index vs HEAD)
@@ -286,6 +289,8 @@ def get_diff_only(
                     total_files += stats[0]
                     total_insertions += stats[1]
                     total_deletions += stats[2]
+                    # Collect changed files
+                    changed_files.extend(_extract_changed_files(result.stdout))
         
         # 2. Recent commits diff
         commits_included = 0
@@ -331,8 +336,18 @@ def get_diff_only(
                         total_files += stats[0]
                         total_insertions += stats[1]
                         total_deletions += stats[2]
+                        # Collect changed files from commits
+                        changed_files.extend(_extract_changed_files(stat_result.stdout))
         
         diff_content = "".join(diff_parts)
+        
+        # Deduplicate changed files while preserving order
+        seen = set()
+        unique_files = []
+        for f in changed_files:
+            if f not in seen:
+                seen.add(f)
+                unique_files.append(f)
         
         return DiffOnlyResult(
             diff_content=diff_content,
@@ -340,6 +355,7 @@ def get_diff_only(
             insertions=total_insertions,
             deletions=total_deletions,
             commits_included=commits_included,
+            changed_files=unique_files,
             error=None
         )
         
@@ -399,3 +415,42 @@ def _parse_diff_stats(stat_output: str) -> tuple[int, int, int]:
         deletions = int(del_match.group(1))
     
     return (files, insertions, deletions)
+
+
+def _extract_changed_files(stat_output: str) -> list[str]:
+    """
+    Extract danh sách file paths từ git diff --stat output.
+    
+    Format của mỗi dòng: " path/to/file.py | N +++ --"
+    
+    Args:
+        stat_output: Output từ git diff --stat
+    
+    Returns:
+        List các file paths đã thay đổi
+    """
+    files = []
+    lines = stat_output.strip().split("\n")
+    
+    for line in lines:
+        # Skip summary line (cuối cùng chứa "files changed")
+        if "changed" in line and ("insertion" in line or "deletion" in line):
+            continue
+        
+        # Format: " path/to/file | stats"
+        if "|" in line:
+            file_part = line.split("|")[0].strip()
+            if file_part:
+                # Handle renamed files: "old_name => new_name"
+                if "=>" in file_part:
+                    # Lấy new name
+                    parts = file_part.split("=>")
+                    if len(parts) == 2:
+                        file_part = parts[1].strip()
+                        # Handle path prefix: "{dir/}old => new"
+                        if "{" in parts[0]:
+                            prefix = parts[0].split("{")[0]
+                            file_part = prefix + file_part.rstrip("}")
+                files.append(file_part)
+    
+    return files

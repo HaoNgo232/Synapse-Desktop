@@ -2421,6 +2421,70 @@ class ContextView:
         dialog.open = True
         safe_page_update(self.page)
     
+    def _build_tree_from_paths(self, file_paths: list[str], root_name: str = "project") -> str:
+        """
+        Build tree hierarchy string từ danh sách file paths.
+        
+        Ví dụ output:
+        project/
+            views/
+                context_view.py  [modified]
+            core/
+                utils/
+                    git_utils.py  [modified]
+        
+        Args:
+            file_paths: List các relative file paths
+            root_name: Tên root folder
+        
+        Returns:
+            String representation của tree
+        """
+        # Build nested dict structure
+        tree_dict: dict = {}
+        
+        for file_path in file_paths:
+            parts = file_path.replace("\\", "/").split("/")
+            current = tree_dict
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    # File (leaf node)
+                    current[part] = None
+                else:
+                    # Directory
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+        
+        # Render tree to string
+        lines = [f"{root_name}/"]
+        self._render_tree_dict(tree_dict, lines, indent=1)
+        
+        return "\n".join(lines)
+    
+    def _render_tree_dict(self, tree_dict: dict, lines: list[str], indent: int = 0):
+        """
+        Recursively render tree dict to lines.
+        
+        Args:
+            tree_dict: Nested dict representing tree
+            lines: List to append lines to
+            indent: Current indentation level
+        """
+        indent_str = "    " * indent
+        
+        # Sort: directories first, then files
+        items = sorted(tree_dict.items(), key=lambda x: (x[1] is None, x[0]))
+        
+        for name, children in items:
+            if children is None:
+                # File
+                lines.append(f"{indent_str}{name}  [modified]")
+            else:
+                # Directory
+                lines.append(f"{indent_str}{name}/")
+                self._render_tree_dict(children, lines, indent + 1)
+    
     def _build_diff_only_prompt(
         self, 
         diff_result, 
@@ -2459,16 +2523,31 @@ class ContextView:
         ])
         
         # Optional: Include tree structure for project context
-        if include_tree_structure and self.tree and self.file_tree_component:
-            selected_paths = self.file_tree_component.get_selected_paths()
-            if selected_paths:
-                file_map = generate_file_map(self.tree, selected_paths)
+        if include_tree_structure and self.tree:
+            # Ưu tiên: dùng changed files từ diff, fallback sang selected files
+            if diff_result.changed_files:
+                # Tạo tree hierarchy từ changed files
+                tree_str = self._build_tree_from_paths(
+                    diff_result.changed_files[:50],  # Limit 50 files
+                    workspace_name
+                )
                 parts.extend([
                     "<project_structure>",
-                    file_map,
+                    tree_str,
                     "</project_structure>",
                     "",
                 ])
+            elif self.file_tree_component:
+                # Fallback: dùng selected paths nếu có
+                selected_paths = self.file_tree_component.get_selected_paths()
+                if selected_paths:
+                    file_map = generate_file_map(self.tree, selected_paths)
+                    parts.extend([
+                        "<project_structure>",
+                        file_map,
+                        "</project_structure>",
+                        "",
+                    ])
         
         # Git diff content
         parts.extend([

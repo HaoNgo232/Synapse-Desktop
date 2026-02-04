@@ -2,11 +2,14 @@
 
 > Extract codebase context for LLMs and apply changes
 
+**Workflow:**
+> Select Files → Generate optimized prompt → Send to LLM → Receive Patch → Preview Diff → Apply → Backup/Undo (optional)
+
 ## Quick Start
 
 ```bash
-git clone https://github.com/HaoNgo232/synapse-desktop.git
-cd synapse-desktop
+git clone https://github.com/HaoNgo232/Synapse-Desktop.git
+cd Synapse-Desktop
 
 python3 -m venv .venv
 source .venv/bin/activate

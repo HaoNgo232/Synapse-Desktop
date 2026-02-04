@@ -8,7 +8,7 @@ import flet as ft
 import threading
 from threading import Timer
 from pathlib import Path
-from typing import Callable, Optional, Set, Union
+from typing import Callable, Optional, Set, Union, List
 
 from core.utils.file_utils import scan_directory, TreeItem
 from core.utils.ui_utils import safe_page_update
@@ -27,6 +27,7 @@ from core.prompt_generator import (
 from core.utils.git_utils import get_git_diffs, get_git_logs, get_diff_only
 from core.tree_map_generator import generate_tree_map_only
 from components.file_tree import FileTreeComponent
+from components.virtual_file_tree import VirtualFileTreeComponent
 from components.file_preview import FilePreviewDialog
 from components.token_stats import TokenStatsPanel
 from core.theme import ThemeColors
@@ -48,21 +49,30 @@ from config.output_format import (
     DEFAULT_OUTPUT_STYLE,
 )
 from core.utils.repo_manager import RepoManager, CloneProgress
+from core.dependency_resolver import DependencyResolver
 
 
 class ContextView:
-    """View cho Context tab - su dung FileTreeComponent"""
+    """View cho Context tab - su dung FileTreeComponent hoặc VirtualFileTreeComponent"""
+
+    # Threshold for switching to VirtualFileTree
+    VIRTUAL_TREE_THRESHOLD = 5000
 
     def __init__(self, page: ft.Page, get_workspace: Callable[[], Optional[Path]]):
         self.page = page
         self.get_workspace = get_workspace
 
         self.tree: Optional[TreeItem] = None
-        self.file_tree_component: Optional[FileTreeComponent] = None
+        self.file_tree_component: Optional[Union[FileTreeComponent, VirtualFileTreeComponent]] = None
+        self.left_panel: Optional[ft.Container] = None
         self.token_count_text: Optional[ft.Text] = None
         self.instructions_field: Optional[ft.TextField] = None
         self.status_text: Optional[ft.Text] = None
         self.token_stats_panel: Optional[TokenStatsPanel] = None
+        
+        # Direct reference to tree container for safe UI updates
+        # Thay vì dùng index-based lookup (fragile), dùng direct reference
+        self._tree_container: Optional[ft.Container] = None
 
         # Debounce timer for token counting
         self._token_update_timer: Optional[Union[Timer, SafeTimer]] = None
@@ -299,18 +309,92 @@ class ContextView:
             self._file_watcher.stop()
             self._file_watcher = None
 
+    def _count_total_items(self, tree: TreeItem) -> int:
+        """Count total number of items in tree recursively"""
+        if not tree:
+            return 0
+        
+        count = 1  # Count current item
+        if hasattr(tree, 'children') and tree.children:
+            for child in tree.children:
+                count += self._count_total_items(child)
+        return count
+
+    def _rebuild_tree_container(self):
+        """
+        Rebuild the tree container with the new component.
+        
+        Sử dụng direct reference (_tree_container) thay vì index-based lookup
+        để code bền vững hơn khi UI structure thay đổi.
+        """
+        if not self._tree_container or not self.file_tree_component:
+            return
+        
+        # Direct reference update - không phụ thuộc vào UI structure
+        self._tree_container.content = self.file_tree_component.build()
+        safe_page_update(self.page)
+
+    def _create_file_tree_component(self, tree: Optional[TreeItem]) -> Union[FileTreeComponent, VirtualFileTreeComponent]:
+        """Create appropriate file tree component based on tree size"""
+        if not tree:
+            # Default to regular FileTreeComponent for empty trees
+            return FileTreeComponent(
+                page=self.page,
+                on_selection_changed=self._on_selection_changed,
+                on_preview=self._preview_file,
+                show_tokens=True,
+                show_lines=False,
+            )
+        
+        total_items = self._count_total_items(tree)
+        
+        if total_items > self.VIRTUAL_TREE_THRESHOLD:
+            # Use VirtualFileTreeComponent for large trees
+            return VirtualFileTreeComponent(
+                page=self.page,
+                on_selection_changed=self._on_selection_changed,
+                show_tokens=True,
+                show_lines=False,
+            )
+        else:
+            # Use regular FileTreeComponent for smaller trees
+            return FileTreeComponent(
+                page=self.page,
+                on_selection_changed=self._on_selection_changed,
+                on_preview=self._preview_file,  # VirtualFileTree doesn't support preview yet
+                show_tokens=True,
+                show_lines=False,
+            )
+
+    def _create_tree_container(self) -> ft.Container:
+        """
+        Tạo và lưu reference đến tree container.
+        
+        Method này được gọi trong build() để tạo container chứa file tree.
+        Reference được lưu vào self._tree_container để _rebuild_tree_container
+        có thể update trực tiếp mà không cần dùng index-based lookup.
+        
+        Returns:
+            ft.Container chứa tree component hoặc loading text
+        """
+        if self.file_tree_component:
+            content = self.file_tree_component.build()
+        else:
+            content = ft.Text("Loading...", color=ThemeColors.TEXT_SECONDARY)
+        
+        self._tree_container = ft.Container(
+            content=content,
+            expand=True,
+        )
+        return self._tree_container
+
     def build(self) -> ft.Container:
         """Build UI cho Context view"""
 
         # File tree component voi search and preview
         # PERFORMANCE: Disable line counting mặc định - giảm 50% I/O operations
-        self.file_tree_component = FileTreeComponent(
-            page=self.page,
-            on_selection_changed=self._on_selection_changed,
-            on_preview=self._preview_file,  # Enable file preview
-            show_tokens=True,
-            show_lines=False,  # Disabled for performance with large projects (700+ files)
-        )
+        # Will be created dynamically based on tree size in _load_tree()
+        self.file_tree_component = None
 
         # Token count display
         self.token_count_text = ft.Text(
@@ -354,6 +438,13 @@ class ContextView:
                                             icon_color=ThemeColors.TEXT_SECONDARY,
                                             tooltip="Deselect All",
                                             on_click=lambda _: self._deselect_all(),
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.ACCOUNT_TREE,
+                                            icon_size=20,
+                                            icon_color=ThemeColors.PRIMARY,
+                                            tooltip="Select Related Files (imports/dependencies)",
+                                            on_click=lambda _: self._select_related_files(),
                                         ),
                                     ],
                                     spacing=0,
@@ -497,8 +588,9 @@ class ContextView:
                         padding=ft.padding.only(bottom=8),
                     ),
                     ft.Divider(height=1, color=ThemeColors.BORDER),
-                    # File tree component
-                    self.file_tree_component.build(),
+                    # File tree component - will be created dynamically
+                    # Lưu reference trực tiếp để _rebuild_tree_container có thể update
+                    self._create_tree_container(),
                 ],
                 expand=True,
             ),
@@ -878,6 +970,27 @@ class ContextView:
             
             log_info(f"[ContextView] Shallow scan complete. Tree: {self.tree.label if self.tree else 'None'}")
 
+            # Create appropriate file tree component based on tree size
+            if not self.file_tree_component:
+                self.file_tree_component = self._create_file_tree_component(self.tree)
+                # Need to rebuild the UI container to include the new component
+                self._rebuild_tree_container()
+            else:
+                # Check if we need to switch component types
+                total_items = self._count_total_items(self.tree) if self.tree else 0
+                current_is_virtual = isinstance(self.file_tree_component, VirtualFileTreeComponent)
+                should_be_virtual = total_items > self.VIRTUAL_TREE_THRESHOLD
+                
+                if current_is_virtual != should_be_virtual:
+                    # Need to switch component types
+                    old_selection = self.file_tree_component.get_selected_paths()
+                    self.file_tree_component.cleanup()
+                    self.file_tree_component = self._create_file_tree_component(self.tree)
+                    self._rebuild_tree_container()
+                    # Restore selection
+                    if old_selection:
+                        self.file_tree_component.selected_paths = old_selection
+
             # Set tree to component - NO TOKEN COUNTING HERE
             assert self.file_tree_component is not None
             log_info(f"[ContextView] Setting tree to component...")
@@ -1018,6 +1131,75 @@ class ContextView:
                     instruction_tokens=instruction_tokens,
                 )
             self._update_token_count()
+
+    def _select_related_files(self):
+        """
+        Tự động chọn các files được import/require bởi files đang chọn.
+        
+        Sử dụng DependencyResolver để parse imports trong selected files
+        và automatically select các files được reference.
+        
+        Hữu ích khi muốn đảm bảo LLM có đủ context về dependencies.
+        """
+        if not self.file_tree_component or not self.tree:
+            self._show_status("No files selected", is_error=True)
+            return
+        
+        workspace = self.get_workspace()
+        if not workspace:
+            self._show_status("No workspace selected", is_error=True)
+            return
+        
+        selected_paths = self.file_tree_component.get_selected_paths()
+        if not selected_paths:
+            self._show_status("Select at least one file first", is_error=True)
+            return
+        
+        # Filter chỉ lấy files (không lấy folders)
+        selected_files = [
+            Path(p) for p in selected_paths 
+            if Path(p).is_file() and Path(p).suffix in [".py", ".js", ".jsx", ".ts", ".tsx"]
+        ]
+        
+        if not selected_files:
+            self._show_status("No supported files selected (Python/JS/TS)", is_error=True)
+            return
+        
+        try:
+            # Create resolver và build index
+            resolver = DependencyResolver(workspace)
+            resolver.build_file_index(self.tree)
+            
+            # Collect related files từ tất cả selected files
+            all_related: Set[Path] = set()
+            for file_path in selected_files:
+                related = resolver.get_related_files(file_path, max_depth=1)
+                all_related.update(related)
+            
+            if not all_related:
+                self._show_status("No related files found", is_error=False)
+                return
+            
+            # Add related files to selection
+            added_count = 0
+            for related_path in all_related:
+                path_str = str(related_path)
+                if path_str not in self.file_tree_component.selected_paths:
+                    self.file_tree_component.selected_paths.add(path_str)
+                    added_count += 1
+            
+            # Update UI
+            self.file_tree_component._render_tree()
+            self._update_token_count()
+            
+            # Show status
+            self._show_status(
+                f"Added {added_count} related files ({len(all_related)} total dependencies)",
+                is_error=False
+            )
+            
+        except Exception as e:
+            self._show_status(f"Error finding related files: {e}", is_error=True)
 
     def _add_to_ignore(self):
         """

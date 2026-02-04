@@ -16,6 +16,9 @@ from core.constants import BINARY_EXTENSIONS, EXTENDED_IGNORE_PATTERNS
 # Cache for gitignore patterns: root_path -> (mtime, patterns)
 _gitignore_cache: Dict[str, Tuple[float, list]] = {}
 
+# Cache for PathSpec objects: root_path -> (mtime, PathSpec)
+_pathspec_cache: Dict[str, Tuple[float, pathspec.PathSpec]] = {}
+
 
 @dataclass
 class TreeItem:
@@ -371,8 +374,49 @@ def _read_gitignore(root_path: Path) -> list[str]:
 
 def clear_gitignore_cache():
     """Clear the gitignore pattern cache"""
-    global _gitignore_cache
+    global _gitignore_cache, _pathspec_cache
     _gitignore_cache.clear()
+    _pathspec_cache.clear()
+
+
+def _get_gitignore_mtime(root_path: Path) -> float:
+    """Get modification time of .gitignore file"""
+    gitignore_file = root_path / ".gitignore"
+    if gitignore_file.exists():
+        return gitignore_file.stat().st_mtime
+    return 0.0
+
+
+def get_cached_pathspec(root_path: Path, patterns: list) -> pathspec.PathSpec:
+    """
+    Cache PathSpec object, invalidate khi .gitignore hoặc patterns thay đổi.
+    
+    Cache key bao gồm cả root_path và patterns hash để đảm bảo:
+    - Khác patterns → khác PathSpec (tránh cache collision)
+    - Patterns giống nhau + gitignore unchanged → reuse cache
+    
+    Args:
+        root_path: Root path của workspace
+        patterns: List patterns để build PathSpec
+        
+    Returns:
+        Cached hoặc newly created PathSpec object
+    """
+    # Include patterns hash trong cache key để tránh collision
+    # khi patterns thay đổi nhưng gitignore mtime vẫn giữ nguyên
+    patterns_hash = hash(tuple(patterns))
+    cache_key = f"{root_path}:{patterns_hash}"
+    gitignore_mtime = _get_gitignore_mtime(root_path)
+
+    if cache_key in _pathspec_cache:
+        cached_mtime, cached_spec = _pathspec_cache[cache_key]
+        if cached_mtime == gitignore_mtime:
+            return cached_spec
+
+    # Create new PathSpec and cache it
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    _pathspec_cache[cache_key] = (gitignore_mtime, spec)
+    return spec
 
 
 def flatten_tree_files(tree: TreeItem) -> list[Path]:
@@ -469,8 +513,16 @@ def load_folder_children(
         
         gitignore_patterns = _read_gitignore(root_path)
         ignore_patterns.extend(gitignore_patterns)
+    else:
+        # Default root path for caching
+        root_path = folder_path
+        while root_path.parent != root_path:
+            if (root_path / ".git").exists():
+                break
+            root_path = root_path.parent
     
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    # Use cached PathSpec instead of creating new one each time
+    spec = get_cached_pathspec(root_path, list(ignore_patterns))
     
     # Scan children
     try:

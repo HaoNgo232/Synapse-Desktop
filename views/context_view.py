@@ -111,6 +111,15 @@ class ContextView:
 
         # Remote repo manager - quản lý clone và cache repositories
         self._repo_manager: Optional[RepoManager] = None
+        
+        # ========================================
+        # SELECT RELATED FILES: State management
+        # ========================================
+        # Lưu các files đã thêm vào selection bởi Select Related
+        # Để có thể toggle (remove) khi nhấn lại
+        self._last_added_related_files: Set[str] = set()
+        self._related_mode_active: bool = False  # Toggle state
+        self._select_related_button: Optional[ft.Container] = None  # Reference để update appearance
 
     def _show_dirty_repo_dialog(
         self, repo_path: Path, repo_name: str, status_text: ft.Text, refresh_callback
@@ -439,16 +448,18 @@ class ContextView:
                                             tooltip="Deselect All",
                                             on_click=lambda _: self._deselect_all(),
                                         ),
-                                        ft.IconButton(
-                                            icon=ft.Icons.ACCOUNT_TREE,
-                                            icon_size=20,
-                                            icon_color=ThemeColors.PRIMARY,
-                                            tooltip="Select Related Files (imports/dependencies)",
-                                            on_click=lambda _: self._select_related_files(),
-                                        ),
                                     ],
                                     spacing=0,
                                 ),
+                                # Separator
+                                ft.Container(
+                                    width=1,
+                                    height=20,
+                                    bgcolor=ThemeColors.BORDER,
+                                    margin=ft.margin.symmetric(horizontal=4),
+                                ),
+                                # Select Related Button - Toggle với label no bat
+                                self._create_select_related_button(),
                                 # Separator
                                 ft.Container(
                                     width=1,
@@ -1120,6 +1131,13 @@ class ContextView:
         if self.file_tree_component:
             self.file_tree_component.selected_paths.clear()
             self.file_tree_component._render_tree()
+            
+            # Reset related files toggle state
+            if self._related_mode_active:
+                self._last_added_related_files.clear()
+                self._related_mode_active = False
+                self._update_related_button_state()
+            
             # Immediately update token stats to zero
             if self.token_stats_panel:
                 instruction_tokens = 0
@@ -1132,15 +1150,24 @@ class ContextView:
                 )
             self._update_token_count()
 
-    def _select_related_files(self):
+    def _select_related_files(self, depth: int = 1):
         """
-        Tự động chọn các files được import/require bởi files đang chọn.
+        Chọn các files được import/require bởi files đang chọn.
+        
+        Args:
+            depth: Độ sâu đệ quy để tìm related files
+                   - 1: Direct imports only
+                   - 2: Include 1-level nested imports
+                   - 3: Include 2-levels nested imports
         
         Sử dụng DependencyResolver để parse imports trong selected files
         và automatically select các files được reference.
-        
-        Hữu ích khi muốn đảm bảo LLM có đủ context về dependencies.
         """
+        # Nếu đang có related files, clear trước khi add mới
+        if self._related_mode_active:
+            self._last_added_related_files.clear()
+            self._related_mode_active = False
+        
         if not self.file_tree_component or not self.tree:
             self._show_status("No files selected", is_error=True)
             return
@@ -1170,23 +1197,31 @@ class ContextView:
             resolver = DependencyResolver(workspace)
             resolver.build_file_index(self.tree)
             
-            # Collect related files từ tất cả selected files
+            # Collect related files từ tất cả selected files với depth
             all_related: Set[Path] = set()
             for file_path in selected_files:
-                related = resolver.get_related_files(file_path, max_depth=1)
+                related = resolver.get_related_files(file_path, max_depth=depth)
                 all_related.update(related)
             
             if not all_related:
                 self._show_status("No related files found", is_error=False)
                 return
             
-            # Add related files to selection
+            # Add related files to selection và track để có thể undo
             added_count = 0
+            self._last_added_related_files.clear()
+            
             for related_path in all_related:
                 path_str = str(related_path)
                 if path_str not in self.file_tree_component.selected_paths:
                     self.file_tree_component.selected_paths.add(path_str)
+                    self._last_added_related_files.add(path_str)
                     added_count += 1
+            
+            # Update toggle state và button appearance
+            if added_count > 0:
+                self._related_mode_active = True
+                self._update_related_button_state()
             
             # Update UI
             self.file_tree_component._render_tree()
@@ -1194,12 +1229,192 @@ class ContextView:
             
             # Show status
             self._show_status(
-                f"Added {added_count} related files ({len(all_related)} total dependencies)",
+                f"Added {added_count} related files (click again to undo)",
                 is_error=False
             )
             
         except Exception as e:
             self._show_status(f"Error finding related files: {e}", is_error=True)
+    
+    def _deselect_related_files(self):
+        """
+        Bỏ chọn các related files đã thêm trước đó (undo).
+        
+        Chỉ remove các files mà _select_related_files() đã thêm,
+        không ảnh hưởng đến selection gốc của user.
+        """
+        if not self.file_tree_component or not self._last_added_related_files:
+            return
+        
+        # Remove only the files that were added by select related
+        removed_count = 0
+        for path_str in self._last_added_related_files:
+            if path_str in self.file_tree_component.selected_paths:
+                self.file_tree_component.selected_paths.discard(path_str)
+                removed_count += 1
+        
+        # Clear tracking state
+        self._last_added_related_files.clear()
+        self._related_mode_active = False
+        self._update_related_button_state()
+        
+        # Update UI
+        self.file_tree_component._render_tree()
+        self._update_token_count()
+        
+        self._show_status(
+            f"Removed {removed_count} related files",
+            is_error=False
+        )
+    
+    def _create_select_related_button(self) -> ft.Container:
+        """
+        Tạo PopupMenuButton cho Select Related với các depth options.
+        
+        Options:
+        - Direct imports only (depth=1)
+        - Include 1-level nested (depth=2)  
+        - Include 2-levels nested (depth=3)
+        - Clear Related (khi đang active)
+        
+        Returns:
+            ft.Container chứa PopupMenuButton
+        """
+        self._select_related_button = ft.PopupMenuButton(
+            content=ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.ACCOUNT_TREE,
+                            size=16,
+                            color=ThemeColors.BG_PAGE,
+                        ),
+                        ft.Text(
+                            "Select Related",
+                            size=12,
+                            weight=ft.FontWeight.W_500,
+                            color=ThemeColors.BG_PAGE,
+                        ),
+                        ft.Icon(
+                            ft.Icons.ARROW_DROP_DOWN,
+                            size=14,
+                            color=ThemeColors.BG_PAGE,
+                        ),
+                    ],
+                    spacing=2,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=4,
+                bgcolor=ThemeColors.PRIMARY,
+            ),
+            items=self._build_related_menu_items(),
+            tooltip="Select imported files with depth options",
+        )
+        return self._select_related_button
+    
+    def _build_related_menu_items(self) -> list:
+        """
+        Build menu items cho Select Related popup.
+        
+        Khi active (có related files đã thêm): hiện option Clear
+        Khi inactive: hiện các depth options
+        
+        Returns:
+            List các PopupMenuItem
+        """
+        if self._related_mode_active:
+            # Active state: chỉ hiện option Clear
+            return [
+                ft.PopupMenuItem(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.REMOVE_CIRCLE_OUTLINE, size=16, color=ThemeColors.ERROR),
+                            ft.Text(f"Clear {len(self._last_added_related_files)} related files", size=13),
+                        ],
+                        spacing=8,
+                    ),
+                    on_click=lambda _: self._deselect_related_files(),
+                ),
+            ]
+        else:
+            # Inactive state: hiện depth options
+            return [
+                ft.PopupMenuItem(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.LOOKS_ONE, size=16, color=ThemeColors.PRIMARY),
+                            ft.Text("Direct imports only", size=13),
+                        ],
+                        spacing=8,
+                    ),
+                    on_click=lambda _: self._select_related_files(depth=1),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.LOOKS_TWO, size=16, color=ThemeColors.WARNING),
+                            ft.Text("Include 1-level nested", size=13),
+                        ],
+                        spacing=8,
+                    ),
+                    on_click=lambda _: self._select_related_files(depth=2),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.LOOKS_3, size=16, color=ThemeColors.ERROR),
+                            ft.Text("Include 2-levels nested", size=13),
+                        ],
+                        spacing=8,
+                    ),
+                    on_click=lambda _: self._select_related_files(depth=3),
+                ),
+            ]
+    
+    def _update_related_button_state(self):
+        """
+        Cập nhật appearance của Select Related button và menu items.
+        
+        - Active (có related files): Màu xanh lá, menu hiện Clear option
+        - Inactive: Màu primary, menu hiện depth options
+        """
+        if not self._select_related_button:
+            return
+        
+        # Update menu items
+        self._select_related_button.items = self._build_related_menu_items()
+        
+        # Update button appearance (Container inside PopupMenuButton)
+        btn_container = self._select_related_button.content
+        if not isinstance(btn_container, ft.Container):
+            safe_page_update(self.page)
+            return
+        
+        btn_row = btn_container.content
+        if not isinstance(btn_row, ft.Row) or len(btn_row.controls) < 2:
+            safe_page_update(self.page)
+            return
+        
+        icon = btn_row.controls[0]
+        text = btn_row.controls[1]
+        
+        if self._related_mode_active:
+            # Active state: màu xanh lá, text hiện số files đã thêm
+            btn_container.bgcolor = ThemeColors.SUCCESS
+            if isinstance(icon, ft.Icon):
+                icon.name = ft.Icons.CHECK_CIRCLE
+            if isinstance(text, ft.Text):
+                text.value = f"Related ({len(self._last_added_related_files)})"
+        else:
+            # Inactive state: màu primary, text "Select Related"
+            btn_container.bgcolor = ThemeColors.PRIMARY
+            if isinstance(icon, ft.Icon):
+                icon.name = ft.Icons.ACCOUNT_TREE
+            if isinstance(text, ft.Text):
+                text.value = "Select Related"
+        
+        safe_page_update(self.page)
 
     def _add_to_ignore(self):
         """

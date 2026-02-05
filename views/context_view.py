@@ -2839,7 +2839,7 @@ class ContextView:
                             italic=True,
                         ),
                         padding=20,
-                        alignment=ft.alignment.center,
+                        alignment=ft.Alignment(0, 0),
                     )
                 )
             else:

@@ -1,7 +1,7 @@
 """
 Apply View - Tab de paste OPX va apply changes
 
-Theme: Swiss Professional (Light)
+Theme: Dark Mode OLED với High Contrast
 """
 
 import flet as ft
@@ -31,8 +31,50 @@ from services.error_context import (
 from services.clipboard_utils import get_clipboard_text
 
 
+# High Contrast Colors for Dark Mode
+class ApplyViewColors:
+    """Enhanced colors for better contrast in Apply View"""
+    
+    # Backgrounds
+    BG_CARD = "#1E293B"  # Slate 800
+    BG_CARD_HOVER = "#334155"  # Slate 700
+    BG_EXPANDED = "#0F172A"  # Slate 900 - for expanded content
+    
+    # Action badge colors - vivid for dark mode
+    ACTION_CREATE = "#22C55E"  # Green 500
+    ACTION_CREATE_BG = "#052E16"  # Green 950
+    ACTION_MODIFY = "#3B82F6"  # Blue 500
+    ACTION_MODIFY_BG = "#172554"  # Blue 950
+    ACTION_REWRITE = "#F59E0B"  # Amber 500
+    ACTION_REWRITE_BG = "#422006"  # Amber 950
+    ACTION_DELETE = "#EF4444"  # Red 500
+    ACTION_DELETE_BG = "#450A0A"  # Red 950
+    ACTION_RENAME = "#A855F7"  # Purple 500
+    ACTION_RENAME_BG = "#3B0764"  # Purple 950
+    
+    # Status colors
+    SUCCESS_BG = "#052E16"  # Green 950
+    SUCCESS_BORDER = "#166534"  # Green 800
+    SUCCESS_TEXT = "#4ADE80"  # Green 400
+    
+    ERROR_BG = "#450A0A"  # Red 950
+    ERROR_BORDER = "#991B1B"  # Red 800
+    ERROR_TEXT = "#FCA5A5"  # Red 300
+    
+    # Diff stats
+    DIFF_ADD = "#4ADE80"  # Green 400
+    DIFF_REMOVE = "#F87171"  # Red 400
+    DIFF_NEUTRAL = "#60A5FA"  # Blue 400
+    
+    # Text
+    TEXT_PRIMARY = "#F8FAFC"  # Slate 50
+    TEXT_SECONDARY = "#CBD5E1"  # Slate 300
+    TEXT_MUTED = "#94A3B8"  # Slate 400
+    TEXT_DESCRIPTION = "#E2E8F0"  # Slate 200
+
+
 class ApplyView:
-    """View cho Apply tab"""
+    """View cho Apply tab với improved UI"""
 
     def __init__(self, page: ft.Page, get_workspace: Callable[[], Optional[Path]]):
         self.page = page
@@ -41,7 +83,7 @@ class ApplyView:
         self.opx_input: Optional[ft.TextField] = None
         self.results_column: Optional[ft.Column] = None
         self.status_text: Optional[ft.Text] = None
-        self.workspace_indicator: Optional[ft.Text] = None  # NEW: Workspace display
+        self.workspace_indicator: Optional[ft.Text] = None
 
         # State for error copying
         self.last_preview_data: Optional[PreviewData] = None
@@ -49,209 +91,253 @@ class ApplyView:
         self.last_opx_text: str = ""
         
         # State for diff expansion
-        self.expanded_diffs: set = set()  # Set of row indices that are expanded
+        self.expanded_diffs: set = set()
 
     def build(self) -> ft.Container:
-        """Build UI cho Apply view voi Swiss Professional styling"""
+        """Build UI cho Apply view với improved styling"""
 
-        # Workspace indicator
+        # Workspace indicator with better visibility
         current_workspace = self.get_workspace()
         workspace_name = (
             current_workspace.name if current_workspace else "No workspace selected"
         )
 
-        self.workspace_indicator = ft.Text(
-            f"📁 {workspace_name}",
-            size=12,
-            color=ThemeColors.PRIMARY if current_workspace else ThemeColors.TEXT_MUTED,
-            weight=ft.FontWeight.W_500,
-            tooltip=(
-                str(current_workspace)
-                if current_workspace
-                else "Please select a workspace"
+        self.workspace_indicator = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.FOLDER_OPEN if current_workspace else ft.Icons.FOLDER_OFF,
+                        size=16,
+                        color=ApplyViewColors.ACTION_MODIFY if current_workspace else ApplyViewColors.TEXT_MUTED,
+                    ),
+                    ft.Text(
+                        workspace_name,
+                        size=12,
+                        color=ApplyViewColors.TEXT_SECONDARY if current_workspace else ApplyViewColors.TEXT_MUTED,
+                        weight=ft.FontWeight.W_500,
+                    ),
+                ],
+                spacing=6,
             ),
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            bgcolor=ApplyViewColors.BG_CARD,
+            border_radius=6,
+            tooltip=str(current_workspace) if current_workspace else "Please select a workspace",
         )
 
-        # OPX Input - Compact de danh khong gian cho Results
+        # OPX Input with better contrast
         self.opx_input = ft.TextField(
-            label="Paste OPX Response",
             multiline=True,
-            min_lines=4,
-            max_lines=6,
-            hint_text="Paste the LLM's OPX XML response here...",
+            expand=True,
+            hint_text="Paste the LLM's OPX XML response here...\n\nExample:\n<edit file=\"path/to/file\" op=\"patch\">\n  ...\n</edit>",
             border_color=ThemeColors.BORDER,
-            focused_border_color=ThemeColors.PRIMARY,
-            label_style=ft.TextStyle(color=ThemeColors.TEXT_SECONDARY),
-            text_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=13),
+            focused_border_color=ApplyViewColors.ACTION_MODIFY,
+            text_style=ft.TextStyle(
+                color=ApplyViewColors.TEXT_PRIMARY, 
+                size=13,
+                font_family="monospace",
+            ),
+            hint_style=ft.TextStyle(color=ApplyViewColors.TEXT_MUTED, size=12),
+            bgcolor=ApplyViewColors.BG_EXPANDED,
+            cursor_color=ApplyViewColors.ACTION_MODIFY,
+            content_padding=15,
         )
 
-        # Status
-        self.status_text = ft.Text("", size=12)
+        # Status with better visibility
+        self.status_text = ft.Text("", size=12, weight=ft.FontWeight.W_500)
 
-        # Results table
+        # Results container
         self.results_column = ft.Column(
-            controls=[
-                ft.Text(
-                    "Results will appear here after Preview or Apply",
-                    color=ThemeColors.TEXT_MUTED,
-                    italic=True,
-                    size=14,
-                )
-            ],
+            controls=[self._create_empty_state()],
             scroll=ft.ScrollMode.AUTO,
             expand=True,
+            spacing=12,
         )
 
         return ft.Container(
-            content=ft.Column(
+            content=ft.Row(
                 [
-                    # Input section
+                    # Left Column: Input section
                     ft.Container(
                         content=ft.Column(
                             [
+                                # Header row
                                 ft.Row(
                                     [
-                                        ft.Text(
-                                            "OPX Response",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.CODE, size=18, color=ApplyViewColors.ACTION_MODIFY),
+                                                ft.Text(
+                                                    "OPX Input",
+                                                    weight=ft.FontWeight.W_600,
+                                                    size=15,
+                                                    color=ApplyViewColors.TEXT_PRIMARY,
+                                                ),
+                                            ],
+                                            spacing=8,
                                         ),
-                                        ft.Container(expand=True),
                                         self.workspace_indicator,
                                     ],
                                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                                 ),
-                                ft.Container(height=8),
+                                ft.Container(height=10),
+                                ft.Text(
+                                    "Paste OPX code from AI chat below:",
+                                    size=12,
+                                    color=ApplyViewColors.TEXT_MUTED,
+                                ),
+                                ft.Container(height=5),
                                 self.opx_input,
                                 ft.Container(height=12),
+                                # Action buttons
                                 ft.Row(
                                     [
                                         ft.OutlinedButton(
                                             "Paste",
                                             icon=ft.Icons.CONTENT_PASTE,
                                             on_click=lambda _: self._paste_from_clipboard(),
-                                            tooltip="Paste OPX from clipboard",
+                                            tooltip="Paste from clipboard",
                                             style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
-                                                ),
+                                                color=ApplyViewColors.TEXT_SECONDARY,
+                                                side=ft.BorderSide(1, ThemeColors.BORDER),
                                             ),
                                         ),
                                         ft.OutlinedButton(
                                             "Preview",
                                             icon=ft.Icons.VISIBILITY,
                                             on_click=lambda _: self._preview_changes(),
+                                            tooltip="Preview changes",
                                             style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_PRIMARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
-                                                ),
+                                                color=ApplyViewColors.ACTION_MODIFY,
+                                                side=ft.BorderSide(1, ApplyViewColors.ACTION_MODIFY),
                                             ),
                                         ),
                                         ft.ElevatedButton(
-                                            "Apply Changes",
+                                            "Apply",
                                             icon=ft.Icons.PLAY_ARROW,
                                             on_click=lambda _: self._apply_changes(),
+                                            tooltip="Apply all changes",
                                             style=ft.ButtonStyle(
                                                 color="#FFFFFF",
-                                                bgcolor=ThemeColors.SUCCESS,
-                                            ),
-                                        ),
-                                        ft.Container(expand=True),
-                                        self.status_text,
-                                    ],
-                                    spacing=12,
-                                ),
-                            ]
-                        ),
-                        padding=16,
-                        bgcolor=ThemeColors.BG_SURFACE,
-                        border=ft.border.all(1, ThemeColors.BORDER),
-                        border_radius=8,
-                    ),
-                    ft.Container(height=16),
-                    # Results section
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.Row(
-                                    [
-                                        ft.Text(
-                                            "Results",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
-                                        ),
-                                        ft.Container(expand=True),
-                                        ft.OutlinedButton(
-                                            "Clear",
-                                            icon=ft.Icons.CLEAR_ALL,
-                                            on_click=lambda _: self._clear_results(),
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
-                                                ),
-                                            ),
-                                        ),
-                                        ft.OutlinedButton(
-                                            "View Backups",
-                                            icon=ft.Icons.HISTORY,
-                                            on_click=lambda _: self._show_backups_dialog(),
-                                            tooltip="View and restore from backups",
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
-                                                ),
-                                            ),
-                                        ),
-                                        ft.OutlinedButton(
-                                            "Copy All Results",
-                                            icon=ft.Icons.CONTENT_COPY_OUTLINED,
-                                            on_click=lambda _: self._copy_all_results(),
-                                            tooltip="Copy ALL results (success + failure) for AI debugging",
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.PRIMARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.PRIMARY
-                                                ),
+                                                bgcolor=ApplyViewColors.ACTION_CREATE,
                                             ),
                                         ),
                                     ],
                                     spacing=8,
+                                    wrap=True,
                                 ),
+                                ft.Container(height=5),
+                                self.status_text,
+                            ],
+                            expand=True,
+                        ),
+                        expand=2,
+                        padding=20,
+                        bgcolor=ApplyViewColors.BG_CARD,
+                        border=ft.border.all(1, ThemeColors.BORDER),
+                        border_radius=10,
+                    ),
+                    
+                    # Right Column: Results section
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                # Results header
+                                ft.Row(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.LIST_ALT, size=18, color=ApplyViewColors.TEXT_SECONDARY),
+                                                ft.Text(
+                                                    "Results & Preview",
+                                                    weight=ft.FontWeight.W_600,
+                                                    size=15,
+                                                    color=ApplyViewColors.TEXT_PRIMARY,
+                                                ),
+                                            ],
+                                            spacing=8,
+                                        ),
+                                        ft.Container(expand=True),
+                                        ft.IconButton(
+                                            icon=ft.Icons.DELETE_OUTLINE,
+                                            icon_size=16,
+                                            icon_color=ApplyViewColors.TEXT_MUTED,
+                                            on_click=lambda _: self._clear_results(),
+                                            tooltip="Clear results",
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.HISTORY,
+                                            icon_size=16,
+                                            icon_color=ApplyViewColors.TEXT_MUTED,
+                                            on_click=lambda _: self._show_backups_dialog(),
+                                            tooltip="View backups",
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.Icons.CONTENT_COPY,
+                                            icon_size=16,
+                                            icon_color=ApplyViewColors.ACTION_MODIFY,
+                                            on_click=lambda _: self._copy_all_results(),
+                                            tooltip="Copy results for AI",
+                                        ),
+                                    ],
+                                    spacing=4,
+                                ),
+                                ft.Container(height=10),
                                 ft.Divider(height=1, color=ThemeColors.BORDER),
+                                ft.Container(height=10),
                                 self.results_column,
                             ],
                             expand=True,
                         ),
-                        padding=16,
-                        expand=True,
-                        bgcolor=ThemeColors.BG_SURFACE,
+                        expand=3,
+                        padding=20,
+                        bgcolor=ApplyViewColors.BG_CARD,
                         border=ft.border.all(1, ThemeColors.BORDER),
-                        border_radius=8,
+                        border_radius=10,
                     ),
                 ],
                 expand=True,
+                spacing=16,
             ),
             expand=True,
             padding=16,
             bgcolor=ThemeColors.BG_PAGE,
         )
 
+    def _create_empty_state(self) -> ft.Container:
+        """Create empty state placeholder"""
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(
+                        ft.Icons.DESCRIPTION_OUTLINED,
+                        size=48,
+                        color=ApplyViewColors.TEXT_MUTED,
+                    ),
+                    ft.Text(
+                        "No results yet",
+                        size=14,
+                        color=ApplyViewColors.TEXT_MUTED,
+                        weight=ft.FontWeight.W_500,
+                    ),
+                    ft.Text(
+                        "Paste OPX and click Preview or Apply",
+                        size=12,
+                        color=ApplyViewColors.TEXT_MUTED,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
+            ),
+            padding=40,
+            alignment=ft.Alignment(0, 0),
+        )
+
     def _preview_changes(self):
-        """
-        Preview changes without applying.
-        Hien thi diff stats (+lines/-lines) cho moi action.
-        """
-        # Type assertions - dam bao cac controls da duoc khoi tao
+        """Preview changes without applying"""
         assert self.opx_input is not None
         assert self.results_column is not None
 
-        # Refresh workspace indicator first
         self._update_workspace_indicator()
 
         opx_text = self.opx_input.value
@@ -259,7 +345,6 @@ class ApplyView:
             self._show_status("Please paste OPX response first", is_error=True)
             return
 
-        # Basic validation - check for edit tags
         opx_text_lower = opx_text.lower()
         if "<edit" not in opx_text_lower:
             self._show_status(
@@ -273,42 +358,35 @@ class ApplyView:
         # Clear previous results
         self.results_column.controls.clear()
 
-        # Show parse errors if any
+        # Show parse errors
         if result.errors:
             for error in result.errors:
                 self.results_column.controls.append(
-                    self._create_result_row("ERROR", "", error, success=False)
+                    self._create_error_card("Parse Error", error)
                 )
 
-        # Analyze file actions to get diff stats
+        # Analyze file actions
         workspace = self.get_workspace()
         preview_data = analyze_file_actions(result.file_actions, workspace)
 
         # Show analysis errors
         for error in preview_data.errors:
             self.results_column.controls.append(
-                self._create_result_row("ERROR", "", error, success=False)
+                self._create_error_card("Analysis Error", error)
             )
 
-        # Show parsed actions with diff stats
+        # Show preview cards
         for idx, row in enumerate(preview_data.rows):
+            file_action = result.file_actions[idx] if idx < len(result.file_actions) else None
             self.results_column.controls.append(
-                self._create_preview_row(
-                    row,
-                    idx,
-                    (
-                        result.file_actions[idx]
-                        if idx < len(result.file_actions)
-                        else None
-                    ),
-                )
+                self._create_preview_card(row, idx, file_action)
             )
 
         if preview_data.rows:
             total_added = sum(r.changes.added for r in preview_data.rows)
             total_removed = sum(r.changes.removed for r in preview_data.rows)
             self._show_status(
-                f"Preview: {len(preview_data.rows)} action(s) | +{total_added} / -{total_removed} lines"
+                f"Preview: {len(preview_data.rows)} action(s)  •  +{total_added} / -{total_removed} lines"
             )
         else:
             self._show_status("No actions found in OPX", is_error=True)
@@ -317,7 +395,6 @@ class ApplyView:
 
     def _apply_changes(self):
         """Apply changes to files"""
-        # Type assertions - dam bao cac controls da duoc khoi tao
         assert self.opx_input is not None
         assert self.results_column is not None
 
@@ -326,14 +403,11 @@ class ApplyView:
             self._show_status("Please paste OPX response first", is_error=True)
             return
 
-        # Parse first to count actions
         parse_result = parse_opx_response(opx_text)
         if parse_result.file_actions:
             action_count = len(parse_result.file_actions)
-            # Count unique files
             unique_files = set(a.path for a in parse_result.file_actions)
             file_count = len(unique_files)
-            # Show confirmation dialog
             self._show_confirmation_dialog(
                 f"Apply {action_count} change(s) to {file_count} file(s)?",
                 "This will modify files in your workspace. Backups will be created automatically.",
@@ -343,7 +417,7 @@ class ApplyView:
             self._do_apply_changes(opx_text)
 
     def _show_confirmation_dialog(self, title: str, message: str, on_confirm: Callable):
-        """Hiển thị confirmation dialog"""
+        """Show confirmation dialog"""
 
         def close_dialog(e):
             dialog.open = False
@@ -356,16 +430,21 @@ class ApplyView:
 
         dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text(title, weight=ft.FontWeight.W_600),
-            content=ft.Text(message, color=ThemeColors.TEXT_SECONDARY),
+            title=ft.Text(title, weight=ft.FontWeight.W_600, color=ApplyViewColors.TEXT_PRIMARY),
+            content=ft.Text(message, color=ApplyViewColors.TEXT_SECONDARY),
+            bgcolor=ApplyViewColors.BG_CARD,
             actions=[
-                ft.TextButton("Cancel", on_click=close_dialog),
+                ft.TextButton(
+                    "Cancel", 
+                    on_click=close_dialog,
+                    style=ft.ButtonStyle(color=ApplyViewColors.TEXT_MUTED),
+                ),
                 ft.ElevatedButton(
                     "Apply",
                     on_click=confirm_action,
                     style=ft.ButtonStyle(
                         color="#FFFFFF",
-                        bgcolor=ThemeColors.SUCCESS,
+                        bgcolor=ApplyViewColors.ACTION_CREATE,
                     ),
                 ),
             ],
@@ -378,31 +457,26 @@ class ApplyView:
         safe_page_update(self.page)
 
     def _do_apply_changes(self, opx_text: str):
-        """Thực hiện apply changes sau khi confirm"""
-        # Refresh workspace indicator
+        """Execute apply changes"""
         self._update_workspace_indicator()
 
         workspace = self.get_workspace()
         workspace_roots = [workspace] if workspace else None
 
-        # Parse OPX
         parse_result = parse_opx_response(opx_text)
 
-        # Clear previous results and state
         assert self.results_column is not None
 
         self.results_column.controls.clear()
         self.last_apply_results = []
         self.last_opx_text = opx_text
 
-        # Show parse errors if any
         if parse_result.errors:
             for error in parse_result.errors:
                 self.results_column.controls.append(
-                    self._create_result_row("ERROR", "", error, success=False)
+                    self._create_error_card("Parse Error", error)
                 )
             self._show_status("Parse errors occurred", is_error=True)
-
             safe_page_update(self.page)
             return
 
@@ -411,15 +485,13 @@ class ApplyView:
             safe_page_update(self.page)
             return
 
-        # Analyze for preview data (used in error context)
         self.last_preview_data = analyze_file_actions(
             parse_result.file_actions, workspace
         )
 
-        # Apply actions
         results = apply_file_actions(parse_result.file_actions, workspace_roots)
 
-        # Convert to ApplyRowResult and save
+        # Convert to ApplyRowResult
         self.last_apply_results = []
         for i, result in enumerate(results):
             self.last_apply_results.append(
@@ -434,33 +506,25 @@ class ApplyView:
             )
 
         # Display results
-        assert self.results_column is not None
-
         success_count = 0
-        for result in results:
+        for i, result in enumerate(results):
+            preview_row = self.last_preview_data.rows[i] if i < len(self.last_preview_data.rows) else None
             self.results_column.controls.append(
-                self._create_result_row(
-                    result.action.upper(),
-                    result.path,
-                    result.message,
-                    success=result.success,
-                )
+                self._create_result_card(result, preview_row)
             )
             if result.success:
                 success_count += 1
 
         total = len(results)
-        failed_count = total - success_count
 
         if success_count == total:
-            self._show_status(f"Applied all {total} action(s) successfully!")
+            self._show_status(f"✓ Applied all {total} action(s) successfully!")
         else:
             self._show_status(
                 f"Applied {success_count}/{total} action(s)", is_error=True
             )
 
         # Save to history
-        workspace = self.get_workspace()
         action_results_for_history = [
             {
                 "action": r.action,
@@ -479,155 +543,75 @@ class ApplyView:
         safe_page_update(self.page)
 
     def _check_cascade_failure(self, current_result: ActionResult, previous_results: list) -> bool:
-        """
-        Check if failure might be caused by previous operations on same file.
-        
-        Args:
-            current_result: The current failed result
-            previous_results: List of results before this one
-            
-        Returns:
-            True if this looks like a cascade failure
-        """
+        """Check if failure might be caused by previous operations"""
         if current_result.success:
             return False
-            
-        # Check if any previous operation modified the same file
         for prev in previous_results:
             if prev.path == current_result.path and prev.success:
                 return True
         return False
 
-    def _create_result_row(
-        self,
-        action: str,
-        path: str,
-        message: str,
-        success: bool,
-        is_preview: bool = False,
-    ) -> ft.Container:
-        """
-        Tạo một row trong results với Swiss Professional styling.
-
-        Args:
-            action: Loại action (CREATE, MODIFY, DELETE, etc.)
-            path: Đường dẫn file
-            message: Message kết quả
-            success: True nếu thành công
-            is_preview: True nếu đang ở chế độ preview
-
-        Returns:
-            Container chứa row UI
-        """
-
-        # Action badge color
-        action_colors = {
-            "CREATE": ThemeColors.SUCCESS,
-            "MODIFY": ThemeColors.PRIMARY,
-            "REWRITE": ThemeColors.WARNING,
-            "DELETE": ThemeColors.ERROR,
-            "RENAME": "#8B5CF6",  # Purple
-            "ERROR": ThemeColors.ERROR,
+    def _get_action_colors(self, action: str) -> tuple:
+        """Get badge color and background for action type"""
+        action_lower = action.lower()
+        colors = {
+            "create": (ApplyViewColors.ACTION_CREATE, ApplyViewColors.ACTION_CREATE_BG),
+            "modify": (ApplyViewColors.ACTION_MODIFY, ApplyViewColors.ACTION_MODIFY_BG),
+            "rewrite": (ApplyViewColors.ACTION_REWRITE, ApplyViewColors.ACTION_REWRITE_BG),
+            "delete": (ApplyViewColors.ACTION_DELETE, ApplyViewColors.ACTION_DELETE_BG),
+            "rename": (ApplyViewColors.ACTION_RENAME, ApplyViewColors.ACTION_RENAME_BG),
         }
+        return colors.get(action_lower, (ApplyViewColors.TEXT_MUTED, ApplyViewColors.BG_CARD))
 
-        badge_color = action_colors.get(action, ThemeColors.TEXT_SECONDARY)
-
-        # Status icon
-        if is_preview:
-            status_icon = ft.Icon(
-                ft.Icons.VISIBILITY, size=16, color=ThemeColors.TEXT_MUTED
-            )
-        elif success:
-            status_icon = ft.Icon(
-                ft.Icons.CHECK_CIRCLE, size=16, color=ThemeColors.SUCCESS
-            )
-        else:
-            status_icon = ft.Icon(ft.Icons.ERROR, size=16, color=ThemeColors.ERROR)
-
-        # Background color for row
-        row_bg = (
-            ThemeColors.BG_ELEVATED if success else "#FEF2F2"
-        )  # Light red for errors
-
+    def _create_error_card(self, error_type: str, message: str) -> ft.Container:
+        """Create error card with high visibility"""
         return ft.Container(
             content=ft.Row(
                 [
-                    status_icon,
-                    ft.Container(
-                        content=ft.Text(
-                            action, size=11, weight=ft.FontWeight.W_600, color="#FFFFFF"
-                        ),
-                        bgcolor=badge_color,
-                        padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                        border_radius=4,
-                    ),
-                    ft.Text(
-                        path,
-                        size=12,
-                        weight=ft.FontWeight.W_500,
-                        color=ThemeColors.TEXT_PRIMARY,
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=20, color=ApplyViewColors.ERROR_TEXT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                error_type,
+                                size=12,
+                                weight=ft.FontWeight.W_600,
+                                color=ApplyViewColors.ERROR_TEXT,
+                            ),
+                            ft.Text(
+                                message,
+                                size=12,
+                                color=ApplyViewColors.TEXT_SECONDARY,
+                            ),
+                        ],
+                        spacing=2,
                         expand=True,
-                    ),
-                    ft.Text(
-                        message[:60] + "..." if len(message) > 60 else message,
-                        size=11,
-                        color=ThemeColors.TEXT_SECONDARY,
                     ),
                 ],
                 spacing=12,
             ),
-            padding=12,
-            bgcolor=row_bg,
-            border=ft.border.all(1, ThemeColors.BORDER),
-            border_radius=6,
-            margin=ft.margin.only(bottom=8),
+            padding=14,
+            bgcolor=ApplyViewColors.ERROR_BG,
+            border=ft.border.all(1, ApplyViewColors.ERROR_BORDER),
+            border_radius=8,
         )
 
-    def _create_preview_row(
-        self, row: PreviewRow, row_idx: int = 0, file_action=None
+    def _create_preview_card(
+        self, row: PreviewRow, row_idx: int, file_action=None
     ) -> ft.Container:
-        """
-        Tạo một preview row với diff stats (+lines/-lines) và expandable visual diff.
-        Hiển thị chi tiết thay đổi trước khi apply.
+        """Create expandable preview card with full description and diff"""
+        
+        badge_color, badge_bg = self._get_action_colors(row.action)
+        is_expanded = row_idx in self.expanded_diffs
 
-        Args:
-            row: PreviewRow data chứa thông tin về file action
-            row_idx: Index của row (dùng để track expand state)
-            file_action: FileAction gốc (dùng để generate diff lines)
-
-        Returns:
-            Container chứa preview row UI với:
-            - Action badge (CREATE, MODIFY, etc.)
-            - File path
-            - Diff stats (+X / -Y lines)
-            - Description
-            - Expandable diff viewer
-        """
-        # Action badge color
-        action_colors = {
-            "create": ThemeColors.SUCCESS,
-            "modify": ThemeColors.PRIMARY,
-            "rewrite": ThemeColors.WARNING,
-            "delete": ThemeColors.ERROR,
-            "rename": "#8B5CF6",  # Purple
-        }
-        badge_color = action_colors.get(row.action, ThemeColors.TEXT_SECONDARY)
-
-        # Diff stats
-        diff_text = format_change_summary(row.changes)
-        diff_color = get_change_color(row.changes)
-
-        # Error handling
-        if row.has_error:
-            status_icon = ft.Icon(ft.Icons.ERROR, size=16, color=ThemeColors.ERROR)
-            row_bg = "#FEF2F2"
+        # Diff stats color
+        if row.changes.added > row.changes.removed:
+            diff_color = ApplyViewColors.DIFF_ADD
+        elif row.changes.removed > row.changes.added:
+            diff_color = ApplyViewColors.DIFF_REMOVE
         else:
-            status_icon = ft.Icon(
-                ft.Icons.VISIBILITY, size=16, color=ThemeColors.TEXT_MUTED
-            )
-            row_bg = ThemeColors.BG_ELEVATED
+            diff_color = ApplyViewColors.DIFF_NEUTRAL
 
-        # Generate diff lines neu chua co
+        # Generate diff lines
         workspace = self.get_workspace()
         diff_lines = []
         if file_action and row.action != "rename":
@@ -636,132 +620,251 @@ class ApplyView:
             except Exception:
                 pass
 
-        # Check expand state
-        is_expanded = row_idx in self.expanded_diffs
-
-        # Show diff button (chi hien thi neu co diff lines)
-        show_diff_btn = None
-        if diff_lines:
-            show_diff_btn = ft.IconButton(
-                icon=ft.Icons.EXPAND_MORE if not is_expanded else ft.Icons.EXPAND_LESS,
-                icon_size=18,
-                icon_color=ThemeColors.TEXT_SECONDARY,
-                tooltip="Show Diff" if not is_expanded else "Hide Diff",
-                on_click=lambda e: self._toggle_diff_expand(row_idx),
-            )
-
-        # Header row
-        header_row = ft.Row(
+        # Header content
+        header_content = ft.Row(
             [
-                status_icon,
                 # Action badge
                 ft.Container(
                     content=ft.Text(
                         row.action.upper(),
                         size=11,
-                        weight=ft.FontWeight.W_600,
-                        color="#FFFFFF",
+                        weight=ft.FontWeight.W_700,
+                        color=badge_color,
                     ),
-                    bgcolor=badge_color,
-                    padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                    border_radius=4,
+                    bgcolor=badge_bg,
+                    padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                    border_radius=6,
                 ),
                 # File path
                 ft.Text(
                     row.path,
-                    size=12,
+                    size=13,
                     weight=ft.FontWeight.W_500,
-                    color=ThemeColors.TEXT_PRIMARY,
+                    color=ApplyViewColors.TEXT_PRIMARY,
                     expand=True,
                 ),
-                # Diff stats badge (+X / -Y)
+                # Diff stats
                 ft.Container(
-                    content=ft.Text(
-                        diff_text,
-                        size=11,
-                        weight=ft.FontWeight.W_600,
-                        color=diff_color,
+                    content=ft.Row(
+                        [
+                            ft.Text(f"+{row.changes.added}", size=12, color=ApplyViewColors.DIFF_ADD, weight=ft.FontWeight.W_600),
+                            ft.Text("/", size=12, color=ApplyViewColors.TEXT_MUTED),
+                            ft.Text(f"-{row.changes.removed}", size=12, color=ApplyViewColors.DIFF_REMOVE, weight=ft.FontWeight.W_600),
+                        ],
+                        spacing=4,
                     ),
-                    bgcolor=ThemeColors.BG_ELEVATED,
-                    padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                    border_radius=4,
-                    border=ft.border.all(1, ThemeColors.BORDER),
+                    bgcolor=ApplyViewColors.BG_EXPANDED,
+                    padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                    border_radius=6,
                 ),
-                # Description
-                ft.Text(
-                    (
-                        row.description[:40] + "..."
-                        if len(row.description) > 40
-                        else row.description
-                    ),
-                    size=11,
-                    color=ThemeColors.TEXT_SECONDARY,
-                    width=180,
-                ),
-                # Show diff button
-                show_diff_btn if show_diff_btn else ft.Container(width=0),
+                # Expand button
+                ft.IconButton(
+                    icon=ft.Icons.EXPAND_MORE if not is_expanded else ft.Icons.EXPAND_LESS,
+                    icon_size=20,
+                    icon_color=ApplyViewColors.TEXT_SECONDARY,
+                    tooltip="Show diff preview" if not is_expanded else "Hide diff preview",
+                    on_click=lambda e, idx=row_idx: self._toggle_diff_expand(idx),
+                ) if diff_lines else ft.Container(width=40),
             ],
             spacing=12,
+            alignment=ft.MainAxisAlignment.START,
         )
 
-        # Column content - List of Controls (Row or Container)
-        column_content: list[ft.Control] = [header_row]
+        # Description row (always visible, full width)
+        description_row = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=ApplyViewColors.TEXT_MUTED),
+                    ft.Text(
+                        row.description,
+                        size=12,
+                        color=ApplyViewColors.TEXT_DESCRIPTION,
+                        expand=True,
+                    ),
+                ],
+                spacing=8,
+            ),
+            margin=ft.margin.only(top=10),
+        )
 
-        # Diff viewer (neu expanded)
+        # Build card content
+        card_content: list[ft.Control] = [header_content, description_row]
+
+        # Expanded diff viewer
         if is_expanded and diff_lines:
             diff_viewer = DiffViewer(
                 diff_lines=diff_lines,
-                max_height=250,
+                max_height=300,
                 show_line_numbers=True,
             )
-            column_content.append(
+            card_content.append(
                 ft.Container(
                     content=diff_viewer,
-                    margin=ft.margin.only(top=8),
+                    margin=ft.margin.only(top=12),
+                    border=ft.border.all(1, ThemeColors.BORDER),
+                    border_radius=6,
+                )
+            )
+
+        # Error state
+        if row.has_error:
+            card_content.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.WARNING_AMBER, size=14, color=ApplyViewColors.ACTION_REWRITE),
+                            ft.Text(
+                                row.error_message or "Unknown error",
+                                size=12,
+                                color=ApplyViewColors.ACTION_REWRITE,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                    margin=ft.margin.only(top=10),
                 )
             )
 
         return ft.Container(
             content=ft.Column(
-                controls=column_content,
+                controls=card_content,
                 spacing=0,
             ),
-            padding=12,
-            bgcolor=row_bg,
-            border=ft.border.all(1, ThemeColors.BORDER),
-            border_radius=6,
-            margin=ft.margin.only(bottom=8),
+            padding=16,
+            bgcolor=ApplyViewColors.BG_CARD if not row.has_error else ApplyViewColors.ERROR_BG,
+            border=ft.border.all(1, ThemeColors.BORDER if not row.has_error else ApplyViewColors.ERROR_BORDER),
+            border_radius=10,
+        )
+
+    def _create_result_card(self, result: ActionResult, preview_row: Optional[PreviewRow] = None) -> ft.Container:
+        """Create result card showing success/failure with details"""
+        
+        badge_color, badge_bg = self._get_action_colors(result.action)
+        
+        if result.success:
+            status_icon = ft.Icon(ft.Icons.CHECK_CIRCLE, size=22, color=ApplyViewColors.SUCCESS_TEXT)
+            card_bg = ApplyViewColors.SUCCESS_BG
+            card_border = ApplyViewColors.SUCCESS_BORDER
+            message_color = ApplyViewColors.SUCCESS_TEXT
+        else:
+            status_icon = ft.Icon(ft.Icons.CANCEL, size=22, color=ApplyViewColors.ERROR_TEXT)
+            card_bg = ApplyViewColors.ERROR_BG
+            card_border = ApplyViewColors.ERROR_BORDER
+            message_color = ApplyViewColors.ERROR_TEXT
+
+        # Main content
+        card_content: list[ft.Control] = [
+            ft.Row(
+                [
+                    status_icon,
+                    # Action badge
+                    ft.Container(
+                        content=ft.Text(
+                            result.action.upper(),
+                            size=11,
+                            weight=ft.FontWeight.W_700,
+                            color=badge_color,
+                        ),
+                        bgcolor=badge_bg,
+                        padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                        border_radius=6,
+                    ),
+                    # File path
+                    ft.Text(
+                        result.path,
+                        size=13,
+                        weight=ft.FontWeight.W_500,
+                        color=ApplyViewColors.TEXT_PRIMARY,
+                        expand=True,
+                    ),
+                    # Diff stats if available
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Text(f"+{preview_row.changes.added}", size=12, color=ApplyViewColors.DIFF_ADD, weight=ft.FontWeight.W_600),
+                                ft.Text("/", size=12, color=ApplyViewColors.TEXT_MUTED),
+                                ft.Text(f"-{preview_row.changes.removed}", size=12, color=ApplyViewColors.DIFF_REMOVE, weight=ft.FontWeight.W_600),
+                            ],
+                            spacing=4,
+                        ),
+                        bgcolor=ApplyViewColors.BG_EXPANDED,
+                        padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                        border_radius=6,
+                    ) if preview_row else ft.Container(),
+                ],
+                spacing=12,
+            ),
+        ]
+
+        # Description from preview
+        if preview_row and preview_row.description:
+            card_content.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=ApplyViewColors.TEXT_MUTED),
+                            ft.Text(
+                                preview_row.description,
+                                size=12,
+                                color=ApplyViewColors.TEXT_DESCRIPTION,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                    margin=ft.margin.only(top=10),
+                )
+            )
+
+        # Result message
+        card_content.append(
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.ARROW_RIGHT if result.success else ft.Icons.ERROR_OUTLINE, 
+                            size=14, 
+                            color=message_color
+                        ),
+                        ft.Text(
+                            result.message,
+                            size=12,
+                            color=message_color,
+                            expand=True,
+                        ),
+                    ],
+                    spacing=8,
+                ),
+                margin=ft.margin.only(top=8),
+            )
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=card_content,
+                spacing=0,
+            ),
+            padding=16,
+            bgcolor=card_bg,
+            border=ft.border.all(1, card_border),
+            border_radius=10,
         )
 
     def _toggle_diff_expand(self, row_idx: int):
-        """
-        Toggle expand/collapse cua diff viewer cho row.
-
-        Args:
-            row_idx: Index cua row
-        """
+        """Toggle expand/collapse of diff viewer"""
         if row_idx in self.expanded_diffs:
             self.expanded_diffs.discard(row_idx)
         else:
             self.expanded_diffs.add(row_idx)
-
-        # Re-render preview
         self._preview_changes()
 
     def _clear_results(self):
-        """Clear tất cả results và reset input"""
+        """Clear all results and reset input"""
         assert self.results_column is not None
         assert self.opx_input is not None
 
         self.results_column.controls.clear()
-        self.results_column.controls.append(
-            ft.Text(
-                "Results will appear here after Preview or Apply",
-                color=ThemeColors.TEXT_MUTED,
-                italic=True,
-                size=14,
-            )
-        )
+        self.results_column.controls.append(self._create_empty_state())
 
         self.opx_input.value = ""
         self.expanded_diffs.clear()
@@ -773,7 +876,7 @@ class ApplyView:
         safe_page_update(self.page)
 
     def _paste_from_clipboard(self):
-        """Paste OPX content từ clipboard vào input field"""
+        """Paste OPX content from clipboard"""
         success, result = get_clipboard_text()
 
         if success and result:
@@ -785,10 +888,7 @@ class ApplyView:
             self._show_status(result or "Clipboard is empty", is_error=True)
 
     def _update_workspace_indicator(self):
-        """
-        Update workspace indicator to reflect current workspace.
-        Call this before preview/apply to ensure correct workspace is shown.
-        """
+        """Update workspace indicator"""
         if self.workspace_indicator is None:
             return
 
@@ -797,19 +897,30 @@ class ApplyView:
             current_workspace.name if current_workspace else "No workspace selected"
         )
 
-        self.workspace_indicator.value = f"📁 {workspace_name}"
-        self.workspace_indicator.color = (
-            ThemeColors.PRIMARY if current_workspace else ThemeColors.TEXT_MUTED
-        )
+        # Update the container content
+        if isinstance(self.workspace_indicator.content, ft.Row):
+            row = self.workspace_indicator.content
+            if row.controls and len(row.controls) >= 2:
+                # Update icon
+                icon = row.controls[0]
+                if isinstance(icon, ft.Icon):
+                    icon.name = ft.Icons.FOLDER_OPEN if current_workspace else ft.Icons.FOLDER_OFF
+                    icon.color = ApplyViewColors.ACTION_MODIFY if current_workspace else ApplyViewColors.TEXT_MUTED
+                # Update text
+                text = row.controls[1]
+                if isinstance(text, ft.Text):
+                    text.value = workspace_name
+                    text.color = ApplyViewColors.TEXT_SECONDARY if current_workspace else ApplyViewColors.TEXT_MUTED
+
         self.workspace_indicator.tooltip = (
             str(current_workspace) if current_workspace else "Please select a workspace"
         )
 
     def _show_status(self, message: str, is_error: bool = False):
-        """Hien thi status message"""
+        """Show status message"""
         assert self.status_text is not None
         self.status_text.value = message
-        self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
+        self.status_text.color = ApplyViewColors.ERROR_TEXT if is_error else ApplyViewColors.SUCCESS_TEXT
         safe_page_update(self.page)
 
     def _show_backups_dialog(self):
@@ -827,15 +938,11 @@ class ApplyView:
             safe_page_update(self.page)
 
         def restore_selected(backup_path: Path):
-            # Extract original filename from backup name (format: filename.timestamp.bak)
             parts = backup_path.name.rsplit(".", 2)
             if len(parts) >= 3:
                 original_name = parts[0]
-                # Ask user for restore location
                 workspace = self.get_workspace()
                 if workspace:
-                    # Simple restore to workspace root for now
-                    # In future, could add file picker
                     target = workspace / original_name
                     if restore_backup(backup_path, target):
                         self._show_status(f"Restored: {original_name}")
@@ -845,7 +952,7 @@ class ApplyView:
             safe_page_update(self.page)
 
         def rollback_last_batch(e):
-            """Restore files from the most recent backup batch (within 60s window)"""
+            """Restore files from the most recent backup batch"""
             workspace = self.get_workspace()
             if not workspace:
                 self._show_status("No workspace selected", is_error=True)
@@ -856,7 +963,6 @@ class ApplyView:
 
             from datetime import datetime
 
-            # Helper checks timestamp
             def get_time(backup_path):
                 parts = backup_path.name.rsplit(".", 2)
                 if len(parts) >= 3:
@@ -866,33 +972,29 @@ class ApplyView:
                         pass
                 return None
 
-            # Sort backups by time desc
             backup_data = []
             for b in backups:
                 t = get_time(b)
                 if t:
                     backup_data.append((b, t))
 
-            # list_backups usually sorted, but ensure desc
             backup_data.sort(key=lambda x: x[1], reverse=True)
 
             if not backup_data:
                 self._show_status("No valid backups found", is_error=True)
                 return
 
-            # Identify latest batch (cluster of backups within 60s of the newest one)
             latest_time = backup_data[0][1]
             batch_backups = []
-            BATCH_THRESHOLD = 60.0  # seconds
+            BATCH_THRESHOLD = 60.0
 
             for b, t in backup_data:
                 delta = (latest_time - t).total_seconds()
                 if delta <= BATCH_THRESHOLD:
                     batch_backups.append(b)
                 else:
-                    break  # Gap detected, end of batch
+                    break
 
-            # Restore batch
             restored_files = set()
             count = 0
             for backup in batch_backups:
@@ -905,22 +1007,19 @@ class ApplyView:
                         count += 1
                     restored_files.add(original_name)
 
-            self._show_status(f"Undid changes for {count} files (Last Batch)")
+            self._show_status(f"Undid changes for {count} files")
             dialog.open = False
             safe_page_update(self.page)
 
         # Build backup list
         backup_items = []
-        for backup in backups[:20]:  # Show max 20
-            # Parse timestamp from name
+        for backup in backups[:20]:
             parts = backup.name.rsplit(".", 2)
             if len(parts) >= 3:
                 file_name = parts[0]
                 timestamp = parts[1]
-                # Format timestamp for display
                 try:
                     from datetime import datetime
-
                     dt = datetime.strptime(timestamp, "%Y%m%d_%H%M%S")
                     time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
                 except ValueError:
@@ -928,35 +1027,40 @@ class ApplyView:
 
                 backup_items.append(
                     ft.ListTile(
-                        leading=ft.Icon(ft.Icons.RESTORE, color=ThemeColors.PRIMARY),
-                        title=ft.Text(file_name, size=13),
-                        subtitle=ft.Text(
-                            time_str, size=11, color=ThemeColors.TEXT_MUTED
-                        ),
+                        leading=ft.Icon(ft.Icons.RESTORE, color=ApplyViewColors.ACTION_MODIFY),
+                        title=ft.Text(file_name, size=13, color=ApplyViewColors.TEXT_PRIMARY),
+                        subtitle=ft.Text(time_str, size=11, color=ApplyViewColors.TEXT_MUTED),
                         on_click=(lambda b: lambda e: restore_selected(b))(backup),
                     )
                 )
 
         dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Backup Files", weight=ft.FontWeight.W_600),
+            title=ft.Text("Backup Files", weight=ft.FontWeight.W_600, color=ApplyViewColors.TEXT_PRIMARY),
             content=ft.Container(
                 content=ft.Column(
                     controls=backup_items,
                     scroll=ft.ScrollMode.AUTO,
                     spacing=0,
                 ),
-                width=400,
-                height=300,
+                width=450,
+                height=350,
+                bgcolor=ApplyViewColors.BG_EXPANDED,
+                border_radius=8,
             ),
+            bgcolor=ApplyViewColors.BG_CARD,
             actions=[
                 ft.TextButton(
                     "Undo Last Apply",
                     on_click=rollback_last_batch,
-                    style=ft.ButtonStyle(color=ThemeColors.ERROR),
-                    tooltip="Revert all files from the most recent patch apply",
+                    style=ft.ButtonStyle(color=ApplyViewColors.ACTION_DELETE),
+                    tooltip="Revert all files from the most recent apply",
                 ),
-                ft.TextButton("Close", on_click=close_dialog),
+                ft.TextButton(
+                    "Close", 
+                    on_click=close_dialog,
+                    style=ft.ButtonStyle(color=ApplyViewColors.TEXT_MUTED),
+                ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -966,18 +1070,12 @@ class ApplyView:
         safe_page_update(self.page)
 
     def _copy_error_for_ai(self):
-        """
-        Copy error context for AI de fix.
-        Bao gom context day du: errors, search patterns, instructions.
-        """
+        """Copy error context for AI to fix"""
         try:
-            # Get workspace path for file content reading
             workspace = self.get_workspace()
             workspace_path = str(workspace) if workspace else None
             
-            # Build error context
             if self.last_preview_data and self.last_apply_results:
-                # Full context from apply results with file content
                 context = build_error_context_for_ai(
                     preview_data=self.last_preview_data,
                     row_results=self.last_apply_results,
@@ -987,7 +1085,6 @@ class ApplyView:
                     include_file_content=True,
                 )
             else:
-                # Fallback for parse errors or other errors
                 error_msg = (
                     self.status_text.value if self.status_text else "Unknown error"
                 )
@@ -997,13 +1094,10 @@ class ApplyView:
                     additional_context=f"Original OPX:\\n```xml\\n{self.last_opx_text}\\n```",
                 )
 
-            # Copy to clipboard with fallback handling
             success, message = copy_to_clipboard(context)
 
             if success:
-                self._show_status(
-                    "Error context copied! Paste to AI for fix.", is_error=False
-                )
+                self._show_status("Error context copied! Paste to AI for fix.")
             else:
                 self._show_status(f"Failed to copy: {message}", is_error=True)
 
@@ -1011,7 +1105,7 @@ class ApplyView:
             self._show_status(f"Failed to copy: {e}", is_error=True)
 
     def _copy_all_results(self):
-        """Copy TOAN BO results (success + failure) cho debugging"""
+        """Copy all results for AI debugging"""
         try:
             results = self.last_apply_results or []
             opx_text = self.last_opx_text or (
@@ -1022,7 +1116,6 @@ class ApplyView:
                 self._show_status("No results to copy", is_error=True)
                 return
 
-            # Calculate stats
             total = len(results)
             success = [r for r in results if r.success]
             failed = [r for r in results if not r.success]
@@ -1030,20 +1123,13 @@ class ApplyView:
             bad_count = len(failed)
             workspace = self.get_workspace()
 
-            # Build conversational context
             lines = []
-
-            # Intro - conversational, first-person
             lines.append(
                 "I just applied changes from OPX to the project with the following results:"
             )
             lines.append("")
-
-            # Workspace context
             lines.append(f"**Workspace**: `{workspace or 'Not set'}`")
             lines.append("")
-
-            # OPX structure explanation (prevent AI hallucination)
             lines.append("**About OPX:**")
             lines.append(
                 "OPX is an XML format for defining file operations. Structure:"
@@ -1057,47 +1143,38 @@ class ApplyView:
             lines.append("- `<replace>`: Replacement content")
             lines.append("- `<content>`: Full content (for create/rewrite)")
             lines.append("")
-
-            # OPX content
             lines.append("**Applied OPX:**")
             lines.append("```xml")
             lines.append(opx_text if opx_text else "(empty)")
             lines.append("```")
             lines.append("")
-
-            # Results summary - natural language
             lines.append("**Results:**")
             lines.append(f"- Total: {total} operations")
             lines.append(f"- Successful: {ok_count} files")
             lines.append(f"- Failed: {bad_count} files")
             lines.append("")
 
-            # Success details
             if success:
                 lines.append("**Success details:**")
                 for idx, r in enumerate(success, 1):
                     lines.append(f"{idx}. {r.action} `{r.path}` - {r.message}")
                 lines.append("")
 
-            # Failure details
             if failed:
                 lines.append("**Failure details:**")
                 for idx, r in enumerate(failed, 1):
                     lines.append(f"{idx}. {r.action} `{r.path}` - ERROR: {r.message}")
                 lines.append("")
 
-            # Outro - Option 2: Confirmation request
             lines.append("---")
             lines.append("")
             lines.append("Please confirm you've received this context.")
 
-            # Copy to clipboard
             full_context = "\n".join(lines)
             copy_to_clipboard(full_context)
 
             self._show_status(
-                f"Copied {total} operations ({ok_count} OK, {bad_count} failed)",
-                is_error=False,
+                f"Copied {total} operations ({ok_count} OK, {bad_count} failed)"
             )
         except Exception as e:
             self._show_status(f"Copy failed: {e}", is_error=True)

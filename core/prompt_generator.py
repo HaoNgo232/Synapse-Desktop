@@ -486,7 +486,9 @@ def generate_file_contents_plain(
 
 
 def generate_smart_context(
-    selected_paths: set[str], max_file_size: int = 1024 * 1024
+    selected_paths: set[str], 
+    max_file_size: int = 1024 * 1024,
+    include_relationships: bool = False
 ) -> str:
     """
     Tao Smart Context string - chi chua code structure (signatures, docstrings).
@@ -498,6 +500,7 @@ def generate_smart_context(
     Args:
         selected_paths: Set cac duong dan file duoc tick
         max_file_size: Maximum file size to include (default 1MB)
+        include_relationships: Nếu True, append relationships section (CodeMaps)
 
     Returns:
         Smart context string voi code signatures
@@ -547,8 +550,10 @@ def generate_smart_context(
                 )
                 continue
 
-            # Try Smart Parse
-            smart_content = smart_parse(path_str, raw_content)
+            # Try Smart Parse với relationships nếu enabled
+            smart_content = smart_parse(
+                path_str, raw_content, include_relationships=include_relationships
+            )
 
             if smart_content:
                 file_data.append((path, smart_content, None))

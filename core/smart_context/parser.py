@@ -18,7 +18,7 @@ from core.smart_context.loader import get_language, get_query
 CHUNK_SEPARATOR = "⋮----"
 
 
-def smart_parse(file_path: str, content: str) -> Optional[str]:
+def smart_parse(file_path: str, content: str, include_relationships: bool = False) -> Optional[str]:
     """
     Parse file content và trích xuất cấu trúc code (Smart Context).
 
@@ -26,16 +26,19 @@ def smart_parse(file_path: str, content: str) -> Optional[str]:
     1. Try query-based parsing first (better quality, from Repomix)
     2. Fallback to node-type based parsing if query fails
     3. Fallback to None if both fail
+    4. Optionally append relationships section (CodeMaps)
 
     Args:
         file_path: Đường dẫn file (để xác định ngôn ngữ)
         content: Nội dung raw của file
+        include_relationships: Nếu True, append relationships section (default: False)
 
     Returns:
-        String chứa các code chunks (signatures, docstrings) hoặc None nếu không hỗ trợ
+        String chứa các code chunks (signatures, docstrings) và relationships (nếu enabled)
+        hoặc None nếu không hỗ trợ
 
     BACKWARD COMPATIBILITY:
-    - API signature không đổi
+    - API signature không đổi (include_relationships default=False)
     - Nếu query-based fails → fallback to old node-type logic
     """
     # Lấy file extension
@@ -63,6 +66,13 @@ def smart_parse(file_path: str, content: str) -> Optional[str]:
             try:
                 result = _parse_with_query(language, tree, content, query_string, ext)
                 if result:
+                    # Append relationships section nếu enabled (reuse tree)
+                    if include_relationships:
+                        relationships_section = _build_relationships_section(
+                            file_path, content, tree=tree, language=language
+                        )
+                        if relationships_section:
+                            result += f"\n\n{relationships_section}"
                     return result
             except Exception:
                 # Query parsing failed, fallback below
@@ -76,10 +86,85 @@ def smart_parse(file_path: str, content: str) -> Optional[str]:
             return None
 
         # Nối các chunks với separator
-        return f"\n{CHUNK_SEPARATOR}\n".join(chunks)
+        result = f"\n{CHUNK_SEPARATOR}\n".join(chunks)
+        
+        # Append relationships section nếu enabled (reuse tree)
+        if include_relationships:
+            relationships_section = _build_relationships_section(
+                file_path, content, tree=tree, language=language
+            )
+            if relationships_section:
+                result += f"\n\n{relationships_section}"
+        
+        return result
 
     except Exception:
         # Nếu có lỗi parse, trả về None
+        return None
+
+
+def _build_relationships_section(
+    file_path: str, content: str, tree=None, language=None
+) -> Optional[str]:
+    """
+    Build relationships section cho Smart Context output.
+    
+    Extract và format relationships (function calls, class inheritance)
+    thành markdown section.
+    
+    Args:
+        file_path: Đường dẫn file
+        content: Nội dung file
+        tree: Pre-parsed AST tree (optional, để reuse - PERFORMANCE)
+        language: Pre-loaded language (optional)
+    
+    Returns:
+        Formatted relationships section hoặc None nếu không có relationships
+    
+    OPTIMIZATION: Truyền tree để tránh double parsing (~50% faster)
+    """
+    try:
+        from core.codemaps.relationship_extractor import extract_relationships
+        from core.codemaps.types import RelationshipKind
+        
+        # Extract relationships (reuse tree nếu có)
+        relationships = extract_relationships(
+            file_path, content, tree=tree, language=language
+        )
+        
+        if not relationships:
+            return None
+        
+        # Group by kind
+        calls = [r for r in relationships if r.kind == RelationshipKind.CALLS]
+        inherits = [r for r in relationships if r.kind == RelationshipKind.INHERITS]
+        imports = [r for r in relationships if r.kind == RelationshipKind.IMPORTS]
+        
+        # Build section
+        lines = ["## Relationships"]
+        
+        if calls:
+            lines.append("\n### Function Calls")
+            for rel in calls[:20]:  # Limit to 20 để tránh quá dài
+                lines.append(f"- `{rel.source}` calls `{rel.target}` (line {rel.source_line})")
+        
+        if inherits:
+            lines.append("\n### Class Inheritance")
+            for rel in inherits:
+                lines.append(f"- `{rel.source}` inherits from `{rel.target}` (line {rel.source_line})")
+        
+        if imports:
+            lines.append("\n### Imports")
+            for rel in imports[:15]:  # Limit to 15
+                lines.append(f"- Imports `{rel.target}` (line {rel.source_line})")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        # Debug: log exception để biết tại sao relationships không được append
+        import traceback
+        print(f"[DEBUG] _build_relationships_section failed: {e}")
+        traceback.print_exc()
         return None
 
 

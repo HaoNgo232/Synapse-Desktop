@@ -1701,7 +1701,6 @@ class ContextView:
             spacing=0,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
-
     def _on_format_changed(self, e):
         """
         Handle khi user đổi output format.
@@ -1989,7 +1988,7 @@ class ContextView:
         """
         Copy Smart Context to clipboard.
         Dùng Tree-sitter để trích xuất code structure (signatures, docstrings).
-        Không fallback sang raw content khi không hỗ trợ.
+        Luôn bao gồm relationships (function calls, class inheritance) từ CodeMaps.
         """
         if not self.tree or not self.file_tree_component:
             self._show_status("No files selected", is_error=True)
@@ -2009,8 +2008,11 @@ class ContextView:
                 )
                 safe_page_update(self.page)
 
-            # Generate smart context
-            smart_contents = generate_smart_context(selected_paths)
+            # Generate smart context với relationships (CodeMaps - always ON)
+            smart_contents = generate_smart_context(
+                selected_paths, 
+                include_relationships=True  # Always include relationships for Smart Copy
+            )
             file_map = generate_file_map(self.tree, selected_paths)
 
             assert self.instructions_field is not None

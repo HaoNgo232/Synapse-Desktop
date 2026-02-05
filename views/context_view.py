@@ -1509,10 +1509,49 @@ class ContextView:
                 self._select_all_recursive(child)
 
     def _refresh_tree(self):
-        """Refresh tree - giu lai selection hien tai"""
+        """
+        Refresh tree - Reset selection và re-render hoàn toàn.
+        
+        Khi user nhấn nút Refresh, tree sẽ được load lại từ đầu với:
+        - Selection được reset (không preserve)
+        - Tất cả caches được clear
+        - Tree component được reset hoàn toàn
+        """
         workspace = self.get_workspace()
-        if workspace:
-            self._load_tree(workspace, preserve_selection=True)
+        if not workspace:
+            return
+        
+        from core.logging_config import log_info
+        from core.utils.file_scanner import stop_scanning
+        from services.token_display import stop_token_counting
+        
+        log_info(f"[ContextView] Refreshing tree (hard reset): {workspace}")
+        
+        # Stop tất cả operations đang chạy
+        stop_scanning()
+        stop_token_counting()
+        
+        # Cancel pending timers
+        if self._token_update_timer is not None:
+            try:
+                self._token_update_timer.cancel()
+            except Exception:
+                pass
+            self._token_update_timer = None
+        
+        if self._selection_update_timer is not None:
+            try:
+                self._selection_update_timer.dispose()
+            except Exception:
+                pass
+            self._selection_update_timer = None
+        
+        # Reset tree component để clear state
+        if self.file_tree_component:
+            self.file_tree_component.reset_for_new_tree()
+        
+        # Load tree với preserve_selection=False để reset selection
+        self._load_tree(workspace, preserve_selection=False)
 
     def _on_file_modified(self, path: str):
         """

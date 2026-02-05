@@ -85,12 +85,13 @@ class TokenDisplayService:
     SMALL_FILE_THRESHOLD = 10000  # bytes - count immediately
     LARGE_FILE_THRESHOLD = 100000  # bytes - defer to background
 
-    def __init__(self, on_update: Optional[Callable[[], None]] = None):
+    def __init__(self, on_update: Optional[Callable[[], None]] = None, page=None):
         """
         Args:
             on_update: Callback khi token cache được update (để refresh UI)
         """
         self.on_update = on_update
+        self._page = page
 
         # Cache: path -> token count
         self._cache: Dict[str, int] = {}

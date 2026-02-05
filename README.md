@@ -1,24 +1,77 @@
 # Synapse Desktop
+### The "White-Box" Context Engine for AI-Native Developers
 
-> Extract codebase context for LLMs and apply changes
+> **"The Manual Transmission for AI Coding."**
+>
+> Synapse Desktop is a standalone sidecar tool designed to bridge your local codebase with powerful Web LLMs (ChatGPT, Claude, Gemini, DeepSeek). It gives you **deterministic control** over context and enables zero-cost API coding workflows.
 
-**Workflow:**
-> Select Files/Folders → Generate optimized prompt → Send to LLM → Receive Review/Patch → Preview Diff → Apply → Backup/Undo (optional)
+---
+
+## Why use this in the era of IDE Agents?
+
+Modern IDE Agents are amazing "Automatic Transmissions"—fast and convenient. However, they rely on RAG (Vector Search) which is probabilistic, and they consume API credits per token.
+
+**Synapse is built for the scenarios where IDE Agents fall short:**
+
+### 1. The "Flat Rate" Economy
+*   **The Problem:** Using IDE Agents with powerful models burns API credits quickly. A heavy refactoring session can cost $5-$10/day.
+*   **The Synapse Solution:** Leverage the **Web Subscription** you already paid for. Synapse formats your code perfectly for the Web UI, allowing you to code heavily at **Zero Marginal Cost**.
+
+### 2. Deterministic Context (vs. RAG Luck)
+*   **The Problem:** IDE Agents use RAG to find files. Sometimes RAG misses a crucial config file because of low keyword similarity, leading the AI to hallucinate variables.
+*   **The Synapse Solution:** You build the context **deterministically** using **Dependency Graphs** (Tree-sitter) and manual selection. You know *exactly* 100% of what the AI sees. No hidden system prompts, no missing files.
+
+### 3. Macro-Architecture Analysis
+*   **The Problem:** Dumping 50 full files into a chat window exceeds context limits or confuses the model.
+*   **The Synapse Solution:** **"Smart Copy"** mode uses Tree-sitter to strip function bodies, keeping only signatures and docstrings. You can feed **your entire project structure (100+ files)** into a single prompt to ask high-level architectural questions.
+
+---
+
+## Feature Comparison
+
+| Feature | IDE Agents | Synapse Desktop |
+| :--- | :--- | :--- |
+| **Primary Interface** | Chat inside IDE | **Any** Web UI (ChatGPT/Claude/Gemini) |
+| **Cost Model** | Subscription + API Credits (Pay-per-token) | **Flat Rate** (Uses your Web Subs) |
+| **Context Discovery** | **Auto (RAG)** - Probabilistic | **Manual + Graph** - Deterministic |
+| **Refactoring Scale** | Micro/Medium (File implementation) | **Macro** (Architecture/Planning) |
+| **Transparency** | Black Box (Hidden context) | **White Box** (Visual Diff, Secret Scan) |
+
+---
 
 ## Quick Start
 
 ```bash
+# Clone repository
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
 
+# Setup environment
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 
+# Install dependencies & Run
 pip install -r requirements.txt
 python main.py
 ```
 
-**Requirements:** Python 3.10+
+**Requirements:** Python 3.10+ (Dependencies include `flet`, `tree-sitter`, `detect-secrets`).
+
+---
+
+## Workflow: The "Sidecar" Approach
+
+Synapse runs alongside your editor (VS Code, Neovim, IntelliJ).
+
+1.  **Curate:** Select files manually or use **"Select Related"** (Dependency Graph) to auto-select imports.
+2.  **Optimize:**
+    *   *Coding?* Use **Standard Context** (Full code).
+    *   *Architecture?* Use **Smart Context** (Signatures only, saves ~70% tokens).
+    *   *Review?* Use **Diff Only** (Git changes).
+3.  **Prompt:** Click `Copy`. Synapse wraps code in XML tags optimized for LLMs.
+4.  **Chat:** Paste into **ChatGPT / Claude / DeepSeek** web interface.
+5.  **Apply:** Copy the XML response -> Paste into Synapse -> **Review Diff** -> **Apply**.
 
 ---
 
@@ -43,41 +96,22 @@ python main.py
 | **Secret Scan** | Detect secrets before copying |
 | **Apply OPX** | Preview diff, apply patch, backup, undo |
 
----
+### Smart Context (Tree-sitter Powered)
+Uses language-specific parsers to extract only the "skeleton" of your code.
+*   **Benefit:** Fits massive codebases into limited context windows.
 
-## Use Case
+### Dependency Resolver
+Don't know which files are related?
+*   Click **"Select Related"** to automatically find and select files imported by your current selection (supports Python/JS/TS imports).
 
-Synapse generates structured text output, so you can copy context to **any AI chat interface** - ChatGPT, Claude, Gemini, local LLMs, or any future AI.
+### Security & Safety
+*   **Secret Scanning:** Integrated `detect-secrets` scans your prompt before copying. Warns you if you are about to paste API Keys or Private Keys to the web.
+*   **Visual Diff:** See exactly what lines will change (Green/Red) before applying AI code.
+*   **Auto-Backup:** Every apply operation creates a backup. One-click Undo available.
 
-**When to use:**
-- **Codebase review** - Export entire repo for AI to review architecture, find bugs, suggest improvements
-- **Security audit** - Quick scan for vulnerabilities by feeding code to AI
-- Multi-file refactoring with precise context control
-- Comparing responses from different LLMs
-- Complex changes needing diff preview
-
----
-
-## Usage
-
-### Send Context to LLM
-
-```
-1. Open folder
-2. Select files (or use "Select Related" for imports)
-3. Enter instructions
-4. Click "Copy Context" or "Copy + OPX"
-5. Paste to any AI chat
-```
-
-### Apply LLM Response
-
-```
-1. LLM responds with OPX block
-2. Go to Apply tab
-3. Paste → Preview → Apply
-4. If wrong: View Backups → Undo
-```
+### OPX Protocol (Overwrite Patch XML)
+Forces LLMs to output structured XML (`<edit>`, `<find>`, `<replace>`).
+*   **Fuzzy Matching:** If the LLM hallucinates indentation or misses a comma in the `<find>` block, Synapse's fuzzy search (`rapidfuzz`) can still locate the correct code block to patch.
 
 ---
 
@@ -137,11 +171,13 @@ pip install pyinstaller
 
 ---
 
-## Acknowledgements
+## Acknowledgements & Inspirations
 
-- Workflow inspired by **Overwrite** (VS Code extension)
-- Concurrency from **Pastemax**
-- Security patterns from **Repomix**
+This project combines workflow patterns, security practices, and performance optimizations from:
+
+*   **[Overwrite](https://github.com/mnismt/overwrite)** by [@mnismt](https://github.com/mnismt)
+*   **[Repomix](https://github.com/yamadashy/repomix)** by [@yamadashy](https://github.com/yamadashy)
+*   **[PasteMax](https://github.com/kleneway/pastemax)** by [@kleneway](https://github.com/kleneway)
 
 ---
 

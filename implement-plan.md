@@ -98,7 +98,6 @@ def _create_file_tree_component(self, total_items: int):
 ### 2.1 ⭐ Select Related Files (Dependency Graph) ✅ DONE
 
 **Status:** Implemented on 2026-02-04
-
 **Implementation:**
 - **File:** `core/dependency_resolver.py` - DependencyResolver class
 - **UI:** Button "Select Related" trong toolbar của ContextView
@@ -541,4 +540,13 @@ Future:
 
 ---
 
-_Last updated: 2026-02-03_
+## 🛠️ Log Bảo Trì (Maintenance Log)
+
+### 2026-02-05: Fix Flet Compatibility
+- **Vấn đề:** Lỗi `AttributeError: module 'flet' has no attribute 'run'` khi khởi chạy ứng dụng.
+- **Nguyên nhân:** Có sự chồng chéo giữa core `flet` (v0.28.1) và `flet-desktop-light` (v0.80.5). API chuẩn hiện tại cho core Flet là `ft.app()`.
+- **Giải pháp:** Cập nhật `main.py` từ `ft.run(main)` sang `ft.app(target=main)`.
+- **Trạng thái:** ✅ Đã hoàn thành.
+
+---
+_Last updated: 2026-02-05_

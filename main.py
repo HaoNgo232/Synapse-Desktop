@@ -649,4 +649,5 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    # Su dung ft.app thay vi ft.run cho cac version Flet moi (0.28.1+)
+    ft.app(target=main)

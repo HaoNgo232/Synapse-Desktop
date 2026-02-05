@@ -92,6 +92,10 @@ class ApplyView:
         
         # State for diff expansion
         self.expanded_diffs: set = set()
+        
+        # Cached data for fast re-render
+        self._cached_preview_rows: List[PreviewRow] = []
+        self._cached_file_actions: List = []
 
     def build(self) -> ft.Container:
         """Build UI cho Apply view với improved styling"""
@@ -375,6 +379,10 @@ class ApplyView:
                 self._create_error_card("Analysis Error", error)
             )
 
+        # Cache for fast toggle
+        self._cached_preview_rows = preview_data.rows
+        self._cached_file_actions = result.file_actions
+        
         # Show preview cards
         for idx, row in enumerate(preview_data.rows):
             file_action = result.file_actions[idx] if idx < len(result.file_actions) else None
@@ -611,14 +619,17 @@ class ApplyView:
         else:
             diff_color = ApplyViewColors.DIFF_NEUTRAL
 
-        # Generate diff lines
+        # Generate diff lines only if expanded (lazy loading)
         workspace = self.get_workspace()
         diff_lines = []
-        if file_action and row.action != "rename":
+        if is_expanded and file_action and row.action != "rename":
             try:
                 diff_lines = generate_preview_diff_lines(file_action, workspace)
             except Exception:
                 pass
+        
+        # Check if diff is available (for showing expand button)
+        has_diff_available = file_action and row.action != "rename"
 
         # Header content
         header_content = ft.Row(
@@ -664,7 +675,7 @@ class ApplyView:
                     icon_color=ApplyViewColors.TEXT_SECONDARY,
                     tooltip="Show diff preview" if not is_expanded else "Hide diff preview",
                     on_click=lambda e, idx=row_idx: self._toggle_diff_expand(idx),
-                ) if diff_lines else ft.Container(width=40),
+                ) if has_diff_available else ft.Container(width=40),
             ],
             spacing=12,
             alignment=ft.MainAxisAlignment.START,
@@ -851,12 +862,33 @@ class ApplyView:
         )
 
     def _toggle_diff_expand(self, row_idx: int):
-        """Toggle expand/collapse of diff viewer"""
+        """Toggle expand/collapse of diff viewer - optimized to update only affected card"""
         if row_idx in self.expanded_diffs:
             self.expanded_diffs.discard(row_idx)
         else:
             self.expanded_diffs.add(row_idx)
-        self._preview_changes()
+        
+        # Fast path: update only the affected card if we have cached data
+        if (self._cached_preview_rows and 
+            row_idx < len(self._cached_preview_rows) and
+            self.results_column and
+            row_idx < len(self.results_column.controls)):
+            
+            row = self._cached_preview_rows[row_idx]
+            file_action = (
+                self._cached_file_actions[row_idx] 
+                if row_idx < len(self._cached_file_actions) 
+                else None
+            )
+            
+            # Replace only the specific card
+            self.results_column.controls[row_idx] = self._create_preview_card(
+                row, row_idx, file_action
+            )
+            safe_page_update(self.page)
+        else:
+            # Fallback: full re-render if cache miss
+            self._preview_changes()
 
     def _clear_results(self):
         """Clear all results and reset input"""
@@ -871,6 +903,8 @@ class ApplyView:
         self.last_preview_data = None
         self.last_apply_results = []
         self.last_opx_text = ""
+        self._cached_preview_rows = []
+        self._cached_file_actions = []
 
         self._show_status("")
         safe_page_update(self.page)

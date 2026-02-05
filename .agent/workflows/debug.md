@@ -1,57 +1,103 @@
 ---
-description: Debug issues by clarifying expectations and agreeing on fix plans
-argument-hint: <issue-description>
+description: Debugging command. Activates DEBUG mode for systematic problem investigation.
 ---
 
-# Local Debugging Assistant
+# /debug - Systematic Problem Investigation
 
-Help me debug an issue by clarifying expectations, identifying gaps, and agreeing on a fix plan before changing code.
+$ARGUMENTS
 
-## Step 1: Gather Context
+---
 
-Ask me for:
+## Purpose
 
-- Brief issue description (what is happening?)
-- Expected behavior or acceptance criteria (what should happen?)
-- Current behavior and any error messages/logs
-- Recent related changes or deployments
-- Scope of impact (users, services, environments)
+This command activates DEBUG mode for systematic investigation of issues, errors, or unexpected behavior.
 
-## Step 2: Clarify Reality vs Expectation
+---
 
-- Restate the observed behavior vs the expected outcome
-- Confirm relevant requirements, tickets, or docs that define the expectation
-- Identify acceptance criteria for the fix (how we know it is resolved)
+## Behavior
 
-## Step 3: Reproduce & Isolate
+When `/debug` is triggered:
 
-- Determine reproducibility (always, intermittent, environment-specific)
-- Capture reproduction steps or commands
-- Note any available tests that expose the failure
-- List suspected components, services, or modules
+1. **Gather information**
+   - Error message
+   - Reproduction steps
+   - Expected vs actual behavior
+   - Recent changes
 
-## Step 4: Analyze Potential Causes
+2. **Form hypotheses**
+   - List possible causes
+   - Order by likelihood
 
-- Brainstorm plausible root causes (data, config, code regressions, external dependencies)
-- Gather supporting evidence (logs, metrics, traces, screenshots)
-- Highlight gaps or unknowns that need investigation
+3. **Investigate systematically**
+   - Test each hypothesis
+   - Check logs, data flow
+   - Use elimination method
 
-## Step 5: Surface Options
+4. **Fix and prevent**
+   - Apply fix
+   - Explain root cause
+   - Add prevention measures
 
-- Present possible resolution paths (quick fix, deeper refactor, rollback, feature flag, etc.)
-- For each option, list pros/cons, risks, and verification steps
-- Consider required approvals or coordination
+---
 
-## Step 6: Confirm Path Forward
+## Output Format
 
-- Ask which option we should pursue
-- Summarize chosen approach, required pre-work, and success criteria
-- Plan validation steps (tests, monitoring, user sign-off)
+```markdown
+## 🔍 Debug: [Issue]
 
-## Step 7: Next Actions & Tracking
+### 1. Symptom
+[What's happening]
 
-- Document tasks, owners, and timelines for the selected option
-- Note follow-up actions after deployment (monitoring, comms, postmortem if needed)
-- Encourage updating relevant docs/tests once resolved
+### 2. Information Gathered
+- Error: `[error message]`
+- File: `[filepath]`
+- Line: [line number]
 
-Let me know when you're ready to walk through the debugging flow.
+### 3. Hypotheses
+1. ❓ [Most likely cause]
+2. ❓ [Second possibility]
+3. ❓ [Less likely cause]
+
+### 4. Investigation
+
+**Testing hypothesis 1:**
+[What I checked] → [Result]
+
+**Testing hypothesis 2:**
+[What I checked] → [Result]
+
+### 5. Root Cause
+🎯 **[Explanation of why this happened]**
+
+### 6. Fix
+```[language]
+// Before
+[broken code]
+
+// After
+[fixed code]
+```
+
+### 7. Prevention
+🛡️ [How to prevent this in the future]
+```
+
+---
+
+## Examples
+
+```
+/debug login not working
+/debug API returns 500
+/debug form doesn't submit
+/debug data not saving
+```
+
+---
+
+## Key Principles
+
+- **Ask before assuming** - get full error context
+- **Test hypotheses** - don't guess randomly
+- **Explain why** - not just what to fix
+- **Prevent recurrence** - add tests, validation

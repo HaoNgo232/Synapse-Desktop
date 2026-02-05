@@ -8,6 +8,8 @@ Refactored to use modular config and loader.
 """
 
 import os
+import hashlib
+from functools import lru_cache
 from typing import Optional
 from tree_sitter import Parser, Node, Language, Tree  # type: ignore
 
@@ -16,6 +18,45 @@ from core.smart_context.loader import get_language, get_query
 
 # Chunk separator giống Repomix
 CHUNK_SEPARATOR = "⋮----"
+
+# LRU Cache cho relationships (max 128 files)
+_RELATIONSHIPS_CACHE: dict[str, str] = {}
+_CACHE_MAX_SIZE = 128
+
+
+def _get_cache_key(file_path: str, content_hash: str) -> str:
+    """Tạo cache key từ file_path và content_hash."""
+    return f"{file_path}:{content_hash}"
+
+
+def _get_cached_relationships(file_path: str, content_hash: str) -> str | None:
+    """
+    Lấy cached relationships section.
+    
+    Returns:
+        Cached string nếu có, None nếu cache miss
+        "" (empty string) nếu cached result là 'no relationships'
+    """
+    key = _get_cache_key(file_path, content_hash)
+    return _RELATIONSHIPS_CACHE.get(key)
+
+
+def _cache_relationships(file_path: str, content_hash: str, result: str | None) -> None:
+    """
+    Cache relationships section.
+    
+    Args:
+        result: Relationships section string, hoặc "" nếu không có relationships
+    """
+    # Evict oldest entries nếu cache đầy
+    if len(_RELATIONSHIPS_CACHE) >= _CACHE_MAX_SIZE:
+        # Remove 25% oldest entries (simple LRU approximation)
+        keys_to_remove = list(_RELATIONSHIPS_CACHE.keys())[: _CACHE_MAX_SIZE // 4]
+        for k in keys_to_remove:
+            del _RELATIONSHIPS_CACHE[k]
+    
+    key = _get_cache_key(file_path, content_hash)
+    _RELATIONSHIPS_CACHE[key] = result if result else ""
 
 
 def smart_parse(file_path: str, content: str, include_relationships: bool = False) -> Optional[str]:
@@ -121,8 +162,18 @@ def _build_relationships_section(
     Returns:
         Formatted relationships section hoặc None nếu không có relationships
     
-    OPTIMIZATION: Truyền tree để tránh double parsing (~50% faster)
+    OPTIMIZATIONS:
+    - Truyền tree để tránh double parsing (~50% faster)
+    - LRU cache để tránh re-extract (~O(1) cho repeated calls)
     """
+    # Tính content hash cho caching
+    content_hash = hashlib.md5(content.encode()).hexdigest()[:16]
+    
+    # Check cache
+    cached = _get_cached_relationships(file_path, content_hash)
+    if cached is not None:
+        return cached if cached else None  # "" means no relationships
+    
     try:
         from core.codemaps.relationship_extractor import extract_relationships
         from core.codemaps.types import RelationshipKind
@@ -133,6 +184,7 @@ def _build_relationships_section(
         )
         
         if not relationships:
+            _cache_relationships(file_path, content_hash, "")  # Cache empty result
             return None
         
         # Group by kind
@@ -158,7 +210,9 @@ def _build_relationships_section(
             for rel in imports[:15]:  # Limit to 15
                 lines.append(f"- Imports `{rel.target}` (line {rel.source_line})")
         
-        return "\n".join(lines)
+        result = "\n".join(lines)
+        _cache_relationships(file_path, content_hash, result)  # Cache result
+        return result
         
     except Exception as e:
         # Debug: log exception để biết tại sao relationships không được append

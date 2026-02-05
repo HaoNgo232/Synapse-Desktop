@@ -496,6 +496,8 @@ def generate_smart_context(
 
     Su dung Smart Markdown Delimiter de tranh broken markdown
     khi file content chua backticks.
+    
+    OPTIMIZATION: Parallel processing khi có >5 files.
 
     Args:
         selected_paths: Set cac duong dan file duoc tick
@@ -505,64 +507,77 @@ def generate_smart_context(
     Returns:
         Smart context string voi code signatures
     """
-    # Import lazy de tranh circular import va load cham
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from core.smart_context import smart_parse, is_supported
 
     sorted_paths = sorted(selected_paths)
-
-    # Phase 1: Doc va parse tat ca files truoc
-    file_data: list[tuple[Path, str | None, str | None]] = (
-        []
-    )  # (path, smart_content, error)
-    all_contents: list[str] = []
-
-    for path_str in sorted_paths:
+    
+    def _process_single_file(path_str: str) -> tuple[Path, str | None, str | None]:
+        """
+        Process một file và return (path, smart_content, error).
+        Helper function cho parallel processing.
+        """
         path = Path(path_str)
-
+        
         try:
             if not path.is_file():
-                continue
-
+                return (path, None, "Not a file")
+            
             # Skip binary files
             if is_binary_by_extension(path):
-                file_data.append((path, None, "Binary file"))
-                continue
-
+                return (path, None, "Binary file")
+            
             # Skip files that are too large
             try:
                 file_size = path.stat().st_size
                 if file_size > max_file_size:
-                    file_data.append(
-                        (path, None, f"File too large ({file_size // 1024}KB)")
-                    )
-                    continue
+                    return (path, None, f"File too large ({file_size // 1024}KB)")
             except OSError:
                 pass
-
+            
             # Doc raw content
             raw_content = path.read_text(encoding="utf-8", errors="replace")
-
+            
             # Kiem tra ho tro Smart Context
             ext = path.suffix.lstrip(".")
             if not is_supported(ext):
-                file_data.append(
-                    (path, None, f"Smart Context not available for .{ext} files")
-                )
-                continue
-
+                return (path, None, f"Smart Context not available for .{ext} files")
+            
             # Try Smart Parse với relationships nếu enabled
             smart_content = smart_parse(
                 path_str, raw_content, include_relationships=include_relationships
             )
-
+            
             if smart_content:
-                file_data.append((path, smart_content, None))
-                all_contents.append(smart_content)
+                return (path, smart_content, None)
             else:
-                file_data.append((path, None, "Smart Context parse failed"))
-
+                return (path, None, "Smart Context parse failed")
+                
         except (OSError, IOError) as e:
-            file_data.append((path, None, f"Error reading file: {e}"))
+            return (path, None, f"Error reading file: {e}")
+    
+    # Phase 1: Process files (parallel nếu >5 files, sequential nếu ít)
+    file_data: list[tuple[Path, str | None, str | None]] = []
+    all_contents: list[str] = []
+    
+    if len(sorted_paths) > 5:
+        # PARALLEL processing với ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(8, len(sorted_paths))) as executor:
+            futures = {executor.submit(_process_single_file, p): p for p in sorted_paths}
+            for future in as_completed(futures):
+                result = future.result()
+                file_data.append(result)
+                if result[1]:  # smart_content exists
+                    all_contents.append(result[1])
+        # Sort lại theo path để maintain order
+        file_data.sort(key=lambda x: str(x[0]))
+    else:
+        # Sequential processing cho ít files
+        for path_str in sorted_paths:
+            result = _process_single_file(path_str)
+            file_data.append(result)
+            if result[1]:
+                all_contents.append(result[1])
 
     # Phase 2: Tinh Smart Markdown Delimiter
     delimiter = calculate_markdown_delimiter(all_contents)

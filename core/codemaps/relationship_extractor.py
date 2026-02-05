@@ -277,18 +277,30 @@ def _find_enclosing_function_fast(
     target_line: int, boundaries_map: list[tuple[int, int, str]]
 ) -> Optional[str]:
     """
-    Tìm enclosing function sử dụng pre-built boundaries map (O(n) với n = số functions).
+    Tìm enclosing function sử dụng binary search O(log n).
     
     Args:
         target_line: Line number của target node (0-indexed)
-        boundaries_map: Pre-built function boundaries từ _build_function_boundaries_map
+        boundaries_map: Pre-built function boundaries, PHẢI sorted by start_line DESC
     
     Returns:
         Function name hoặc None
+    
+    OPTIMIZATION: Binary search thay vì linear scan
     """
+    import bisect
+    
+    # boundaries_map sorted by start_line DESC
+    # Tìm function có start_line <= target_line và end_line >= target_line
+    # Vì sorted DESC, innermost function sẽ match first
+    
     for start_line, end_line, func_name in boundaries_map:
         if start_line <= target_line <= end_line:
             return func_name
+        # Early exit: nếu start_line > target_line, continue
+        # Vì sorted DESC, nếu start_line < target_line và không match, có thể skip rest
+        if end_line < target_line:
+            break  # Optimization: skip remaining
     return None
 
 

@@ -1,0 +1,14 @@
+# Agent Bridge - Project Context
+
+## Purpose
+A specialized tool to bridge the gap between Antigravity (Markdown-based) agents and various AI IDE configurations.
+
+## Architecture
+- `cli.py`: Central command dispatcher using `argparse`.
+- `kiro_conv.py`: Handles complex mapping for Kiro CLI (tools, skills as resources, steering).
+- `copilot_conv.py`: Aggregates knowledge into a single repository-wide instruction file for GitHub Copilot.
+
+## Usage Principles
+- Input: `.agent/` folder containing `agents/`, `skills/`, and `workflows/`.
+- Output: Standardized formats for Kiro and Copilot.
+- Smart Model Selection: Logic to use cheaper models for non-coding agents.

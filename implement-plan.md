@@ -549,4 +549,13 @@ Future:
 - **Trạng thái:** ✅ Đã hoàn thành.
 
 ---
+### 2026-02-05: Update Settings View UI
+- **Task:** Cải thiện UI Settings tab thành 2 cột, gọn gàng tương tự Apply tab.
+- **Changes:**
+  - Rewrite `SettingsView` to use a 2-column layout (Configuration vs Excluded Patterns).
+  - Add `SettingsViewColors` for consistent dark mode styling matching `ApplyView`.
+  - Group settings into logical sections (General, Context, Security, Presets, Session).
+- **Status:** ✅ Đã hoàn thành.
+
+---
 _Last updated: 2026-02-05_

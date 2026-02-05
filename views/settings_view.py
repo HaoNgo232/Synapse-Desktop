@@ -118,8 +118,28 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
     return save_settings(settings)
 
 
+class SettingsViewColors:
+    """Enhanced colors for Settings View to match Apply View style"""
+    BG_CARD = "#1E293B"  # Slate 800
+    BG_EXPANDED = "#0F172A"  # Slate 900
+    
+    TEXT_PRIMARY = "#F8FAFC"  # Slate 50
+    TEXT_SECONDARY = "#CBD5E1"  # Slate 300
+    TEXT_MUTED = "#94A3B8"  # Slate 400
+    
+    BORDER = "#334155"  # Slate 700
+    PRIMARY = "#3B82F6"  # Blue 500
+    SUCCESS = "#10B981"  # Emerald 500
+    WARNING = "#F59E0B"  # Amber 500
+    ERROR = "#EF4444"  # Red 500
+    
+    # Action colors
+    BTN_PRIMARY_BG = "#3B82F6"
+    BTN_PRIMARY_TEXT = "#FFFFFF"
+
+
 class SettingsView:
-    """View cho Settings tab"""
+    """View cho Settings tab voi improved UI (2 columns)"""
 
     def __init__(
         self, page: ft.Page, on_settings_changed: Optional[Callable[[], None]] = None
@@ -138,60 +158,60 @@ class SettingsView:
         self._initial_values: dict = {}
 
     def build(self) -> ft.Container:
-        """Build UI cho Settings view voi Swiss Professional styling"""
+        """Build UI cho Settings view voi 2 column layout"""
 
         settings = load_settings()
 
+        # --- CONTROLS SETUP ---
+
         # Excluded folders textarea
-        # Excluded folders textarea - Fix: Removed label to prevent overlap, better styling
         self.excluded_field = ft.TextField(
             multiline=True,
-            min_lines=15,
-            max_lines=15,
+            expand=True,
             value=settings.get("excluded_folders", ""),
             hint_text="node_modules\ndist\nbuild\n__pycache__",
-            border_color=ThemeColors.BORDER,
-            focused_border_color=ThemeColors.PRIMARY,
+            border_color=SettingsViewColors.BORDER,
+            focused_border_color=SettingsViewColors.PRIMARY,
             text_style=ft.TextStyle(
-                color=ThemeColors.TEXT_PRIMARY, size=13, font_family="monospace"
+                color=SettingsViewColors.TEXT_PRIMARY, size=13, font_family="monospace"
             ),
             content_padding=15,
-            cursor_color=ThemeColors.PRIMARY,
-            bgcolor=ThemeColors.BG_PAGE,
+            cursor_color=SettingsViewColors.PRIMARY,
+            bgcolor=SettingsViewColors.BG_EXPANDED,
             on_change=lambda e: self._mark_changed(),
         )
 
-        # Respect .gitignore checkbox
+        # Checkboxes style
+        checkbox_style = ft.TextStyle(color=SettingsViewColors.TEXT_PRIMARY, size=14)
+
         self.gitignore_checkbox = ft.Checkbox(
             label="Respect .gitignore",
             value=settings.get("use_gitignore", True),
-            active_color=ThemeColors.PRIMARY,
+            active_color=SettingsViewColors.PRIMARY,
             check_color="#FFFFFF",
-            label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
+            label_style=checkbox_style,
             on_change=lambda e: self._mark_changed(),
         )
 
-        # Security Check checkbox
         self.security_check_checkbox = ft.Checkbox(
             label="Enable Security Check",
             value=settings.get("enable_security_check", True),
-            active_color=ThemeColors.WARNING,
+            active_color=SettingsViewColors.WARNING,
             check_color="#FFFFFF",
-            label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
+            label_style=checkbox_style,
             on_change=lambda e: self._mark_changed(),
         )
 
-        # Git Include Checkbox
         self.git_include_checkbox = ft.Checkbox(
             label="Include Git Diff/Log",
             value=settings.get("include_git_changes", True),
-            active_color=ThemeColors.PRIMARY,
+            active_color=SettingsViewColors.PRIMARY,
             check_color="#FFFFFF",
-            label_style=ft.TextStyle(color=ThemeColors.TEXT_PRIMARY, size=14),
+            label_style=checkbox_style,
             on_change=lambda e: self._mark_changed(),
         )
 
-        # Store initial values for comparison
+        # Store initial values
         self._initial_values = {
             "excluded_folders": settings.get("excluded_folders", ""),
             "use_gitignore": settings.get("use_gitignore", True),
@@ -203,283 +223,266 @@ class SettingsView:
         # Status
         self.status_text = ft.Text("", size=12)
 
-        return ft.Container(
+        # --- LEFT COLUMN: CONFIGURATION ---
+        left_column = ft.Container(
             content=ft.Column(
                 [
                     # Header
                     ft.Row(
                         [
-                            ft.Icon(
-                                ft.Icons.SETTINGS,
-                                color=ThemeColors.TEXT_PRIMARY,
-                                size=24,
-                            ),
+                            ft.Icon(ft.Icons.TUNE, color=SettingsViewColors.PRIMARY, size=20),
                             ft.Text(
-                                "Settings",
-                                size=20,
+                                "Configuration",
+                                size=16,
                                 weight=ft.FontWeight.W_600,
-                                color=ThemeColors.TEXT_PRIMARY,
+                                color=SettingsViewColors.TEXT_PRIMARY,
                             ),
                         ],
-                        spacing=12,
+                        spacing=10,
                     ),
-                    ft.Divider(height=1, color=ThemeColors.BORDER),
-                    ft.Container(height=16),
-                    # Main content in Grid Layout
-                    ft.Container(
-                        content=ft.ResponsiveRow(
-                            [
-                                # LEFT COLUMN: Options & Controls
-                                ft.Column(
-                                    col={"sm": 12, "md": 5},
-                                    controls=[
-                                        # File Tree Options
-                                        ft.Text(
-                                            "File Tree Options",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
-                                        ),
-                                        ft.Container(height=4),
-                                        self.gitignore_checkbox,
-                                        ft.Text(
-                                            "When enabled, files matching .gitignore patterns will be hidden.",
-                                            size=12,
-                                            color=ThemeColors.TEXT_SECONDARY,
-                                        ),
-                                        ft.Container(height=24),
-                                        # Git Options
-                                        ft.Text(
-                                            "Context Generation",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
-                                        ),
-                                        ft.Container(height=4),
-                                        self.git_include_checkbox,
-                                        ft.Text(
-                                            "Include git diffs and recent logs in prompt.",
-                                            size=12,
-                                            color=ThemeColors.TEXT_SECONDARY,
-                                        ),
-                                        ft.Container(height=24),
-                                        # Security Check
-                                        ft.Text(
-                                            "Security",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
-                                        ),
-                                        ft.Container(height=4),
-                                        self.security_check_checkbox,
-                                        ft.Text(
-                                            "When enabled, scan for secrets (API Keys, etc) before copying.",
-                                            size=12,
-                                            color=ThemeColors.TEXT_SECONDARY,
-                                        ),
-                                        ft.Container(height=24),
-                                        # Presets
-                                        ft.Text(
-                                            "Quick Presets",
-                                            weight=ft.FontWeight.W_600,
-                                            size=14,
-                                            color=ThemeColors.TEXT_PRIMARY,
-                                        ),
-                                        ft.Container(height=4),
-                                        ft.Text(
-                                            "Load standard exclusion patterns:",
-                                            size=12,
-                                            color=ThemeColors.TEXT_SECONDARY,
-                                        ),
-                                        ft.Container(height=8),
-                                        ft.Dropdown(
-                                            options=[
-                                                ft.dropdown.Option(key=name, text=name)
-                                                for name in PRESET_PROFILES.keys()
-                                            ],
-                                            on_select=lambda e: self._load_preset(
-                                                e.control.value or ""
-                                            ),
-                                            hint_text="Select a preset...",
-                                            text_size=13,
-                                            border_color=ThemeColors.BORDER,
-                                            focused_border_color=ThemeColors.PRIMARY,
-                                            dense=True,
-                                            width=220,  # Compact fixed width
-                                        ),
-                                        ft.Container(height=32),
-                                        # Action Buttons Grouped
-                                        ft.ElevatedButton(
-                                            "Save Settings",
-                                            icon=ft.Icons.SAVE,
-                                            on_click=lambda _: self._save_settings(),
-                                            style=ft.ButtonStyle(
-                                                color="#FFFFFF",
-                                                bgcolor=ThemeColors.SUCCESS,
-                                                shape=ft.RoundedRectangleBorder(
-                                                    radius=6
-                                                ),
-                                            ),
-                                            width=float("inf"),  # Full width
-                                        ),
-                                        ft.Container(height=8),
-                                        ft.Row(
-                                            [
-                                                ft.OutlinedButton(
-                                                    "Reset",
-                                                    icon=ft.Icons.RESTORE,
-                                                    on_click=lambda _: self._reset_settings(),
-                                                    style=ft.ButtonStyle(
-                                                        color=ThemeColors.TEXT_PRIMARY,
-                                                        side=ft.BorderSide(
-                                                            1, ThemeColors.BORDER
-                                                        ),
-                                                    ),
-                                                    expand=True,
-                                                ),
-                                                ft.OutlinedButton(
-                                                    "Export",
-                                                    icon=ft.Icons.DOWNLOAD,
-                                                    on_click=lambda _: self._export_settings(),
-                                                    style=ft.ButtonStyle(
-                                                        color=ThemeColors.TEXT_SECONDARY,
-                                                        side=ft.BorderSide(
-                                                            1, ThemeColors.BORDER
-                                                        ),
-                                                    ),
-                                                    expand=True,
-                                                ),
-                                            ],
-                                            spacing=8,
-                                        ),
-                                        ft.OutlinedButton(
-                                            "Import Settings",
-                                            icon=ft.Icons.UPLOAD,
-                                            on_click=lambda _: self._import_settings(),
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
-                                                ),
-                                            ),
-                                            width=float("inf"),
-                                        ),
-                                        ft.Container(height=16),
-                                        self.status_text,
-                                    ],
+                    ft.Divider(color=SettingsViewColors.BORDER, height=1),
+                    ft.Container(height=10),
+                    
+                    # Scrollable Settings Group
+                    ft.Column(
+                        [
+                            # File Tree Section
+                            self._build_section_header("File Tree Options"),
+                            self.gitignore_checkbox,
+                            ft.Text(
+                                "Hide files matching .gitignore patterns",
+                                size=12,
+                                color=SettingsViewColors.TEXT_MUTED,
+                            ),
+                            ft.Container(height=16),
+
+                            # Context Section
+                            self._build_section_header("AI Context"),
+                            self.git_include_checkbox,
+                            ft.Text(
+                                "Include recent git changes in context",
+                                size=12,
+                                color=SettingsViewColors.TEXT_MUTED,
+                            ),
+                            ft.Container(height=16),
+
+                            # Security Section
+                            self._build_section_header("Security"),
+                            self.security_check_checkbox,
+                            ft.Text(
+                                "Scan for secrets before copying to clipboard",
+                                size=12,
+                                color=SettingsViewColors.TEXT_MUTED,
+                            ),
+                            ft.Container(height=16),
+
+                            # Presets Section
+                            self._build_section_header("Quick Presets"),
+                            ft.Dropdown(
+                                options=[
+                                    ft.dropdown.Option(key=name, text=name)
+                                    for name in PRESET_PROFILES.keys()
+                                ],
+                                on_select=lambda e: self._load_preset(e.control.value or ""),
+                                hint_text="Select a profile...",
+                                text_size=13,
+                                border_color=SettingsViewColors.BORDER,
+                                focused_border_color=SettingsViewColors.PRIMARY,
+                                bgcolor=SettingsViewColors.BG_EXPANDED,
+                                width=float("inf"),
+                                dense=True,
+                                height=40,
+                            ),
+                            ft.Container(height=16),
+
+                            # Session Section
+                            self._build_section_header("Session"),
+                            ft.OutlinedButton(
+                                "Clear Saved Session",
+                                icon=ft.Icons.DELETE_OUTLINE,
+                                on_click=lambda _: self._clear_session(),
+                                style=ft.ButtonStyle(
+                                    color=SettingsViewColors.TEXT_SECONDARY,
+                                    side=ft.BorderSide(1, SettingsViewColors.BORDER),
                                 ),
-                                # RIGHT COLUMN: Excluded Folders Input
-                                ft.Column(
-                                    col={"sm": 12, "md": 7},
-                                    controls=[
-                                        ft.Row(
-                                            [
-                                                ft.Text(
-                                                    "Excluded Folders",
-                                                    weight=ft.FontWeight.W_600,
-                                                    size=14,
-                                                    color=ThemeColors.TEXT_PRIMARY,
-                                                ),
-                                                ft.Container(expand=True),
-                                                ft.IconButton(
-                                                    icon=ft.Icons.REFRESH,
-                                                    icon_size=18,
-                                                    icon_color=ThemeColors.TEXT_SECONDARY,
-                                                    tooltip="Reload from file",
-                                                    on_click=lambda _: self._reload_settings(),
-                                                ),
-                                            ],
-                                        ),
-                                        ft.Text(
-                                            "One pattern per line. Lines starting with # are comments.",
-                                            size=12,
-                                            color=ThemeColors.TEXT_SECONDARY,
-                                        ),
-                                        ft.Container(height=8),
-                                        self.excluded_field,
-                                    ],
-                                ),
-                            ],
-                            spacing=40,
+                                width=float("inf"),
+                            ),
+                            ft.Text(
+                                "Resets workspace and open files state",
+                                size=11,
+                                color=SettingsViewColors.TEXT_SECONDARY,
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                            ft.Container(height=24),  # Prevent bottom clipping
+                        ],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+
+                    ft.Container(height=10),
+                    ft.Divider(color=SettingsViewColors.BORDER),
+                    ft.Container(height=10),
+
+                    # Action Buttons
+                    ft.ElevatedButton(
+                        "Save Settings",
+                        icon=ft.Icons.SAVE,
+                        on_click=lambda _: self._save_settings(),
+                        style=ft.ButtonStyle(
+                            color=SettingsViewColors.BTN_PRIMARY_TEXT,
+                            bgcolor=SettingsViewColors.BTN_PRIMARY_BG,
+                            shape=ft.RoundedRectangleBorder(radius=6),
+                            padding=16,
                         ),
-                        padding=24,
-                        bgcolor=ThemeColors.BG_SURFACE,
-                        border=ft.border.all(1, ThemeColors.BORDER),
-                        border_radius=8,
+                        width=float("inf"),
                     ),
-                    ft.Container(height=16),
-                    # Session section
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.Text(
-                                    "Session",
-                                    weight=ft.FontWeight.W_600,
-                                    size=14,
-                                    color=ThemeColors.TEXT_PRIMARY,
+                    ft.Container(height=8),
+                    ft.Row(
+                        [
+                            ft.OutlinedButton(
+                                "Reset",
+                                icon=ft.Icons.RESTORE,
+                                on_click=lambda _: self._reset_settings(),
+                                style=ft.ButtonStyle(
+                                    color=SettingsViewColors.TEXT_SECONDARY,
+                                    side=ft.BorderSide(1, SettingsViewColors.BORDER),
                                 ),
-                                ft.Container(height=8),
-                                ft.Row(
-                                    [
-                                        ft.Text(
-                                            "Your workspace and selected files are automatically saved when closing the app.",
-                                            size=12,
-                                            color=ThemeColors.TEXT_SECONDARY,
-                                            expand=True,
-                                        ),
-                                        ft.OutlinedButton(
-                                            "Clear Session",
-                                            icon=ft.Icons.DELETE_OUTLINE,
-                                            on_click=lambda _: self._clear_session(),
-                                            tooltip="Clear saved workspace and selections",
-                                            style=ft.ButtonStyle(
-                                                color=ThemeColors.TEXT_SECONDARY,
-                                                side=ft.BorderSide(
-                                                    1, ThemeColors.BORDER
-                                                ),
-                                            ),
-                                        ),
-                                    ],
-                                    spacing=12,
+                                expand=True,
+                            ),
+                            ft.OutlinedButton(
+                                "Share",
+                                icon=ft.Icons.SHARE,
+                                on_click=lambda _: self._show_share_menu(),
+                                style=ft.ButtonStyle(
+                                    color=SettingsViewColors.TEXT_SECONDARY,
+                                    side=ft.BorderSide(1, SettingsViewColors.BORDER),
                                 ),
-                            ]
-                        ),
-                        padding=16,
-                        bgcolor=ThemeColors.BG_SURFACE,
-                        border=ft.border.all(1, ThemeColors.BORDER),
-                        border_radius=8,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=8,
                     ),
-                    ft.Container(height=16),
-                    # Info section
+                    ft.Container(height=4),
+                    self.status_text,
+                ],
+                spacing=0,
+            ),
+            expand=2,
+            padding=20,
+            bgcolor=SettingsViewColors.BG_CARD,
+            border=ft.border.all(1, SettingsViewColors.BORDER),
+            border_radius=10,
+        )
+
+        # --- RIGHT COLUMN: EXCLUDED FOLDERS ---
+        right_column = ft.Container(
+            content=ft.Column(
+                [
+                    # Header
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.FOLDER_OFF, color=SettingsViewColors.TEXT_SECONDARY, size=20),
+                            ft.Text(
+                                "Excluded Patterns",
+                                size=16,
+                                weight=ft.FontWeight.W_600,
+                                color=SettingsViewColors.TEXT_PRIMARY,
+                            ),
+                            ft.Container(expand=True),
+                            ft.IconButton(
+                                icon=ft.Icons.REFRESH,
+                                icon_size=18,
+                                icon_color=SettingsViewColors.TEXT_MUTED,
+                                tooltip="Reload from file",
+                                on_click=lambda _: self._reload_settings(),
+                            ),
+                        ],
+                        spacing=10,
+                    ),
+                    ft.Divider(color=SettingsViewColors.BORDER, height=1),
+                    ft.Container(height=10),
+                    
+                    # Helper Text
                     ft.Container(
                         content=ft.Row(
                             [
-                                ft.Icon(
-                                    ft.Icons.INFO_OUTLINE,
-                                    color=ThemeColors.TEXT_SECONDARY,
-                                    size=18,
-                                ),
+                                ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=SettingsViewColors.TEXT_MUTED),
                                 ft.Text(
-                                    "Default excluded: .git, .hg, .svn (Version control folders are always excluded)",
+                                    "Exclude files/folders from File Tree & AI Context. One pattern per line.",
                                     size=12,
-                                    color=ThemeColors.TEXT_SECONDARY,
+                                    color=SettingsViewColors.TEXT_MUTED,
+                                    expand=True,
                                 ),
                             ],
-                            spacing=8,
+                            spacing=6,
                         ),
-                        bgcolor=ThemeColors.BG_ELEVATED,
-                        padding=12,
-                        border_radius=6,
-                        border=ft.border.all(1, ThemeColors.BORDER),
+                        margin=ft.margin.only(bottom=10),
                     ),
+
+                    # Editor
+                    self.excluded_field,
                 ],
-                expand=True,
-                scroll=ft.ScrollMode.AUTO,
+                spacing=0,
             ),
+            expand=3,
             padding=20,
+            bgcolor=SettingsViewColors.BG_CARD,
+            border=ft.border.all(1, SettingsViewColors.BORDER),
+            border_radius=10,
+        )
+
+        # --- MAIN LAYOUT ---
+        return ft.Container(
+            content=ft.Row(
+                [left_column, right_column],
+                spacing=16,
+                expand=True,
+            ),
+            padding=16,
             expand=True,
             bgcolor=ThemeColors.BG_PAGE,
         )
+
+    def _build_section_header(self, title: str) -> ft.Text:
+        return ft.Text(
+            title,
+            size=13,
+            weight=ft.FontWeight.W_600,
+            color=SettingsViewColors.TEXT_SECONDARY,
+        )
+    
+    def _show_share_menu(self):
+        """Show Export/Import menu"""
+        def close_menu(e):
+            bs.open = False
+            bs.update()
+
+        bs = ft.BottomSheet(
+            ft.Container(
+                ft.Column(
+                    [
+                        ft.Text("Share Settings", weight=ft.FontWeight.BOLD),
+                        ft.ListTile(
+                            leading=ft.Icon(ft.Icons.DOWNLOAD),
+                            title=ft.Text("Export to Clipboard"),
+                            subtitle=ft.Text("Copy settings JSON"),
+                            on_click=lambda e: [self._export_settings(), close_menu(e)],
+                        ),
+                        ft.ListTile(
+                            leading=ft.Icon(ft.Icons.UPLOAD),
+                            title=ft.Text("Import from Clipboard"),
+                            subtitle=ft.Text("Load settings JSON"),
+                            on_click=lambda e: [self._import_settings(), close_menu(e)],
+                        ),
+                    ],
+                    tight=True,
+                ),
+                padding=10,
+            ),
+        )
+        self.page.overlay.append(bs)
+        bs.open = True
+        self.page.update()
 
     def _save_settings(self):
         """Save settings va notify"""
@@ -496,7 +499,7 @@ class SettingsView:
         }
 
         if save_settings(settings):
-            self._show_status("Settings saved!")
+            self._show_status("Settings saved!", is_error=False)
             self.reset_unsaved_state()  # Reset unsaved state after successful save
             if self.on_settings_changed:
                 self.on_settings_changed()
@@ -509,13 +512,6 @@ class SettingsView:
         assert self.gitignore_checkbox is not None
         assert self.security_check_checkbox is not None
         assert self.git_include_checkbox is not None
-
-        # Reset UI but don't save yet to match previous behavior
-        # But wait, logic changed. Let's just load defaults from manager manually?
-        # Actually default in manager is internal.
-        # Replicating defaults here for UI consistency or exposing from manager.
-        # Let's keep hardcoded here for now as view-specific defaults if needed,
-        # or better, just rely on visual reset.
 
         default_excluded = "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage"
 
@@ -613,7 +609,7 @@ class SettingsView:
         """Hien thi status message"""
         assert self.status_text is not None
         self.status_text.value = message
-        self.status_text.color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
+        self.status_text.color = SettingsViewColors.ERROR if is_error else SettingsViewColors.SUCCESS
         safe_page_update(self.page)
 
     def _reload_settings(self):
@@ -675,10 +671,7 @@ class SettingsView:
     ):
         """
         Hiển thị dialog cảnh báo có thay đổi chưa save.
-
-        Args:
-            on_discard: Callback khi user chọn discard changes
-            on_cancel: Callback khi user chọn cancel (ở lại Settings)
+        Using simple Flet AlertDialog
         """
 
         def close_and_discard(e):
@@ -702,7 +695,7 @@ class SettingsView:
             title=ft.Text(
                 "Unsaved Changes",
                 weight=ft.FontWeight.BOLD,
-                color=ThemeColors.WARNING,
+                color=SettingsViewColors.WARNING,
             ),
             content=ft.Text(
                 "You have unsaved changes in Settings. What would you like to do?",
@@ -712,23 +705,24 @@ class SettingsView:
                 ft.TextButton(
                     "Discard",
                     on_click=close_and_discard,
-                    style=ft.ButtonStyle(color=ThemeColors.ERROR),
+                    style=ft.ButtonStyle(color=SettingsViewColors.ERROR),
                 ),
                 ft.TextButton(
                     "Stay",
                     on_click=close_and_stay,
-                    style=ft.ButtonStyle(color=ThemeColors.TEXT_SECONDARY),
+                    style=ft.ButtonStyle(color=SettingsViewColors.TEXT_SECONDARY),
                 ),
                 ft.ElevatedButton(
                     "Save & Leave",
                     on_click=save_and_leave,
                     style=ft.ButtonStyle(
                         color="#FFFFFF",
-                        bgcolor=ThemeColors.SUCCESS,
+                        bgcolor=SettingsViewColors.SUCCESS,
                     ),
                 ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
+            bgcolor=SettingsViewColors.BG_CARD,
         )
 
         self.page.overlay.append(dialog)

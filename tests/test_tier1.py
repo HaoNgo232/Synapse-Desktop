@@ -100,22 +100,21 @@ def test_component_selection():
     context_view = ContextView(page, lambda: Path('.'))
     
     # Test small tree component selection
-    small_component = context_view._create_file_tree_component(small_tree)
+    context_view.tree = small_tree
+    small_component = context_view._create_file_tree_component()
     is_small_regular = isinstance(small_component, FileTreeComponent)
     
     # Test large tree component selection
-    large_component = context_view._create_file_tree_component(large_tree)
+    context_view.tree = large_tree
+    large_component = context_view._create_file_tree_component()
     is_large_virtual = isinstance(large_component, VirtualFileTreeComponent)
     
     print(f"Small tree uses FileTreeComponent: {is_small_regular}")
     print(f"Large tree uses VirtualFileTreeComponent: {is_large_virtual}")
     
-    if is_small_regular and is_large_virtual:
-        print("✅ Component selection works correctly")
-        return True
-    else:
-        print("❌ Component selection failed")
-        return False
+    assert is_small_regular, "Small tree should use FileTreeComponent"
+    assert is_large_virtual, "Large tree should use VirtualFileTreeComponent"
+    print("✅ Component selection works correctly")
 
 
 def main():

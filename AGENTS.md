@@ -51,8 +51,11 @@ SYNAPSE_DEBUG=1 python main.py
 ### Testing Commands
 
 ```bash
-# Run all tests
-pytest tests/ -v
+# Run ALL tests (activate venv first)
+source .venv/bin/activate && pytest tests/ -v
+
+# Run all tests with output
+source .venv/bin/activate && pytest tests/ -v -s
 
 # Run single test file
 pytest tests/test_opx_parser.py -v
@@ -69,6 +72,55 @@ pytest tests/ --cov=core --cov=services --cov=components -v
 # Type checking
 pyrefly check
 ```
+
+### Performance Testing Commands
+
+```bash
+# Run ALL performance tests (activate venv first)
+source .venv/bin/activate && pytest tests/test_ui_performance.py tests/test_real_user_behavior.py tests/test_scan_bottleneck.py tests/test_token_counting_fix.py -v -s
+
+# Test UI rendering performance (all scenarios)
+pytest tests/test_ui_performance.py -v -s
+
+# Test real user behavior (giả lập expand/select/copy)
+pytest tests/test_real_user_behavior.py -v -s
+
+# Test specific user workflow with large project
+pytest tests/test_real_user_behavior.py::TestRealUserBehavior::test_user_workflow_paas_k3s -v -s
+
+# Test scan directory bottleneck
+pytest tests/test_scan_bottleneck.py -v -s
+
+# Test token counting fix
+pytest tests/test_token_counting_fix.py -v -s
+
+# Test rapid user interaction (spam clicks)
+pytest tests/test_real_user_behavior.py::TestRealUserBehavior::test_rapid_interaction -v -s
+
+# Test with timeout (for long-running tests)
+timeout 60 pytest tests/test_scan_bottleneck.py -v -s
+```
+
+**Performance Test Options:**
+- `-v`: Verbose output (show test names)
+- `-s`: Show print statements (performance metrics)
+- `--tb=short`: Short traceback on failures
+- `-x`: Stop on first failure
+- `-k "pattern"`: Run tests matching pattern
+
+**Performance Test Files:**
+- `test_ui_performance.py` - UI rendering benchmarks (render, expand, select, search)
+- `test_real_user_behavior.py` - Real user workflow simulation (expand/select/copy)
+- `test_scan_bottleneck.py` - Scan directory analysis (shallow vs full scan)
+- `test_token_counting_fix.py` - Token counting coverage verification
+
+**Key Findings:**
+- UI render: 0.6ms for 2844 files ✅
+- Expand/select: ~400ms (bottleneck - needs lazy expand fix) ⚠️
+- Scan directory: 941ms (can optimize with shallow scan) ⚠️
+- Token counting: 100% coverage after fix ✅
+
+See `BOTTLENECK_FOUND.md` and `PERFORMANCE_REPORT.md` for details.
 
 ### Linting & Formatting
 

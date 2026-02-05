@@ -150,12 +150,12 @@ class ApplyView:
         # Status with better visibility
         self.status_text = ft.Text("", size=12, weight=ft.FontWeight.W_500)
 
-        # Results container
-        self.results_column = ft.Column(
+        # ListView cho danh sách kết quả, hỗ trợ ảo hóa khi có nhiều file thay đổi
+        self.results_column = ft.ListView(
             controls=[self._create_empty_state()],
-            scroll=ft.ScrollMode.AUTO,
             expand=True,
             spacing=12,
+            auto_scroll=False,
         )
 
         return ft.Container(
@@ -625,8 +625,10 @@ class ApplyView:
         if is_expanded and file_action and row.action != "rename":
             try:
                 diff_lines = generate_preview_diff_lines(file_action, workspace)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Error producing diff for {file_action.path if file_action else 'unknown'}: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Check if diff is available (for showing expand button)
         has_diff_available = file_action and row.action != "rename"
@@ -702,20 +704,38 @@ class ApplyView:
         card_content: list[ft.Control] = [header_content, description_row]
 
         # Expanded diff viewer
-        if is_expanded and diff_lines:
-            diff_viewer = DiffViewer(
-                diff_lines=diff_lines,
-                max_height=300,
-                show_line_numbers=True,
-            )
-            card_content.append(
-                ft.Container(
-                    content=diff_viewer,
-                    margin=ft.margin.only(top=12),
-                    border=ft.border.all(1, ThemeColors.BORDER),
-                    border_radius=6,
+        if is_expanded:
+            if diff_lines:
+                diff_viewer = DiffViewer(
+                    diff_lines=diff_lines,
+                    max_height=300,
+                    show_line_numbers=True,
                 )
-            )
+                card_content.append(
+                    ft.Container(
+                        content=diff_viewer,
+                        margin=ft.margin.only(top=12),
+                        border=ft.border.all(1, ThemeColors.BORDER),
+                        border_radius=6,
+                    )
+                )
+            elif has_diff_available:
+                # Show message if expanded but no diff (e.g. content identical)
+                card_content.append(
+                    ft.Container(
+                        content=ft.Text(
+                            "No visual changes detected (content matches existing file)",
+                            color=ApplyViewColors.TEXT_MUTED,
+                            italic=True,
+                            size=12,
+                        ),
+                        margin=ft.margin.only(top=12),
+                        padding=12,
+                        bgcolor=ApplyViewColors.BG_EXPANDED,
+                        border_radius=6,
+                        alignment=ft.Alignment.CENTER,
+                    )
+                )
 
         # Error state
         if row.has_error:

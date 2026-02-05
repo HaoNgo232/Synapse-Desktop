@@ -10,7 +10,7 @@ from threading import Timer
 from pathlib import Path
 from typing import Callable, Optional, Set, Union
 
-from core.utils.file_utils import scan_directory, scan_directory_shallow, TreeItem
+from core.utils.file_utils import scan_directory_shallow, TreeItem
 from core.utils.ui_utils import safe_page_update
 from services.clipboard_utils import copy_to_clipboard
 from core.token_counter import count_tokens_batch_parallel, count_tokens

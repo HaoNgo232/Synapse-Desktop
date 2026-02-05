@@ -558,4 +558,13 @@ Future:
 - **Status:** ✅ Đã hoàn thành.
 
 ---
+### 2026-02-05: Optimize Apply View Preview Performance
+- **Vấn đề:** Không thể mở preview cho các file có thay đổi lớn (>3000 dòng) hoặc lag cực nặng trong tab Apply.
+- **Nguyên nhân:** Sử dụng `ft.Column` để render hàng nghìn dòng diff cùng lúc, gây quá tải cho UI.
+- **Giải pháp:** 
+  - Chuyển `DiffViewer` sang sử dụng `ft.ListView` để kích hoạt tính năng **virtualization** (ảo hóa), chỉ render các dòng đang hiển thị.
+  - Chuyển `results_column` trong `ApplyView` sang `ft.ListView` để đảm bảo hiệu năng khi có nhiều file thay đổi.
+- **Trạng thái:** ✅ Đã hoàn thành.
+
+---
 _Last updated: 2026-02-05_

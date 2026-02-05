@@ -258,11 +258,13 @@ class DiffViewer(ft.Column):
             )
             return
 
-        # Tao container scrollable
-        diff_rows = ft.Column(
+        # Sử dụng ListView thay vì Column để hỗ trợ ảo hóa (virtualization)
+        # Giúp render các diff lớn (hàng nghìn dòng) cực nhanh
+        diff_rows = ft.ListView(
             controls=[self._create_diff_row(line) for line in self.diff_lines],
             spacing=0,
-            scroll=ft.ScrollMode.AUTO,
+            auto_scroll=False,
+            expand=True,
         )
 
         self.controls.append(

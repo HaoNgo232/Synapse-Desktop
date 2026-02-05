@@ -1,6 +1,6 @@
 # Workflow: /orchestrate
 
-Coordinate multiple agents for complex tasks. Use for multi-perspective analysis comprehensive reviews or tasks requiring different domain expertise.
+['Coordinate multiple agents for complex tasks. Use for multi-perspective analysis', 'comprehensive reviews', 'or tasks requiring different domain expertise.']
 
 # Multi-Agent Orchestration
 

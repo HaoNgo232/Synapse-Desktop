@@ -473,11 +473,33 @@ class ContextView:
                     self.file_tree_component.selected_paths = old_selection
 
     def _create_file_tree_component(self) -> Union[FileTreeComponent, VirtualFileTreeComponent]:
-        """Create appropriate file tree component based on tree size."""
+        """
+        Create appropriate file tree component based on tree size.
+        
+        FIX #3: Register callback để context_view re-calculate khi token cache updates.
+        """
         total_items = self._count_total_items(self.tree) if self.tree else 0
         if total_items > self.VIRTUAL_TREE_THRESHOLD:
-            return VirtualFileTreeComponent(page=self.page, on_selection_changed=self._on_selection_changed, show_tokens=True, show_lines=False)
-        return FileTreeComponent(page=self.page, on_selection_changed=self._on_selection_changed, on_preview=self._preview_file, show_tokens=True, show_lines=False)
+            component = VirtualFileTreeComponent(page=self.page, on_selection_changed=self._on_selection_changed, show_tokens=True, show_lines=False)
+        else:
+            component = FileTreeComponent(page=self.page, on_selection_changed=self._on_selection_changed, on_preview=self._preview_file, show_tokens=True, show_lines=False)
+        
+        # FIX #3: Register callback để re-calculate token count khi cache updates
+        # Khi background counting hoàn thành, token service sẽ gọi callback này
+        # để context_view update header token count và stats panel
+        if hasattr(component, '_token_service'):
+            original_callback = component._token_service.on_update
+            
+            def combined_callback():
+                # Gọi callback gốc (update tree badges)
+                if original_callback:
+                    original_callback()
+                # Re-calculate token count cho header và stats panel
+                self._update_token_count()
+            
+            component._token_service.on_update = combined_callback
+        
+        return component
 
     def _rebuild_tree_container(self):
         """Rebuild tree container with new component."""
@@ -498,7 +520,16 @@ class ContextView:
     # === Selection Actions ===
 
     def _on_selection_changed(self, selected_paths: Set[str]):
-        """Handle selection change with adaptive debouncing."""
+        """
+        Handle selection change with adaptive debouncing.
+        
+        FIX #4: Generation counter để invalidate stale results.
+        Mỗi lần selection thay đổi, increment generation để các token counting
+        đang chạy biết rằng kết quả của chúng đã stale.
+        """
+        # Increment generation để invalidate stale counting results
+        self._token_generation = getattr(self, '_token_generation', 0) + 1
+        
         if self._selection_update_timer:
             self._selection_update_timer.dispose()
             self._selection_update_timer = None
@@ -751,10 +782,18 @@ class ContextView:
         self._token_update_timer.start()
 
     def _update_token_count(self):
-        """Update token count display."""
+        """
+        Update token count display.
+        
+        FIX #4: Check generation counter để skip stale results.
+        FIX #2: Đây là nguồn DUY NHẤT trigger token counting.
+        """
         import os
         if not self.file_tree_component:
             return
+
+        # Capture current generation
+        current_gen = getattr(self, '_token_generation', 0)
 
         selected_paths = self.file_tree_component.get_visible_selected_paths()
         file_paths = [Path(p) for p in selected_paths if os.path.isfile(p)]
@@ -782,6 +821,11 @@ class ContextView:
                     start_token_counting()
                     uncached_paths = [fp for fp in file_paths if token_service.get_token_count(str(fp)) is None]
                     token_results = count_tokens_batch_parallel(uncached_paths, max_workers=2)
+                    
+                    # Check generation before updating
+                    if current_gen != getattr(self, '_token_generation', 0):
+                        return  # Selection changed, result is stale
+                    
                     with token_service._lock:
                         token_service._cache.update(token_results)
                     file_tokens = cached_total + sum(token_results.values())

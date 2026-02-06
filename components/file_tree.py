@@ -1020,20 +1020,19 @@ class FileTreeComponent:
         RACE CONDITION FIX: Sử dụng atomic check pattern.
         Check _is_rendering VÀ thao tác selection trong cùng một lock.
         
-        LAZY LOADING: Khi check folder, lazy load children nếu chưa loaded.
+        LAZY LOADING FIX #5: Ensure fully loaded TRƯỚC KHI notify selection.
         """
         from core.logging_config import log_info
         log_info(f"[FileTree] _on_item_toggled: path={path}, is_dir={is_dir}, value={e.control.value}")
         
-        # LAZY LOADING: Nếu check folder chưa loaded, load children trước
+        # FIX #5: LAZY LOADING - Ensure fully loaded TRƯỚC KHI selection
+        # Load ALL children synchronously để children list stable
         if e.control.value and is_dir:
-            # Tìm item trong tree
             item = self._find_item_by_path(self.tree, path) if self.tree else None
             if item and not item.is_loaded:
                 log_info(f"[FileTree] Lazy loading children for: {path}")
                 from core.utils.file_utils import load_folder_children
                 load_folder_children(item)
-                # Update children reference
                 children = item.children
                 log_info(f"[FileTree] Loaded {len(children)} children")
         
@@ -1065,14 +1064,13 @@ class FileTreeComponent:
         # 1. Mũi tên expand (vì children đã được loaded)
         # 2. Token count cho folder
         if is_dir and e.control.value:
-            # Trigger token counting cho files trong folder đã loaded
-            self._trigger_folder_token_counting_for_selected(path)
             # Re-render để hiển thị mũi tên và tokens
             self._schedule_render()
 
-        # Notify parent NGOÀI lock
+        # FIX #1+#7: Gửi SNAPSHOT thay vì reference để tránh race condition
+        # Context view sẽ nhận immutable copy, không bị ảnh hưởng bởi mutations sau này
         if self.on_selection_changed:
-            self.on_selection_changed(self.selected_paths)
+            self.on_selection_changed(self.selected_paths.copy())
 
     def _select_all_children(self, children: list):
         """
@@ -1267,77 +1265,22 @@ class FileTreeComponent:
         
         collect_and_request(folder_item)
 
-    def _trigger_folder_token_counting_for_selected(self, folder_path: str):
-        """
-        Trigger token counting cho folder được check.
-        
-        Khác với _trigger_folder_token_counting, method này:
-        1. Tìm folder trong tree theo path
-        2. Đếm tokens cho tất cả files đã loaded trong folder
-        3. Dùng parallel counting để nhanh hơn
-        
-        Args:
-            folder_path: Path của folder được check
-        """
-        from core.logging_config import log_info
-        from services.token_display import start_token_counting, is_counting_tokens
-        from core.token_counter import count_tokens_batch_parallel
-        from pathlib import Path
-        
-        if not self.tree:
-            return
-        
-        folder_item = self._find_item_by_path(self.tree, folder_path)
-        if not folder_item or not folder_item.is_dir:
-            return
-        
-        # Collect all files trong folder đã loaded
-        files_to_count: list[str] = []
-        
-        def collect_files(item: TreeItem):
-            for child in item.children:
-                if child.is_dir:
-                    # Recurse vào folder đã loaded
-                    if child.is_loaded:
-                        collect_files(child)
-                else:
-                    # Chỉ add files chưa có trong cache
-                    if self._token_service.get_token_count(child.path) is None:
-                        files_to_count.append(child.path)
-        
-        collect_files(folder_item)
-        
-        if not files_to_count:
-            log_info(f"[FileTree] No files to count for folder: {folder_path}")
-            return
-        
-        log_info(f"[FileTree] Counting tokens for {len(files_to_count)} files in {folder_path}")
-        
-        # Start counting
-        start_token_counting()
-        
-        # Count in background để không block UI
-        def do_count():
-            if not is_counting_tokens():
-                return
-            
-            # Parallel counting
-            file_paths = [Path(p) for p in files_to_count]
-            results = count_tokens_batch_parallel(file_paths, max_workers=4)
-            
-            # Update cache
-            if results and is_counting_tokens():
-                with self._token_service._lock:
-                    self._token_service._cache.update(results)
-                
-                # Trigger UI update
-                if self._token_service.on_update:
-                    self._token_service.on_update()
-        
-        # Run in background thread
-        import threading
-        thread = threading.Thread(target=do_count, daemon=True)
-        thread.start()
+    # FIX #2: DEPRECATED - Không còn dùng method này
+    # Token counting giờ chỉ được trigger từ context_view._update_token_count()
+    # để tránh multiple concurrent counters race condition
+    #
+    # def _trigger_folder_token_counting_for_selected(self, folder_path: str):
+    #     """
+    #     [DEPRECATED] Trigger token counting cho folder được check.
+    #     
+    #     Method này gây ra race condition vì:
+    #     1. Chạy song song với context_view._update_token_count()
+    #     2. Gọi start_token_counting() override cancellation flag
+    #     3. Update cache với files không còn selected
+    #     
+    #     Giờ chỉ dùng context_view._update_token_count() làm nguồn DUY NHẤT.
+    #     """
+    #     pass
 
 
     def _on_metrics_updated(self):

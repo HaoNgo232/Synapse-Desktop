@@ -38,11 +38,25 @@ class DiffOnlyDialog(BaseDialog):
             value="0",
             label="Recent commits to include",
             hint_text="0 = uncommitted only",
-            width=200,
+            width=120,
             keyboard_type=ft.KeyboardType.NUMBER,
             border_color=ThemeColors.BORDER,
             focused_border_color=ThemeColors.PRIMARY,
         )
+
+        self.commit_stepper = ft.Row([
+            ft.IconButton(
+                icon=ft.Icons.REMOVE,
+                tooltip="Decrease commits",
+                on_click=lambda _: self._adjust_commits(-1),
+            ),
+            self.num_commits,
+            ft.IconButton(
+                icon=ft.Icons.ADD,
+                tooltip="Increase commits",
+                on_click=lambda _: self._adjust_commits(1),
+            ),
+        ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         
         self.include_staged = ft.Checkbox(
             label="Include staged changes",
@@ -58,14 +72,14 @@ class DiffOnlyDialog(BaseDialog):
         
         self.include_file_content = ft.Checkbox(
             label="Include changed file content",
-            value=False,
+            value=True,
             active_color=ThemeColors.WARNING,
             tooltip="Include full content of modified files for better AI context",
         )
         
         self.include_tree = ft.Checkbox(
             label="Include project tree structure",
-            value=False,
+            value=True,
             active_color=ThemeColors.PRIMARY,
             tooltip="Include file tree to help AI understand project structure",
         )
@@ -98,7 +112,7 @@ class DiffOnlyDialog(BaseDialog):
                         italic=True,
                     ),
                     ft.Container(height=16),
-                    ft.Row([self.num_commits, self.file_pattern], spacing=16),
+                    ft.Row([self.commit_stepper, self.file_pattern], spacing=16),
                     ft.Container(height=8),
                     self.include_staged,
                     self.include_unstaged,
@@ -130,12 +144,7 @@ class DiffOnlyDialog(BaseDialog):
     
     def _do_copy(self, e):
         """Execute the diff copy."""
-        try:
-            commits = int(self.num_commits.value or "0")
-            if commits < 0:
-                commits = 0
-        except ValueError:
-            commits = 0
+        commits = self._get_num_commits()
         
         self.status_text.value = "Getting diff..."
         safe_page_update(self.page)
@@ -181,3 +190,14 @@ class DiffOnlyDialog(BaseDialog):
             self.status_text.value = f"Copy failed: {message}"
             self.status_text.color = ThemeColors.ERROR
             safe_page_update(self.page)
+
+    def _get_num_commits(self) -> int:
+        try:
+            return max(0, int(self.num_commits.value or "0"))
+        except ValueError:
+            return 0
+
+    def _adjust_commits(self, delta: int) -> None:
+        commits = max(0, self._get_num_commits() + delta)
+        self.num_commits.value = str(commits)
+        safe_page_update(self.page)

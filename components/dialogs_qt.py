@@ -244,10 +244,28 @@ class DiffOnlyDialogQt(BaseDialogQt):
         form.setSpacing(8)
 
         form.addWidget(QLabel("Recent commits:"), 0, 0)
+        commits_row = QHBoxLayout()
+        commits_row.setSpacing(6)
+
         self._num_commits = QLineEdit("0")
-        self._num_commits.setFixedWidth(100)
+        self._num_commits.setFixedWidth(80)
         self._num_commits.setPlaceholderText("0 = uncommitted only")
-        form.addWidget(self._num_commits, 0, 1)
+
+        dec_btn = QPushButton("-")
+        dec_btn.setFixedSize(32, 30)
+        dec_btn.setStyleSheet("padding: 0px; font-size: 16px; font-weight: 700;")
+        dec_btn.clicked.connect(lambda: self._adjust_commits(-1))
+
+        inc_btn = QPushButton("+")
+        inc_btn.setFixedSize(32, 30)
+        inc_btn.setStyleSheet("padding: 0px; font-size: 16px; font-weight: 700;")
+        inc_btn.clicked.connect(lambda: self._adjust_commits(1))
+
+        commits_row.addWidget(dec_btn)
+        commits_row.addWidget(self._num_commits)
+        commits_row.addWidget(inc_btn)
+        commits_row.addStretch()
+        form.addLayout(commits_row, 0, 1)
 
         form.addWidget(QLabel("Filter files:"), 0, 2)
         self._file_pattern = QLineEdit()
@@ -272,9 +290,11 @@ class DiffOnlyDialogQt(BaseDialogQt):
         layout.addWidget(self._make_label("Enhanced context (larger output):"))
 
         self._include_file_content = QCheckBox("Include changed file content")
+        self._include_file_content.setChecked(True)
         layout.addWidget(self._include_file_content)
 
         self._include_tree = QCheckBox("Include project tree structure")
+        self._include_tree.setChecked(True)
         layout.addWidget(self._include_tree)
 
         self._status = self._make_status_label()
@@ -296,10 +316,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         from core.utils.git_utils import get_diff_only
         from core.token_counter import count_tokens
 
-        try:
-            commits = max(0, int(self._num_commits.text() or "0"))
-        except ValueError:
-            commits = 0
+        commits = self._get_num_commits()
 
         self._status.setText("Getting diff...")
         self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
@@ -341,6 +358,16 @@ class DiffOnlyDialogQt(BaseDialogQt):
         else:
             self._status.setText(f"Copy failed: {message}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
+
+    def _get_num_commits(self) -> int:
+        try:
+            return max(0, int(self._num_commits.text() or "0"))
+        except ValueError:
+            return 0
+
+    def _adjust_commits(self, delta: int) -> None:
+        commits = max(0, self._get_num_commits() + delta)
+        self._num_commits.setText(str(commits))
 
 
 # ============================================================

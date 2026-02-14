@@ -13,7 +13,6 @@ Usage:
 """
 
 import threading
-import flet as ft
 from threading import Timer
 from typing import Callable, Optional, Any
 
@@ -33,7 +32,7 @@ class SafeTimer:
         self,
         interval: float,
         callback: Callable[[], None],
-        page: Optional[ft.Page] = None,
+        page: Optional[Any] = None,
         use_main_thread: bool = True,
     ):
         """
@@ -42,7 +41,7 @@ class SafeTimer:
         Args:
             interval: Số giây delay trước khi execute callback
             callback: Function sẽ được gọi sau interval (không nhận arguments)
-            page: Flet Page object - nếu có và use_main_thread=True,
+            page: Page object (legacy Flet) - nếu có và use_main_thread=True,
                   callback sẽ được defer đến main thread
             use_main_thread: Có defer callback đến main thread không
         """
@@ -193,7 +192,7 @@ class DebouncedCallback:
         self,
         delay: float,
         callback: Callable[[], None],
-        page: Optional[ft.Page] = None,
+        page: Optional[Any] = None,
     ):
         """
         Khởi tạo DebouncedCallback.
@@ -201,7 +200,7 @@ class DebouncedCallback:
         Args:
             delay: Số giây delay sau lần gọi cuối cùng
             callback: Function sẽ được gọi (không nhận arguments)
-            page: Flet Page object cho main-thread execution
+            page: Page object (legacy Flet) cho main-thread execution
         """
         self._delay = delay
         self._callback = callback

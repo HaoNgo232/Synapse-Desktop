@@ -5,8 +5,8 @@ Chứa các utility modules:
 - file_utils: File system operations, gitignore, tree scanning
 - git_utils: Git operations (diff, log, status)
 - language_utils: Language detection cho syntax highlighting
-- ui_utils: Safe UI updates cho Flet
 - threading_utils: Thread management và cancellation
+- qt_utils: PySide6 utilities (signals, debounce, main-thread scheduling)
 """
 
 # Re-export commonly used items for convenience
@@ -32,11 +32,6 @@ from core.utils.language_utils import (
     get_language_from_filename,
     get_language_from_path,
     get_llm_compatible_language,
-)
-
-from core.utils.ui_utils import (
-    safe_page_update,
-    safe_control_update,
 )
 
 from core.utils.threading_utils import (
@@ -79,9 +74,6 @@ __all__ = [
     "get_language_from_filename",
     "get_language_from_path",
     "get_llm_compatible_language",
-    # ui_utils
-    "safe_page_update",
-    "safe_control_update",
     # threading_utils
     "get_app_stop_event",
     "signal_app_shutdown",

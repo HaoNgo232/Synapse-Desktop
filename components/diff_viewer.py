@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
 
-import flet as ft
-
 from core.theme import ThemeColors
 
 
@@ -208,169 +206,180 @@ def generate_delete_diff_lines(old_content: str, file_path: str = "") -> List[Di
     """
     return generate_diff_lines(old_content, "", file_path)
 
+# Legacy Flet DiffViewer class — only defined when flet is installed.
+# PySide6 app uses DiffViewerQt from diff_viewer_qt.py instead.
+import importlib.util as _importlib_util
 
-class DiffViewer(ft.Column):
-    """
-    Flet component de hien thi visual diff.
+def _has_flet() -> bool:
+    try:
+        return _importlib_util.find_spec("flet") is not None
+    except (ValueError, ModuleNotFoundError):
+        return False
 
-    Su dung:
-        diff_lines = generate_diff_lines(old, new)
-        viewer = DiffViewer(diff_lines)
-        page.add(viewer)
-    """
+if _has_flet():
+    import flet as ft
 
-    def __init__(
-        self,
-        diff_lines: List[DiffLine],
-        max_height: int = 300,
-        show_line_numbers: bool = True,
-        **kwargs,
-    ):
+    class DiffViewer(ft.Column):
         """
-        Khoi tao DiffViewer.
+        Flet component de hien thi visual diff (LEGACY — replaced by DiffViewerQt).
 
-        Args:
-            diff_lines: Danh sach DiffLine tu generate_diff_lines()
-            max_height: Chieu cao toi da cua viewer (scroll neu qua dai)
-            show_line_numbers: Hien thi so dong hay khong
+        Su dung:
+            diff_lines = generate_diff_lines(old, new)
+            viewer = DiffViewer(diff_lines)
+            page.add(viewer)
         """
-        super().__init__(**kwargs)
 
-        self.diff_lines = diff_lines
-        self.max_height = max_height
-        self.show_line_numbers = show_line_numbers
+        def __init__(
+            self,
+            diff_lines: List[DiffLine],
+            max_height: int = 300,
+            show_line_numbers: bool = True,
+            **kwargs,
+        ):
+            """
+            Khoi tao DiffViewer.
 
-        # Build UI
-        self._build_ui()
+            Args:
+                diff_lines: Danh sach DiffLine tu generate_diff_lines()
+                max_height: Chieu cao toi da cua viewer (scroll neu qua dai)
+                show_line_numbers: Hien thi so dong hay khong
+            """
+            super().__init__(**kwargs)
 
-    def _build_ui(self):
-        """Xay dung giao dien diff viewer"""
-        self.controls = []
+            self.diff_lines = diff_lines
+            self.max_height = max_height
+            self.show_line_numbers = show_line_numbers
 
-        if not self.diff_lines:
-            self.controls.append(
-                ft.Text(
-                    "No changes to display",
-                    color=ThemeColors.TEXT_MUTED,
-                    italic=True,
-                    size=12,
-                )
-            )
-            return
+            # Build UI
+            self._build_ui()
 
-        # Sử dụng ListView thay vì Column để hỗ trợ ảo hóa (virtualization)
-        # Giúp render các diff lớn (hàng nghìn dòng) cực nhanh
-        diff_rows = ft.ListView(
-            controls=[self._create_diff_row(line) for line in self.diff_lines],
-            spacing=0,
-            auto_scroll=False,
-            expand=True,
-        )
+        def _build_ui(self):
+            """Xay dung giao dien diff viewer"""
+            self.controls = []
 
-        self.controls.append(
-            ft.Container(
-                content=diff_rows,
-                height=self.max_height,
-                border=ft.border.all(1, ThemeColors.BORDER),
-                border_radius=4,
-                clip_behavior=ft.ClipBehavior.HARD_EDGE,
-            )
-        )
-
-    def _create_diff_row(self, line: DiffLine) -> ft.Container:
-        """
-        Tao mot row cho mot dong diff.
-
-        Args:
-            line: DiffLine object
-
-        Returns:
-            Flet Container chua row
-        """
-        # Chon mau background dua tren loai dong
-        bg_color = {
-            DiffLineType.ADDED: DiffColors.ADDED_BG,
-            DiffLineType.REMOVED: DiffColors.REMOVED_BG,
-            DiffLineType.CONTEXT: DiffColors.CONTEXT_BG,
-            DiffLineType.HEADER: DiffColors.HEADER_BG,
-        }.get(line.line_type, DiffColors.CONTEXT_BG)
-
-        # Chon mau text - su dung DiffColors constants
-        text_color = {
-            DiffLineType.ADDED: DiffColors.ADDED_TEXT,
-            DiffLineType.REMOVED: DiffColors.REMOVED_TEXT,
-            DiffLineType.CONTEXT: ThemeColors.TEXT_SECONDARY,
-            DiffLineType.HEADER: DiffColors.HEADER_TEXT,
-        }.get(line.line_type, ThemeColors.TEXT_PRIMARY)
-
-        # Build row content
-        row_content: List[ft.Control] = []
-
-        # Line numbers (optional)
-        if self.show_line_numbers and line.line_type != DiffLineType.HEADER:
-            old_no = str(line.old_line_no) if line.old_line_no else ""
-            new_no = str(line.new_line_no) if line.new_line_no else ""
-
-            row_content.append(
-                ft.Container(
-                    content=ft.Text(
-                        old_no,
-                        size=11,
+            if not self.diff_lines:
+                self.controls.append(
+                    ft.Text(
+                        "No changes to display",
                         color=ThemeColors.TEXT_MUTED,
-                        font_family="monospace",
-                    ),
-                    width=35,
-                    padding=ft.padding.only(right=4),
-                    alignment=ft.Alignment.CENTER_RIGHT,
+                        italic=True,
+                        size=12,
+                    )
                 )
-            )
-            row_content.append(
-                ft.Container(
-                    content=ft.Text(
-                        new_no,
-                        size=11,
-                        color=ThemeColors.TEXT_MUTED,
-                        font_family="monospace",
-                    ),
-                    width=35,
-                    padding=ft.padding.only(right=8),
-                    alignment=ft.Alignment.CENTER_RIGHT,
-                    border=ft.border.only(right=ft.BorderSide(1, ThemeColors.BORDER)),
-                )
-            )
+                return
 
-        # Content
-        row_content.append(
-            ft.Container(
-                content=ft.Text(
-                    line.content,
-                    size=12,
-                    color=text_color,
-                    font_family="monospace",
-                    no_wrap=True,
-                    overflow=ft.TextOverflow.CLIP,
-                ),
-                expand=True,
-                padding=ft.padding.only(left=8),
-            )
-        )
-
-        return ft.Container(
-            content=ft.Row(
-                controls=row_content,
+            # Sử dụng ListView thay vì Column để hỗ trợ ảo hóa (virtualization)
+            diff_rows = ft.ListView(
+                controls=[self._create_diff_row(line) for line in self.diff_lines],
                 spacing=0,
-            ),
-            bgcolor=bg_color,
-            padding=ft.padding.symmetric(vertical=2, horizontal=4),
-        )
+                auto_scroll=False,
+                expand=True,
+            )
 
-    def update_diff(self, diff_lines: List[DiffLine]):
-        """
-        Cap nhat diff lines va re-render.
+            self.controls.append(
+                ft.Container(
+                    content=diff_rows,
+                    height=self.max_height,
+                    border=ft.border.all(1, ThemeColors.BORDER),
+                    border_radius=4,
+                    clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                )
+            )
 
-        Args:
-            diff_lines: Danh sach DiffLine moi
-        """
-        self.diff_lines = diff_lines
-        self._build_ui()
-        self.update()
+        def _create_diff_row(self, line: DiffLine) -> ft.Container:
+            """
+            Tao mot row cho mot dong diff.
+
+            Args:
+                line: DiffLine object
+
+            Returns:
+                Flet Container chua row
+            """
+            # Chon mau background dua tren loai dong
+            bg_color = {
+                DiffLineType.ADDED: DiffColors.ADDED_BG,
+                DiffLineType.REMOVED: DiffColors.REMOVED_BG,
+                DiffLineType.CONTEXT: DiffColors.CONTEXT_BG,
+                DiffLineType.HEADER: DiffColors.HEADER_BG,
+            }.get(line.line_type, DiffColors.CONTEXT_BG)
+
+            # Chon mau text
+            text_color = {
+                DiffLineType.ADDED: DiffColors.ADDED_TEXT,
+                DiffLineType.REMOVED: DiffColors.REMOVED_TEXT,
+                DiffLineType.CONTEXT: ThemeColors.TEXT_SECONDARY,
+                DiffLineType.HEADER: DiffColors.HEADER_TEXT,
+            }.get(line.line_type, ThemeColors.TEXT_PRIMARY)
+
+            # Build row content
+            row_content: List[ft.Control] = []
+
+            # Line numbers (optional)
+            if self.show_line_numbers and line.line_type != DiffLineType.HEADER:
+                old_no = str(line.old_line_no) if line.old_line_no else ""
+                new_no = str(line.new_line_no) if line.new_line_no else ""
+
+                row_content.append(
+                    ft.Container(
+                        content=ft.Text(
+                            old_no,
+                            size=11,
+                            color=ThemeColors.TEXT_MUTED,
+                            font_family="monospace",
+                        ),
+                        width=35,
+                        padding=ft.padding.only(right=4),
+                        alignment=ft.Alignment.CENTER_RIGHT,
+                    )
+                )
+                row_content.append(
+                    ft.Container(
+                        content=ft.Text(
+                            new_no,
+                            size=11,
+                            color=ThemeColors.TEXT_MUTED,
+                            font_family="monospace",
+                        ),
+                        width=35,
+                        padding=ft.padding.only(right=8),
+                        alignment=ft.Alignment.CENTER_RIGHT,
+                        border=ft.border.only(right=ft.BorderSide(1, ThemeColors.BORDER)),
+                    )
+                )
+
+            # Content
+            row_content.append(
+                ft.Container(
+                    content=ft.Text(
+                        line.content,
+                        size=12,
+                        color=text_color,
+                        font_family="monospace",
+                        no_wrap=True,
+                        overflow=ft.TextOverflow.CLIP,
+                    ),
+                    expand=True,
+                    padding=ft.padding.only(left=8),
+                )
+            )
+
+            return ft.Container(
+                content=ft.Row(
+                    controls=row_content,
+                    spacing=0,
+                ),
+                bgcolor=bg_color,
+                padding=ft.padding.symmetric(vertical=2, horizontal=4),
+            )
+
+        def update_diff(self, diff_lines: List[DiffLine]):
+            """
+            Cap nhat diff lines va re-render.
+
+            Args:
+                diff_lines: Danh sach DiffLine moi
+            """
+            self.diff_lines = diff_lines
+            self._build_ui()
+            self.update()

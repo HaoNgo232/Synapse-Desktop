@@ -1,13 +1,6 @@
-# Overwrite Desktop - Reusable UI components
+# Synapse Desktop - Reusable UI components
+# PySide6 components are imported directly where needed.
+# Legacy Flet components (file_tree.py, virtual_file_tree.py, etc.) are kept
+# for reference but no longer re-exported here.
 
-from components.file_tree import FileTreeComponent
-from components.virtual_file_tree import VirtualFileTreeComponent
-from components.diff_viewer import DiffViewer
-from components.token_stats import TokenStatsPanel
-
-__all__ = [
-    "FileTreeComponent",
-    "VirtualFileTreeComponent", 
-    "DiffViewer",
-    "TokenStatsPanel",
-]
+__all__: list[str] = []

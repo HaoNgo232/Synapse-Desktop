@@ -8,7 +8,6 @@ Giải quyết race condition trong Flet:
 """
 
 import threading
-import flet as ft
 from typing import Callable, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -70,12 +69,12 @@ def is_view_active(view_id: str) -> bool:
 
 
 def safe_ui_callback(
-    page: ft.Page,
+    page: Any,
     view_id: str,
     callback: Callable[[], None],
 ) -> None:
     """
-    Chạy callback trên UI thread một cách an toàn.
+    Chạy callback trên UI thread một cách an toàn (legacy Flet API).
 
     Chỉ chạy nếu:
     - App không đang shutdown

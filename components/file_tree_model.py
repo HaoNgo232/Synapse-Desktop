@@ -557,6 +557,28 @@ class FileTreeModel(QAbstractItemModel):
         self._emit_tree_checkstate_changed()
         self.selection_changed.emit(set(self._selected_paths))
     
+    def add_paths_to_selection(self, paths: Set[str]) -> int:
+        """Add paths to selection without clearing existing. Returns count of newly added."""
+        before = len(self._selected_paths)
+        self._selected_paths.update(paths)
+        added = len(self._selected_paths) - before
+        if added > 0:
+            self._clear_folder_state_cache()
+            self._emit_tree_checkstate_changed()
+            self.selection_changed.emit(set(self._selected_paths))
+        return added
+    
+    def remove_paths_from_selection(self, paths: Set[str]) -> int:
+        """Remove specific paths from selection. Returns count removed."""
+        before = len(self._selected_paths)
+        self._selected_paths -= paths
+        removed = before - len(self._selected_paths)
+        if removed > 0:
+            self._clear_folder_state_cache()
+            self._emit_tree_checkstate_changed()
+            self.selection_changed.emit(set(self._selected_paths))
+        return removed
+    
     def select_all(self) -> None:
         """Select tất cả files."""
         self._select_all_recursive(self._get_root_parent())

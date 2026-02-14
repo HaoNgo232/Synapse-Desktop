@@ -190,6 +190,14 @@ class FileTreeWidget(QWidget):
         """Set selected paths (session restore)."""
         self._model.set_selected_paths(paths)
     
+    def add_paths_to_selection(self, paths: Set[str]) -> int:
+        """Add paths to selection. Returns count added."""
+        return self._model.add_paths_to_selection(paths)
+    
+    def remove_paths_from_selection(self, paths: Set[str]) -> int:
+        """Remove paths from selection. Returns count removed."""
+        return self._model.remove_paths_from_selection(paths)
+    
     def set_expanded_paths(self, paths: Set[str]) -> None:
         """Expand folders theo paths (session restore)."""
         self._expand_paths_recursive(QModelIndex(), paths)

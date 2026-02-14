@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QLabel, QPushButton, QToolButton, QTextEdit,
     QComboBox, QFrame, QMenu, QProgressBar, QSizePolicy,
+    QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer, QThreadPool
 
@@ -60,6 +61,7 @@ class ContextViewQt(QWidget):
         self._last_ignored_patterns: List[str] = []
         self._related_mode_active: bool = False
         self._last_added_related_files: Set[str] = set()
+        self._resolving_related: bool = False  # Guard against recursive triggers
         self._loading_lock = threading.Lock()
         self._is_loading = False
         self._pending_refresh = False
@@ -162,6 +164,63 @@ class ContextViewQt(QWidget):
         undo_btn.setStyleSheet(btn_style)
         undo_btn.clicked.connect(self._undo_ignore)
         header.addWidget(undo_btn)
+        
+        header.addSpacing(8)
+        
+        # --- Related files toggle ---
+        related_active_style = (
+            f"QToolButton {{ "
+            f"  background: {ThemeColors.SUCCESS}; border: 1px solid {ThemeColors.SUCCESS}; "
+            f"  border-radius: 6px; padding: 4px 10px; font-size: 12px; "
+            f"  color: #FFFFFF; min-height: 28px; font-weight: bold; "
+            f"}} "
+            f"QToolButton:hover {{ "
+            f"  background: #059669; border-color: #059669; "
+            f"}}"
+        )
+        related_inactive_style = (
+            f"QToolButton {{ "
+            f"  background: {ThemeColors.BG_ELEVATED}; border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 6px; padding: 4px 10px; font-size: 12px; "
+            f"  color: {ThemeColors.TEXT_SECONDARY}; min-height: 28px; "
+            f"}} "
+            f"QToolButton:hover {{ "
+            f"  background: {ThemeColors.PRIMARY}; color: #FFFFFF; "
+            f"  border-color: {ThemeColors.PRIMARY}; "
+            f"}}"
+        )
+        self._related_active_style = related_active_style
+        self._related_inactive_style = related_inactive_style
+        
+        self._related_btn = QToolButton()
+        self._related_btn.setText("🔗 Related")
+        self._related_btn.setToolTip("Auto-select files imported by your selection")
+        self._related_btn.setStyleSheet(related_inactive_style)
+        self._related_btn.setCheckable(True)
+        self._related_btn.clicked.connect(self._toggle_related_mode)
+        header.addWidget(self._related_btn)
+        
+        # Level spinbox
+        level_label = QLabel("Lvl")
+        level_label.setStyleSheet(f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px;")
+        header.addWidget(level_label)
+        
+        self._related_level_spin = QSpinBox()
+        self._related_level_spin.setRange(1, 5)
+        self._related_level_spin.setValue(1)
+        self._related_level_spin.setToolTip("Relationship depth (1=direct imports, 2+=nested)")
+        self._related_level_spin.setFixedWidth(45)
+        self._related_level_spin.setFixedHeight(28)
+        self._related_level_spin.setStyleSheet(
+            f"QSpinBox {{ "
+            f"  background: {ThemeColors.BG_ELEVATED}; color: {ThemeColors.TEXT_PRIMARY}; "
+            f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; "
+            f"  padding: 2px; font-size: 12px; "
+            f"}} "
+            f"QSpinBox::up-button, QSpinBox::down-button {{ width: 12px; }}"
+        )
+        self._related_level_spin.valueChanged.connect(self._on_related_level_changed)
+        header.addWidget(self._related_level_spin)
         
         header.addStretch()
         
@@ -375,10 +434,13 @@ class ContextViewQt(QWidget):
     
     @Slot(set)
     def _on_selection_changed(self, selected_paths: set) -> None:
-        """Handle selection change — chỉ update display, không trigger counting lại.
-        Token counting đã được FileTreeWidget xử lý qua _token_debounce."""
+        """Handle selection change — update display + trigger related resolution if active."""
         self._token_generation += 1
         self._update_token_display()
+        
+        # Auto-resolve related files when mode is active
+        if self._related_mode_active and not self._resolving_related:
+            self._resolve_related_files()
     
     @Slot()
     def _on_instructions_changed(self) -> None:
@@ -665,6 +727,136 @@ class ContextViewQt(QWidget):
         workspace = self.get_workspace()
         if workspace:
             run_on_main_thread(lambda: self._refresh_tree())
+    
+    # ===== Related Files =====
+    
+    @Slot()
+    def _toggle_related_mode(self) -> None:
+        """Toggle related files mode on/off."""
+        if self._related_mode_active:
+            self._deactivate_related_mode()
+        else:
+            self._activate_related_mode()
+    
+    def _activate_related_mode(self) -> None:
+        """Activate related mode and resolve for current selection."""
+        self._related_mode_active = True
+        self._related_btn.setChecked(True)
+        self._related_btn.setStyleSheet(self._related_active_style)
+        self._resolve_related_files()
+    
+    def _deactivate_related_mode(self) -> None:
+        """Deactivate related mode and remove auto-added files."""
+        if self._last_added_related_files:
+            removed = self.file_tree_widget.remove_paths_from_selection(
+                self._last_added_related_files
+            )
+            self._show_status(f"Removed {removed} related files")
+        
+        self._last_added_related_files.clear()
+        self._related_mode_active = False
+        self._related_btn.setChecked(False)
+        self._related_btn.setText("🔗 Related")
+        self._related_btn.setStyleSheet(self._related_inactive_style)
+    
+    @Slot(int)
+    def _on_related_level_changed(self, value: int) -> None:
+        """Handle level spinbox change — re-resolve if mode active."""
+        if self._related_mode_active:
+            # Remove old related files first
+            if self._last_added_related_files:
+                self.file_tree_widget.remove_paths_from_selection(
+                    self._last_added_related_files
+                )
+                self._last_added_related_files.clear()
+            self._resolve_related_files()
+    
+    def _resolve_related_files(self) -> None:
+        """Resolve related files for all currently selected files."""
+        workspace = self.get_workspace()
+        if not workspace:
+            return
+        
+        tree_item = self.file_tree_widget.get_root_tree_item()
+        if not tree_item:
+            return
+        
+        # Get user-selected files only (exclude auto-added related files)
+        all_selected = self.file_tree_widget.get_all_selected_paths()
+        user_selected = all_selected - self._last_added_related_files
+        
+        # Filter to supported file types
+        supported_exts = {".py", ".js", ".jsx", ".ts", ".tsx"}
+        source_files = [
+            Path(p) for p in user_selected
+            if Path(p).is_file() and Path(p).suffix in supported_exts
+        ]
+        
+        if not source_files:
+            if self._last_added_related_files:
+                self.file_tree_widget.remove_paths_from_selection(
+                    self._last_added_related_files
+                )
+                self._last_added_related_files.clear()
+            self._related_btn.setText("🔗 Related")
+            return
+        
+        depth = self._related_level_spin.value()
+        
+        # Resolve in background to avoid UI freeze
+        def resolve():
+            try:
+                resolver = DependencyResolver(workspace)
+                resolver.build_file_index(tree_item)
+                
+                all_related: Set[Path] = set()
+                for file_path in source_files:
+                    related = resolver.get_related_files(file_path, max_depth=depth)
+                    all_related.update(related)
+                
+                # Convert to string paths
+                related_strs = {str(p) for p in all_related if p.exists()}
+                # Exclude files already selected by user
+                new_related = related_strs - user_selected
+                
+                # Apply on main thread
+                run_on_main_thread(lambda: self._apply_related_results(new_related, user_selected))
+            except Exception as e:
+                run_on_main_thread(
+                    lambda: self._show_status(f"Related files error: {e}", is_error=True)
+                )
+        
+        schedule_background(resolve)
+    
+    def _apply_related_results(self, new_related: Set[str], user_selected: Set[str]) -> None:
+        """Apply resolved related files to selection (main thread)."""
+        if not self._related_mode_active:
+            return  # Mode was deactivated while resolving
+        
+        self._resolving_related = True
+        try:
+            # Remove previously auto-added files that are no longer related
+            old_to_remove = self._last_added_related_files - new_related
+            if old_to_remove:
+                self.file_tree_widget.remove_paths_from_selection(old_to_remove)
+            
+            # Add new related files
+            to_add = new_related - self._last_added_related_files
+            if to_add:
+                self.file_tree_widget.add_paths_to_selection(to_add)
+            
+            self._last_added_related_files = new_related
+            
+            count = len(new_related)
+            self._related_btn.setText(f"🔗 Related ({count})")
+            if count > 0:
+                self._show_status(
+                    f"Found {count} related files (depth={self._related_level_spin.value()})"
+                )
+            else:
+                self._show_status("No related files found")
+        finally:
+            self._resolving_related = False
     
     # ===== Helpers =====
     

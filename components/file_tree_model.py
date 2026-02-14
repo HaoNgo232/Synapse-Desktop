@@ -454,17 +454,78 @@ class FileTreeModel(QAbstractItemModel):
         """
         Scan filesystem trực tiếp để tìm tất cả files trong folder.
         Dùng cho folders chưa lazy-loaded trong tree model.
-        Respect excluded patterns và gitignore.
+        Respect excluded patterns, gitignore, và binary extensions.
         """
-        from core.utils.file_utils import is_binary_by_extension
+        from core.utils.file_utils import (
+            is_binary_by_extension, is_system_path,
+            get_cached_pathspec, _read_gitignore,
+        )
+        from core.constants import EXTENDED_IGNORE_PATTERNS
+        from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+        
+        # Build ignore spec giống load_folder_children
+        ignore_patterns: List[str] = [".git", ".hg", ".svn"]
+        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
+        
+        excluded = get_excluded_patterns()
+        if excluded:
+            ignore_patterns.extend(excluded)
+        
+        # Tìm git root
+        root_path = folder
+        while root_path.parent != root_path:
+            if (root_path / ".git").exists():
+                break
+            root_path = root_path.parent
+        
+        # Fallback to workspace root nếu có
+        if self._workspace_path and self._workspace_path != root_path:
+            ws = self._workspace_path
+            while ws.parent != ws:
+                if (ws / ".git").exists():
+                    root_path = ws
+                    break
+                ws = ws.parent
+        
+        if get_use_gitignore():
+            gitignore_patterns = _read_gitignore(root_path)
+            ignore_patterns.extend(gitignore_patterns)
+        
+        spec = get_cached_pathspec(root_path, list(ignore_patterns))
+        
+        # Quick-skip set cho common ignores
+        QUICK_SKIP = frozenset({
+            "node_modules", ".next", "dist", "__pycache__",
+            ".venv", "venv", "coverage", ".git", ".hg", ".svn",
+            "build", "target", ".cache", ".parcel-cache",
+        })
         
         try:
             for entry in folder.rglob('*'):
-                if entry.is_file() and not is_binary_by_extension(entry):
-                    path_str = str(entry)
-                    if path_str not in seen:
-                        result.append(path_str)
-                        seen.add(path_str)
+                # Skip ignored directories' contents
+                parts = entry.relative_to(folder).parts
+                if any(p in QUICK_SKIP for p in parts):
+                    continue
+                
+                if not entry.is_file():
+                    continue
+                
+                if is_system_path(entry) or is_binary_by_extension(entry):
+                    continue
+                
+                # Check pathspec
+                try:
+                    rel_path_str = str(entry.relative_to(root_path))
+                except ValueError:
+                    rel_path_str = entry.name
+                
+                if spec.match_file(rel_path_str):
+                    continue
+                
+                path_str = str(entry)
+                if path_str not in seen:
+                    result.append(path_str)
+                    seen.add(path_str)
         except (PermissionError, OSError) as e:
             logger.debug(f"Error scanning {folder}: {e}")
     

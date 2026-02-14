@@ -11,7 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Tuple
 import pathspec
-from core.constants import BINARY_EXTENSIONS, EXTENDED_IGNORE_PATTERNS
+from core.constants import BINARY_EXTENSIONS, DIRECTORY_QUICK_SKIP, EXTENDED_IGNORE_PATTERNS
 
 # Cache for gitignore patterns: root_path -> (mtime, patterns)
 _gitignore_cache: Dict[str, Tuple[float, list]] = {}
@@ -550,11 +550,9 @@ def load_folder_children(
         # Vì patterns như "node_modules" cần match cả khi ở subfolder
         entry_name = entry.name
         
-        # Quick check cho common ignore patterns
-        # Không cần relative path matching cho các patterns phổ biến
-        if entry_name in ("node_modules", ".next", "dist", "__pycache__", 
-                          ".venv", "venv", "coverage", ".git", ".hg", ".svn",
-                          "build", "target", ".cache", ".parcel-cache"):
+        # Quick check cho common ignore directories
+        # Dùng shared DIRECTORY_QUICK_SKIP - bao gồm tất cả ngôn ngữ/framework
+        if entry_name in DIRECTORY_QUICK_SKIP:
             continue
         
         # Check với spec cho các patterns khác

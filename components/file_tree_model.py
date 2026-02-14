@@ -498,16 +498,7 @@ class FileTreeModel(QAbstractItemModel):
         
         spec = get_cached_pathspec(root_path, list(ignore_patterns))
         
-        # Quick-skip set cho common ignores — os.walk sẽ prune directories này
-        # KHÔNG cần enter vào node_modules, .next, dist...
-        QUICK_SKIP = frozenset({
-            "node_modules", ".next", ".nuxt", "dist", "__pycache__",
-            ".venv", "venv", "coverage", ".git", ".hg", ".svn",
-            "build", "target", ".cache", ".parcel-cache",
-            "bower_components", "jspm_packages", ".bundle",
-            ".gradle", ".npm", ".yarn", ".serverless",
-            ".fusebox", ".dynamodb", ".tox", "egg-info",
-        })
+        from core.constants import DIRECTORY_QUICK_SKIP
         
         root_path_str = str(root_path)
         
@@ -515,7 +506,7 @@ class FileTreeModel(QAbstractItemModel):
             for dirpath, dirnames, filenames in os.walk(str(folder)):
                 # Prune ignored directories IN-PLACE — os.walk sẽ KHÔNG enter vào
                 # Đây là key fix: tránh traverse node_modules (100K+ files)
-                dirnames[:] = sorted(d for d in dirnames if d not in QUICK_SKIP)
+                dirnames[:] = sorted(d for d in dirnames if d not in DIRECTORY_QUICK_SKIP)
                 
                 for filename in filenames:
                     full_path = os.path.join(dirpath, filename)

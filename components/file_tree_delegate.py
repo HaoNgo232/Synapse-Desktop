@@ -57,17 +57,17 @@ _font_small: QFont | None = None
 def _get_font_normal() -> QFont:
     global _font_normal
     if _font_normal is None:
-        _font_normal = QFont()
-        _font_normal.setPointSize(10)
+        _font_normal = QFont("IBM Plex Sans")
+        _font_normal.setPointSize(11)
     return _font_normal
 
 
 def _get_font_bold() -> QFont:
     global _font_bold
     if _font_bold is None:
-        _font_bold = QFont()
-        _font_bold.setPointSize(10)
-        _font_bold.setBold(True)
+        _font_bold = QFont("IBM Plex Sans")
+        _font_bold.setPointSize(11)
+        _font_bold.setWeight(QFont.Weight.Medium)  # Medium thay vì Bold
     return _font_bold
 
 
@@ -75,7 +75,7 @@ def _get_font_mono() -> QFont:
     global _font_mono
     if _font_mono is None:
         _font_mono = QFont("JetBrains Mono, Fira Code, Consolas, monospace")
-        _font_mono.setPointSize(9)
+        _font_mono.setPointSize(10)
     return _font_mono
 
 

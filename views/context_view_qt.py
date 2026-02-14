@@ -64,6 +64,7 @@ class ContextViewQt(QWidget):
         self._is_loading = False
         self._pending_refresh = False
         self._token_generation = 0
+        self._status_timer: Optional[QTimer] = None  # Fix race condition
         
         # Services
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
@@ -117,9 +118,10 @@ class ContextViewQt(QWidget):
         # --- Action buttons (compact, icon-only with tooltips) ---
         btn_style = (
             f"QToolButton {{ "
-            f"  background: {ThemeColors.BG_ELEVATED}; border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 6px; padding: 4px 8px; font-size: 16px; "
-            f"  color: {ThemeColors.TEXT_SECONDARY}; min-width: 28px; min-height: 28px; "
+            f"  background: {ThemeColors.BG_SURFACE}; border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 8px; padding: 6px 10px; font-size: 12px; "
+            f"  color: {ThemeColors.TEXT_SECONDARY}; min-width: 32px; min-height: 32px; "
+            f"  font-weight: 500; "
             f"}} "
             f"QToolButton:hover {{ "
             f"  background: {ThemeColors.PRIMARY}; color: #FFFFFF; "
@@ -130,8 +132,9 @@ class ContextViewQt(QWidget):
         # Refresh
         refresh_btn = QToolButton()
         refresh_btn.setText("↻")
-        refresh_btn.setToolTip("Refresh file tree")
+        refresh_btn.setToolTip("Refresh file tree (F5)")
         refresh_btn.setStyleSheet(btn_style)
+        refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self._refresh_tree)
         header.addWidget(refresh_btn)
         
@@ -140,6 +143,7 @@ class ContextViewQt(QWidget):
         remote_btn.setText("☁")
         remote_btn.setToolTip("Remote Repositories")
         remote_btn.setStyleSheet(btn_style)
+        remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         remote_menu = QMenu(remote_btn)
         remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
@@ -152,6 +156,7 @@ class ContextViewQt(QWidget):
         ignore_btn.setText("⊘")
         ignore_btn.setToolTip("Ignore selected files")
         ignore_btn.setStyleSheet(btn_style)
+        ignore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ignore_btn.clicked.connect(self._add_to_ignore)
         header.addWidget(ignore_btn)
         
@@ -160,6 +165,7 @@ class ContextViewQt(QWidget):
         undo_btn.setText("↩")
         undo_btn.setToolTip("Undo last ignore")
         undo_btn.setStyleSheet(btn_style)
+        undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         undo_btn.clicked.connect(self._undo_ignore)
         header.addWidget(undo_btn)
         
@@ -169,8 +175,8 @@ class ContextViewQt(QWidget):
         related_active_style = (
             f"QToolButton {{ "
             f"  background: {ThemeColors.SUCCESS}; border: 1px solid {ThemeColors.SUCCESS}; "
-            f"  border-radius: 6px; padding: 4px 10px; font-size: 12px; "
-            f"  color: #FFFFFF; min-height: 28px; font-weight: bold; "
+            f"  border-radius: 8px; padding: 6px 12px; font-size: 12px; "
+            f"  color: #FFFFFF; min-height: 32px; font-weight: 600; "
             f"}} "
             f"QToolButton:hover {{ "
             f"  background: #059669; border-color: #059669; "
@@ -178,9 +184,9 @@ class ContextViewQt(QWidget):
         )
         related_inactive_style = (
             f"QToolButton {{ "
-            f"  background: {ThemeColors.BG_ELEVATED}; border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 6px; padding: 4px 10px; font-size: 12px; "
-            f"  color: {ThemeColors.TEXT_SECONDARY}; min-height: 28px; "
+            f"  background: {ThemeColors.BG_SURFACE}; border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 8px; padding: 6px 12px; font-size: 12px; "
+            f"  color: {ThemeColors.TEXT_SECONDARY}; min-height: 32px; font-weight: 500; "
             f"}} "
             f"QToolButton:hover {{ "
             f"  background: {ThemeColors.PRIMARY}; color: #FFFFFF; "
@@ -191,16 +197,17 @@ class ContextViewQt(QWidget):
         self._related_inactive_style = related_inactive_style
         
         self._related_btn = QToolButton()
-        self._related_btn.setText("🔗 Related")
+        self._related_btn.setText("Related")
         self._related_btn.setToolTip("Auto-select files imported by your selection")
         self._related_btn.setStyleSheet(related_inactive_style)
         self._related_btn.setCheckable(True)
+        self._related_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._related_btn.clicked.connect(self._toggle_related_mode)
         header.addWidget(self._related_btn)
         
         # Level spinbox
-        level_label = QLabel("Lvl")
-        level_label.setStyleSheet(f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px;")
+        level_label = QLabel("Depth")
+        level_label.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; font-weight: 500;")
         header.addWidget(level_label)
         
         self._related_level_spin = QSpinBox()
@@ -255,7 +262,14 @@ class ContextViewQt(QWidget):
         
         self._instructions_field = QTextEdit()
         self._instructions_field.setPlaceholderText("Enter your task instructions here...")
-        self._instructions_field.setMaximumHeight(120)
+        self._instructions_field.setMinimumHeight(280)  # Tăng từ 200 lên 280
+        self._instructions_field.setStyleSheet(f"""
+            QTextEdit {{
+                font-family: 'IBM Plex Sans', sans-serif;
+                font-size: 13px;
+                line-height: 1.6;
+            }}
+        """)
         self._instructions_field.textChanged.connect(self._on_instructions_changed)
         layout.addWidget(self._instructions_field)
         
@@ -289,9 +303,21 @@ class ContextViewQt(QWidget):
         actions = self._build_action_buttons()
         layout.addWidget(actions)
         
-        # Status text
+        # Status toast (nổi bật hơn)
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.SUCCESS};")
+        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_label.setMinimumHeight(40)
+        self._status_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 13px;
+                font-weight: 600;
+                color: white;
+                background-color: transparent;
+                border-radius: 8px;
+                padding: 10px 16px;
+            }}
+        """)
+        self._status_label.hide()  # Ẩn mặc định
         layout.addWidget(self._status_label)
         
         # Token stats panel
@@ -314,18 +340,26 @@ class ContextViewQt(QWidget):
         row1 = QHBoxLayout()
         diff_btn = QPushButton("Copy Diff Only")
         diff_btn.setStyleSheet(
-            "QPushButton {"
-            "  background-color: #8B5CF6; color: #FFFFFF; border: none;"
-            "  border-radius: 6px; padding: 8px 16px; font-weight: 500;"
-            "}"
-            "QPushButton:hover {"
-            "  background-color: #7C3AED;"
-            "}"
-            "QPushButton:pressed {"
-            "  background-color: #6D28D9;"
-            "}"
+            f"""
+            QPushButton {{
+                background-color: #8B5CF6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: #7C3AED;
+            }}
+            QPushButton:pressed {{
+                background-color: #6D28D9;
+            }}
+            """
         )
-        diff_btn.setToolTip("Copy only git diff")
+        diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
+        diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         diff_btn.clicked.connect(self._show_diff_only_dialog)
         row1.addWidget(diff_btn)
         layout.addLayout(row1)
@@ -333,25 +367,58 @@ class ContextViewQt(QWidget):
         # Row 2: Copy Tree Map + Copy Smart
         row2 = QHBoxLayout()
         tree_map_btn = QPushButton("Copy Tree Map")
-        tree_map_btn.setProperty("class", "outlined")
+        tree_map_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 2px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.BG_SURFACE};
+                border-color: {ThemeColors.BORDER_LIGHT};
+            }}
+            QPushButton:pressed {{
+                background-color: {ThemeColors.BG_ELEVATED};
+            }}
+            """
+        )
         tree_map_btn.setToolTip("Copy only file structure")
+        tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         tree_map_btn.clicked.connect(self._copy_tree_map_only)
         row2.addWidget(tree_map_btn)
         
         smart_btn = QPushButton("Copy Smart")
+        smart_btn.setProperty("custom-style", "orange")  # Prevent global override
         smart_btn.setStyleSheet(
-            "QPushButton {"
-            f"  color: {ThemeColors.WARNING}; border: 1px solid {ThemeColors.WARNING};"
-            "  background: transparent; border-radius: 6px; padding: 8px 16px; font-weight: 500;"
-            "}"
-            "QPushButton:hover {"
-            f"  background-color: {ThemeColors.BG_ELEVATED};"
-            "}"
-            "QPushButton:pressed {"
-            f"  background-color: {ThemeColors.BG_HOVER};"
-            "}"
+            f"""
+            QPushButton[custom-style="orange"] {{
+                color: {ThemeColors.WARNING};
+                border: 2px solid {ThemeColors.WARNING};
+                background-color: {ThemeColors.BG_PAGE};
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton[custom-style="orange"]:hover {{
+                background-color: {ThemeColors.WARNING};
+                color: white;
+                border-color: {ThemeColors.WARNING};
+            }}
+            QPushButton[custom-style="orange"]:pressed {{
+                background-color: #D97706;
+                border-color: #D97706;
+                color: white;
+            }}
+            """
         )
-        smart_btn.setToolTip("Copy code structure only")
+        smart_btn.setToolTip("Copy code structure only (Smart Context)")
+        smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         smart_btn.clicked.connect(self._copy_smart_context)
         row2.addWidget(smart_btn)
         layout.addLayout(row2)
@@ -359,14 +426,53 @@ class ContextViewQt(QWidget):
         # Row 3: Copy Context + Copy + OPX
         row3 = QHBoxLayout()
         copy_btn = QPushButton("Copy Context")
-        copy_btn.setProperty("class", "outlined")
-        copy_btn.setToolTip("Copy context with basic formatting")
+        copy_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 2px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.BG_SURFACE};
+                border-color: {ThemeColors.BORDER_LIGHT};
+            }}
+            QPushButton:pressed {{
+                background-color: {ThemeColors.BG_ELEVATED};
+            }}
+            """
+        )
+        copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
         row3.addWidget(copy_btn)
         
         opx_btn = QPushButton("Copy + OPX")
-        opx_btn.setProperty("class", "primary")
-        opx_btn.setToolTip("Copy context with OPX instructions")
+        opx_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.PRIMARY_HOVER};
+            }}
+            QPushButton:pressed {{
+                background-color: #1E40AF;
+            }}
+            """
+        )
+        opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
+        opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
         row3.addWidget(opx_btn)
         layout.addLayout(row3)
@@ -901,10 +1007,38 @@ class ContextViewQt(QWidget):
     # ===== Helpers =====
     
     def _show_status(self, message: str, is_error: bool = False) -> None:
-        """Show status message."""
-        color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status_label.setStyleSheet(f"font-size: 12px; color: {color};")
-        self._status_label.setText(message)
+        """Show status message as subtle notification."""
+        # Cancel timer cũ để tránh race condition
+        if self._status_timer is not None:
+            self._status_timer.stop()
+            self._status_timer = None
         
-        if message and not is_error:
-            QTimer.singleShot(5000, lambda: self._status_label.setText(""))
+        if is_error:
+            bg_color = "#FEE2E2"  # Light red background
+            text_color = "#7F1D1D"  # Darker red text (tăng tương phản)
+            icon = "⚠"
+        else:
+            bg_color = "#A7F3D0"  # Darker green background (tăng tương phản)
+            text_color = "#064E3B"  # Darker green text
+            icon = "✓"
+        
+        self._status_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 13px;
+                font-weight: 600;
+                color: {text_color};
+                background-color: {bg_color};
+                border-radius: 6px;
+                padding: 8px 12px;
+                border: 1px solid {text_color}66;
+            }}
+        """)
+        self._status_label.setText(f"{icon} {message}")
+        self._status_label.show()
+        
+        # Tạo timer mới
+        if message:
+            self._status_timer = QTimer()
+            self._status_timer.setSingleShot(True)
+            self._status_timer.timeout.connect(self._status_label.hide)
+            self._status_timer.start(8000)  # 8 giây

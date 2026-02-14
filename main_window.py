@@ -40,6 +40,12 @@ class SynapseMainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        
+        # Load custom fonts FIRST
+        from core.theme import ThemeFonts
+        from core.stylesheet import get_global_stylesheet
+        ThemeFonts.load_fonts()
+        
         self.workspace_path: Optional[Path] = None
         
         # Session restore data
@@ -54,6 +60,9 @@ class SynapseMainWindow(QMainWindow):
         self.setWindowTitle("Synapse Desktop")
         self.setMinimumSize(800, 600)
         self.resize(1500, 1000)
+        
+        # Apply global stylesheet
+        self.setStyleSheet(get_global_stylesheet())
         
         # Build UI
         self._build_ui()
@@ -162,24 +171,62 @@ class SynapseMainWindow(QMainWindow):
         # Folder path text
         self._folder_path_label = QLabel("No folder selected")
         self._folder_path_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; font-size: 14px;"
+            f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 13px; font-weight: 500;"
         )
         self._folder_path_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._folder_path_label, stretch=1)
         
         # Recent folders menu button
         self._recent_btn = QToolButton()
-        self._recent_btn.setText("⏱")
-        self._recent_btn.setToolTip("Recent Folders")
+        self._recent_btn.setText("Recent")
+        self._recent_btn.setToolTip("Recent Folders (Ctrl+R)")
         self._recent_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._recent_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._recent_btn.setStyleSheet(f"""
+            QToolButton {{
+                background-color: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_SECONDARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: 500;
+            }}
+            QToolButton:hover {{
+                background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border-color: {ThemeColors.BORDER_LIGHT};
+            }}
+            QToolButton::menu-indicator {{
+                width: 0px;
+            }}
+        """)
         self._recent_menu = QMenu(self._recent_btn)
         self._recent_btn.setMenu(self._recent_menu)
         self._refresh_recent_folders_menu()
         layout.addWidget(self._recent_btn)
         
         # Open Folder button
-        open_btn = QPushButton("Open Folder")
-        open_btn.setProperty("class", "primary")
+        open_btn = QPushButton("📁 Open Folder")
+        open_btn.setToolTip("Open workspace folder (Ctrl+O)")
+        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 20px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.PRIMARY_HOVER};
+            }}
+            QPushButton:pressed {{
+                background-color: #1E40AF;
+            }}
+        """)
         open_btn.clicked.connect(self._open_folder_dialog)
         layout.addWidget(open_btn)
         

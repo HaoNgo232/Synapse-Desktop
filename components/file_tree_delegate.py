@@ -203,7 +203,9 @@ class FileTreeDelegate(QStyledItemDelegate):
             token_text = self._format_count(token_count)
             bw = self._badge_width(token_text)
             badge_x -= bw
-            self._draw_badge(painter, badge_x, y, bw, height, token_text, COLOR_SUCCESS)
+            # Folder totals use primary color (blue), file counts use green
+            badge_color = COLOR_PRIMARY if is_dir else COLOR_SUCCESS
+            self._draw_badge(painter, badge_x, y, bw, height, token_text, badge_color)
         
         painter.restore()
     

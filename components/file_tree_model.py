@@ -213,6 +213,8 @@ class FileTreeModel(QAbstractItemModel):
             return Qt.CheckState.Checked if node.path in self._selected_paths else Qt.CheckState.Unchecked
         
         elif role == FileTreeRoles.TOKEN_COUNT_ROLE:
+            if node.is_dir:
+                return self._get_folder_token_total(node)
             return self._token_cache.get(node.path)
         
         elif role == FileTreeRoles.LINE_COUNT_ROLE:
@@ -588,17 +590,28 @@ class FileTreeModel(QAbstractItemModel):
         self.token_count_updated.emit(path, count)
 
     def update_token_counts_batch(self, counts: Dict[str, int]) -> None:
-        """Batch update token counts và emit một lần dataChanged."""
+        """Batch update token counts và emit dataChanged cho files + ancestor folders."""
         if not counts:
             return
 
         self._token_cache.update(counts)
 
-        if self._root_node:
-            top_left = self.index(0, 0)
-            bottom_right = self.index(self.rowCount() - 1, 0)
-            if top_left.isValid() and bottom_right.isValid():
-                self.dataChanged.emit(top_left, bottom_right, [FileTreeRoles.TOKEN_COUNT_ROLE])
+        # Emit dataChanged for updated files + their ancestor folders
+        changed_nodes: Set[TreeNode] = set()
+        for path in counts:
+            node = self._path_to_node.get(path)
+            if node is not None:
+                changed_nodes.add(node)
+                # Also mark ancestor folders for repaint (token total changed)
+                parent = node.parent
+                while parent is not None and parent is not self._invisible_root:
+                    changed_nodes.add(parent)
+                    parent = parent.parent
+
+        for node in changed_nodes:
+            idx = self._node_to_index(node)
+            if idx.isValid():
+                self.dataChanged.emit(idx, idx, [FileTreeRoles.TOKEN_COUNT_ROLE])
 
         for path, count in counts.items():
             self.token_count_updated.emit(path, count)
@@ -737,6 +750,26 @@ class FileTreeModel(QAbstractItemModel):
 
         self._folder_state_cache[node.path] = state
         return state
+    
+    def _get_folder_token_total(self, node: TreeNode) -> Optional[int]:
+        """
+        Tính tổng tokens của tất cả selected files trong folder.
+        
+        Chỉ tính files đã có token count trong cache.
+        Returns None nếu không có file nào selected hoặc chưa counted.
+        """
+        total = 0
+        has_any = False
+        folder_prefix = node.path + "/"
+        
+        for file_path, count in self._token_cache.items():
+            if file_path.startswith(folder_prefix) and count > 0:
+                # Chỉ tính files đang selected
+                if file_path in self._selected_paths or file_path in self._last_resolved_files:
+                    total += count
+                    has_any = True
+        
+        return total if has_any else None
     
     def _emit_parent_changes(self, node: TreeNode) -> None:
         """Emit dataChanged cho tất cả ancestors (cập nhật tri-state)."""

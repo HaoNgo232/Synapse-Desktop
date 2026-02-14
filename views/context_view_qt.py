@@ -103,13 +103,66 @@ class ContextViewQt(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(8)
         
-        # Header: "Files" + token count
+        # Header: "Files" + actions + token count
         header = QHBoxLayout()
+        header.setSpacing(6)
+        
         files_label = QLabel("Files")
         files_label.setStyleSheet(
             f"font-weight: 600; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(files_label)
+        header.addSpacing(8)
+        
+        # --- Action buttons (compact, icon-only with tooltips) ---
+        btn_style = (
+            f"QToolButton {{ "
+            f"  background: {ThemeColors.BG_ELEVATED}; border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 6px; padding: 4px 8px; font-size: 16px; "
+            f"  color: {ThemeColors.TEXT_SECONDARY}; min-width: 28px; min-height: 28px; "
+            f"}} "
+            f"QToolButton:hover {{ "
+            f"  background: {ThemeColors.PRIMARY}; color: #FFFFFF; "
+            f"  border-color: {ThemeColors.PRIMARY}; "
+            f"}}"
+        )
+        
+        # Refresh
+        refresh_btn = QToolButton()
+        refresh_btn.setText("↻")
+        refresh_btn.setToolTip("Refresh file tree")
+        refresh_btn.setStyleSheet(btn_style)
+        refresh_btn.clicked.connect(self._refresh_tree)
+        header.addWidget(refresh_btn)
+        
+        # Remote repos (dropdown)
+        remote_btn = QToolButton()
+        remote_btn.setText("☁")
+        remote_btn.setToolTip("Remote Repositories")
+        remote_btn.setStyleSheet(btn_style)
+        remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        remote_menu = QMenu(remote_btn)
+        remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
+        remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
+        remote_btn.setMenu(remote_menu)
+        header.addWidget(remote_btn)
+        
+        # Ignore
+        ignore_btn = QToolButton()
+        ignore_btn.setText("⊘")
+        ignore_btn.setToolTip("Ignore selected files")
+        ignore_btn.setStyleSheet(btn_style)
+        ignore_btn.clicked.connect(self._add_to_ignore)
+        header.addWidget(ignore_btn)
+        
+        # Undo ignore
+        undo_btn = QToolButton()
+        undo_btn.setText("↩")
+        undo_btn.setToolTip("Undo last ignore")
+        undo_btn.setStyleSheet(btn_style)
+        undo_btn.clicked.connect(self._undo_ignore)
+        header.addWidget(undo_btn)
+        
         header.addStretch()
         
         self._token_count_label = QLabel("0 tokens")
@@ -119,15 +172,6 @@ class ContextViewQt(QWidget):
         header.addWidget(self._token_count_label)
         layout.addLayout(header)
         
-        # Toolbar
-        toolbar = self._build_toolbar()
-        layout.addWidget(toolbar)
-        
-        # Separator
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        layout.addWidget(sep)
-        
         # File tree widget
         self.file_tree_widget = FileTreeWidget()
         self.file_tree_widget.selection_changed.connect(self._on_selection_changed)
@@ -136,47 +180,6 @@ class ContextViewQt(QWidget):
         layout.addWidget(self.file_tree_widget, stretch=1)
         
         return panel
-    
-    def _build_toolbar(self) -> QWidget:
-        """Build toolbar với action buttons."""
-        toolbar = QWidget()
-        layout = QHBoxLayout(toolbar)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(2)
-        
-        layout.addStretch()
-        
-        # Refresh
-        refresh_btn = QToolButton()
-        refresh_btn.setText("🔄")
-        refresh_btn.setToolTip("Refresh")
-        refresh_btn.clicked.connect(self._refresh_tree)
-        layout.addWidget(refresh_btn)
-        
-        # Remote repos menu
-        remote_btn = QPushButton("Remote Repos")
-        remote_btn.setProperty("class", "outlined")
-        remote_btn.setFixedHeight(28)
-        remote_menu = QMenu(remote_btn)
-        remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
-        remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
-        remote_btn.setMenu(remote_menu)
-        layout.addWidget(remote_btn)
-        
-        # Ignore buttons
-        ignore_btn = QToolButton()
-        ignore_btn.setText("🚫")
-        ignore_btn.setToolTip("Add selected to ignore list")
-        ignore_btn.clicked.connect(self._add_to_ignore)
-        layout.addWidget(ignore_btn)
-        
-        undo_btn = QToolButton()
-        undo_btn.setText("↩")
-        undo_btn.setToolTip("Undo last ignore")
-        undo_btn.clicked.connect(self._undo_ignore)
-        layout.addWidget(undo_btn)
-        
-        return toolbar
     
     def _build_right_panel(self) -> QFrame:
         """Build right panel với instructions, format selector, action buttons."""

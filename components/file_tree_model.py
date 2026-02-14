@@ -10,6 +10,7 @@ KEY OPTIMIZATIONS:
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Set, Dict, List, Any
 
@@ -497,39 +498,44 @@ class FileTreeModel(QAbstractItemModel):
         
         spec = get_cached_pathspec(root_path, list(ignore_patterns))
         
-        # Quick-skip set cho common ignores
+        # Quick-skip set cho common ignores — os.walk sẽ prune directories này
+        # KHÔNG cần enter vào node_modules, .next, dist...
         QUICK_SKIP = frozenset({
-            "node_modules", ".next", "dist", "__pycache__",
+            "node_modules", ".next", ".nuxt", "dist", "__pycache__",
             ".venv", "venv", "coverage", ".git", ".hg", ".svn",
             "build", "target", ".cache", ".parcel-cache",
+            "bower_components", "jspm_packages", ".bundle",
+            ".gradle", ".npm", ".yarn", ".serverless",
+            ".fusebox", ".dynamodb", ".tox", "egg-info",
         })
         
+        root_path_str = str(root_path)
+        
         try:
-            for entry in folder.rglob('*'):
-                # Skip ignored directories' contents
-                parts = entry.relative_to(folder).parts
-                if any(p in QUICK_SKIP for p in parts):
-                    continue
+            for dirpath, dirnames, filenames in os.walk(str(folder)):
+                # Prune ignored directories IN-PLACE — os.walk sẽ KHÔNG enter vào
+                # Đây là key fix: tránh traverse node_modules (100K+ files)
+                dirnames[:] = sorted(d for d in dirnames if d not in QUICK_SKIP)
                 
-                if not entry.is_file():
-                    continue
-                
-                if is_system_path(entry) or is_binary_by_extension(entry):
-                    continue
-                
-                # Check pathspec
-                try:
-                    rel_path_str = str(entry.relative_to(root_path))
-                except ValueError:
-                    rel_path_str = entry.name
-                
-                if spec.match_file(rel_path_str):
-                    continue
-                
-                path_str = str(entry)
-                if path_str not in seen:
-                    result.append(path_str)
-                    seen.add(path_str)
+                for filename in filenames:
+                    full_path = os.path.join(dirpath, filename)
+                    entry = Path(full_path)
+                    
+                    if is_system_path(entry) or is_binary_by_extension(entry):
+                        continue
+                    
+                    # Check pathspec
+                    try:
+                        rel_path_str = os.path.relpath(full_path, root_path_str)
+                    except ValueError:
+                        rel_path_str = filename
+                    
+                    if spec.match_file(rel_path_str):
+                        continue
+                    
+                    if full_path not in seen:
+                        result.append(full_path)
+                        seen.add(full_path)
         except (PermissionError, OSError) as e:
             logger.debug(f"Error scanning {folder}: {e}")
     
@@ -658,8 +664,25 @@ class FileTreeModel(QAbstractItemModel):
         return total
     
     def get_selected_file_count(self) -> int:
-        """Get số files đã selected (bao gồm deep unloaded files)."""
-        return len(self._last_resolved_files) if self._last_resolved_files else len(self.get_selected_paths())
+        """Get số files đã selected (bao gồm deep unloaded files).
+        
+        Dùng _last_resolved_files nếu đã có (set bởi background token counting).
+        Nếu chưa có, trả về quick estimate từ _selected_paths để KHÔNG block UI.
+        Accurate count sẽ update sau khi token counting hoàn thành.
+        """
+        if self._last_resolved_files:
+            return len(self._last_resolved_files)
+        # Quick estimate: count non-folder paths, treat unloaded folders as 1 each
+        # Tránh gọi get_selected_paths() synchronously vì nó scan disk
+        count = 0
+        for p in self._selected_paths:
+            node = self._path_to_node.get(p)
+            if node is None or not node.is_dir:
+                count += 1
+            else:
+                # Folder — estimate có files bên trong
+                count += max(1, node.child_count())
+        return count
     
     def clear_token_cache(self) -> None:
         """Clear token cache."""

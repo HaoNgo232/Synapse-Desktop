@@ -4,7 +4,7 @@ This document provides guidelines and commands for agentic coding agents working
 
 ## Project Overview
 
-Synapse Desktop is a lightweight AI-assisted code editing tool built with Python and Flet. It provides file context management for LLMs with features like smart context extraction, OPX apply operations, and comprehensive security scanning.
+Synapse Desktop is a lightweight AI-assisted code editing tool built with Python and PySide6. It provides file context management for LLMs with features like smart context extraction, OPX apply operations, and comprehensive security scanning.
 
 ## Build & Development Commands
 
@@ -36,16 +36,13 @@ echo $VIRTUAL_ENV
 ### Running the Application
 
 ```bash
-# Development with hot reload (recommended)
-flet run main.py -r
-
 # Standard run
-python main.py
+python main_window.py
 # OR
 ./start.sh
 
 # With debug logging
-SYNAPSE_DEBUG=1 python main.py
+SYNAPSE_DEBUG=1 python main_window.py
 ```
 
 ### Testing Commands
@@ -158,10 +155,10 @@ import json
 from pathlib import Path
 from typing import Optional, Dict, List
 
-import flet as ft
+from PySide6 import QtWidgets as qw
 import pytest
 
-from views.context_view import ContextView
+from views.context_view_qt import ContextViewQt
 from core.utils.file_utils import scan_directory, TreeItem
 ```
 
@@ -230,10 +227,10 @@ def load_settings() -> Dict[str, Any]:
     return DEFAULT_SETTINGS.copy()
 ```
 
-### UI Development (Flet)
-- Use Flet's built-in components and styling
+### UI Development (PySide6)
+- Use PySide6 signal/slot mechanism for thread safety
 - Follow the existing theme structure (`ThemeColors`)
-- Use `safe_page_update()` for thread-safe UI updates
+- Use `run_on_main_thread()` or `schedule_background()` from `qt_utils` for async operations
 - Implement proper error handling for UI operations
 
 ```python
@@ -329,7 +326,7 @@ class TestGenerateDiffLines:
 
 ## Notes for Agents
 
-- This is a desktop application using Flet for the UI
+- This is a desktop application using PySide6 for the UI
 - The project uses tree-sitter for smart code context extraction
 - Security scanning is a core feature using detect-secrets
 - Token counting is essential for LLM context management

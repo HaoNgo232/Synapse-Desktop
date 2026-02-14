@@ -1,7 +1,5 @@
 """
 History View (PySide6) - Tab hiển thị lịch sử các thao tác đã thực hiện.
-
-Port từ views/history_view.py (Flet) sang QWidget.
 """
 
 from datetime import datetime

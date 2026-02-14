@@ -53,10 +53,10 @@ source .venv/bin/activate  # Linux/Mac
 
 # Install dependencies & Run
 pip install -r requirements.txt
-python main.py
+python3 main_window.py
 ```
 
-**Requirements:** Python 3.10+ (Dependencies include `flet`, `tree-sitter`, `detect-secrets`).
+**Requirements:** Python 3.10+ (Dependencies include `pyside6`, `tree-sitter`, `detect-secrets`).
 
 ---
 

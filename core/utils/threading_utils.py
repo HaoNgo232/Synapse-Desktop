@@ -1,10 +1,8 @@
 """
 Threading Utilities - Quản lý background threads an toàn
 
-Giải quyết race condition trong Flet:
 - Global stop event cho app shutdown
 - View-aware task management
-- Safe UI update từ background threads
 """
 
 import threading

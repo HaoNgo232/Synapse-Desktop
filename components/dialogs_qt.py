@@ -1,7 +1,5 @@
 """
 Dialogs Qt - PySide6 versions of all dialogs.
-
-Port từ components/dialogs/ (Flet) sang QDialog-based.
 """
 
 import json

@@ -1,7 +1,7 @@
 """
 Token Stats Panel (PySide6) - Hiển thị thống kê tokens với model context warning.
 
-Modern Dashboard Metrics Style - port từ Flet version.
+Modern Dashboard Metrics Style.
 """
 
 from PySide6.QtWidgets import (

@@ -1,7 +1,5 @@
 """
 Context View (PySide6) - Tab để chọn files và copy context.
-
-Refactored từ Flet version, sử dụng FileTreeWidget + signals/slots.
 """
 
 import os

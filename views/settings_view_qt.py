@@ -1,8 +1,7 @@
 """
 Settings View (PySide6) - Tab cấu hình excluded folders, gitignore, security.
 
-Port từ views/settings_view.py (Flet) sang QWidget.
-Module-level functions (get_excluded_patterns, etc.) reuse trực tiếp từ original file.
+PySide6-only implementation.
 """
 
 import json
@@ -20,14 +19,53 @@ from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.session_state import clear_session_state
 from services.settings_manager import load_settings, save_settings
 
-# Re-export module-level functions
-from views.settings_view import (
-    get_excluded_patterns,
-    get_use_gitignore,
-    add_excluded_patterns,
-    remove_excluded_patterns,
-    PRESET_PROFILES,
-)
+
+PRESET_PROFILES = {
+    "Node.js": "node_modules\ndist\nbuild\n.next\ncoverage\npackage-lock.json\npnpm-lock.yaml\nyarn.lock",
+    "Python": "__pycache__\n.pytest_cache\n.venv\nvenv\nbuild\ndist\n*.pyc\n.mypy_cache",
+    "Java": "target\nout\n.gradle\n.classpath\n.project\n.settings",
+    "Go": "vendor\nbin\ndist\ncoverage.out",
+}
+
+
+def get_excluded_patterns() -> list[str]:
+    """Return normalized exclude patterns from settings."""
+    raw = load_settings().get("excluded_folders", "")
+    patterns: list[str] = []
+    for line in raw.splitlines():
+        value = line.strip()
+        if not value or value.startswith("#"):
+            continue
+        patterns.append(value)
+    return patterns
+
+
+def get_use_gitignore() -> bool:
+    """Return whether .gitignore should be respected."""
+    return bool(load_settings().get("use_gitignore", True))
+
+
+def add_excluded_patterns(patterns: list[str]) -> bool:
+    """Append new exclude patterns, avoiding duplicates."""
+    settings = load_settings()
+    existing = get_excluded_patterns()
+    merged = existing[:]
+    for pattern in patterns:
+        normalized = pattern.strip()
+        if normalized and normalized not in merged:
+            merged.append(normalized)
+    settings["excluded_folders"] = "\n".join(merged)
+    return save_settings(settings)
+
+
+def remove_excluded_patterns(patterns: list[str]) -> bool:
+    """Remove exclude patterns from settings."""
+    to_remove = {p.strip() for p in patterns if p.strip()}
+    settings = load_settings()
+    existing = get_excluded_patterns()
+    filtered = [p for p in existing if p not in to_remove]
+    settings["excluded_folders"] = "\n".join(filtered)
+    return save_settings(settings)
 
 
 class SettingsViewQt(QWidget):

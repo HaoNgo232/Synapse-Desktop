@@ -1,7 +1,5 @@
 """
 Apply View (PySide6) - Tab để paste OPX và apply changes.
-
-Port từ Flet version với QPlainTextEdit + preview cards + DiffViewer.
 """
 
 from pathlib import Path

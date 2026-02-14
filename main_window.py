@@ -1,7 +1,6 @@
 """
 Synapse Desktop - PySide6 Main Window Entry Point
 
-QMainWindow-based app kế thừa tính năng từ Flet version.
 Theme: Dark Mode OLED (Developer Tools Edition)
 """
 

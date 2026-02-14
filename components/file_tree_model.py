@@ -7,10 +7,6 @@ KEY OPTIMIZATIONS:
 3. Incremental updates: beginInsertRows/endInsertRows cho surgical updates
 4. Role-based data: Token counts, line counts, selection state stored as custom roles
 5. O(1) path lookup thông qua _path_to_index dictionary
-
-Thay thế hoàn toàn:
-- components/file_tree.py (Flet)
-- components/virtual_file_tree.py (Flet)
 """
 
 import logging

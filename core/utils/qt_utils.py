@@ -1,8 +1,7 @@
 """
 Qt Utilities - Thread-safe UI update functions cho PySide6
 
-Thay thế core/utils/ui_utils.py (Flet) bằng signal/slot pattern.
-Thay thế core/utils/safe_timer.py (threading.Timer) bằng QTimer.
+Sử dụng signal/slot pattern và QTimer cho UI-safe operations.
 """
 
 from PySide6.QtCore import (
@@ -21,7 +20,6 @@ class SignalBridge(QObject):
     Bridge để emit signals từ background threads tới main thread.
     
     Dùng signal/slot mechanism của Qt - thread-safe by design.
-    Thay thế safe_page_update() và SafeTimer pattern từ Flet.
     
     Usage:
         bridge = SignalBridge()
@@ -77,8 +75,6 @@ def get_signal_bridge() -> SignalBridge:
 def run_on_main_thread(callback: Callable[[], Any]) -> None:
     """
     Chạy callback trên main thread.
-    
-    Thay thế safe_page_update() từ Flet.
     Thread-safe: có thể gọi từ bất kỳ thread nào.
     
     Args:
@@ -90,8 +86,6 @@ def run_on_main_thread(callback: Callable[[], Any]) -> None:
 class DebouncedTimer:
     """
     Debounced timer sử dụng QTimer.
-    
-    Thay thế SafeTimer pattern từ Flet.
     Khi start() được gọi nhiều lần, chỉ callback cuối cùng
     được execute sau khi hết delay.
     
@@ -163,8 +157,6 @@ class WorkerSignals(QObject):
 class BackgroundWorker(QRunnable):
     """
     Generic background worker sử dụng QThreadPool.
-    
-    Thay thế threading.Thread và page.run_task() từ Flet.
     
     Usage:
         def heavy_work():

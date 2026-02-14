@@ -6,8 +6,6 @@ Composite widget bao gồm:
 - Action buttons (Select All, Deselect All, Collapse)
 - QTreeView với custom model/delegate
 - Token count integration (async background)
-
-Thay thế components/file_tree.py và components/virtual_file_tree.py từ Flet.
 """
 
 import logging

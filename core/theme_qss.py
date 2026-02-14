@@ -1,7 +1,6 @@
 """
 Theme QSS Generator - Tạo Qt Stylesheet từ ThemeColors
 
-Chuyển đổi hệ thống theme từ Flet sang PySide6 QSS.
 Giữ nguyên tất cả color constants từ core/theme.py.
 """
 

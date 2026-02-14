@@ -817,9 +817,9 @@ class FilePreviewDialogQt(BaseDialogQt):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        copy_btn = self._make_outlined_btn("Copy")
-        copy_btn.clicked.connect(self._copy_content)
-        btn_row.addWidget(copy_btn)
+        self._copy_btn = self._make_outlined_btn("Copy")
+        self._copy_btn.clicked.connect(self._copy_content)
+        btn_row.addWidget(self._copy_btn)
 
         close_btn = self._make_outlined_btn("Close")
         close_btn.clicked.connect(self.accept)
@@ -841,7 +841,11 @@ class FilePreviewDialogQt(BaseDialogQt):
     @Slot()
     def _copy_content(self) -> None:
         if self._content:
-            copy_to_clipboard(self._content)
+            from services.clipboard_utils import copy_to_clipboard
+            success, _ = copy_to_clipboard(self._content)
+            if success:
+                self._copy_btn.setText("Copied! ✅")
+                QTimer.singleShot(2000, lambda: self._copy_btn.setText("Copy"))
 
     @staticmethod
     def _highlight_code(content: str, language: str) -> Optional[str]:

@@ -32,7 +32,7 @@ BADGE_HEIGHT = 18
 BADGE_PADDING_H = 6
 BADGE_RADIUS = 4
 SPACING = 6
-EYE_ICON_SIZE = 20
+EYE_ICON_SIZE = 24
 
 # Colors
 COLOR_FOLDER = QColor(ThemeColors.ICON_FOLDER)
@@ -166,7 +166,18 @@ class FileTreeDelegate(QStyledItemDelegate):
         painter.drawText(icon_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, icon_str)
         x += ICON_SIZE + SPACING + 2
         
-        # 3. Calculate available space for label (excluding badges + eye icon)
+        # 3. Reserve space for eye icon (files only, on hover)
+        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        show_eye = not is_dir and is_hovered
+        
+        if show_eye:
+            eye_rect = QRect(x, y, EYE_ICON_SIZE, height)
+            painter.setFont(_get_font_normal())
+            painter.setPen(COLOR_TEXT_MUTED)
+            painter.drawText(eye_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, "👁")
+            x += EYE_ICON_SIZE + SPACING
+
+        # 4. Calculate available space for label (excluding badges)
         right_x = rect.right() - SPACING
         badges_width = 0
         
@@ -175,15 +186,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         if line_count is not None and line_count > 0:
             badges_width += self._badge_width(f"{line_count}L") + SPACING
         
-        # Reserve space for eye icon on hover (files only)
-        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
-        show_eye = not is_dir and is_hovered
-        if show_eye:
-            badges_width += EYE_ICON_SIZE + SPACING
-        
         label_max_width = right_x - x - badges_width - SPACING
         
-        # 4. Draw label (with search highlight)
+        # 5. Draw label (with search highlight)
         painter.setFont(_get_font_bold() if is_dir else _get_font_normal())
         painter.setPen(COLOR_TEXT_PRIMARY)
         
@@ -196,7 +201,7 @@ class FileTreeDelegate(QStyledItemDelegate):
         else:
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, elided_label)
         
-        # 5. Draw badges (right-aligned)
+        # 6. Draw badges (right-aligned)
         badge_x = right_x
         
         if line_count is not None and line_count > 0:
@@ -214,13 +219,6 @@ class FileTreeDelegate(QStyledItemDelegate):
             badge_color = COLOR_PRIMARY if is_dir else COLOR_SUCCESS
             self._draw_badge(painter, badge_x, y, bw, height, token_text, badge_color)
             badge_x -= SPACING
-        
-        # 6. Draw eye icon for preview (files only, on hover)
-        if show_eye:
-            eye_rect = QRect(int(badge_x) - EYE_ICON_SIZE, y, EYE_ICON_SIZE, height)
-            painter.setFont(_get_font_normal())
-            painter.setPen(COLOR_TEXT_MUTED)
-            painter.drawText(eye_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, "👁")
         
         painter.restore()
     

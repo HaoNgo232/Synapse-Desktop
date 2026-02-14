@@ -274,15 +274,19 @@ class FileTreeWidget(QWidget):
         from components.file_tree_model import FileTreeRoles
         is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
         
-        # Check if click was on the eye icon area (right side, files only)
+        # Check if click was on the eye icon area (now on the left, next to file icon)
         if not is_dir:
             cursor_pos = self._tree_view.viewport().mapFromGlobal(
                 self._tree_view.cursor().pos()
             )
             item_rect = self._tree_view.visualRect(proxy_index)
-            # Eye icon is near right edge
-            eye_area_left = item_rect.right() - EYE_ICON_SIZE - DELEGATE_SPACING - 80
-            if cursor_pos.x() >= eye_area_left:
+            
+            # Toạ độ X của con mắt (bên trái, sau icon file)
+            # Checkbox (16) + Icon (16) + 3 * SPACING (6)
+            eye_x_start = item_rect.left() + 16 + 16 + (3 * DELEGATE_SPACING)
+            eye_x_end = eye_x_start + EYE_ICON_SIZE + 4
+            
+            if eye_x_start <= cursor_pos.x() <= eye_x_end:
                 file_path = self._model.data(source_index, FileTreeRoles.FILE_PATH_ROLE)
                 if file_path:
                     self.file_preview_requested.emit(file_path)

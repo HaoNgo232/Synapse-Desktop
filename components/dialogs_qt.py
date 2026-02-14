@@ -743,8 +743,34 @@ class FilePreviewDialogQt(BaseDialogQt):
         self._text_edit.setReadOnly(True)
         self._text_edit.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 12))
         self._text_edit.setStyleSheet(
-            f"background-color: #282a36; color: #f8f8f2; "
-            f"border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 8px;"
+            f"QTextEdit {{ "
+            f"  background-color: #282a36; color: #f8f8f2; "
+            f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 8px; "
+            f"}} "
+            f"QScrollBar:vertical {{ "
+            f"  background: #1e1f29; width: 14px; margin: 0; border-radius: 7px; "
+            f"}} "
+            f"QScrollBar::handle:vertical {{ "
+            f"  background: #6272a4; border-radius: 7px; min-height: 30px; "
+            f"}} "
+            f"QScrollBar::handle:vertical:hover {{ "
+            f"  background: #8be9fd; "
+            f"}} "
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ "
+            f"  height: 0; "
+            f"}} "
+            f"QScrollBar:horizontal {{ "
+            f"  background: #1e1f29; height: 14px; margin: 0; border-radius: 7px; "
+            f"}} "
+            f"QScrollBar::handle:horizontal {{ "
+            f"  background: #6272a4; border-radius: 7px; min-width: 30px; "
+            f"}} "
+            f"QScrollBar::handle:horizontal:hover {{ "
+            f"  background: #8be9fd; "
+            f"}} "
+            f"QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ "
+            f"  width: 0; "
+            f"}}"
         )
         self._text_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         

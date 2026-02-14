@@ -135,7 +135,7 @@ class HistoryViewQt(QWidget):
 
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
-        layout.addWidget(splitter)
+        layout.addWidget(splitter, stretch=1)  # stretch=1 để chiếm hết chiều cao
 
         # Status
         self._status = QLabel("")
@@ -293,21 +293,34 @@ class HistoryViewQt(QWidget):
 
         # Action buttons
         btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 10, 0, 0)
         copy_btn = QPushButton("Copy OPX")
         copy_btn.setProperty("class", "outlined")
+        copy_btn.setMinimumHeight(34)
         copy_btn.clicked.connect(lambda: self._copy_opx(entry))
         btn_row.addWidget(copy_btn)
 
         reapply_btn = QPushButton("Re-apply")
         reapply_btn.setProperty("class", "primary")
+        reapply_btn.setMinimumHeight(34)
         reapply_btn.clicked.connect(lambda: self._reapply_opx(entry))
         btn_row.addWidget(reapply_btn)
 
         btn_row.addStretch()
 
-        del_btn = QPushButton("🗑")
-        del_btn.setFixedWidth(32)
-        del_btn.setStyleSheet(f"color: {ThemeColors.ERROR}; border: none;")
+        del_btn = QPushButton("🗑 Delete")
+        del_btn.setToolTip("Delete this entry")
+        del_btn.setMinimumHeight(34)
+        del_btn.setStyleSheet(
+            f"QPushButton {{ "
+            f"  font-size: 13px; border-radius: 6px; padding: 6px 14px; "
+            f"  border: 1px solid {ThemeColors.ERROR}; "
+            f"  background-color: transparent; color: {ThemeColors.ERROR}; "
+            f"}} "
+            f"QPushButton:hover {{ "
+            f"  background-color: {ThemeColors.ERROR}; color: #FFFFFF; "
+            f"}}"
+        )
         del_btn.clicked.connect(lambda: self._delete_entry(entry.id))
         btn_row.addWidget(del_btn)
 

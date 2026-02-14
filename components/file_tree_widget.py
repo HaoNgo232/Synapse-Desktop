@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QTimer
 from core.theme import ThemeColors
 from core.utils.qt_utils import DebouncedTimer, run_on_main_thread
 from components.file_tree_model import FileTreeModel, TokenCountWorker
-from components.file_tree_delegate import FileTreeDelegate
+from components.file_tree_delegate import FileTreeDelegate, EYE_ICON_SIZE, SPACING as DELEGATE_SPACING
 from components.file_tree_filter import FileTreeFilterProxy
 
 logger = logging.getLogger(__name__)
@@ -129,6 +129,7 @@ class FileTreeWidget(QWidget):
         self._tree_view.setUniformRowHeights(True)  # Performance optimization
         self._tree_view.setAlternatingRowColors(False)
         self._tree_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self._tree_view.setMouseTracking(True)  # Enable hover for eye icon
         
         layout.addWidget(self._tree_view, stretch=1)
     
@@ -259,10 +260,27 @@ class FileTreeWidget(QWidget):
     
     @Slot(QModelIndex)
     def _on_item_clicked(self, proxy_index: QModelIndex) -> None:
-        """Handle item click — toggle checkbox."""
+        """Handle item click — toggle checkbox or preview if eye icon clicked."""
         source_index = self._filter_proxy.mapToSource(proxy_index)
         if not source_index.isValid():
             return
+        
+        from components.file_tree_model import FileTreeRoles
+        is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
+        
+        # Check if click was on the eye icon area (right side, files only)
+        if not is_dir:
+            cursor_pos = self._tree_view.viewport().mapFromGlobal(
+                self._tree_view.cursor().pos()
+            )
+            item_rect = self._tree_view.visualRect(proxy_index)
+            # Eye icon is near right edge
+            eye_area_left = item_rect.right() - EYE_ICON_SIZE - DELEGATE_SPACING - 80
+            if cursor_pos.x() >= eye_area_left:
+                file_path = self._model.data(source_index, FileTreeRoles.FILE_PATH_ROLE)
+                if file_path:
+                    self.file_preview_requested.emit(file_path)
+                return
         
         # Toggle check state
         current_state = self._model.data(source_index, Qt.ItemDataRole.CheckStateRole)

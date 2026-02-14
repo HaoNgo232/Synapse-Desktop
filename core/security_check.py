@@ -16,7 +16,7 @@ import re
 
 from detect_secrets import SecretsCollection
 from detect_secrets.settings import default_settings
-from core.utils.file_utils import is_binary_by_extension
+from core.utils.file_utils import is_binary_file
 
 
 # ============================================
@@ -159,7 +159,7 @@ def scan_secrets_in_files(
         try:
             if not path.is_file():
                 continue
-            if is_binary_by_extension(path):
+            if is_binary_file(path):
                 continue
 
             # Size check
@@ -208,7 +208,7 @@ def scan_secrets_in_files_cached(
         try:
             if not path.is_file():
                 continue
-            if is_binary_by_extension(path):
+            if is_binary_file(path):
                 continue
 
             try:

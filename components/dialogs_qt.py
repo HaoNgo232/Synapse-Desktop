@@ -726,8 +726,8 @@ class FilePreviewDialogQt(BaseDialogQt):
 
         # Read content
         if self._content is None:
-            from core.utils.file_utils import is_binary_by_extension
-            if is_binary_by_extension(path_obj):
+            from core.utils.file_utils import is_binary_file
+            if is_binary_file(path_obj):
                 self._show_error_content(layout, "Cannot preview binary file.")
                 return
             if not path_obj.exists():

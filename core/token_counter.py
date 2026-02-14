@@ -332,11 +332,9 @@ def _count_tokens_for_file_no_cache(file_path: Path) -> int:
                 if cached_mtime == stat.st_mtime:
                     return cached_count
         
-        # Check binary
-        with open(file_path, "rb") as f:
-            chunk = f.read(8000)
-        
-        if _looks_binary_fast(chunk):
+        # Check binary using comprehensive detection
+        from core.utils.file_utils import is_binary_file
+        if is_binary_file(file_path):
             return 0
         
         # Read với mmap (nhanh hơn)
@@ -396,11 +394,9 @@ def count_tokens_for_file(file_path: Path) -> int:
                     _file_token_cache.move_to_end(path_str)
                     return cached_count
 
-        # Check if binary using optimized detection
-        with open(file_path, "rb") as f:
-            chunk = f.read(8000)
-
-        if _looks_binary_fast(chunk):
+        # Check if binary using comprehensive detection
+        from core.utils.file_utils import is_binary_file
+        if is_binary_file(file_path):
             return 0
 
         # Read and count
@@ -671,6 +667,11 @@ def count_tokens_batch_parallel(
             return (str(path), 0, 0)
         
         try:
+            # Skip binary files IMMEDIATELY (before any I/O)
+            from core.utils.file_utils import is_binary_file
+            if is_binary_file(path):
+                return (str(path), 0, 0)
+            
             stat = path.stat()
             count = _count_tokens_for_file_no_cache(path)
             return (str(path), count, stat.st_mtime)

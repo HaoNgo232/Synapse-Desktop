@@ -14,6 +14,7 @@ from core.utils.file_utils import (
     TreeItem,
     scan_directory,
     is_binary_by_extension,
+    is_binary_file,
     flatten_tree_files,
     get_selected_file_paths,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "TreeItem",
     "scan_directory",
     "is_binary_by_extension",
+    "is_binary_file",
     "flatten_tree_files",
     "get_selected_file_paths",
     # git_utils

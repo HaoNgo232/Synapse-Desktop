@@ -24,6 +24,8 @@ BINARY_EXTENSIONS = {
     ".raw",
     ".cr2",
     ".nef",
+    ".dng",
+    ".arw",
     # Videos
     ".mp4",
     ".avi",
@@ -35,6 +37,8 @@ BINARY_EXTENSIONS = {
     ".m4v",
     ".3gp",
     ".ogv",
+    ".mpg",
+    ".mpeg",
     # Audio
     ".mp3",
     ".wav",
@@ -45,6 +49,8 @@ BINARY_EXTENSIONS = {
     ".m4a",
     ".opus",
     ".oga",
+    ".mid",
+    ".midi",
     # Archives
     ".zip",
     ".rar",
@@ -58,6 +64,9 @@ BINARY_EXTENSIONS = {
     ".dmg",
     ".iso",
     ".asar",
+    ".tgz",
+    ".tbz2",
+    ".txz",
     # Executables
     ".exe",
     ".dll",
@@ -68,6 +77,8 @@ BINARY_EXTENSIONS = {
     ".rpm",
     ".msi",
     ".pkg",
+    ".apk",
+    ".ipa",
     # Documents
     ".pdf",
     ".doc",
@@ -79,6 +90,9 @@ BINARY_EXTENSIONS = {
     ".odt",
     ".ods",
     ".odp",
+    ".pages",
+    ".numbers",
+    ".key",
     # Fonts
     ".ttf",
     ".otf",
@@ -100,8 +114,22 @@ BINARY_EXTENSIONS = {
     ".dat",
     ".class",
     ".pyc",
+    ".pyo",
     ".o",
     ".obj",
+    ".a",
+    ".lib",
+    ".node",
+    ".wasm",
+    # 3D Models
+    ".obj",
+    ".fbx",
+    ".blend",
+    ".3ds",
+    ".stl",
+    # CAD
+    ".dwg",
+    ".dxf",
 }
 
 # Directory Quick Skip - dùng với os.walk để PRUNE directory TRƯỚC KHI enter

@@ -15,7 +15,7 @@ Features:
 import os
 import time
 from pathlib import Path
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Any
 from dataclasses import dataclass
 
 import pathspec
@@ -24,13 +24,19 @@ from core.constants import EXTENDED_IGNORE_PATTERNS
 from core.utils.file_utils import (
     TreeItem,
     is_system_path,
+    is_binary_file,
     _read_gitignore,
 )
 
 # Try import scandir_rs (Rust-based, much faster)
+# Some environments do not expose typed symbols for scandir_rs.Walk,
+# so resolve dynamically to keep runtime behavior and satisfy static analysis.
+RustWalk: Any = None
 try:
-    from scandir_rs import Walk as RustWalk
-    HAS_SCANDIR_RS = True
+    import scandir_rs
+
+    RustWalk = getattr(scandir_rs, "Walk", None)
+    HAS_SCANDIR_RS = callable(RustWalk)
 except ImportError:
     HAS_SCANDIR_RS = False
 
@@ -204,6 +210,10 @@ class FileScanner:
         NOTE: RustWalk trả về relative paths, không phải absolute paths!
         """
         from core.logging_config import log_info
+
+        if not HAS_SCANDIR_RS or RustWalk is None:
+            return self._scan_directory(root_path, root_path, spec, progress_callback)
+
         log_info("[FileScanner] Using scandir-rs (Rust) for fast scanning")
         
         root_path_str = str(root_path)
@@ -421,6 +431,10 @@ class FileScanner:
             entry_path = Path(entry.path)
             
             if is_system_path(entry_path):
+                continue
+            
+            # Skip binary files (check magic bytes)
+            if is_binary_file(entry_path):
                 continue
 
             try:

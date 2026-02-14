@@ -403,7 +403,7 @@ class FileTreeModel(QAbstractItemModel):
         Đảm bảo token counting luôn đầy đủ dù tree chưa expand.
         Skip binary/image files.
         """
-        from core.utils.file_utils import is_binary_by_extension
+        from core.utils.file_utils import is_binary_file
         
         result: List[str] = []
         seen: Set[str] = set()
@@ -412,7 +412,7 @@ class FileTreeModel(QAbstractItemModel):
             node = self._path_to_node.get(p)
             if node is not None:
                 if not node.is_dir:
-                    if p not in seen and not is_binary_by_extension(Path(p)):
+                    if p not in seen and not is_binary_file(Path(p)):
                         result.append(p)
                         seen.add(p)
                 elif node.is_dir:
@@ -421,7 +421,7 @@ class FileTreeModel(QAbstractItemModel):
             else:
                 # Path in selected but not in model (e.g. deep unloaded file)
                 path_obj = Path(p)
-                if path_obj.is_file() and p not in seen and not is_binary_by_extension(path_obj):
+                if path_obj.is_file() and p not in seen and not is_binary_file(path_obj):
                     result.append(p)
                     seen.add(p)
                 elif path_obj.is_dir():
@@ -435,13 +435,13 @@ class FileTreeModel(QAbstractItemModel):
         scan filesystem trực tiếp thay vì bỏ qua.
         Skip binary/image files.
         """
-        from core.utils.file_utils import is_binary_by_extension
+        from core.utils.file_utils import is_binary_file
         
         for child in node.children:
             if child.path in seen:
                 continue
             if not child.is_dir:
-                if not is_binary_by_extension(Path(child.path)):
+                if not is_binary_file(Path(child.path)):
                     result.append(child.path)
                     seen.add(child.path)
             elif child.is_dir:
@@ -462,7 +462,7 @@ class FileTreeModel(QAbstractItemModel):
         Respect excluded patterns, gitignore, và binary extensions.
         """
         from core.utils.file_utils import (
-            is_binary_by_extension, is_system_path,
+            is_binary_file, is_system_path,
             get_cached_pathspec, _read_gitignore,
         )
         from core.constants import EXTENDED_IGNORE_PATTERNS
@@ -512,7 +512,7 @@ class FileTreeModel(QAbstractItemModel):
                     full_path = os.path.join(dirpath, filename)
                     entry = Path(full_path)
                     
-                    if is_system_path(entry) or is_binary_by_extension(entry):
+                    if is_system_path(entry) or is_binary_file(entry):
                         continue
                     
                     # Check pathspec
@@ -842,7 +842,10 @@ class TokenCountWorker(QRunnable):
     def run(self) -> None:
         """Đếm tokens cho tất cả files. Skip binary/image files."""
         from core.token_counter import count_tokens
-        from core.utils.file_utils import is_binary_by_extension
+        from core.utils.file_utils import is_binary_file
+        
+        # Max file size for token counting (5MB) - prevents OOM on large binaries
+        MAX_TOKEN_FILE_SIZE = 5 * 1024 * 1024
         
         try:
             batch: Dict[str, int] = {}
@@ -855,9 +858,17 @@ class TokenCountWorker(QRunnable):
                     if not path.exists() or not path.is_file():
                         continue
                     
-                    # Skip binary/image files
-                    if is_binary_by_extension(path):
+                    # Skip binary/image files (check magic bytes, not just extension)
+                    if is_binary_file(path):
                         batch[file_path] = 0
+                        continue
+                    
+                    # Skip files too large for token counting
+                    try:
+                        if path.stat().st_size > MAX_TOKEN_FILE_SIZE:
+                            batch[file_path] = 0
+                            continue
+                    except OSError:
                         continue
                     
                     content = path.read_text(encoding="utf-8", errors="replace")

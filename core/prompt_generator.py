@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
-from core.utils.file_utils import TreeItem, is_binary_by_extension
+from core.utils.file_utils import TreeItem, is_binary_file
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.utils.language_utils import get_language_from_path
 from core.utils.git_utils import GitDiffResult, GitLogResult
@@ -239,8 +239,8 @@ def generate_file_contents(
             if not path.is_file():
                 continue
 
-            # Skip binary files
-            if is_binary_by_extension(path):
+            # Skip binary files (check magic bytes)
+            if is_binary_file(path):
                 file_data.append((path, None, "Binary file"))
                 continue
 
@@ -324,8 +324,8 @@ def generate_file_contents_xml(
             if not path.is_file():
                 continue
 
-            # Skip binary files
-            if is_binary_by_extension(path):
+            # Skip binary files (check magic bytes, not just extension)
+            if is_binary_file(path):
                 file_elements.append(
                     f'<file path="{html.escape(str(path))}" skipped="true">Binary file</file>'
                 )
@@ -390,8 +390,8 @@ def generate_file_contents_json(
             if not path.is_file():
                 continue
 
-            # Skip binary files
-            if is_binary_by_extension(path):
+            # Skip binary files (check magic bytes, not just extension)
+            if is_binary_file(path):
                 files_dict[str(path)] = "Binary file (skipped)"
                 continue
 
@@ -453,8 +453,8 @@ def generate_file_contents_plain(
             # Content handling
             content_display = ""
 
-            # Skip binary files
-            if is_binary_by_extension(path):
+            # Skip binary files (check magic bytes, not just extension)
+            if is_binary_file(path):
                 content_display = "Binary file (skipped)"
             else:
                 # Skip files that are too large
@@ -523,8 +523,8 @@ def generate_smart_context(
             if not path.is_file():
                 return (path, None, "Not a file")
             
-            # Skip binary files
-            if is_binary_by_extension(path):
+            # Skip binary files (check magic bytes, not just extension)
+            if is_binary_file(path):
                 return (path, None, "Binary file")
             
             # Skip files that are too large

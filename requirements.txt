@@ -29,3 +29,4 @@ rapidfuzz>=3.0.0
 scandir-rs>=2.9.0
 rs-bpe>=0.1.0
 tokenizers>=0.20.0
+filetype>=1.2.0

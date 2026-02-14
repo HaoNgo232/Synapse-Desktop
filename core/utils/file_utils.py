@@ -37,8 +37,53 @@ class TreeItem:
     is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
 
 
+def is_binary_file(file_path: Path) -> bool:
+    """
+    Check if file is binary using extension, magic bytes, and null byte detection.
+    Returns True if file is binary (image, video, audio, executable, etc.)
+    
+    OPTIMIZED: Check extension first (no I/O), then magic bytes if needed.
+    """
+    # 1. Check extension first (FAST - no I/O)
+    if file_path.suffix.lower() in BINARY_EXTENSIONS:
+        return True
+    
+    # 2. Check if file exists and has content
+    if not file_path.is_file():
+        return False
+    
+    try:
+        file_size = file_path.stat().st_size
+        if file_size == 0:
+            return False
+        
+        # 3. For files without extension or unknown extension, check content
+        # Only read first 8KB to minimize I/O
+        chunk_size = min(8192, file_size)
+        with open(file_path, 'rb') as f:
+            chunk = f.read(chunk_size)
+        
+        # 4. Check for null bytes first (FAST)
+        if b'\x00' in chunk:
+            return True
+        
+        # 5. Check magic bytes with filetype library (SLOWER)
+        import filetype
+        kind = filetype.guess(file_path)
+        if kind is not None:
+            return True
+            
+    except Exception:
+        pass
+    
+    return False
+
+
 def is_binary_by_extension(file_path: Path) -> bool:
-    """Check if file is binary based on extension"""
+    """
+    Check if file is binary based on extension (legacy function).
+    Use is_binary_file() for more accurate detection.
+    """
     return file_path.suffix.lower() in BINARY_EXTENSIONS
 
 

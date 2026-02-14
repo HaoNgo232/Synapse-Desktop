@@ -402,7 +402,10 @@ class FileTreeModel(QAbstractItemModel):
         Nếu có folder được selected mà children chưa loaded (lazy loading),
         sẽ scan filesystem trực tiếp để tìm tất cả files bên trong.
         Đảm bảo token counting luôn đầy đủ dù tree chưa expand.
+        Skip binary/image files.
         """
+        from core.utils.file_utils import is_binary_by_extension
+        
         result: List[str] = []
         seen: Set[str] = set()
         
@@ -410,7 +413,7 @@ class FileTreeModel(QAbstractItemModel):
             node = self._path_to_node.get(p)
             if node is not None:
                 if not node.is_dir:
-                    if p not in seen:
+                    if p not in seen and not is_binary_by_extension(Path(p)):
                         result.append(p)
                         seen.add(p)
                 elif node.is_dir:
@@ -418,9 +421,8 @@ class FileTreeModel(QAbstractItemModel):
                     self._collect_files_deep(node, result, seen)
             else:
                 # Path in selected but not in model (e.g. deep unloaded file)
-                # Check filesystem directly
                 path_obj = Path(p)
-                if path_obj.is_file() and p not in seen:
+                if path_obj.is_file() and p not in seen and not is_binary_by_extension(path_obj):
                     result.append(p)
                     seen.add(p)
                 elif path_obj.is_dir():
@@ -432,13 +434,17 @@ class FileTreeModel(QAbstractItemModel):
         """
         Collect tất cả files từ node. Nếu subfolder chưa loaded,
         scan filesystem trực tiếp thay vì bỏ qua.
+        Skip binary/image files.
         """
+        from core.utils.file_utils import is_binary_by_extension
+        
         for child in node.children:
             if child.path in seen:
                 continue
             if not child.is_dir:
-                result.append(child.path)
-                seen.add(child.path)
+                if not is_binary_by_extension(Path(child.path)):
+                    result.append(child.path)
+                    seen.add(child.path)
             elif child.is_dir:
                 if child.is_loaded:
                     self._collect_files_deep(child, result, seen)
@@ -769,8 +775,9 @@ class TokenCountWorker(QRunnable):
     
     @Slot()
     def run(self) -> None:
-        """Đếm tokens cho tất cả files."""
+        """Đếm tokens cho tất cả files. Skip binary/image files."""
         from core.token_counter import count_tokens
+        from core.utils.file_utils import is_binary_by_extension
         
         try:
             batch: Dict[str, int] = {}
@@ -780,14 +787,21 @@ class TokenCountWorker(QRunnable):
                 
                 try:
                     path = Path(file_path)
-                    if path.exists() and path.is_file():
-                        content = path.read_text(encoding="utf-8", errors="replace")
-                        tokens = count_tokens(content)
-                        batch[file_path] = tokens
+                    if not path.exists() or not path.is_file():
+                        continue
+                    
+                    # Skip binary/image files
+                    if is_binary_by_extension(path):
+                        batch[file_path] = 0
+                        continue
+                    
+                    content = path.read_text(encoding="utf-8", errors="replace")
+                    tokens = count_tokens(content)
+                    batch[file_path] = tokens
 
-                        if len(batch) >= self._batch_size:
-                            self.signals.token_counts_batch.emit(dict(batch))
-                            batch.clear()
+                    if len(batch) >= self._batch_size:
+                        self.signals.token_counts_batch.emit(dict(batch))
+                        batch.clear()
                 except Exception as e:
                     logger.debug(f"Error counting tokens for {file_path}: {e}")
 

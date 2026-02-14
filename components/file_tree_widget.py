@@ -12,7 +12,7 @@ Thay thế components/file_tree.py và components/virtual_file_tree.py từ Flet
 
 import logging
 from pathlib import Path
-from typing import Optional, Set, List, Callable
+from typing import Optional, Set, List, Callable, Dict
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTreeView,
@@ -42,6 +42,7 @@ class FileTreeWidget(QWidget):
     # Signals
     selection_changed = Signal(set)
     file_preview_requested = Signal(str)
+    token_counting_done = Signal()  # Emitted khi batch token counting hoàn thành
     
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -304,9 +305,15 @@ class FileTreeWidget(QWidget):
         if self._current_token_worker:
             self._current_token_worker.cancel()
         
+        # get_selected_paths() now discovers deep files from disk
         selected_files = self._model.get_selected_paths()
         if not selected_files:
+            self._model._last_resolved_files.clear()
+            self.token_counting_done.emit()
             return
+        
+        # Track resolved files for accurate total counting
+        self._model._last_resolved_files = set(selected_files)
         
         # Filter files chưa có trong cache
         uncached = [
@@ -315,25 +322,29 @@ class FileTreeWidget(QWidget):
         ]
         
         if not uncached:
+            # All cached — just emit done to refresh display
+            self.token_counting_done.emit()
             return
         
         # Create and start worker
         worker = TokenCountWorker(uncached)
-        worker.signals.token_counted.connect(self._on_token_counted)
+        worker.signals.token_counts_batch.connect(self._on_token_counts_batch)
         worker.signals.finished.connect(self._on_token_counting_finished)
         self._current_token_worker = worker
         
         QThreadPool.globalInstance().start(worker)
     
-    @Slot(str, int)
-    def _on_token_counted(self, path: str, count: int) -> None:
-        """Handle token count result (main thread via signal)."""
-        self._model.update_token_count(path, count)
+    @Slot(dict)
+    def _on_token_counts_batch(self, counts: Dict[str, int]) -> None:
+        """Handle token count batch results (main thread via signal)."""
+        self._model.update_token_counts_batch(counts)
+        self.token_counting_done.emit()
     
     @Slot()
     def _on_token_counting_finished(self) -> None:
         """Handle token counting completion."""
         self._current_token_worker = None
+        self.token_counting_done.emit()
     
     # ===== Private Helpers =====
     

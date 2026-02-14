@@ -146,9 +146,15 @@ class FileTreeModel(QAbstractItemModel):
         
         # Line count cache  
         self._line_cache: Dict[str, int] = {}
+
+        # Folder check state cache
+        self._folder_state_cache: Dict[str, Qt.CheckState] = {}
         
         # Path -> QModelIndex mapping cho O(1) lookup
         self._path_to_node: Dict[str, TreeNode] = {}
+        
+        # Last resolved file paths (set by token counting to track deep files)
+        self._last_resolved_files: Set[str] = set()
         
         # Workspace root
         self._workspace_path: Optional[Path] = None
@@ -240,10 +246,9 @@ class FileTreeModel(QAbstractItemModel):
                 self._select_node(node)
             else:
                 self._deselect_node(node)
-            
-            # Emit signals
-            self.dataChanged.emit(index, index, [Qt.ItemDataRole.CheckStateRole])
-            self._emit_parent_changes(node)
+
+            self._clear_folder_state_cache()
+            self._emit_tree_checkstate_changed()
             self.selection_changed.emit(set(self._selected_paths))
             return True
         
@@ -315,6 +320,7 @@ class FileTreeModel(QAbstractItemModel):
         # Insert children vào model
         self.beginInsertRows(parent, 0, len(children_items) - 1)
         
+        added_selected = False
         for i, child_item in enumerate(children_items):
             child_node = TreeNode(
                 label=child_item.label,
@@ -330,9 +336,15 @@ class FileTreeModel(QAbstractItemModel):
             # Nếu parent đang selected, auto-select children
             if node.path in self._selected_paths:
                 self._selected_paths.add(child_node.path)
+                added_selected = True
         
         node.is_loaded = True
         self.endInsertRows()
+
+        if added_selected:
+            self._clear_folder_state_cache()
+            self._emit_tree_checkstate_changed()
+            self.selection_changed.emit(set(self._selected_paths))
     
     def hasChildren(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> bool:
         """Folders luôn return True để hiện expand arrow."""
@@ -360,6 +372,8 @@ class FileTreeModel(QAbstractItemModel):
         self._token_cache.clear()
         self._line_cache.clear()
         self._path_to_node.clear()
+        self._folder_state_cache.clear()
+        self._last_resolved_files.clear()
         
         try:
             tree_item = scan_directory_shallow(workspace_path, depth=1)
@@ -382,9 +396,77 @@ class FileTreeModel(QAbstractItemModel):
         self.endResetModel()
     
     def get_selected_paths(self) -> List[str]:
-        """Get danh sách selected file paths (chỉ files, không folders)."""
-        return [p for p in self._selected_paths 
-                if p in self._path_to_node and not self._path_to_node[p].is_dir]
+        """
+        Get danh sách selected file paths (chỉ files, không folders).
+        
+        Nếu có folder được selected mà children chưa loaded (lazy loading),
+        sẽ scan filesystem trực tiếp để tìm tất cả files bên trong.
+        Đảm bảo token counting luôn đầy đủ dù tree chưa expand.
+        """
+        result: List[str] = []
+        seen: Set[str] = set()
+        
+        for p in self._selected_paths:
+            node = self._path_to_node.get(p)
+            if node is not None:
+                if not node.is_dir:
+                    if p not in seen:
+                        result.append(p)
+                        seen.add(p)
+                elif node.is_dir:
+                    # Folder selected — collect all files recursively
+                    self._collect_files_deep(node, result, seen)
+            else:
+                # Path in selected but not in model (e.g. deep unloaded file)
+                # Check filesystem directly
+                path_obj = Path(p)
+                if path_obj.is_file() and p not in seen:
+                    result.append(p)
+                    seen.add(p)
+                elif path_obj.is_dir():
+                    self._collect_files_from_disk(path_obj, result, seen)
+        
+        return result
+    
+    def _collect_files_deep(self, node: TreeNode, result: List[str], seen: Set[str]) -> None:
+        """
+        Collect tất cả files từ node. Nếu subfolder chưa loaded,
+        scan filesystem trực tiếp thay vì bỏ qua.
+        """
+        for child in node.children:
+            if child.path in seen:
+                continue
+            if not child.is_dir:
+                result.append(child.path)
+                seen.add(child.path)
+            elif child.is_dir:
+                if child.is_loaded:
+                    self._collect_files_deep(child, result, seen)
+                else:
+                    # Chưa loaded — scan disk trực tiếp
+                    self._collect_files_from_disk(Path(child.path), result, seen)
+        
+        # Nếu folder chưa loaded và ko có children
+        if node.is_dir and not node.is_loaded and not node.children:
+            self._collect_files_from_disk(Path(node.path), result, seen)
+    
+    def _collect_files_from_disk(self, folder: Path, result: List[str], seen: Set[str]) -> None:
+        """
+        Scan filesystem trực tiếp để tìm tất cả files trong folder.
+        Dùng cho folders chưa lazy-loaded trong tree model.
+        Respect excluded patterns và gitignore.
+        """
+        from core.utils.file_utils import is_binary_by_extension
+        
+        try:
+            for entry in folder.rglob('*'):
+                if entry.is_file() and not is_binary_by_extension(entry):
+                    path_str = str(entry)
+                    if path_str not in seen:
+                        result.append(path_str)
+                        seen.add(path_str)
+        except (PermissionError, OSError) as e:
+            logger.debug(f"Error scanning {folder}: {e}")
     
     def get_root_tree_item(self) -> Optional[TreeItem]:
         """Get root TreeItem (for tree map generation)."""
@@ -402,30 +484,25 @@ class FileTreeModel(QAbstractItemModel):
     def set_selected_paths(self, paths: Set[str]) -> None:
         """Set selected paths (cho session restore)."""
         self._selected_paths = set(paths)
-        # Emit dataChanged cho toàn tree
-        if self._root_node:
-            top_left = self.index(0, 0)
-            bottom_right = self.index(self.rowCount() - 1, 0)
-            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
-            self.selection_changed.emit(set(self._selected_paths))
+        self._clear_folder_state_cache()
+        self._emit_tree_checkstate_changed()
+        self.selection_changed.emit(set(self._selected_paths))
     
     def select_all(self) -> None:
         """Select tất cả files."""
         self._select_all_recursive(self._get_root_parent())
-        if self._root_node:
-            top_left = self.index(0, 0)
-            bottom_right = self.index(self.rowCount() - 1, 0)
-            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
-            self.selection_changed.emit(set(self._selected_paths))
+        self._clear_folder_state_cache()
+        self._emit_tree_checkstate_changed()
+        self.selection_changed.emit(set(self._selected_paths))
     
     def deselect_all(self) -> None:
         """Deselect tất cả."""
         self._selected_paths.clear()
-        if self._root_node:
-            top_left = self.index(0, 0)
-            bottom_right = self.index(self.rowCount() - 1, 0)
-            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
-            self.selection_changed.emit(set(self._selected_paths))
+        self._last_resolved_files.clear()
+        self._token_cache.clear()
+        self._clear_folder_state_cache()
+        self._emit_tree_checkstate_changed()
+        self.selection_changed.emit(set(self._selected_paths))
     
     def update_token_count(self, path: str, count: int) -> None:
         """
@@ -442,6 +519,22 @@ class FileTreeModel(QAbstractItemModel):
                 self.dataChanged.emit(idx, idx, [FileTreeRoles.TOKEN_COUNT_ROLE])
         
         self.token_count_updated.emit(path, count)
+
+    def update_token_counts_batch(self, counts: Dict[str, int]) -> None:
+        """Batch update token counts và emit một lần dataChanged."""
+        if not counts:
+            return
+
+        self._token_cache.update(counts)
+
+        if self._root_node:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1, 0)
+            if top_left.isValid() and bottom_right.isValid():
+                self.dataChanged.emit(top_left, bottom_right, [FileTreeRoles.TOKEN_COUNT_ROLE])
+
+        for path, count in counts.items():
+            self.token_count_updated.emit(path, count)
     
     def update_line_count(self, path: str, count: int) -> None:
         """Cập nhật line count cho 1 file."""
@@ -454,12 +547,21 @@ class FileTreeModel(QAbstractItemModel):
                 self.dataChanged.emit(idx, idx, [FileTreeRoles.LINE_COUNT_ROLE])
     
     def get_total_tokens(self) -> int:
-        """Tính tổng tokens cho selected files."""
+        """Tính tổng tokens cho tất cả selected files (bao gồm deep files).
+        
+        Dùng _last_resolved_files nếu có (set bởi token counting worker),
+        fallback sang _selected_paths.
+        """
         total = 0
-        for path in self._selected_paths:
+        paths_to_check = self._last_resolved_files if self._last_resolved_files else self._selected_paths
+        for path in paths_to_check:
             if path in self._token_cache:
                 total += self._token_cache[path]
         return total
+    
+    def get_selected_file_count(self) -> int:
+        """Get số files đã selected (bao gồm deep unloaded files)."""
+        return len(self._last_resolved_files) if self._last_resolved_files else len(self.get_selected_paths())
     
     def clear_token_cache(self) -> None:
         """Clear token cache."""
@@ -470,6 +572,21 @@ class FileTreeModel(QAbstractItemModel):
     def _get_root_parent(self) -> TreeNode:
         """Get invisible root node."""
         return self._invisible_root
+
+    def _clear_folder_state_cache(self) -> None:
+        self._folder_state_cache.clear()
+
+    def _emit_tree_checkstate_changed(self) -> None:
+        if not self._root_node:
+            return
+
+        if self.rowCount() == 0:
+            return
+
+        top_left = self.index(0, 0)
+        bottom_right = self.index(self.rowCount() - 1, 0)
+        if top_left.isValid() and bottom_right.isValid():
+            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
     
     def _build_path_index(self, node: TreeNode) -> None:
         """Build path -> node index (recursive)."""
@@ -511,8 +628,14 @@ class FileTreeModel(QAbstractItemModel):
         - PartiallyChecked: một số children selected
         - Unchecked: không có children selected
         """
+        cached = self._folder_state_cache.get(node.path)
+        if cached is not None:
+            return cached
+
         if not node.children:
-            return Qt.CheckState.Checked if node.path in self._selected_paths else Qt.CheckState.Unchecked
+            state = Qt.CheckState.Checked if node.path in self._selected_paths else Qt.CheckState.Unchecked
+            self._folder_state_cache[node.path] = state
+            return state
         
         all_selected = True
         any_selected = False
@@ -533,12 +656,20 @@ class FileTreeModel(QAbstractItemModel):
                     all_selected = False
                 else:
                     all_selected = False
+
+            if any_selected and not all_selected:
+                self._folder_state_cache[node.path] = Qt.CheckState.PartiallyChecked
+                return Qt.CheckState.PartiallyChecked
         
         if all_selected and any_selected:
-            return Qt.CheckState.Checked
+            state = Qt.CheckState.Checked
         elif any_selected:
-            return Qt.CheckState.PartiallyChecked
-        return Qt.CheckState.Unchecked
+            state = Qt.CheckState.PartiallyChecked
+        else:
+            state = Qt.CheckState.Unchecked
+
+        self._folder_state_cache[node.path] = state
+        return state
     
     def _emit_parent_changes(self, node: TreeNode) -> None:
         """Emit dataChanged cho tất cả ancestors (cập nhật tri-state)."""
@@ -559,6 +690,7 @@ class TokenCountWorker(QRunnable):
     
     class Signals(QObject):
         token_counted = Signal(str, int)  # (file_path, token_count)
+        token_counts_batch = Signal(dict)  # Dict[str, int]
         finished = Signal()
         error = Signal(str)
     
@@ -568,6 +700,7 @@ class TokenCountWorker(QRunnable):
         self.signals = self.Signals()
         self.setAutoDelete(True)
         self._cancelled = False
+        self._batch_size = 25
     
     def cancel(self) -> None:
         """Cancel worker."""
@@ -579,6 +712,7 @@ class TokenCountWorker(QRunnable):
         from core.token_counter import count_tokens
         
         try:
+            batch: Dict[str, int] = {}
             for file_path in self.file_paths:
                 if self._cancelled:
                     break
@@ -588,9 +722,16 @@ class TokenCountWorker(QRunnable):
                     if path.exists() and path.is_file():
                         content = path.read_text(encoding="utf-8", errors="replace")
                         tokens = count_tokens(content)
-                        self.signals.token_counted.emit(file_path, tokens)
+                        batch[file_path] = tokens
+
+                        if len(batch) >= self._batch_size:
+                            self.signals.token_counts_batch.emit(dict(batch))
+                            batch.clear()
                 except Exception as e:
                     logger.debug(f"Error counting tokens for {file_path}: {e}")
+
+            if not self._cancelled and batch:
+                self.signals.token_counts_batch.emit(dict(batch))
         except Exception as e:
             self.signals.error.emit(str(e))
         finally:

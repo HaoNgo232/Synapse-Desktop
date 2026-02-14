@@ -131,6 +131,7 @@ class ContextViewQt(QWidget):
         self.file_tree_widget = FileTreeWidget()
         self.file_tree_widget.selection_changed.connect(self._on_selection_changed)
         self.file_tree_widget.file_preview_requested.connect(self._preview_file)
+        self.file_tree_widget.token_counting_done.connect(self._update_token_display)
         layout.addWidget(self.file_tree_widget, stretch=1)
         
         return panel
@@ -329,7 +330,7 @@ class ContextViewQt(QWidget):
         if expanded_folders:
             valid = {f for f in expanded_folders if Path(f).exists()}
             self.file_tree_widget.set_expanded_paths(valid)
-        self._update_token_count()
+        self._update_token_display()
     
     def set_instructions_text(self, text: str) -> None:
         """Set instructions text (session restore)."""
@@ -354,14 +355,15 @@ class ContextViewQt(QWidget):
     
     @Slot(set)
     def _on_selection_changed(self, selected_paths: set) -> None:
-        """Handle selection change với adaptive debouncing."""
+        """Handle selection change — chỉ update display, không trigger counting lại.
+        Token counting đã được FileTreeWidget xử lý qua _token_debounce."""
         self._token_generation += 1
-        self._update_token_count()
+        self._update_token_display()
     
     @Slot()
     def _on_instructions_changed(self) -> None:
         """Handle instructions text change."""
-        QTimer.singleShot(150, self._update_token_count)
+        QTimer.singleShot(150, self._update_token_display)
     
     @Slot(int)
     def _on_format_changed(self, index: int) -> None:
@@ -376,10 +378,10 @@ class ContextViewQt(QWidget):
     
     # ===== Token Counting =====
     
-    def _update_token_count(self) -> None:
-        """Update token count display."""
-        selected_files = self.file_tree_widget.get_selected_paths()
-        file_count = len(selected_files)
+    def _update_token_display(self) -> None:
+        """Update token count display từ cached values. Không trigger counting."""
+        model = self.file_tree_widget.get_model()
+        file_count = model.get_selected_file_count()
         
         # Count instruction tokens
         instructions = self._instructions_field.toPlainText()

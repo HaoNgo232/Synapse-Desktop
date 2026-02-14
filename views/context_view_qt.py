@@ -296,6 +296,7 @@ class ContextViewQt(QWidget):
         
         # Token stats panel
         self._token_stats = TokenStatsPanelQt()
+        self._token_stats.model_changed.connect(self._on_model_changed)
         layout.addWidget(self._token_stats)
         
         layout.addStretch()
@@ -479,6 +480,22 @@ class ContextViewQt(QWidget):
             file_tokens=total_file_tokens,
             instruction_tokens=instruction_tokens,
         )
+    
+    @Slot(str)
+    def _on_model_changed(self, model_id: str) -> None:
+        """
+        Handler khi user đổi model.
+        
+        Clear cache và trigger recount với tokenizer mới.
+        """
+        # Clear token cache (vì tokenizer đã thay đổi)
+        model = self.file_tree_widget.get_model()
+        model._token_cache.clear()
+        
+        # Trigger recount cho selected files
+        self.file_tree_widget._start_token_counting()
+        
+        self._show_status(f"Recounting tokens with {model_id}...")
     
     # ===== Copy Actions =====
     

@@ -121,7 +121,7 @@ def build_error_context_for_ai(
 def _build_focused_error_context(
     row_results: List[ApplyRowResult],
     preview_data: PreviewData,
-    original_opx: str,
+    _original_opx: str,
     include_opx: bool,
     workspace_path: Optional[str] = None,
     include_file_content: bool = True,

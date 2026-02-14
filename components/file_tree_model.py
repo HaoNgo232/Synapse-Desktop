@@ -1,0 +1,597 @@
+"""
+File Tree Model - QAbstractItemModel cho file tree với lazy loading.
+
+KEY OPTIMIZATIONS:
+1. Lazy loading: Chỉ load children khi parent được expand (canFetchMore/fetchMore)
+2. No widget creation per row — Qt model/view pattern chỉ paint visible rows
+3. Incremental updates: beginInsertRows/endInsertRows cho surgical updates
+4. Role-based data: Token counts, line counts, selection state stored as custom roles
+5. O(1) path lookup thông qua _path_to_index dictionary
+
+Thay thế hoàn toàn:
+- components/file_tree.py (Flet)
+- components/virtual_file_tree.py (Flet)
+"""
+
+import logging
+from pathlib import Path
+from typing import Optional, Set, Dict, List, Any
+
+from PySide6.QtCore import (
+    QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal, QThreadPool,
+    QObject, QRunnable, Slot,
+)
+from PySide6.QtGui import QColor
+
+from core.utils.file_utils import TreeItem, scan_directory_shallow
+from core.utils.qt_utils import run_on_main_thread
+
+logger = logging.getLogger(__name__)
+
+
+class TreeNode:
+    """
+    Internal node cho file tree model.
+    
+    Wraps TreeItem từ core/utils/file_utils.py
+    và thêm Qt-specific state (parent tracking, row index).
+    """
+    
+    __slots__ = (
+        'label', 'path', 'is_dir', 'is_loaded',
+        'children', 'parent', 'row',
+    )
+    
+    def __init__(
+        self,
+        label: str,
+        path: str,
+        is_dir: bool = False,
+        is_loaded: bool = False,
+        parent: Optional['TreeNode'] = None,
+        row: int = 0,
+    ):
+        self.label = label
+        self.path = path
+        self.is_dir = is_dir
+        self.is_loaded = is_loaded  # True = children đã scan
+        self.children: List['TreeNode'] = []
+        self.parent = parent
+        self.row = row
+    
+    def child_count(self) -> int:
+        return len(self.children)
+    
+    def child(self, row: int) -> Optional['TreeNode']:
+        if 0 <= row < len(self.children):
+            return self.children[row]
+        return None
+    
+    @staticmethod
+    def from_tree_item(
+        item: TreeItem,
+        parent: Optional['TreeNode'] = None,
+        row: int = 0,
+        depth: int = 0,
+        max_depth: int = 1,
+    ) -> 'TreeNode':
+        """
+        Chuyển đổi TreeItem sang TreeNode (recursive, depth-limited).
+        
+        Args:
+            item: TreeItem từ file_utils
+            parent: Parent TreeNode
+            row: Row index trong parent
+            depth: Depth hiện tại
+            max_depth: Depth tối đa để load children
+        """
+        node = TreeNode(
+            label=item.label,
+            path=item.path,
+            is_dir=item.is_dir,
+            is_loaded=not item.is_dir or depth < max_depth,
+            parent=parent,
+            row=row,
+        )
+        
+        # Load children nếu trong depth limit
+        if item.is_dir and depth < max_depth:
+            for i, child_item in enumerate(item.children):
+                child_node = TreeNode.from_tree_item(
+                    child_item, parent=node, row=i,
+                    depth=depth + 1, max_depth=max_depth,
+                )
+                node.children.append(child_node)
+        
+        return node
+
+
+# Custom roles cho data
+class FileTreeRoles:
+    TOKEN_COUNT_ROLE = Qt.ItemDataRole.UserRole + 1
+    LINE_COUNT_ROLE = Qt.ItemDataRole.UserRole + 2
+    IS_SELECTED_ROLE = Qt.ItemDataRole.UserRole + 3
+    FILE_PATH_ROLE = Qt.ItemDataRole.UserRole + 4
+    IS_DIR_ROLE = Qt.ItemDataRole.UserRole + 5
+    IS_LOADED_ROLE = Qt.ItemDataRole.UserRole + 6
+
+
+class FileTreeModel(QAbstractItemModel):
+    """
+    Custom model cho file tree.
+    
+    Features:
+    - Lazy loading via canFetchMore/fetchMore
+    - Checkbox tri-state selection
+    - Token/line count via custom roles
+    - Background token counting
+    - Path-based O(1) index lookup
+    """
+    
+    # Signals
+    selection_changed = Signal(set)  # Set[str] - selected file paths
+    token_count_updated = Signal(str, int)  # (path, count)
+    
+    def __init__(self, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        
+        self._root_node: Optional[TreeNode] = None
+        self._invisible_root = TreeNode("", "", is_dir=True, is_loaded=True)
+        
+        # Selection state
+        self._selected_paths: Set[str] = set()
+        
+        # Token cache
+        self._token_cache: Dict[str, int] = {}
+        
+        # Line count cache  
+        self._line_cache: Dict[str, int] = {}
+        
+        # Path -> QModelIndex mapping cho O(1) lookup
+        self._path_to_node: Dict[str, TreeNode] = {}
+        
+        # Workspace root
+        self._workspace_path: Optional[Path] = None
+        
+        # Original TreeItem root (for tree map generation)
+        self._root_tree_item: Optional[TreeItem] = None
+    
+    # ===== QAbstractItemModel Interface =====
+    
+    def index(self, row: int, column: int, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> QModelIndex:
+        if not self.hasIndex(row, column, parent):
+            return QModelIndex()
+        
+        parent_node = parent.internalPointer() if parent.isValid() else self._get_root_parent()
+        
+        child = parent_node.child(row)
+        if child:
+            return self.createIndex(row, column, child)
+        return QModelIndex()
+    
+    def parent(self, index: QModelIndex | QPersistentModelIndex = QModelIndex()) -> QModelIndex:  # type: ignore[override]
+        if not index.isValid():
+            return QModelIndex()
+        
+        node: TreeNode = index.internalPointer()
+        parent_node = node.parent
+        
+        if parent_node is None or parent_node is self._get_root_parent():
+            return QModelIndex()
+        
+        return self.createIndex(parent_node.row, 0, parent_node)
+    
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
+        if parent.column() > 0:
+            return 0
+        
+        parent_node = parent.internalPointer() if parent.isValid() else self._get_root_parent()
+        return parent_node.child_count()
+    
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
+        return 1
+    
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if not index.isValid():
+            return None
+        
+        node: TreeNode = index.internalPointer()
+        
+        if role == Qt.ItemDataRole.DisplayRole:
+            return node.label
+        
+        elif role == Qt.ItemDataRole.CheckStateRole:
+            if node.is_dir:
+                # Tri-state cho folders
+                return self._get_folder_check_state(node)
+            return Qt.CheckState.Checked if node.path in self._selected_paths else Qt.CheckState.Unchecked
+        
+        elif role == FileTreeRoles.TOKEN_COUNT_ROLE:
+            return self._token_cache.get(node.path)
+        
+        elif role == FileTreeRoles.LINE_COUNT_ROLE:
+            return self._line_cache.get(node.path)
+        
+        elif role == FileTreeRoles.IS_SELECTED_ROLE:
+            return node.path in self._selected_paths
+        
+        elif role == FileTreeRoles.FILE_PATH_ROLE:
+            return node.path
+        
+        elif role == FileTreeRoles.IS_DIR_ROLE:
+            return node.is_dir
+        
+        elif role == FileTreeRoles.IS_LOADED_ROLE:
+            return node.is_loaded
+        
+        elif role == Qt.ItemDataRole.ToolTipRole:
+            return node.path
+        
+        return None
+    
+    def setData(self, index: QModelIndex | QPersistentModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        if not index.isValid():
+            return False
+        
+        if role == Qt.ItemDataRole.CheckStateRole:
+            node: TreeNode = index.internalPointer()
+            
+            if value == Qt.CheckState.Checked:
+                self._select_node(node)
+            else:
+                self._deselect_node(node)
+            
+            # Emit signals
+            self.dataChanged.emit(index, index, [Qt.ItemDataRole.CheckStateRole])
+            self._emit_parent_changes(node)
+            self.selection_changed.emit(set(self._selected_paths))
+            return True
+        
+        return False
+    
+    def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
+        if not index.isValid():
+            return Qt.ItemFlag(0)
+        
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsUserCheckable
+        return flags
+    
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+            return "Files"
+        return None
+    
+    # ===== Lazy Loading =====
+    
+    def canFetchMore(self, parent: QModelIndex | QPersistentModelIndex) -> bool:
+        """Return True nếu folder chưa load children (lazy loading)."""
+        if not parent.isValid():
+            return False
+        node: TreeNode = parent.internalPointer()
+        return node.is_dir and not node.is_loaded
+    
+    def fetchMore(self, parent: QModelIndex | QPersistentModelIndex) -> None:
+        """Load children on-demand khi user expand folder."""
+        if not parent.isValid():
+            return
+        
+        node: TreeNode = parent.internalPointer()
+        if not node.is_dir or node.is_loaded:
+            return
+        
+        # Load children từ filesystem
+        folder_path = Path(node.path)
+        if not folder_path.exists():
+            node.is_loaded = True
+            return
+        
+        try:
+            from core.utils.file_utils import load_folder_children, TreeItem as _TreeItem
+            from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+            
+            # Build a temporary TreeItem to use with load_folder_children
+            temp_item = _TreeItem(
+                label=node.label,
+                path=node.path,
+                is_dir=True,
+                is_loaded=False,
+                children=[],
+            )
+            load_folder_children(
+                temp_item,
+                excluded_patterns=get_excluded_patterns(),
+                use_gitignore=get_use_gitignore(),
+            )
+            children_items = temp_item.children
+        except Exception as e:
+            logger.error(f"Error loading children for {node.path}: {e}")
+            node.is_loaded = True
+            return
+        
+        if not children_items:
+            node.is_loaded = True
+            return
+        
+        # Insert children vào model
+        self.beginInsertRows(parent, 0, len(children_items) - 1)
+        
+        for i, child_item in enumerate(children_items):
+            child_node = TreeNode(
+                label=child_item.label,
+                path=child_item.path,
+                is_dir=child_item.is_dir,
+                is_loaded=not child_item.is_dir,  # Files are always "loaded"
+                parent=node,
+                row=i,
+            )
+            node.children.append(child_node)
+            self._path_to_node[child_node.path] = child_node
+            
+            # Nếu parent đang selected, auto-select children
+            if node.path in self._selected_paths:
+                self._selected_paths.add(child_node.path)
+        
+        node.is_loaded = True
+        self.endInsertRows()
+    
+    def hasChildren(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> bool:
+        """Folders luôn return True để hiện expand arrow."""
+        if not parent.isValid():
+            return self._get_root_parent().child_count() > 0
+        node: TreeNode = parent.internalPointer()
+        if node.is_dir and not node.is_loaded:
+            return True  # Giả sử folder có children cho đến khi load
+        return node.child_count() > 0
+    
+    # ===== Public API =====
+    
+    def load_tree(self, workspace_path: Path) -> None:
+        """
+        Load file tree cho workspace mới.
+        
+        Dùng scan_directory_shallow(depth=1) để load nhanh.
+        Children sâu hơn sẽ được lazy-load khi expand.
+        """
+        self._workspace_path = workspace_path
+        
+        self.beginResetModel()
+        
+        self._selected_paths.clear()
+        self._token_cache.clear()
+        self._line_cache.clear()
+        self._path_to_node.clear()
+        
+        try:
+            tree_item = scan_directory_shallow(workspace_path, depth=1)
+            if tree_item:
+                self._root_tree_item = tree_item
+                self._root_node = TreeNode.from_tree_item(
+                    tree_item, parent=self._invisible_root, row=0,
+                    depth=0, max_depth=1,
+                )
+                self._invisible_root.children = [self._root_node]
+                self._build_path_index(self._root_node)
+            else:
+                self._root_node = None
+                self._invisible_root.children = []
+        except Exception as e:
+            logger.error(f"Error loading tree: {e}")
+            self._root_node = None
+            self._invisible_root.children = []
+        
+        self.endResetModel()
+    
+    def get_selected_paths(self) -> List[str]:
+        """Get danh sách selected file paths (chỉ files, không folders)."""
+        return [p for p in self._selected_paths 
+                if p in self._path_to_node and not self._path_to_node[p].is_dir]
+    
+    def get_root_tree_item(self) -> Optional[TreeItem]:
+        """Get root TreeItem (for tree map generation)."""
+        return self._root_tree_item
+    
+    def get_all_selected_paths(self) -> Set[str]:
+        """Get tất cả selected paths (cả files và folders)."""
+        return set(self._selected_paths)
+    
+    def get_expanded_paths(self) -> List[str]:
+        """Get danh sách expanded folder paths. Cần TreeView reference."""
+        # Sẽ được gọi từ bên ngoài với TreeView access
+        return []
+    
+    def set_selected_paths(self, paths: Set[str]) -> None:
+        """Set selected paths (cho session restore)."""
+        self._selected_paths = set(paths)
+        # Emit dataChanged cho toàn tree
+        if self._root_node:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1, 0)
+            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
+            self.selection_changed.emit(set(self._selected_paths))
+    
+    def select_all(self) -> None:
+        """Select tất cả files."""
+        self._select_all_recursive(self._get_root_parent())
+        if self._root_node:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1, 0)
+            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
+            self.selection_changed.emit(set(self._selected_paths))
+    
+    def deselect_all(self) -> None:
+        """Deselect tất cả."""
+        self._selected_paths.clear()
+        if self._root_node:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1, 0)
+            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
+            self.selection_changed.emit(set(self._selected_paths))
+    
+    def update_token_count(self, path: str, count: int) -> None:
+        """
+        Cập nhật token count cho 1 file (gọi từ background thread qua signal).
+        
+        Chỉ emit dataChanged cho row tương ứng - KHÔNG re-render toàn tree.
+        """
+        self._token_cache[path] = count
+        
+        node = self._path_to_node.get(path)
+        if node is not None:
+            idx = self._node_to_index(node)
+            if idx.isValid():
+                self.dataChanged.emit(idx, idx, [FileTreeRoles.TOKEN_COUNT_ROLE])
+        
+        self.token_count_updated.emit(path, count)
+    
+    def update_line_count(self, path: str, count: int) -> None:
+        """Cập nhật line count cho 1 file."""
+        self._line_cache[path] = count
+        
+        node = self._path_to_node.get(path)
+        if node is not None:
+            idx = self._node_to_index(node)
+            if idx.isValid():
+                self.dataChanged.emit(idx, idx, [FileTreeRoles.LINE_COUNT_ROLE])
+    
+    def get_total_tokens(self) -> int:
+        """Tính tổng tokens cho selected files."""
+        total = 0
+        for path in self._selected_paths:
+            if path in self._token_cache:
+                total += self._token_cache[path]
+        return total
+    
+    def clear_token_cache(self) -> None:
+        """Clear token cache."""
+        self._token_cache.clear()
+    
+    # ===== Private Helpers =====
+    
+    def _get_root_parent(self) -> TreeNode:
+        """Get invisible root node."""
+        return self._invisible_root
+    
+    def _build_path_index(self, node: TreeNode) -> None:
+        """Build path -> node index (recursive)."""
+        self._path_to_node[node.path] = node
+        for child in node.children:
+            self._build_path_index(child)
+    
+    def _node_to_index(self, node: TreeNode) -> QModelIndex:
+        """Convert TreeNode sang QModelIndex."""
+        if node is self._invisible_root or node.parent is None:
+            return QModelIndex()
+        return self.createIndex(node.row, 0, node)
+    
+    def _select_node(self, node: TreeNode) -> None:
+        """Select node và tất cả children (recursive)."""
+        self._selected_paths.add(node.path)
+        if node.is_dir:
+            for child in node.children:
+                self._select_node(child)
+    
+    def _deselect_node(self, node: TreeNode) -> None:
+        """Deselect node và tất cả children (recursive)."""
+        self._selected_paths.discard(node.path)
+        if node.is_dir:
+            for child in node.children:
+                self._deselect_node(child)
+    
+    def _select_all_recursive(self, node: TreeNode) -> None:
+        """Recursively select tất cả nodes."""
+        self._selected_paths.add(node.path)
+        for child in node.children:
+            self._select_all_recursive(child)
+    
+    def _get_folder_check_state(self, node: TreeNode) -> Qt.CheckState:
+        """
+        Tính tri-state check state cho folder.
+        
+        - Checked: tất cả loaded children đều selected
+        - PartiallyChecked: một số children selected
+        - Unchecked: không có children selected
+        """
+        if not node.children:
+            return Qt.CheckState.Checked if node.path in self._selected_paths else Qt.CheckState.Unchecked
+        
+        all_selected = True
+        any_selected = False
+        
+        for child in node.children:
+            if child.path in self._selected_paths:
+                any_selected = True
+            else:
+                all_selected = False
+            
+            # Recurse vào subfolders
+            if child.is_dir and child.children:
+                child_state = self._get_folder_check_state(child)
+                if child_state == Qt.CheckState.Checked:
+                    any_selected = True
+                elif child_state == Qt.CheckState.PartiallyChecked:
+                    any_selected = True
+                    all_selected = False
+                else:
+                    all_selected = False
+        
+        if all_selected and any_selected:
+            return Qt.CheckState.Checked
+        elif any_selected:
+            return Qt.CheckState.PartiallyChecked
+        return Qt.CheckState.Unchecked
+    
+    def _emit_parent_changes(self, node: TreeNode) -> None:
+        """Emit dataChanged cho tất cả ancestors (cập nhật tri-state)."""
+        current = node.parent
+        while current is not None and current is not self._invisible_root:
+            idx = self._node_to_index(current)
+            if idx.isValid():
+                self.dataChanged.emit(idx, idx, [Qt.ItemDataRole.CheckStateRole])
+            current = current.parent
+
+
+class TokenCountWorker(QRunnable):
+    """
+    Background worker để đếm tokens cho các file đã selected.
+    
+    Emit kết quả từng file qua signals - model receive và update từng row.
+    """
+    
+    class Signals(QObject):
+        token_counted = Signal(str, int)  # (file_path, token_count)
+        finished = Signal()
+        error = Signal(str)
+    
+    def __init__(self, file_paths: List[str]):
+        super().__init__()
+        self.file_paths = file_paths
+        self.signals = self.Signals()
+        self.setAutoDelete(True)
+        self._cancelled = False
+    
+    def cancel(self) -> None:
+        """Cancel worker."""
+        self._cancelled = True
+    
+    @Slot()
+    def run(self) -> None:
+        """Đếm tokens cho tất cả files."""
+        from core.token_counter import count_tokens
+        
+        try:
+            for file_path in self.file_paths:
+                if self._cancelled:
+                    break
+                
+                try:
+                    path = Path(file_path)
+                    if path.exists() and path.is_file():
+                        content = path.read_text(encoding="utf-8", errors="replace")
+                        tokens = count_tokens(content)
+                        self.signals.token_counted.emit(file_path, tokens)
+                except Exception as e:
+                    logger.debug(f"Error counting tokens for {file_path}: {e}")
+        except Exception as e:
+            self.signals.error.emit(str(e))
+        finally:
+            self.signals.finished.emit()

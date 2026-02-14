@@ -1,5 +1,7 @@
-# Overwrite Desktop - Dependencies
-flet>=0.28.0
+# Synapse Desktop - Dependencies
+# UI Framework (PySide6 replaces Flet)
+PySide6>=6.6.0
+# flet>=0.28.0  # Legacy Flet UI (replaced by PySide6)
 tiktoken>=0.9.0
 pathspec>=0.12.0
 pyperclip>=1.9.0

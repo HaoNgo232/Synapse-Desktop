@@ -339,7 +339,8 @@ def _sanitize_response(raw: str) -> str:
     
     if last_close > -1:
         is_opx = s[last_close:].lower().startswith("</opx>")
-        end = last_close + (6 if is_opx else 7)  # len("</opx>") = 6, len("</edit>") = 7
+        tag_len = 6 if is_opx else 7
+        end = last_close + tag_len
         s = s[:end]
     
     return s.strip()

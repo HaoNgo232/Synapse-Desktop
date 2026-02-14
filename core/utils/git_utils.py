@@ -454,3 +454,94 @@ def _extract_changed_files(stat_output: str) -> list[str]:
                 files.append(file_part)
     
     return files
+
+
+def build_diff_only_prompt(
+    diff_result: DiffOnlyResult,
+    instructions: str,
+    include_changed_content: bool,
+    include_tree_structure: bool,
+) -> str:
+    """
+    Build prompt from diff result for Copy Diff Only feature.
+    
+    Args:
+        diff_result: DiffOnlyResult from get_diff_only()
+        instructions: User instructions text
+        include_changed_content: Include full content of changed files
+        include_tree_structure: Include changed file tree structure
+    
+    Returns:
+        Formatted prompt string
+    """
+    parts = [
+        "<diff_context>",
+        f"Files changed: {diff_result.files_changed}",
+        f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
+    ]
+    if diff_result.commits_included > 0:
+        parts.append(f"Commits included: {diff_result.commits_included}")
+    parts.extend(["</diff_context>", ""])
+
+    if include_tree_structure and diff_result.changed_files:
+        tree_str = _build_tree_from_paths(diff_result.changed_files[:50])
+        parts.extend(["<project_structure>", tree_str, "</project_structure>", ""])
+
+    parts.extend(["<git_diff>", diff_result.diff_content, "</git_diff>"])
+
+    if include_changed_content and diff_result.changed_files:
+        parts.extend(["", "<changed_files_content>"])
+        for file_path in diff_result.changed_files[:20]:
+            full_path = Path(file_path)
+            if full_path.exists() and full_path.is_file():
+                try:
+                    content = full_path.read_text(encoding="utf-8", errors="replace")
+                    if len(content) <= 50000:
+                        from core.utils.language_utils import get_language_from_path
+                        lang = get_language_from_path(str(full_path))
+                        parts.extend([
+                            f'<file path="{file_path}">',
+                            f"```{lang}",
+                            content,
+                            "```",
+                            "</file>",
+                        ])
+                except Exception:
+                    pass
+        parts.append("</changed_files_content>")
+
+    if instructions and instructions.strip():
+        parts.extend(["", "<user_instructions>", instructions.strip(), "</user_instructions>"])
+
+    return "\n".join(parts)
+
+
+def _build_tree_from_paths(file_paths: List[str]) -> str:
+    """Build tree hierarchy string from a list of file paths."""
+    tree_dict: dict = {}
+    for file_path in file_paths:
+        path_parts = file_path.replace("\\", "/").split("/")
+        current = tree_dict
+        for i, part in enumerate(path_parts):
+            if i == len(path_parts) - 1:
+                current[part] = None
+            else:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+
+    lines: List[str] = []
+    _render_tree_dict(tree_dict, lines, indent=0)
+    return "\n".join(lines)
+
+
+def _render_tree_dict(tree_dict: dict, lines: List[str], indent: int = 0) -> None:
+    """Render tree dict to indented lines."""
+    indent_str = "    " * indent
+    items = sorted(tree_dict.items(), key=lambda x: (x[1] is None, x[0]))
+    for name, children in items:
+        if children is None:
+            lines.append(f"{indent_str}{name}  [modified]")
+        else:
+            lines.append(f"{indent_str}{name}/")
+            _render_tree_dict(children, lines, indent + 1)

@@ -210,7 +210,10 @@ class TestCountTokensBatch:
             files.append(file_path)
 
         clear_token_cache()
-        result = count_tokens_batch(files)
+        
+        # Mock is_counting_tokens to return True
+        with patch('services.token_display.is_counting_tokens', return_value=True):
+            result = count_tokens_batch(files)
 
         assert len(result) == 5
         assert all(isinstance(v, int) for v in result.values())
@@ -226,7 +229,10 @@ class TestCountTokensBatch:
             files.append(file_path)
 
         clear_token_cache()
-        result = count_tokens_batch(files)
+        
+        # Mock is_counting_tokens to return True
+        with patch('services.token_display.is_counting_tokens', return_value=True):
+            result = count_tokens_batch(files)
 
         assert len(result) == 15
         assert all(isinstance(v, int) for v in result.values())
@@ -249,7 +255,10 @@ class TestCountTokensBatch:
         files.append(tmp_path / "nonexistent.py")
 
         clear_token_cache()
-        result = count_tokens_batch(files)
+        
+        # Mock is_counting_tokens to return True
+        with patch('services.token_display.is_counting_tokens', return_value=True):
+            result = count_tokens_batch(files)
 
         assert len(result) == 3
         assert result[str(text_file)] > 0

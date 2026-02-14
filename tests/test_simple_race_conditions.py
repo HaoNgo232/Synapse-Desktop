@@ -9,15 +9,15 @@ import threading
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 def test_safe_timer():
     """Test SafeTimer implementation"""
     print("Testing SafeTimer...")
     
-    # Import SafeTimer directly
-    sys.path.insert(0, str(Path(__file__).parent / "core" / "utils"))
-    from safe_timer import SafeTimer, DebouncedCallback
+    # Import SafeTimer from correct location
+    from core.utils.safe_timer import SafeTimer, DebouncedCallback
     
     # Test basic functionality
     callback_count = 0
@@ -70,8 +70,7 @@ def test_state_manager():
     """Test GlobalState manager"""
     print("\nTesting GlobalState manager...")
     
-    sys.path.insert(0, str(Path(__file__).parent / "core" / "utils"))
-    from state_manager import GlobalState
+    from core.utils.state_manager import GlobalState
     
     state = GlobalState()
     

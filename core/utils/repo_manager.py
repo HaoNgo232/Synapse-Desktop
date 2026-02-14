@@ -276,8 +276,8 @@ class RepoManager:
             if target_path.exists():
                 shutil.rmtree(target_path)
             raise CloneTimeoutError(f"Clone timeout sau {timeout} giây")
-        except (RepoError, GitNotInstalledError, RepoNotFoundError, CloneTimeoutError):
-            # Re-raise our errors
+        except RepoError:
+            # Re-raise our errors (includes GitNotInstalledError, RepoNotFoundError, CloneTimeoutError)
             raise
         except Exception as e:
             # Cleanup on error

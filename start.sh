@@ -75,15 +75,15 @@ else
     echo -e "${GREEN}Dependencies đã được cài đặt thành công!${NC}\n"
 fi
 
-# Kiểm tra file main.py
-if [ ! -f "main.py" ]; then
-    echo -e "${RED}Lỗi: Không tìm thấy file main.py!${NC}"
+# Kiểm tra file main_window.py (PySide6)
+if [ ! -f "main_window.py" ]; then
+    echo -e "${RED}Lỗi: Không tìm thấy file main_window.py!${NC}"
     exit 1
 fi
 
-# Chạy ứng dụng
-echo -e "${GREEN}Đang khởi động ứng dụng...${NC}\n"
-python3 main.py
+# Chạy ứng dụng với PySide6
+echo -e "${GREEN}Đang khởi động ứng dụng (PySide6)...${NC}\n"
+python3 main_window.py
 
 # Lưu exit code của ứng dụng
 APP_EXIT_CODE=$?

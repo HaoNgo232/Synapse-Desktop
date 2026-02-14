@@ -256,8 +256,16 @@ class ContextViewQt(QWidget):
         row1 = QHBoxLayout()
         diff_btn = QPushButton("Copy Diff Only")
         diff_btn.setStyleSheet(
-            f"background-color: #8B5CF6; color: #FFFFFF; border: none; "
-            f"border-radius: 6px; padding: 8px 16px; font-weight: 500;"
+            "QPushButton {"
+            "  background-color: #8B5CF6; color: #FFFFFF; border: none;"
+            "  border-radius: 6px; padding: 8px 16px; font-weight: 500;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: #7C3AED;"
+            "}"
+            "QPushButton:pressed {"
+            "  background-color: #6D28D9;"
+            "}"
         )
         diff_btn.setToolTip("Copy only git diff")
         diff_btn.clicked.connect(self._show_diff_only_dialog)
@@ -274,8 +282,16 @@ class ContextViewQt(QWidget):
         
         smart_btn = QPushButton("Copy Smart")
         smart_btn.setStyleSheet(
-            f"color: {ThemeColors.WARNING}; border: 1px solid {ThemeColors.WARNING}; "
-            f"background: transparent; border-radius: 6px; padding: 8px 16px; font-weight: 500;"
+            "QPushButton {"
+            f"  color: {ThemeColors.WARNING}; border: 1px solid {ThemeColors.WARNING};"
+            "  background: transparent; border-radius: 6px; padding: 8px 16px; font-weight: 500;"
+            "}"
+            "QPushButton:hover {"
+            f"  background-color: {ThemeColors.BG_ELEVATED};"
+            "}"
+            "QPushButton:pressed {"
+            f"  background-color: {ThemeColors.BG_HOVER};"
+            "}"
         )
         smart_btn.setToolTip("Copy code structure only")
         smart_btn.clicked.connect(self._copy_smart_context)

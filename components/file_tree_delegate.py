@@ -17,8 +17,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QModelIndex, QPersistentModelIndex, QRect, QSize, QRectF
 from PySide6.QtGui import (
-    QPainter, QColor, QPen, QFont, QFontMetrics, QIcon, QPainterPath,
+    QPainter, QColor, QPen, QFont, QFontMetrics, QIcon, QPainterPath, QPixmap,
 )
+import qtawesome as qta
 
 from core.theme import ThemeColors
 from components.file_tree_model import FileTreeRoles
@@ -87,33 +88,96 @@ def _get_font_small() -> QFont:
     return _font_small
 
 
-# File extension → icon symbol mapping
-_EXT_ICONS: dict[str, str] = {
-    '.py': '🐍', '.js': '📜', '.ts': '📘', '.tsx': '⚛',
-    '.jsx': '⚛', '.html': '🌐', '.css': '🎨', '.json': '📋',
-    '.md': '📝', '.yml': '⚙', '.yaml': '⚙', '.toml': '⚙',
-    '.rs': '🦀', '.go': '🐹', '.java': '☕', '.c': '🔧',
-    '.cpp': '🔧', '.h': '🔧', '.cs': '💠', '.rb': '💎',
-    '.php': '🐘', '.swift': '🐦', '.kt': '🟠', '.sql': '🗄',
-    '.sh': '🖥', '.bash': '🖥', '.zsh': '🖥',
-    '.txt': '📄', '.log': '📋', '.env': '🔒',
-    '.png': '🖼', '.jpg': '🖼', '.svg': '🖼', '.gif': '🖼',
-    '.lock': '🔒', '.gitignore': '🚫',
+# File extension -> (mdi_icon_name, color) mapping
+# Using Material Design Icons (mdi6) for a professional look
+_EXT_ICONS: dict[str, tuple[str, str]] = {
+    # Programming Languages
+    '.py': ('mdi6.language-python', '#3776AB'),
+    '.js': ('mdi6.language-javascript', '#F7DF1E'),
+    '.ts': ('mdi6.language-typescript', '#3178C6'),
+    '.tsx': ('mdi6.react', '#61DAFB'),  # If fails, will fallback
+    '.jsx': ('mdi6.react', '#61DAFB'),
+    '.rs': ('mdi6.cog', '#DEA584'),
+    '.go': ('mdi6.language-go', '#00ADD8'),
+    '.java': ('mdi6.language-java', '#007396'),
+    '.c': ('mdi6.language-c', '#A8B9CC'),
+    '.cpp': ('mdi6.language-cpp', '#00599C'),
+    '.h': ('mdi6.language-cpp', '#00599C'),
+    '.cs': ('mdi6.language-csharp', '#239120'),
+    '.rb': ('mdi6.language-ruby', '#CC342D'),
+    '.php': ('mdi6.language-php', '#777BB4'),
+    '.swift': ('mdi6.language-swift', '#F05138'),
+    '.kt': ('mdi6.language-kotlin', '#7F52FF'),
+    '.sql': ('mdi6.database', '#4479A1'),
+    
+    # Web & Config
+    '.html': ('mdi6.language-html5', '#E34F26'),
+    '.css': ('mdi6.language-css3', '#1572B6'),
+    '.json': ('mdi6.code-json', '#CBCB41'),
+    '.md': ('mdi6.language-markdown', '#ffffff'),
+    '.yml': ('mdi6.cog', '#CB171E'),
+    '.yaml': ('mdi6.cog', '#CB171E'),
+    '.toml': ('mdi6.cog', '#9C4221'),
+    '.xml': ('mdi6.xml', '#ff6600'),
+    
+    # Scripts
+    '.sh': ('mdi6.bash', '#4EAA25'),
+    '.bash': ('mdi6.bash', '#4EAA25'),
+    '.zsh': ('mdi6.bash', '#4EAA25'),
+    
+    # Media & Docs
+    '.txt': ('mdi6.file-document-outline', '#94A3B8'),
+    '.log': ('mdi6.file-document-outline', '#94A3B8'),
+    '.env': ('mdi6.key-variant', '#FACC15'),
+    '.png': ('mdi6.image', '#60A5FA'),
+    '.jpg': ('mdi6.image', '#60A5FA'),
+    '.svg': ('mdi6.image', '#FB923C'),
+    '.gif': ('mdi6.image', '#60A5FA'),
+    '.pdf': ('mdi6.file-pdf-box', '#F43F5E'),
+    
+    # Lock files
+    '.lock': ('mdi6.lock', '#94A3B8'),
+    '.gitignore': ('mdi6.git', '#F05032'),
 }
 
+# Icon cache to avoid repeated rendering
+_icon_cache: dict[str, QPixmap] = {}
 
-def _get_file_icon(label: str, is_dir: bool) -> str:
-    """Get icon symbol cho file/folder."""
+def _get_qta_pixmap(name: str, color: QColor, size: int = ICON_SIZE) -> QPixmap:
+    cache_key = f"{name}_{color.name()}_{size}"
+    if cache_key not in _icon_cache:
+        try:
+            _icon_cache[cache_key] = qta.icon(name, color=color).pixmap(size, size)
+        except Exception:
+            # Fallback to a generic file icon if the specific one fails
+            try:
+                _icon_cache[cache_key] = qta.icon('mdi6.file-outline', color=color).pixmap(size, size)
+            except Exception:
+                # Absolute fallback (empty pixmap) to prevent crash
+                _icon_cache[cache_key] = QPixmap(size, size)
+                _icon_cache[cache_key].fill(Qt.GlobalColor.transparent)
+                
+    return _icon_cache[cache_key]
+
+def _draw_file_icon(painter: QPainter, x: int, y: int, label: str, is_dir: bool, height: int):
+    """Vẽ icon bằng qtawesome pixmap."""
     if is_dir:
-        return "📁"
+        pixmap = _get_qta_pixmap('mdi6.folder', COLOR_FOLDER)
+    else:
+        # Check extension for specific icons
+        icon_name = 'mdi6.file-outline'
+        icon_color = COLOR_FILE
+        
+        for ext, (name, color) in _EXT_ICONS.items():
+            if label.endswith(ext):
+                icon_name = name
+                icon_color = QColor(color)
+                break
+        
+        pixmap = _get_qta_pixmap(icon_name, icon_color)
     
-    # Check extension
-    for ext, icon in _EXT_ICONS.items():
-        if label.endswith(ext):
-            return icon
-    
-    return "📄"  # Default file icon
-
+    icon_y = y + (height - ICON_SIZE) // 2
+    painter.drawPixmap(x, icon_y, pixmap)
 
 class FileTreeDelegate(QStyledItemDelegate):
     """
@@ -158,13 +222,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         self._draw_checkbox(painter, x, center_y, check_state)
         x += CHECKBOX_SIZE + SPACING
         
-        # 2. Draw icon
-        icon_str = _get_file_icon(label, is_dir or False)
-        painter.setFont(_get_font_normal())
-        painter.setPen(COLOR_FOLDER if is_dir else COLOR_FILE)
-        icon_rect = QRect(x, y, ICON_SIZE + 4, height)
-        painter.drawText(icon_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, icon_str)
-        x += ICON_SIZE + SPACING + 2
+        # 2. Draw icon (Material Design)
+        _draw_file_icon(painter, x, y, label, is_dir or False, height)
+        x += ICON_SIZE + SPACING
         
         # 3. Reserve space for eye icon (files only, on hover)
         is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
@@ -174,7 +234,9 @@ class FileTreeDelegate(QStyledItemDelegate):
             eye_rect = QRect(x, y, EYE_ICON_SIZE, height)
             painter.setFont(_get_font_normal())
             painter.setPen(COLOR_TEXT_MUTED)
-            painter.drawText(eye_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, "👁")
+            # Dùng icon MDI cho con mắt luôn
+            eye_pixmap = _get_qta_pixmap('mdi6.eye-outline', COLOR_TEXT_MUTED, 18)
+            painter.drawPixmap(x + (EYE_ICON_SIZE-18)//2, y + (height-18)//2, eye_pixmap)
             x += EYE_ICON_SIZE + SPACING
 
         # 4. Calculate available space for label (excluding badges)

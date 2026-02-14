@@ -738,16 +738,23 @@ class FilePreviewDialogQt(BaseDialogQt):
             )
             layout.addWidget(warn)
 
-        # Code editor (read only)
-        self._text_edit = QPlainTextEdit()
+        # Code editor (read only) with syntax highlighting
+        self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
-        self._text_edit.setPlainText(self._content)
         self._text_edit.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 12))
         self._text_edit.setStyleSheet(
             f"background-color: #282a36; color: #f8f8f2; "
             f"border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 8px;"
         )
-        self._text_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self._text_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        
+        # Apply syntax highlighting via Pygments + Dracula
+        highlighted_html = self._highlight_code(self._content, language)
+        if highlighted_html:
+            self._text_edit.setHtml(highlighted_html)
+        else:
+            self._text_edit.setPlainText(self._content)
+        
         layout.addWidget(self._text_edit, stretch=1)
 
         if truncated:
@@ -784,6 +791,40 @@ class FilePreviewDialogQt(BaseDialogQt):
     def _copy_content(self) -> None:
         if self._content:
             copy_to_clipboard(self._content)
+
+    @staticmethod
+    def _highlight_code(content: str, language: str) -> Optional[str]:
+        """Apply Pygments syntax highlighting with Dracula theme."""
+        try:
+            from pygments import highlight
+            from pygments.lexers import get_lexer_by_name, TextLexer
+            from pygments.formatters import HtmlFormatter
+
+            try:
+                lexer = get_lexer_by_name(language, stripall=True)
+            except Exception:
+                lexer = TextLexer()
+
+            # Dracula-inspired inline styles
+            formatter = HtmlFormatter(
+                style="dracula",
+                noclasses=True,  # Use inline styles
+                nowrap=False,
+                linenos=True,
+                linenostart=1,
+                lineanchors="line",
+                prestyles=(
+                    "background-color: #282a36; color: #f8f8f2; "
+                    "font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; "
+                    "font-size: 12px; padding: 12px; border-radius: 4px; "
+                    "line-height: 1.5;"
+                ),
+            )
+            return highlight(content, lexer, formatter)
+        except ImportError:
+            return None
+        except Exception:
+            return None
 
     @staticmethod
     def show_preview(

@@ -67,6 +67,7 @@ class ContextViewQt(QWidget):
         
         # Services
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
+        self._repo_manager = None  # Lazy init
         
         # Build UI
         self._build_ui()
@@ -594,12 +595,35 @@ class ContextViewQt(QWidget):
         FilePreviewDialogQt.show_preview(self, file_path)
     
     def _open_remote_repo_dialog(self) -> None:
-        """Open remote repo dialog — not yet integrated with PySide6 version."""
-        self._show_status("Remote repos not yet integrated", is_error=True)
+        """Open remote repo clone dialog."""
+        from core.utils.repo_manager import RepoManager
+        from components.dialogs_qt import RemoteRepoDialogQt
+
+        if self._repo_manager is None:
+            self._repo_manager = RepoManager()
+
+        def on_clone_success(repo_path):
+            """Handle successful clone — open the cloned repo as workspace."""
+            self._show_status(f"Cloned to {repo_path}")
+            self.on_workspace_changed(repo_path)
+
+        dialog = RemoteRepoDialogQt(self, self._repo_manager, on_clone_success)
+        dialog.exec()
     
     def _open_cache_management_dialog(self) -> None:
-        """Open cache management dialog — not yet integrated with PySide6 version."""
-        self._show_status("Cache management not yet integrated", is_error=True)
+        """Open cache management dialog for cloned repos."""
+        from core.utils.repo_manager import RepoManager
+        from components.dialogs_qt import CacheManagementDialogQt
+
+        if self._repo_manager is None:
+            self._repo_manager = RepoManager()
+
+        def on_open_repo(repo_path):
+            """Handle opening a cached repo."""
+            self.on_workspace_changed(repo_path)
+
+        dialog = CacheManagementDialogQt(self, self._repo_manager, on_open_repo)
+        dialog.exec()
     
     # ===== File Watcher Callbacks =====
     

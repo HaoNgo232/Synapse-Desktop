@@ -329,23 +329,34 @@ def generate_app_stylesheet() -> str:
     QTreeView::item {{
         padding: 2px 0;
         min-height: 28px;
+        background-color: transparent;
     }}
     QTreeView::item:hover {{
-        background-color: {ThemeColors.BG_ELEVATED};
+        background-color: transparent;
     }}
     QTreeView::item:selected {{
-        background-color: {ThemeColors.BG_HOVER};
+        background-color: transparent;
     }}
     QTreeView::branch {{
         background-color: transparent;
+        border-image: none;
+        image: none;
     }}
     QTreeView::branch:has-children:!has-siblings:closed,
     QTreeView::branch:closed:has-children:has-siblings {{
         border-image: none;
+        image: none;
     }}
     QTreeView::branch:open:has-children:!has-siblings,
     QTreeView::branch:open:has-children:has-siblings {{
         border-image: none;
+        image: none;
+    }}
+    QTreeView::branch:has-siblings:!adjoins-item,
+    QTreeView::branch:has-siblings:adjoins-item,
+    QTreeView::branch:!has-children:!has-siblings:adjoins-item {{
+        border-image: none;
+        image: none;
     }}
 
     /* ===== LIST WIDGET ===== */

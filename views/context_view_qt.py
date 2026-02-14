@@ -21,7 +21,7 @@ from core.theme import ThemeColors
 from core.utils.qt_utils import (
     DebouncedTimer, run_on_main_thread, schedule_background,
 )
-from core.utils.file_utils import scan_directory_shallow, TreeItem
+from core.utils.file_utils import scan_directory, scan_directory_shallow, TreeItem
 from core.token_counter import count_tokens_batch_parallel, count_tokens
 from core.prompt_generator import (
     generate_prompt, generate_file_map, generate_file_contents,
@@ -529,7 +529,8 @@ class ContextViewQt(QWidget):
         """Execute copy context."""
         try:
             selected_path_strs = {str(p) for p in file_paths}
-            tree_item = self.file_tree_widget.get_root_tree_item()
+            # Use full scan to avoid missing deep branches from lazy tree model.
+            tree_item = self._scan_full_tree(workspace)
             file_map = generate_file_map(tree_item, selected_path_strs) if tree_item else ""
             
             if self._selected_output_style == OutputStyle.XML:
@@ -590,16 +591,41 @@ class ContextViewQt(QWidget):
         try:
             selected_files = self.file_tree_widget.get_selected_paths()
             selected_strs = set(selected_files) if selected_files else set()
-            tree_item = self.file_tree_widget.get_root_tree_item()
+            tree_item = self._scan_full_tree(workspace)
             if not tree_item:
                 self._show_status("No file tree loaded", is_error=True)
                 return
+
+            # No selection => generate full project tree map from full scan.
+            if not selected_strs:
+                selected_strs = self._collect_all_tree_paths(tree_item)
+
             instructions = self._instructions_field.toPlainText() if hasattr(self, '_instructions_field') else ""
             tree_map = generate_tree_map_only(tree_item, selected_strs, instructions)
             copy_to_clipboard(tree_map)
             self._show_status("Tree map copied!")
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
+
+    def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
+        """Collect all node paths from a TreeItem tree."""
+        paths: Set[str] = set()
+
+        def _walk(node: TreeItem) -> None:
+            paths.add(node.path)
+            for child in node.children:
+                _walk(child)
+
+        _walk(root)
+        return paths
+
+    def _scan_full_tree(self, workspace: Path) -> TreeItem:
+        """Scan full workspace tree with current exclude settings."""
+        return scan_directory(
+            workspace,
+            excluded_patterns=get_excluded_patterns(),
+            use_gitignore=get_use_gitignore(),
+        )
     
     def _show_diff_only_dialog(self) -> None:
         """Show diff only dialog."""

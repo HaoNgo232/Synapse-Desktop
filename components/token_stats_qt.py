@@ -67,6 +67,38 @@ class TokenStatsPanelQt(QWidget):
         
         self._model_combo = QComboBox()
         self._model_combo.setFixedWidth(220)
+        self._model_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px;
+                padding: 4px 8px;
+            }}
+            QComboBox:hover {{
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                selection-background-color: {ThemeColors.PRIMARY};
+                selection-color: white;
+                border: 1px solid {ThemeColors.BORDER};
+            }}
+            QComboBox QAbstractItemView::item {{
+                padding: 6px 12px;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: {ThemeColors.PRIMARY};
+                color: white;
+            }}
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: {ThemeColors.PRIMARY}33;
+            }}
+        """)
         for m in MODEL_CONFIGS:
             label = f"{m.name} ({self._format_context(m.context_length)})"
             self._model_combo.addItem(label, m.id)

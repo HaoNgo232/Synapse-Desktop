@@ -157,17 +157,7 @@ class FileTreeDelegate(QStyledItemDelegate):
         self._draw_checkbox(painter, x, center_y, check_state)
         x += CHECKBOX_SIZE + SPACING
         
-        # 2. Draw expand/collapse arrow for folders (native arrows hidden via QSS)
-        if is_dir:
-            is_expanded = bool(option.state & QStyle.StateFlag.State_Open)
-            arrow_text = "▾" if is_expanded else "▸"
-            painter.setFont(_get_font_normal())
-            painter.setPen(COLOR_TEXT_MUTED)
-            arrow_rect = QRect(x, y, 14, height)
-            painter.drawText(arrow_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, arrow_text)
-        x += 16
-        
-        # 3. Draw icon
+        # 2. Draw icon
         icon_str = _get_file_icon(label, is_dir or False)
         painter.setFont(_get_font_normal())
         painter.setPen(COLOR_FOLDER if is_dir else COLOR_FILE)

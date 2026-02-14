@@ -5,7 +5,14 @@ Chuyển đổi hệ thống theme từ Flet sang PySide6 QSS.
 Giữ nguyên tất cả color constants từ core/theme.py.
 """
 
+import os
+
 from core.theme import ThemeColors, ThemeSpacing, ThemeRadius
+
+# Resolve absolute paths for SVG icons
+_ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+_ARROW_RIGHT = os.path.join(_ASSETS_DIR, "arrow-right.svg").replace("\\", "/")
+_ARROW_DOWN = os.path.join(_ASSETS_DIR, "arrow-down.svg").replace("\\", "/")
 
 
 def generate_app_stylesheet() -> str:
@@ -345,12 +352,12 @@ def generate_app_stylesheet() -> str:
     QTreeView::branch:has-children:!has-siblings:closed,
     QTreeView::branch:closed:has-children:has-siblings {{
         border-image: none;
-        image: none;
+        image: url({_ARROW_RIGHT});
     }}
     QTreeView::branch:open:has-children:!has-siblings,
     QTreeView::branch:open:has-children:has-siblings {{
         border-image: none;
-        image: none;
+        image: url({_ARROW_DOWN});
     }}
     QTreeView::branch:has-siblings:!adjoins-item,
     QTreeView::branch:has-siblings:adjoins-item,

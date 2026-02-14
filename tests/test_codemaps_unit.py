@@ -46,6 +46,9 @@ class MyClass(BaseClass):
 '''
 
 SAMPLE_JS_CODE = '''
+import React from "react";
+import { helper } from "./utils/helper";
+
 function fetchData() {
     const result = processResult();
     return result;
@@ -112,6 +115,22 @@ class TestExtractRelationships:
         """Test with unsupported file extension."""
         relationships = extract_relationships("test.xyz", "some content")
         assert relationships == []
+
+    def test_extract_js_relationships_including_imports(self):
+        """Test extraction of JS calls, inheritance, and imports."""
+        relationships = extract_relationships("test.js", SAMPLE_JS_CODE)
+
+        calls = [r for r in relationships if r.kind == RelationshipKind.CALLS]
+        inherits = [r for r in relationships if r.kind == RelationshipKind.INHERITS]
+        imports = [r for r in relationships if r.kind == RelationshipKind.IMPORTS]
+
+        assert len(calls) > 0, "Should extract JS function/method calls"
+        assert len(inherits) > 0, "Should extract JS inheritance"
+        assert len(imports) > 0, "Should extract JS imports"
+
+        import_targets = [r.target for r in imports]
+        assert any("react" in target for target in import_targets)
+        assert any("utils/helper" in target for target in import_targets)
 
 
 # ============================================================
@@ -181,6 +200,14 @@ class TestSmartParseIntegration:
         assert result is not None
         assert "## Relationships" in result
         assert "Function Calls" in result
+
+    def test_smart_parse_js_with_relationships(self):
+        """Test smart_parse for JS includes imports section when enabled."""
+        result = smart_parse("test.js", SAMPLE_JS_CODE, include_relationships=True)
+
+        assert result is not None
+        assert "## Relationships" in result
+        assert "Imports" in result
     
     def test_backward_compatibility(self):
         """Test that default behavior is backward compatible."""

@@ -509,13 +509,21 @@ class DependencyResolver:
                             return index_candidate
             return None
         
-        # 2. Handle path aliases (từ tsconfig.json/jsconfig.json)
+        # 2. Tìm theo filename cuối cùng trong import path (strategy chính cho JS/TS)
+        # Ví dụ: '@/infrastructure/cleanup/kpack-cleanup.service'
+        #   -> tìm file 'kpack-cleanup.service.ts' trong file index
+        # Đơn giản, hiệu quả cho mọi alias pattern mà không cần tsconfig
+        resolved = self._resolve_js_by_filename(import_path, possible_extensions)
+        if resolved:
+            return resolved
+        
+        # 3. Fallback: thử path aliases từ tsconfig.json/jsconfig.json
         if self._ts_paths and self._ts_base_url:
             resolved = self._resolve_ts_alias(import_path, possible_extensions)
             if resolved:
                 return resolved
         
-        # 3. Non-relative, non-alias imports (node_modules) - skip
+        # 4. Non-relative, non-alias imports (node_modules) - skip
         return None
     
     def _resolve_ts_alias(
@@ -554,16 +562,23 @@ class DependencyResolver:
                     
                     # Try each target path
                     for target in target_paths:
-                        if target.endswith("/*"):
-                            target_prefix = target[:-2]
+                        # Replace TS wildcard with actual suffix.
+                        # Examples:
+                        #   "*" -> "infrastructure/foo"
+                        #   "src/*" -> "src/infrastructure/foo"
+                        #   "src/lib" -> "src/lib/infrastructure/foo"
+                        if "*" in target:
+                            target_prefix = target.replace("*", suffix)
+                            suffix_to_append = ""
                         else:
                             target_prefix = target
+                            suffix_to_append = suffix
                         
                         # Build full path
                         if self._ts_base_url:
-                            base = self._ts_base_url / target_prefix / suffix
+                            base = self._ts_base_url / target_prefix / suffix_to_append
                         else:
-                            base = self.workspace_root / target_prefix / suffix
+                            base = self.workspace_root / target_prefix / suffix_to_append
                         
                         # Try with extensions
                         for ext in extensions:
@@ -593,6 +608,140 @@ class DependencyResolver:
         
         return None
     
+    def _resolve_js_by_filename(
+        self, 
+        import_path: str, 
+        extensions: list
+    ) -> Optional[Path]:
+        """
+        Fallback: resolve JS/TS import bằng cách tìm filename cuối cùng trong file index.
+        
+        Khi alias resolve thất bại hoặc không có tsconfig, lấy phần cuối
+        của import path và tìm trong file index đã build sẵn.
+        
+        Ví dụ:
+        - '@/infrastructure/cleanup/kpack-cleanup.service'
+          -> basename = 'kpack-cleanup.service'
+          -> tìm 'kpack-cleanup.service.ts' trong _file_index
+          
+        - '@nestjs/common' (node_module)
+          -> basename = 'common' -> quá chung, nhiều match -> skip
+        
+        Để tránh false-positive từ node_modules, chỉ match files 
+        có path nằm trong workspace và suffix path phải match.
+        
+        Args:
+            import_path: Import path (e.g., '@/infrastructure/cleanup/kpack-cleanup.service')
+            extensions: List of extensions to try
+        
+        Returns:
+            Resolved Path hoặc None
+        """
+        if not self._file_index:
+            return None
+        
+        # Lấy basename từ import path
+        # '@/infrastructure/cleanup/kpack-cleanup.service' -> 'kpack-cleanup.service'
+        basename = import_path.rsplit("/", 1)[-1] if "/" in import_path else import_path
+        
+        if not basename:
+            return None
+        
+        # Skip node_module-like imports (không có / hoặc chỉ có scope prefix)
+        # Ví dụ: 'react', 'lodash', '@nestjs/common' 
+        # Heuristic: nếu import bắt đầu bằng letter (không phải @/ hay ~/) 
+        # và không có nhiều segments -> likely node_module
+        segments = import_path.split("/")
+        if not import_path.startswith(("@/", "~/", "~", "#")):
+            # Nếu bắt đầu bằng @ (scoped package) vd: @nestjs/common
+            if import_path.startswith("@") and len(segments) <= 2:
+                return None
+            # Nếu chỉ có 1 segment (vd: 'react', 'lodash')
+            if len(segments) == 1:
+                return None
+        
+        # Tìm trong file index theo basename + extensions
+        for ext in extensions:
+            if ext == "":
+                continue  # Skip empty extension, đã thử ở các ext khác
+            target_name = basename + ext
+            if target_name in self._file_index:
+                candidate = self._file_index[target_name]
+                # Verify: path suffix phải chứa import path segments
+                # để tránh match sai file cùng tên nhưng khác vị trí
+                if self._path_suffix_matches(candidate, import_path):
+                    return candidate
+        
+        # Nếu strict match không tìm thấy, thử relaxed match (chỉ theo tên file)
+        for ext in extensions:
+            if ext == "":
+                continue
+            target_name = basename + ext
+            if target_name in self._file_index:
+                return self._file_index[target_name]
+        
+        # Thử tìm index file trong folder
+        for ext in extensions:
+            if ext == "":
+                for index_name in ["index.ts", "index.tsx", "index.js", "index.jsx"]:
+                    if index_name in self._file_index:
+                        # Chỉ match nếu parent folder đúng
+                        candidate = self._file_index[index_name]
+                        if candidate.parent.name == basename:
+                            return candidate
+        
+        return None
+    
+    def _path_suffix_matches(self, file_path: Path, import_path: str) -> bool:
+        """
+        Kiểm tra xem file path có chứa các segments từ import path không.
+        
+        Ví dụ:
+        - file: /project/src/infrastructure/cleanup/kpack-cleanup.service.ts
+        - import: @/infrastructure/cleanup/kpack-cleanup.service
+        - segments: ['infrastructure', 'cleanup', 'kpack-cleanup.service']
+        - file parts: ['src', 'infrastructure', 'cleanup', 'kpack-cleanup.service.ts']
+        -> match vì 'infrastructure/cleanup' xuất hiện trong file path
+        
+        Args:
+            file_path: Actual file path
+            import_path: Import path string
+        
+        Returns:
+            True nếu path suffix match
+        """
+        # Bỏ prefix alias (@/, ~/, etc.)
+        clean_import = import_path
+        for prefix in ["@/", "~/", "#/"]:
+            if clean_import.startswith(prefix):
+                clean_import = clean_import[len(prefix):]
+                break
+        if clean_import.startswith("@"):
+            # Scoped: @scope/rest -> rest
+            parts = clean_import.split("/", 1)
+            if len(parts) > 1:
+                clean_import = parts[1]
+        
+        # Lấy các segments (bỏ segment cuối vì đã match qua filename)
+        import_segments = clean_import.split("/")[:-1]
+        
+        if not import_segments:
+            return True  # Không có parent segments để verify, accept
+        
+        # Kiểm tra file path có chứa các segments này không
+        try:
+            rel_path = file_path.relative_to(self.workspace_root)
+            file_parts = list(rel_path.parts)
+        except ValueError:
+            file_parts = list(file_path.parts)
+        
+        # Tìm xem import_segments có xuất hiện liên tiếp trong file_parts không
+        for i in range(len(file_parts) - len(import_segments) + 1):
+            if file_parts[i:i + len(import_segments)] == import_segments:
+                return True
+        
+        return False
+
     def _get_lang_name(self, ext: str) -> str:
         """
         Map file extension sang language name cho query lookup.

@@ -8,6 +8,7 @@ Module này parse code và extract relationships:
 """
 
 import os
+from pathlib import Path
 from typing import Optional, Set
 from tree_sitter import Parser, Language, Query, QueryCursor  # type: ignore
 
@@ -19,10 +20,12 @@ from core.codemaps.queries import (
     QUERY_PYTHON_INHERITANCE,
     QUERY_JS_CALLS,
     QUERY_JS_INHERITANCE,
+    QUERY_JS_IMPORTS,
     QUERY_GO_CALLS,
     QUERY_RUST_CALLS,
     QUERY_RUST_INHERITANCE,
 )
+from core.dependency_resolver import DependencyResolver
 
 
 def extract_relationships(
@@ -77,6 +80,10 @@ def extract_relationships(
         # Extract class inheritance
         inheritance = _extract_inheritance(language, tree, content, ext, file_path)
         relationships.extend(inheritance)
+
+        # Extract imports (currently for JS/TS)
+        imports = _extract_imports(language, tree, content, ext, file_path)
+        relationships.extend(imports)
 
         # Filter by known_symbols nếu có
         if known_symbols:
@@ -167,6 +174,10 @@ def _extract_inheritance(
     Returns:
         List Relationship với kind=INHERITS
     """
+    # JS/TS: handle directly from AST to support member-expression heritage
+    if ext in {"js", "jsx", "ts", "tsx", "mjs", "cjs", "mts", "cts"}:
+        return _extract_js_ts_inheritance(tree)
+
     # Select query based on language
     query_map = {
         "py": QUERY_PYTHON_INHERITANCE,
@@ -207,7 +218,11 @@ def _extract_inheritance(
                 if "class.name" in capture_name:
                     if name not in class_bases:
                         class_bases[name] = []
-                elif "class.base" in capture_name or "impl.trait" in capture_name:
+                elif (
+                    "class.base" in capture_name
+                    or "class.base_attr" in capture_name
+                    or "impl.trait" in capture_name
+                ):
                     # Find corresponding class name
                     for class_name in class_bases.keys():
                         class_bases[class_name].append((name, start_row + 1))
@@ -226,6 +241,106 @@ def _extract_inheritance(
 
         return relationships
 
+    except Exception:
+        return []
+
+
+def _extract_js_ts_inheritance(tree) -> list[Relationship]:
+    """Extract inheritance for JS/TS class declarations from AST nodes."""
+    relationships: list[Relationship] = []
+
+    def _walk(node) -> None:
+        if node.type == "class_declaration":
+            class_name = None
+            base_name = None
+
+            for child in node.children:
+                if child.type == "identifier" and class_name is None:
+                    class_name = child.text.decode("utf-8") if child.text else None
+                elif child.type == "class_heritage":
+                    for heritage_child in child.children:
+                        if heritage_child.type in {"identifier", "member_expression"}:
+                            base_name = (
+                                heritage_child.text.decode("utf-8")
+                                if heritage_child.text
+                                else None
+                            )
+                            break
+
+            if class_name and base_name:
+                relationships.append(
+                    Relationship(
+                        source=class_name,
+                        target=base_name,
+                        kind=RelationshipKind.INHERITS,
+                        source_line=node.start_point[0] + 1,
+                    )
+                )
+
+        for child in node.children:
+            _walk(child)
+
+    _walk(tree.root_node)
+    return relationships
+
+
+def _extract_imports(
+    language: Language, tree, content: str, ext: str, file_path: str
+) -> list[Relationship]:
+    """Extract imports for JS/TS and resolve to workspace-relative modules when possible."""
+    if ext not in {"js", "jsx", "ts", "tsx", "mjs", "cjs", "mts", "cts"}:
+        return []
+
+    try:
+        query = Query(language, QUERY_JS_IMPORTS)
+        query_cursor = QueryCursor(query)
+        captures = query_cursor.captures(tree.root_node)
+
+        source_path = os.path.abspath(file_path)
+        source_dir = os.path.dirname(source_path)
+        resolver = DependencyResolver(Path(source_dir))
+
+        relationships: list[Relationship] = []
+        seen: set[tuple[str, int]] = set()
+        lines = content.split("\n")
+
+        for _capture_name, nodes in captures.items():
+            for node in nodes:
+                start_row = node.start_point[0]
+                start_col = node.start_point[1]
+                end_col = node.end_point[1]
+
+                if start_row >= len(lines):
+                    continue
+
+                raw_import = lines[start_row][start_col:end_col].strip().strip("\"'")
+                if not raw_import:
+                    continue
+
+                # Try resolve via resolver. If unresolved, keep raw module path.
+                target = raw_import
+                resolved = resolver._resolve_js_import(raw_import, Path(source_dir))
+                if resolved:
+                    try:
+                        target = str(resolved.resolve())
+                    except Exception:
+                        target = str(resolved)
+
+                key = (target, start_row + 1)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                relationships.append(
+                    Relationship(
+                        source=source_path,
+                        target=target,
+                        kind=RelationshipKind.IMPORTS,
+                        source_line=start_row + 1,
+                    )
+                )
+
+        return relationships
     except Exception:
         return []
 

@@ -572,6 +572,7 @@ class ContextViewQt(QWidget):
             selected_path_strs = {str(p) for p in file_paths}
             prompt = generate_smart_context(
                 selected_paths=selected_path_strs,
+                include_relationships=True,
             )
             if instructions:
                 prompt = f"{prompt}\n\n<instructions>\n{instructions}\n</instructions>"
@@ -803,10 +804,6 @@ class ContextViewQt(QWidget):
         if not workspace:
             return
         
-        tree_item = self.file_tree_widget.get_root_tree_item()
-        if not tree_item:
-            return
-        
         # Get user-selected files only (exclude auto-added related files)
         all_selected = self.file_tree_widget.get_all_selected_paths()
         user_selected = all_selected - self._last_added_related_files
@@ -832,8 +829,10 @@ class ContextViewQt(QWidget):
         # Resolve in background to avoid UI freeze
         def resolve():
             try:
+                # Dùng full scan thay vì lazy UI tree — đảm bảo file index đầy đủ
+                full_tree = self._scan_full_tree(workspace)
                 resolver = DependencyResolver(workspace)
-                resolver.build_file_index(tree_item)
+                resolver.build_file_index(full_tree)
                 
                 all_related: Set[Path] = set()
                 for file_path in source_files:

@@ -10,7 +10,7 @@ from threading import Timer
 from pathlib import Path
 from typing import Callable, Optional, Set, Union
 
-from core.utils.file_utils import scan_directory_shallow, TreeItem
+from core.utils.file_utils import scan_directory, scan_directory_shallow, TreeItem
 from core.utils.ui_utils import safe_page_update
 from services.clipboard_utils import copy_to_clipboard
 from core.token_counter import count_tokens_batch_parallel, count_tokens
@@ -600,8 +600,14 @@ class ContextView:
             return
 
         try:
+            from config.paths import get_excluded_patterns, get_use_gitignore
+            full_tree = scan_directory(
+                workspace,
+                excluded_patterns=get_excluded_patterns(),
+                use_gitignore=get_use_gitignore(),
+            )
             resolver = DependencyResolver(workspace)
-            resolver.build_file_index(self.tree)
+            resolver.build_file_index(full_tree)
             
             all_related: Set[Path] = set()
             for file_path in selected_files:

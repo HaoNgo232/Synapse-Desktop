@@ -60,6 +60,27 @@ QUERY_JS_INHERITANCE = """
   name: (identifier) @class.name
   heritage: (class_heritage
     (identifier) @class.base))
+
+; Class extends member expression: class Foo extends React.Component
+(class_declaration
+  name: (identifier) @class.name
+  heritage: (class_heritage
+    (member_expression) @class.base_attr))
+"""
+
+QUERY_JS_IMPORTS = """
+; ES module import: import x from 'module'
+(import_statement
+  source: (string) @import.source)
+
+; Re-export from module: export {x} from 'module' / export * from 'module'
+(export_statement
+  source: (string) @import.source)
+
+; CommonJS require('module')
+(call_expression
+  function: (identifier) @func (#eq? @func "require")
+  arguments: (arguments (string) @import.source))
 """
 
 # ========================================

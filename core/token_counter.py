@@ -84,11 +84,34 @@ def _get_current_model() -> str:
         return ""
 
 
-def _get_claude_tokenizer() -> Optional[Any]:
+def _get_tokenizer_repo() -> Optional[str]:
     """
-    Lấy Claude tokenizer singleton.
+    Lấy Hugging Face tokenizer repo cho model hiện tại.
     
-    Dùng Xenova/claude-tokenizer (chính thức, 100% chính xác).
+    Returns:
+        Tokenizer repo (e.g., "Xenova/claude-tokenizer") hoặc None (dùng tiktoken)
+    """
+    try:
+        from services.settings_manager import load_settings
+        from config.model_config import get_model_by_id
+        
+        settings = load_settings()
+        model_id = settings.get("model_id", "")
+        
+        model_config = get_model_by_id(model_id)
+        if model_config:
+            return model_config.tokenizer_repo
+        
+        return None
+    except Exception:
+        return None
+
+
+def _get_hf_tokenizer() -> Optional[Any]:
+    """
+    Lấy Hugging Face tokenizer singleton.
+    
+    Dùng tokenizer_repo từ model config (hỗ trợ tất cả models).
     """
     global _claude_tokenizer
     
@@ -98,15 +121,18 @@ def _get_claude_tokenizer() -> Optional[Any]:
     if not HAS_TOKENIZERS:
         return None
     
+    tokenizer_repo = _get_tokenizer_repo()
+    if not tokenizer_repo:
+        return None
+    
     try:
-        # Dùng tokenizer chính thức từ Xenova/claude-tokenizer
-        _claude_tokenizer = Tokenizer.from_pretrained("Xenova/claude-tokenizer")
+        _claude_tokenizer = Tokenizer.from_pretrained(tokenizer_repo)
         from core.logging_config import log_info
-        log_info("[TokenCounter] Using Xenova/claude-tokenizer (official, 100% accurate)")
+        log_info(f"[TokenCounter] Using {tokenizer_repo} tokenizer")
         return _claude_tokenizer
     except Exception as e:
         from core.logging_config import log_error
-        log_error(f"[TokenCounter] Failed to load Claude tokenizer: {e}")
+        log_error(f"[TokenCounter] Failed to load tokenizer from {tokenizer_repo}: {e}")
         return None
 
 
@@ -115,25 +141,25 @@ def _get_encoder() -> Optional[Any]:
     Lấy encoder singleton.
 
     Auto-detect model:
-    - Model có "claude" → Dùng tokenizers (SentencePiece)
+    - Model có tokenizer_repo → Dùng Hugging Face tokenizers
     - Model khác → Dùng rs-bpe (Rust, 5x faster) > tiktoken
     """
     global _encoder, _encoder_type
     
-    # Check if model is Claude
-    model_id = _get_current_model()
-    if "claude" in model_id:
-        if _encoder_type == "claude" and _encoder is not None:
+    # Check if model has custom tokenizer repo
+    tokenizer_repo = _get_tokenizer_repo()
+    if tokenizer_repo:
+        if _encoder_type == "hf" and _encoder is not None:
             return _encoder
         
-        _encoder = _get_claude_tokenizer()
+        _encoder = _get_hf_tokenizer()
         if _encoder is not None:
-            _encoder_type = "claude"
+            _encoder_type = "hf"
             return _encoder
-        # Fallback to OpenAI tokenizer if Claude tokenizer fails
+        # Fallback to OpenAI tokenizer if HF tokenizer fails
     
-    # For non-Claude models or fallback
-    if _encoder is not None and _encoder_type != "claude":
+    # For models without custom tokenizer or fallback
+    if _encoder is not None and _encoder_type != "hf":
         return _encoder
     
     # Thử rs-bpe trước (nhanh hơn ~5x)
@@ -198,7 +224,7 @@ def count_tokens(text: str) -> int:
     Dem so token trong mot doan text.
     
     Auto-detect model:
-    - Model có "claude" → Dùng tokenizers (SentencePiece)
+    - Model có tokenizer_repo → Dùng Hugging Face tokenizers
     - Model khác → Dùng rs-bpe/tiktoken
 
     Args:
@@ -214,8 +240,8 @@ def count_tokens(text: str) -> int:
         return _estimate_tokens(text)
 
     try:
-        # Claude tokenizer dùng .encode().ids
-        if _encoder_type == "claude":
+        # Hugging Face tokenizer dùng .encode().ids
+        if _encoder_type == "hf":
             return len(encoder.encode(text).ids)
         # rs-bpe và tiktoken dùng .encode()
         else:
@@ -622,10 +648,10 @@ def count_tokens_batch_parallel(
     if len(file_paths) == 0:
         return {}
     
-    # Auto-detect: Nếu model là Claude, dùng batch encoding (nhanh hơn)
-    model_id = _get_current_model()
-    if "claude" in model_id and HAS_TOKENIZERS:
-        return count_tokens_batch_claude(file_paths)
+    # Auto-detect: Nếu model có tokenizer_repo, dùng batch encoding (nhanh hơn)
+    tokenizer_repo = _get_tokenizer_repo()
+    if tokenizer_repo and HAS_TOKENIZERS:
+        return count_tokens_batch_hf(file_paths)
     
     # Standard parallel processing cho non-Claude models
     results: Dict[str, int] = {}
@@ -693,9 +719,9 @@ def count_tokens_batch_parallel(
     return results
 
 
-def count_tokens_batch_claude(file_paths: List[Path]) -> Dict[str, int]:
+def count_tokens_batch_hf(file_paths: List[Path]) -> Dict[str, int]:
     """
-    Đếm token cho Claude models sử dụng encode_batch() (Rust multi-thread).
+    Đếm token cho models có tokenizer_repo sử dụng encode_batch() (Rust multi-thread).
     
     PERFORMANCE: Nhanh hơn 5-10x so với loop từng file.
     Sử dụng Rust backend của tokenizers để xử lý batch cực nhanh.
@@ -714,8 +740,8 @@ def count_tokens_batch_claude(file_paths: List[Path]) -> Dict[str, int]:
     if len(file_paths) == 0:
         return {}
     
-    # Get Claude tokenizer
-    tokenizer = _get_claude_tokenizer()
+    # Get HF tokenizer
+    tokenizer = _get_hf_tokenizer()
     if tokenizer is None:
         # Fallback to standard batch processing
         return count_tokens_batch_parallel(file_paths)
@@ -775,7 +801,7 @@ def count_tokens_batch_claude(file_paths: List[Path]) -> Dict[str, int]:
         
         except Exception as e:
             from core.logging_config import log_error
-            log_error(f"[TokenCounter] Claude batch encoding failed: {e}")
+            log_error(f"[TokenCounter] HF batch encoding failed: {e}")
             # Fallback to standard processing for remaining files
             for path_str in valid_paths:
                 if path_str not in results:

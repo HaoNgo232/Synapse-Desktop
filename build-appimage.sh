@@ -40,8 +40,8 @@ pyinstaller \
     --noconfirm \
     --clean \
     --add-data "$SCRIPT_DIR/assets:assets" \
-    --hidden-import tiktoken_ext \\
-    --hidden-import tiktoken_ext.openai_public \\
+    --hidden-import tiktoken_ext \
+    --hidden-import tiktoken_ext.openai_public \
     --collect-all tiktoken_ext \
     --distpath "$BUILD_DIR/dist" \
     --workpath "$BUILD_DIR/work" \

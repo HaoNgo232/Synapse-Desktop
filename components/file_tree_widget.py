@@ -8,15 +8,17 @@ Composite widget bao gồm:
 - Token count integration (async background)
 """
 
+import os
 import logging
 from pathlib import Path
 from typing import Optional, Set, List, Dict
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTreeView,
-    QPushButton, QLabel, QAbstractItemView,
+    QPushButton, QLabel, QAbstractItemView, QStyle,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex
+from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QSize
+from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
 from core.utils.qt_utils import DebouncedTimer
@@ -87,28 +89,51 @@ class FileTreeWidget(QWidget):
         
         layout.addLayout(search_layout)
         
-        # Action buttons
+        # Action buttons với Lucide SVG icons
         actions_layout = QHBoxLayout()
         actions_layout.setSpacing(4)
         
-        self._select_all_btn = QPushButton("Select All")
+        # Get assets directory
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+        
+        # Select All
+        self._select_all_btn = QPushButton()
+        self._select_all_btn.setIcon(QIcon(os.path.join(assets_dir, "select-all.svg")))
+        self._select_all_btn.setIconSize(QSize(20, 20))
         self._select_all_btn.setProperty("class", "flat")
-        self._select_all_btn.setFixedHeight(26)
+        self._select_all_btn.setFixedSize(36, 28)
+        self._select_all_btn.setToolTip("Select All")
+        self._select_all_btn.setStyleSheet("QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }")
         actions_layout.addWidget(self._select_all_btn)
         
-        self._deselect_all_btn = QPushButton("Deselect")
+        # Deselect
+        self._deselect_all_btn = QPushButton()
+        self._deselect_all_btn.setIcon(QIcon(os.path.join(assets_dir, "uncheck.svg")))
+        self._deselect_all_btn.setIconSize(QSize(20, 20))
         self._deselect_all_btn.setProperty("class", "flat")
-        self._deselect_all_btn.setFixedHeight(26)
+        self._deselect_all_btn.setFixedSize(36, 28)
+        self._deselect_all_btn.setToolTip("Deselect All")
+        self._deselect_all_btn.setStyleSheet("QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }")
         actions_layout.addWidget(self._deselect_all_btn)
         
-        self._collapse_btn = QPushButton("Collapse")
+        # Collapse
+        self._collapse_btn = QPushButton()
+        self._collapse_btn.setIcon(QIcon(os.path.join(assets_dir, "colapse.svg")))
+        self._collapse_btn.setIconSize(QSize(20, 20))
         self._collapse_btn.setProperty("class", "flat")
-        self._collapse_btn.setFixedHeight(26)
+        self._collapse_btn.setFixedSize(36, 28)
+        self._collapse_btn.setToolTip("Collapse All")
+        self._collapse_btn.setStyleSheet("QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }")
         actions_layout.addWidget(self._collapse_btn)
         
-        self._expand_btn = QPushButton("Expand")
+        # Expand
+        self._expand_btn = QPushButton()
+        self._expand_btn.setIcon(QIcon(os.path.join(assets_dir, "expand.svg")))
+        self._expand_btn.setIconSize(QSize(20, 20))
         self._expand_btn.setProperty("class", "flat")
-        self._expand_btn.setFixedHeight(26)
+        self._expand_btn.setFixedSize(36, 28)
+        self._expand_btn.setToolTip("Expand All")
+        self._expand_btn.setStyleSheet("QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }")
         actions_layout.addWidget(self._expand_btn)
         
         actions_layout.addStretch()

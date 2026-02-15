@@ -2,6 +2,7 @@
 Context View (PySide6) - Tab để chọn files và copy context.
 """
 
+import os
 import threading
 from pathlib import Path
 from typing import Optional, Set, List, Callable
@@ -11,7 +12,8 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QToolButton, QTextEdit,
     QComboBox, QFrame, QMenu, QSpinBox,
 )
-from PySide6.QtCore import Qt, Slot, QTimer
+from PySide6.QtCore import Qt, Slot, QTimer, QSize
+from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
 from core.utils.qt_utils import (
@@ -103,12 +105,17 @@ class ContextViewQt(QWidget):
         header = QHBoxLayout()
         header.setSpacing(6)
         
+        # Get assets directory
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+        
         files_label = QLabel("Files")
         files_label.setStyleSheet(
             f"font-weight: 600; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(files_label)
-        header.addSpacing(8)
+        
+        # Push buttons to the right
+        header.addStretch()
         
         # --- Action buttons (compact, icon-only with tooltips) ---
         btn_style = (
@@ -126,7 +133,8 @@ class ContextViewQt(QWidget):
         
         # Refresh
         refresh_btn = QToolButton()
-        refresh_btn.setText("↻")
+        refresh_btn.setIcon(QIcon(os.path.join(assets_dir, "refresh.svg")))
+        refresh_btn.setIconSize(QSize(18, 18))
         refresh_btn.setToolTip("Refresh file tree (F5)")
         refresh_btn.setStyleSheet(btn_style)
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -135,7 +143,8 @@ class ContextViewQt(QWidget):
         
         # Remote repos (dropdown)
         remote_btn = QToolButton()
-        remote_btn.setText("☁")
+        remote_btn.setIcon(QIcon(os.path.join(assets_dir, "cloud.svg")))
+        remote_btn.setIconSize(QSize(18, 18))
         remote_btn.setToolTip("Remote Repositories")
         remote_btn.setStyleSheet(btn_style)
         remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -148,7 +157,8 @@ class ContextViewQt(QWidget):
         
         # Ignore
         ignore_btn = QToolButton()
-        ignore_btn.setText("⊘")
+        ignore_btn.setIcon(QIcon(os.path.join(assets_dir, "ban.svg")))
+        ignore_btn.setIconSize(QSize(18, 18))
         ignore_btn.setToolTip("Ignore selected files")
         ignore_btn.setStyleSheet(btn_style)
         ignore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -157,7 +167,8 @@ class ContextViewQt(QWidget):
         
         # Undo ignore
         undo_btn = QToolButton()
-        undo_btn.setText("↩")
+        undo_btn.setIcon(QIcon(os.path.join(assets_dir, "undo.svg")))
+        undo_btn.setIconSize(QSize(18, 18))
         undo_btn.setToolTip("Undo last ignore")
         undo_btn.setStyleSheet(btn_style)
         undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -222,7 +233,7 @@ class ContextViewQt(QWidget):
         self._related_level_spin.valueChanged.connect(self._on_related_level_changed)
         header.addWidget(self._related_level_spin)
         
-        header.addStretch()
+        header.addSpacing(8)
         
         self._token_count_label = QLabel("0 tokens")
         self._token_count_label.setStyleSheet(

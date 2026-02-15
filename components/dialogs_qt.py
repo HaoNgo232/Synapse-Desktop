@@ -654,8 +654,9 @@ class DirtyRepoDialogQt(BaseDialogQt):
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (stashed)")
                 )
-            except Exception:
-                run_on_main_thread(lambda: self.on_done(f"Error: {e}"))
+            except Exception as exc:
+                error_msg = str(exc)
+                run_on_main_thread(lambda: self.on_done(f"Error: {error_msg}"))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -679,8 +680,9 @@ class DirtyRepoDialogQt(BaseDialogQt):
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (discarded)")
                 )
-            except Exception:
-                run_on_main_thread(lambda: self.on_done(f"Error: {e}"))
+            except Exception as exc:
+                error_msg = str(exc)
+                run_on_main_thread(lambda: self.on_done(f"Error: {error_msg}"))
 
         threading.Thread(target=work, daemon=True).start()
 

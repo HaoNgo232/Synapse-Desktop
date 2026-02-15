@@ -524,24 +524,30 @@ def _build_tree_from_paths(file_paths: List[str]) -> str:
         current = tree_dict
         for i, part in enumerate(path_parts):
             if i == len(path_parts) - 1:
-                current[part] = None
+                current[part] = None  # file
             else:
                 if part not in current:
                     current[part] = {}
                 current = current[part]
 
-    lines: List[str] = []
-    _render_tree_dict(tree_dict, lines, indent=0)
+    lines: list = []
+    _render_tree_dict(tree_dict, lines, prefix="")
     return "\n".join(lines)
 
 
-def _render_tree_dict(tree_dict: dict, lines: List[str], indent: int = 0) -> None:
-    """Render tree dict to indented lines."""
-    indent_str = "    " * indent
+def _render_tree_dict(tree_dict: dict, lines: list, prefix: str = "") -> None:
+    """Render tree dict dùng ├──/└──/│ giống _build_tree_string trong prompt_generator."""
+    # Sắp xếp: folders trước, files sau (giống scan_directory)
     items = sorted(tree_dict.items(), key=lambda x: (x[1] is None, x[0]))
-    for name, children in items:
+    for i, (name, children) in enumerate(items):
+        is_last = i == len(items) - 1
+        connector = "└── " if is_last else "├── "
         if children is None:
-            lines.append(f"{indent_str}{name}  [modified]")
+            # File — thêm marker [modified]
+            lines.append(f"{prefix}{connector}{name} [modified]")
         else:
-            lines.append(f"{indent_str}{name}/")
-            _render_tree_dict(children, lines, indent + 1)
+            # Folder
+            lines.append(f"{prefix}{connector}{name}/")
+            # Prefix cho children: "    " nếu là item cuối, "│   " nếu còn item khác
+            new_prefix = prefix + ("    " if is_last else "│   ")
+            _render_tree_dict(children, lines, new_prefix)

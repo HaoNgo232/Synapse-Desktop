@@ -182,7 +182,15 @@ class FileTreeWidget(QWidget):
             self._current_token_worker.cancel()
             self._current_token_worker = None
         
+        # Stop debounce timers to prevent stale callbacks
+        self._token_debounce.stop()
+        self._search_debounce.stop()
+        
         self._search_field.clear()
+        self._match_count_label.setText("")
+        self._delegate.set_search_query("")
+        self._filter_proxy.set_search_query("")
+        
         self._model.load_tree(workspace_path)
         
         # Expand root node
@@ -286,7 +294,11 @@ class FileTreeWidget(QWidget):
     
     @Slot()
     def _on_expand_all(self) -> None:
-        self._tree_view.expandAll()
+        try:
+            self._tree_view.expandAll()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error during expand all: {e}")
     
     @Slot(QModelIndex)
     def _on_item_clicked(self, proxy_index: QModelIndex) -> None:
@@ -356,6 +368,7 @@ class FileTreeWidget(QWidget):
         # Cancel previous worker
         if self._current_token_worker:
             self._current_token_worker.cancel()
+            self._current_token_worker = None
         
         # get_selected_paths() now discovers deep files from disk
         selected_files = self._model.get_selected_paths()
@@ -378,8 +391,9 @@ class FileTreeWidget(QWidget):
             self.token_counting_done.emit()
             return
         
-        # Create and start worker
-        worker = TokenCountWorker(uncached)
+        # Create and start worker with current generation
+        current_gen = self._model.generation
+        worker = TokenCountWorker(uncached, generation=current_gen)
         worker.signals.token_counts_batch.connect(self._on_token_counts_batch)
         worker.signals.finished.connect(self._on_token_counting_finished)
         self._current_token_worker = worker
@@ -388,7 +402,17 @@ class FileTreeWidget(QWidget):
     
     @Slot(dict)
     def _on_token_counts_batch(self, counts: Dict[str, int]) -> None:
-        """Handle token count batch results (main thread via signal)."""
+        """Handle token count batch results (main thread via signal).
+        
+        Discard results if generation has changed (workspace switched).
+        """
+        # Check if this worker's results are still relevant
+        worker = self._current_token_worker
+        if worker is not None and hasattr(worker, 'generation'):
+            if worker.generation != self._model.generation:
+                # Stale results from old workspace — discard
+                return
+        
         self._model.update_token_counts_batch(counts)
         self.token_counting_done.emit()
     

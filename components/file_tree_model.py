@@ -11,6 +11,7 @@ KEY OPTIMIZATIONS:
 
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import Optional, Set, Dict, List, Any
 
@@ -155,6 +156,10 @@ class FileTreeModel(QAbstractItemModel):
         
         # Original TreeItem root (for tree map generation)
         self._root_tree_item: Optional[TreeItem] = None
+        
+        # Generation counter — incremented on load_tree() to invalidate stale workers
+        self._generation: int = 0
+        self._generation_lock = threading.Lock()
     
     # ===== QAbstractItemModel Interface =====
     
@@ -361,6 +366,10 @@ class FileTreeModel(QAbstractItemModel):
         Children sâu hơn sẽ được lazy-load khi expand.
         """
         self._workspace_path = workspace_path
+        
+        # Increment generation to invalidate in-flight background workers
+        with self._generation_lock:
+            self._generation += 1
         
         self.beginResetModel()
         
@@ -680,6 +689,12 @@ class FileTreeModel(QAbstractItemModel):
                 count += max(1, node.child_count())
         return count
     
+    @property
+    def generation(self) -> int:
+        """Current generation counter. Workers compare this to detect staleness."""
+        with self._generation_lock:
+            return self._generation
+    
     def clear_token_cache(self) -> None:
         """Clear token cache."""
         self._token_cache.clear()
@@ -823,6 +838,7 @@ class TokenCountWorker(QRunnable):
     Background worker để đếm tokens cho các file đã selected.
     
     Emit kết quả từng file qua signals - model receive và update từng row.
+    Uses generation counter to detect workspace changes and abort early.
     """
     
     class Signals(QObject):
@@ -831,17 +847,23 @@ class TokenCountWorker(QRunnable):
         finished = Signal()
         error = Signal(str)
     
-    def __init__(self, file_paths: List[str]):
+    def __init__(self, file_paths: List[str], generation: int = 0):
         super().__init__()
         self.file_paths = file_paths
         self.signals = self.Signals()
         self.setAutoDelete(True)
         self._cancelled = False
         self._batch_size = 25
+        self._generation = generation  # Snapshot at creation time
     
     def cancel(self) -> None:
         """Cancel worker."""
         self._cancelled = True
+    
+    @property
+    def generation(self) -> int:
+        """Generation this worker was created for."""
+        return self._generation
     
     @Slot()
     def run(self) -> None:

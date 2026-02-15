@@ -72,10 +72,16 @@ def scan_for_secrets(
     """
     matches: list[SecretMatch] = []
 
+    if not content or not content.strip():
+        return matches
+
     # Tạo temp file để scan (detect-secrets cần file path)
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-        f.write(content)
-        temp_path = f.name
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write(content)
+            temp_path = f.name
+    except (OSError, IOError):
+        return matches
 
     try:
         # Scan với detect-secrets

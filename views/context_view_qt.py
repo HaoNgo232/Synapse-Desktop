@@ -493,14 +493,32 @@ class ContextViewQt(QWidget):
         
         log_info(f"[ContextView] Workspace changing to: {workspace_path}")
         
+        # 1. Stop file watcher for old workspace
         if self._file_watcher:
             self._file_watcher.stop()
         
+        # 2. Deactivate related mode to clean up state
+        if self._related_mode_active:
+            self._related_mode_active = False
+            self._last_added_related_files.clear()
+            self._related_btn.setChecked(False)
+            self._related_btn.setText("Related")
+            self._related_btn.setStyleSheet(self._related_inactive_style)
+        
+        # 3. Clear security scan cache for old workspace
+        from core.security_check import clear_security_cache
+        clear_security_cache()
+        
+        # 4. Load new tree (this increments generation counter, cancels old workers)
         self.file_tree_widget.load_tree(workspace_path)
         self.tree = self.file_tree_widget.get_model()._root_node  # type: ignore
         
-        # Start file watcher
-        if self._file_watcher:
+        # 5. Reset token display
+        self._token_count_label.setText("0 tokens")
+        self._token_stats.update_stats(file_count=0, file_tokens=0, instruction_tokens=0)
+        
+        # 6. Start file watcher for new workspace
+        if self._file_watcher and workspace_path.exists():
             self._file_watcher.start(
                 path=workspace_path,
                 callbacks=WatcherCallbacks(
@@ -539,6 +557,17 @@ class ContextViewQt(QWidget):
         """Cleanup resources."""
         if self._file_watcher:
             self._file_watcher.stop()
+            self._file_watcher = None
+        
+        # Cancel status timer
+        if self._status_timer is not None:
+            try:
+                self._status_timer.stop()
+                self._status_timer.deleteLater()
+            except RuntimeError:
+                pass
+            self._status_timer = None
+        
         self.file_tree_widget.cleanup()
     
     # ===== Slots =====
@@ -730,8 +759,12 @@ class ContextViewQt(QWidget):
 
             instructions = self._instructions_field.toPlainText() if hasattr(self, '_instructions_field') else ""
             tree_map = generate_tree_map_only(tree_item, selected_strs, instructions)
-            copy_to_clipboard(tree_map)
-            self._show_status("Tree map copied!")
+            success, msg = copy_to_clipboard(tree_map)
+            if success:
+                token_count = count_tokens(tree_map)
+                self._show_status(f"Tree map copied! ({token_count:,} tokens)")
+            else:
+                self._show_status(f"Copy failed: {msg}", is_error=True)
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
 
@@ -1021,8 +1054,16 @@ class ContextViewQt(QWidget):
         """Show status message as subtle notification."""
         # Cancel timer cũ để tránh race condition
         if self._status_timer is not None:
-            self._status_timer.stop()
+            try:
+                self._status_timer.stop()
+                self._status_timer.deleteLater()
+            except RuntimeError:
+                pass  # Timer already deleted
             self._status_timer = None
+        
+        if not message:
+            self._status_label.hide()
+            return
         
         if is_error:
             bg_color = "#FEE2E2"  # Light red background
@@ -1047,9 +1088,8 @@ class ContextViewQt(QWidget):
         self._status_label.setText(f"{icon} {message}")
         self._status_label.show()
         
-        # Tạo timer mới
-        if message:
-            self._status_timer = QTimer()
-            self._status_timer.setSingleShot(True)
-            self._status_timer.timeout.connect(self._status_label.hide)
-            self._status_timer.start(8000)  # 8 giây
+        # Tạo timer mới — parented to self for automatic cleanup
+        self._status_timer = QTimer(self)
+        self._status_timer.setSingleShot(True)
+        self._status_timer.timeout.connect(self._status_label.hide)
+        self._status_timer.start(8000)  # 8 giây

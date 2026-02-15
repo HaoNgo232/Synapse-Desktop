@@ -78,7 +78,7 @@ def _get_current_model() -> str:
     try:
         from services.settings_manager import load_settings
         settings = load_settings()
-        return settings.get("model_id", "").lower()
+        return settings.get("model_id", "").lower() if settings else ""
     except Exception:
         return ""
 

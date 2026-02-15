@@ -146,6 +146,10 @@ class _DebouncedEventHandler(FileSystemEventHandler):
         events = self._pending_events.copy()
         self._pending_events.clear()
 
+        # Safety check: ensure callbacks object is still valid
+        if self._callbacks is None:
+            return
+
         try:
             # Nếu có incremental callbacks, xử lý từng event
             has_incremental = (

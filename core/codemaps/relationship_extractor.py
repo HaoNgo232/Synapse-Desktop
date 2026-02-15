@@ -403,7 +403,6 @@ def _find_enclosing_function_fast(
     
     OPTIMIZATION: Binary search thay vì linear scan
     """
-    import bisect
     
     # boundaries_map sorted by start_line DESC
     # Tìm function có start_line <= target_line và end_line >= target_line

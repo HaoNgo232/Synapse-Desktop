@@ -7,9 +7,7 @@ Based on Vercel Engineering best practices
 
 import os
 import re
-import json
 from pathlib import Path
-from typing import List, Dict, Tuple
 
 class PerformanceChecker:
     def __init__(self, project_path: str):
@@ -40,7 +38,7 @@ class PerformanceChecker:
                         'fix': 'Use Promise.all() for parallel fetching',
                         'section': '1-async-eliminating-waterfalls.md'
                     })
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_barrel_imports(self):
@@ -66,7 +64,7 @@ class PerformanceChecker:
                         'fix': 'Import directly from specific files',
                         'section': '2-bundle-bundle-size-optimization.md'
                     })
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_dynamic_imports(self):
@@ -101,7 +99,7 @@ class PerformanceChecker:
                                     'section': '2-bundle-bundle-size-optimization.md'
                                 })
                                 break
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_useEffect_fetching(self):
@@ -125,7 +123,7 @@ class PerformanceChecker:
                             'fix': 'Consider using SWR or React Query for deduplication',
                             'section': '4-client-client-side-data-fetching.md'
                         })
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_missing_memoization(self):
@@ -152,7 +150,7 @@ class PerformanceChecker:
                             'fix': 'Consider using React.memo if props are stable',
                             'section': '5-rerender-re-render-optimization.md'
                         })
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_image_optimization(self):
@@ -175,7 +173,7 @@ class PerformanceChecker:
                         'fix': 'Use next/image for automatic optimization',
                         'section': '6-rendering-rendering-performance.md'
                     })
-            except Exception as e:
+            except Exception:
                 continue
 
     def generate_report(self):

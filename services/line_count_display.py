@@ -225,7 +225,6 @@ class LineCountService:
         - If ends with newline: newline_count
         - Else: newline_count + 1
         """
-        import mmap
         
         try:
             file_path = Path(path)

@@ -2,7 +2,6 @@
 Context View (PySide6) - Tab để chọn files và copy context.
 """
 
-import os
 import threading
 from pathlib import Path
 from typing import Optional, Set, List, Callable
@@ -10,25 +9,22 @@ from typing import Optional, Set, List, Callable
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QLabel, QPushButton, QToolButton, QTextEdit,
-    QComboBox, QFrame, QMenu, QProgressBar, QSizePolicy,
-    QSpinBox,
+    QComboBox, QFrame, QMenu, QSpinBox,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QThreadPool
+from PySide6.QtCore import Qt, Slot, QTimer
 
 from core.theme import ThemeColors
 from core.utils.qt_utils import (
-    DebouncedTimer, run_on_main_thread, schedule_background,
+    run_on_main_thread, schedule_background,
 )
-from core.utils.file_utils import scan_directory, scan_directory_shallow, TreeItem
-from core.token_counter import count_tokens_batch_parallel, count_tokens
+from core.utils.file_utils import scan_directory, TreeItem
+from core.token_counter import count_tokens
 from core.prompt_generator import (
-    generate_prompt, generate_file_map, generate_file_contents,
-    generate_file_contents_xml, generate_file_contents_json,
+    generate_prompt, generate_file_map, generate_file_contents_xml, generate_file_contents_json,
     generate_file_contents_plain, generate_smart_context,
 )
-from core.utils.git_utils import get_git_diffs, get_git_logs, DiffOnlyResult
 from core.tree_map_generator import generate_tree_map_only
-from core.security_check import scan_for_secrets, scan_secrets_in_files_cached
+from core.security_check import scan_secrets_in_files_cached
 from components.file_tree_widget import FileTreeWidget
 from components.token_stats_qt import TokenStatsPanelQt
 from services.clipboard_utils import copy_to_clipboard
@@ -36,8 +32,7 @@ from services.file_watcher import FileWatcher, WatcherCallbacks
 from services.settings_manager import get_setting, set_setting
 from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
 from config.output_format import (
-    OutputStyle, OUTPUT_FORMATS, get_format_tooltip,
-    get_style_by_id, DEFAULT_OUTPUT_STYLE,
+    OutputStyle, OUTPUT_FORMATS, get_style_by_id, DEFAULT_OUTPUT_STYLE,
 )
 from core.dependency_resolver import DependencyResolver
 
@@ -925,6 +920,8 @@ class ContextViewQt(QWidget):
         if not workspace:
             return
         
+        assert workspace is not None  # Type narrowing for pyrefly
+        
         # Get user-selected files only (exclude auto-added related files)
         all_selected = self.file_tree_widget.get_all_selected_paths()
         user_selected = all_selected - self._last_added_related_files
@@ -949,6 +946,7 @@ class ContextViewQt(QWidget):
         
         # Resolve in background to avoid UI freeze
         def resolve():
+            assert workspace is not None  # Type narrowing for nested function
             try:
                 # Dùng full scan thay vì lazy UI tree — đảm bảo file index đầy đủ
                 full_tree = self._scan_full_tree(workspace)
@@ -967,7 +965,7 @@ class ContextViewQt(QWidget):
                 
                 # Apply on main thread
                 run_on_main_thread(lambda: self._apply_related_results(new_related, user_selected))
-            except Exception as e:
+            except Exception:
                 run_on_main_thread(
                     lambda: self._show_status(f"Related files error: {e}", is_error=True)
                 )

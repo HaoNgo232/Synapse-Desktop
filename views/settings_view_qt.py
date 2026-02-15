@@ -10,7 +10,7 @@ from typing import Optional, Callable
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabel,
     QPushButton, QPlainTextEdit, QCheckBox, QComboBox,
-    QFrame, QMessageBox, QGroupBox,
+    QFrame,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
 

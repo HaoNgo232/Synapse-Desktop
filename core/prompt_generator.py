@@ -10,7 +10,7 @@ import re
 import html
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from core.utils.file_utils import TreeItem, is_binary_file
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
@@ -228,7 +228,6 @@ def generate_file_contents(
     # Phase 1: Doc tat ca file contents truoc de tinh delimiter
     # Pre-allocate with capacity hint
     file_data: list[tuple[Path, str | None, str | None]] = []
-    all_contents: list[str] = []
     max_backticks = 3  # Track max backticks for delimiter calculation
 
     for path_str in sorted_paths:

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Set
 from core.utils.file_utils import TreeItem
 
-from core.codemaps.types import CodeMap, Symbol, Relationship
+from core.codemaps.types import CodeMap
 from core.codemaps.symbol_extractor import extract_symbols
 from core.codemaps.relationship_extractor import extract_relationships
 

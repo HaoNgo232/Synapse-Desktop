@@ -5,10 +5,8 @@ Sử dụng signal/slot pattern và QTimer cho UI-safe operations.
 """
 
 from PySide6.QtCore import (
-    QObject, Signal, Slot, QTimer, QMetaObject, Qt, Q_ARG,
-    QRunnable, QThreadPool,
+    QObject, Signal, Slot, QTimer, Qt, QRunnable, QThreadPool,
 )
-from PySide6.QtWidgets import QApplication
 from typing import Callable, Optional, Any
 import logging
 

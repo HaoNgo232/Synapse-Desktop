@@ -10,17 +10,16 @@ Composite widget bao gồm:
 
 import logging
 from pathlib import Path
-from typing import Optional, Set, List, Callable, Dict
+from typing import Optional, Set, List, Dict
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTreeView,
-    QPushButton, QToolButton, QLabel, QFrame, QSizePolicy,
-    QAbstractItemView,
+    QPushButton, QLabel, QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QTimer
+from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex
 
 from core.theme import ThemeColors
-from core.utils.qt_utils import DebouncedTimer, run_on_main_thread
+from core.utils.qt_utils import DebouncedTimer
 from components.file_tree_model import FileTreeModel, TokenCountWorker
 from components.file_tree_delegate import FileTreeDelegate, EYE_ICON_SIZE, SPACING as DELEGATE_SPACING
 from components.file_tree_filter import FileTreeFilterProxy

@@ -8,8 +8,6 @@ can noi dung files. Huu ich khi:
 - Khong can AI doc code cu the
 """
 
-from pathlib import Path
-from typing import List
 
 from core.utils.file_utils import TreeItem
 from core.prompt_generator import generate_file_map

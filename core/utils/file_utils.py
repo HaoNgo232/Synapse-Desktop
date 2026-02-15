@@ -4,7 +4,6 @@ File System Utilities - File tree scanning voi gitignore support
 Su dung pathspec thay vi ignore library.
 """
 
-import os
 import platform
 import re
 from pathlib import Path
@@ -172,7 +171,7 @@ def scan_directory(
         ignore_patterns.extend(gitignore_patterns)
 
     # Create pathspec matcher
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
 
     # Build tree recursively
     return _build_tree(root_path, root_path, spec)
@@ -218,7 +217,7 @@ def scan_directory_shallow(
         gitignore_patterns = _read_gitignore(root_path)
         ignore_patterns.extend(gitignore_patterns)
     
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
     
     # Build tree với depth limit
     # current_depth=1 vì root là level 1, children là level 2

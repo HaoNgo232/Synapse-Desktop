@@ -5,22 +5,22 @@ Dialogs Qt - PySide6 versions of all dialogs.
 import json
 import threading
 from pathlib import Path
-from typing import Optional, List, Callable, TYPE_CHECKING
+from typing import Optional, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.utils.repo_manager import RepoManager
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QPlainTextEdit, QScrollArea, QFrame, QWidget,
-    QLineEdit, QCheckBox, QGroupBox, QMessageBox, QProgressBar,
-    QGridLayout, QSizePolicy,
+    QTextEdit, QScrollArea, QFrame, QWidget,
+    QLineEdit, QCheckBox, QMessageBox, QProgressBar,
+    QGridLayout,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer
 from PySide6.QtGui import QFont
 
 from core.theme import ThemeColors
-from core.utils.qt_utils import schedule_background, run_on_main_thread
+from core.utils.qt_utils import run_on_main_thread
 from services.clipboard_utils import copy_to_clipboard
 
 
@@ -654,7 +654,7 @@ class DirtyRepoDialogQt(BaseDialogQt):
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (stashed)")
                 )
-            except Exception as e:
+            except Exception:
                 run_on_main_thread(lambda: self.on_done(f"Error: {e}"))
 
         threading.Thread(target=work, daemon=True).start()
@@ -679,7 +679,7 @@ class DirtyRepoDialogQt(BaseDialogQt):
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (discarded)")
                 )
-            except Exception as e:
+            except Exception:
                 run_on_main_thread(lambda: self.on_done(f"Error: {e}"))
 
         threading.Thread(target=work, daemon=True).start()

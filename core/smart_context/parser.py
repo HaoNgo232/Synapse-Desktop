@@ -9,7 +9,6 @@ Refactored to use modular config and loader.
 
 import os
 import hashlib
-from functools import lru_cache
 from typing import Optional
 from tree_sitter import Parser, Node, Language, Tree  # type: ignore
 

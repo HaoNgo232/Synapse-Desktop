@@ -347,10 +347,10 @@ class MobileAuditor:
         # 9.1 iOS Type Scale Check
         if is_react_native:
             # Check for iOS text styles that match HIG
-            has_large_title = bool(re.search(r'fontSize:\s*34|largeTitle|font-weight:\s*["\']?bold', content))
-            has_title_1 = bool(re.search(r'fontSize:\s*28', content))
-            has_headline = bool(re.search(r'fontSize:\s*17.*semibold|headline', content))
-            has_body = bool(re.search(r'fontSize:\s*17.*regular|body', content))
+            bool(re.search(r'fontSize:\s*34|largeTitle|font-weight:\s*["\']?bold', content))
+            bool(re.search(r'fontSize:\s*28', content))
+            bool(re.search(r'fontSize:\s*17.*semibold|headline', content))
+            bool(re.search(r'fontSize:\s*17.*regular|body', content))
 
             # Check if following iOS scale roughly
             font_sizes = re.findall(r'fontSize:\s*([\d.]+)', content)
@@ -365,8 +365,8 @@ class MobileAuditor:
             # Check for Material 3 text styles
             has_display = bool(re.search(r'fontSize:\s*[456][0-9]|display', content))
             has_headline_material = bool(re.search(r'fontSize:\s*[23][0-9]|headline', content))
-            has_title_material = bool(re.search(r'fontSize:\s*2[12][0-9].*medium|title', content))
-            has_body_material = bool(re.search(r'fontSize:\s*1[456].*regular|body', content))
+            bool(re.search(r'fontSize:\s*2[12][0-9].*medium|title', content))
+            bool(re.search(r'fontSize:\s*1[456].*regular|body', content))
             has_label = bool(re.search(r'fontSize:\s*1[1234].*medium|label', content))
 
             # Check if using sp (scale-independent pixels)
@@ -455,7 +455,7 @@ class MobileAuditor:
 
         # 10.3 Outdoor Visibility Check
         # Low contrast combinations fail in outdoor sunlight
-        light_colors = re.findall(r'#[0-9A-Fa-f]{6}|rgba?\([^)]+\)', content)
+        re.findall(r'#[0-9A-Fa-f]{6}|rgba?\([^)]+\)', content)
         # Check for potential low contrast (light gray on white, dark gray on black)
         potential_low_contrast = bool(re.search(r'#[EeEeEeEe].*#ffffff|#999999.*#ffffff|#333333.*#000000|#666666.*#000000', content))
         if potential_low_contrast:
@@ -482,7 +482,7 @@ class MobileAuditor:
             # Check for semantic color usage
             has_label = bool(re.search(r'color:\s*["\']?label|\.label', content))
             has_secondaryLabel = bool(re.search(r'secondaryLabel|\.secondaryLabel', content))
-            has_systemBackground = bool(re.search(r'systemBackground|\.systemBackground', content))
+            bool(re.search(r'systemBackground|\.systemBackground', content))
 
             has_hardcoded_gray = bool(re.search(r'#[78]0{4}', content))
             if has_hardcoded_gray and not (has_label or has_secondaryLabel):
@@ -591,7 +591,7 @@ class MobileAuditor:
         # 14.1 Performance Profiling Check
         has_performance = bool(re.search(r'Performance|systrace|profile|Flipper', content))
         has_console_log = len(re.findall(r'console\.(log|warn|error|debug|info)', content))
-        has_debugger = bool(re.search(r'debugger|__DEV__|React\.DevTools', content))
+        bool(re.search(r'debugger|__DEV__|React\.DevTools', content))
 
         if has_console_log > 10:
             self.warnings.append(f"[Debugging] {filename}: {has_console_log} console.log statements. Remove before production; they block JS thread.")

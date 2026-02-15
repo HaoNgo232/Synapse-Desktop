@@ -7,8 +7,7 @@ với metadata (line numbers, signatures, parent).
 
 import os
 from typing import Optional
-from pathlib import Path
-from tree_sitter import Parser, Language, Tree, Node  # type: ignore
+from tree_sitter import Parser, Node  # type: ignore
 
 from core.codemaps.types import Symbol, SymbolKind
 from core.smart_context.config import get_config_by_extension

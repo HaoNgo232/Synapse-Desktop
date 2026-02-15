@@ -14,12 +14,10 @@ Sử dụng ThreadPoolExecutor thay vì actual processes để:
 """
 
 import threading
-import queue
 from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Any, Dict, List, TypeVar, Generic
 from enum import Enum
-import time
 
 T = TypeVar('T')
 

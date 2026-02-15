@@ -13,11 +13,9 @@ Optimized for production:
 import logging
 import logging.handlers
 import sys
-import os
-from datetime import datetime
 from typing import Optional
 
-from config.paths import LOG_DIR, DEBUG_ENV_VAR, DEBUG_MODE
+from config.paths import LOG_DIR, DEBUG_MODE
 
 # Logger singleton
 _logger: Optional[logging.Logger] = None

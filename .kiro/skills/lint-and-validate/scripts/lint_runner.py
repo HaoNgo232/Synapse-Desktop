@@ -15,7 +15,6 @@ import subprocess
 import sys
 import json
 import platform
-import shutil
 from pathlib import Path
 from datetime import datetime
 

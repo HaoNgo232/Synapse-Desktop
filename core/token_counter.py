@@ -10,7 +10,6 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List, Any, TYPE_CHECKING
 from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Try import rs-bpe first (faster, Rust-based)
 try:

@@ -9,7 +9,6 @@ from typing import List, Optional
 
 from PySide6.QtWidgets import QTextEdit, QWidget, QVBoxLayout
 from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
-from PySide6.QtCore import Qt
 
 from components.diff_viewer import DiffLine, DiffLineType, DiffColors
 

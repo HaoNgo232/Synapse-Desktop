@@ -8,19 +8,17 @@ from typing import Optional, List, Callable
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QLabel, QPushButton, QPlainTextEdit, QScrollArea,
-    QFrame, QMessageBox, QSizePolicy,
+    QFrame, QMessageBox,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer
+from PySide6.QtCore import Qt, Slot, QTimer
 
 from core.theme import ThemeColors
 from core.opx_parser import parse_opx_response
 from core.file_actions import apply_file_actions, ActionResult
-from core.utils.qt_utils import run_on_main_thread, schedule_background
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.history_service import add_history_entry
 from services.preview_analyzer import (
-    analyze_file_actions, format_change_summary,
-    get_change_color, PreviewRow, PreviewData, generate_preview_diff_lines,
+    analyze_file_actions, PreviewRow, PreviewData,
 )
 from services.error_context import (
     build_error_context_for_ai, build_general_error_context, ApplyRowResult,

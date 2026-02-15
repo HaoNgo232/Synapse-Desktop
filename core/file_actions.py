@@ -9,15 +9,13 @@ Cac operations:
 - rename: Doi ten/di chuyen file
 """
 
-import os
-import re
 import shutil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Literal, Union
 from datetime import datetime
 
-from core.opx_parser import FileAction, ChangeBlock
+from core.opx_parser import FileAction
 from core.logging_config import log_error, log_info, log_debug, log_warning
 from config.paths import BACKUP_DIR
 

@@ -3,7 +3,8 @@ from pathlib import Path
 import tempfile
 import shutil
 import os
-from core.file_actions import apply_file_actions, _resolve_path, FileAction, ChangeBlock
+from core.file_actions import apply_file_actions, _resolve_path, FileAction
+from core.opx_parser import ChangeBlock
 
 
 class TestFileActionsSecurity(unittest.TestCase):

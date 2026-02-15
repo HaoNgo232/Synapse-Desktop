@@ -145,7 +145,7 @@ class TestBoundariesMapOptimization:
         language = get_language("py")
         parser = Parser(language)
         tree = parser.parse(bytes(SAMPLE_PYTHON_CODE, "utf-8"))
-        lines = SAMPLE_PYTHON_CODE.split("\n")
+        lines: list[str] = list(SAMPLE_PYTHON_CODE.split("\n"))
         
         boundaries = _build_function_boundaries_map(tree.root_node, lines)
         
@@ -163,7 +163,7 @@ class TestBoundariesMapOptimization:
         language = get_language("py")
         parser = Parser(language)
         tree = parser.parse(bytes(SAMPLE_PYTHON_CODE, "utf-8"))
-        lines = SAMPLE_PYTHON_CODE.split("\n")
+        lines: list[str] = list(SAMPLE_PYTHON_CODE.split("\n"))
         
         boundaries = _build_function_boundaries_map(tree.root_node, lines)
         
@@ -218,8 +218,8 @@ class TestSmartParseIntegration:
         result2 = smart_parse("test.py", SAMPLE_PYTHON_CODE, include_relationships=False)
         
         # Both should not have relationships
-        assert "## Relationships" not in result1
-        assert "## Relationships" not in result2
+        assert result1 is not None and "## Relationships" not in result1
+        assert result2 is not None and "## Relationships" not in result2
 
 
 # ============================================================

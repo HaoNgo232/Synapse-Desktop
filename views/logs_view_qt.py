@@ -4,14 +4,13 @@ Logs View (PySide6) - Tab hiển thị logs để debug.
 Port từ views/logs_view.py (Flet) sang QWidget.
 """
 
-from pathlib import Path
 from typing import Optional, List
 from dataclasses import dataclass
 from enum import Enum
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QPlainTextEdit, QComboBox, QCheckBox, QFrame,
+    QPlainTextEdit, QComboBox, QCheckBox,
 )
 from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
 from PySide6.QtCore import Qt, Slot, QTimer

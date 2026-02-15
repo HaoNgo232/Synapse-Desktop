@@ -3,14 +3,14 @@ History View (PySide6) - Tab hiển thị lịch sử các thao tác đã thực
 """
 
 from datetime import datetime
-from typing import Optional, Callable, List
+from typing import Optional, Callable
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabel,
     QPushButton, QListWidget, QListWidgetItem, QScrollArea,
     QFrame, QMessageBox,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer
+from PySide6.QtCore import Qt, Slot, QTimer
 
 from core.theme import ThemeColors
 from services.history_service import (

@@ -172,7 +172,7 @@ class FileScanner:
 
         # Build ignore spec
         ignore_patterns = self._build_ignore_patterns(root_path, config)
-        spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+        spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
 
         try:
             # Ưu tiên dùng Rust scanner nếu có
@@ -603,7 +603,7 @@ def scan_directory_lazy(
     
     # Build ignore spec
     ignore_patterns = scanner._build_ignore_patterns(root_path, config)
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", list(ignore_patterns))
+    spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
     
     start_scanning()
     try:

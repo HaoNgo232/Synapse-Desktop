@@ -1,6 +1,5 @@
 """Global state manager to prevent race conditions"""
 import threading
-from typing import Set
 
 class GlobalState:
     def __init__(self):

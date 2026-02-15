@@ -14,14 +14,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QToolButton, QFileDialog, QMenu, QFrame, QSizePolicy,
 )
-from PySide6.QtCore import Qt, QTimer, Slot, QSize
-from PySide6.QtGui import QIcon, QAction, QFont
+from PySide6.QtCore import Qt, QTimer, Slot
 
 from core.theme import ThemeColors
 from core.theme_qss import generate_app_stylesheet
 from core.utils.qt_utils import (
-    run_on_main_thread, DebouncedTimer, get_signal_bridge,
-    schedule_background,
+    run_on_main_thread, get_signal_bridge,
 )
 from core.utils.threading_utils import shutdown_all, set_active_view
 from services.recent_folders import (

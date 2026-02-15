@@ -12,12 +12,14 @@ MUCH faster than creating widgets per row —
 Qt chỉ gọi paint() cho visible rows.
 """
 
+from typing import cast
+
 from PySide6.QtWidgets import (
-    QStyledItemDelegate, QStyleOptionViewItem, QStyle, QApplication,
+    QStyledItemDelegate, QStyleOptionViewItem, QStyle,
 )
 from PySide6.QtCore import Qt, QModelIndex, QPersistentModelIndex, QRect, QSize, QRectF
 from PySide6.QtGui import (
-    QPainter, QColor, QPen, QFont, QFontMetrics, QIcon, QPainterPath, QPixmap,
+    QPainter, QColor, QPen, QFont, QFontMetrics, QPainterPath, QPixmap,
 )
 import qtawesome as qta
 
@@ -198,7 +200,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         
-        rect = option.rect
+        # Type narrowing - pyrefly infers option.rect as Ellipsis without this
+        rect = cast(QRect, option.rect)
+        state = cast(QStyle.StateFlag, option.state)
         is_dir = index.data(FileTreeRoles.IS_DIR_ROLE)
         label = index.data(Qt.ItemDataRole.DisplayRole) or ""
         check_state = index.data(Qt.ItemDataRole.CheckStateRole)
@@ -206,9 +210,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         line_count = index.data(FileTreeRoles.LINE_COUNT_ROLE)
         
         # Draw selection/hover background
-        if option.state & QStyle.StateFlag.State_Selected:
+        if state & QStyle.StateFlag.State_Selected:
             painter.fillRect(rect, COLOR_BG_ELEVATED)
-        elif option.state & QStyle.StateFlag.State_MouseOver:
+        elif state & QStyle.StateFlag.State_MouseOver:
             hover_color = QColor(COLOR_BG_ELEVATED)
             hover_color.setAlpha(128)
             painter.fillRect(rect, hover_color)
@@ -227,11 +231,11 @@ class FileTreeDelegate(QStyledItemDelegate):
         x += ICON_SIZE + SPACING
         
         # 3. Reserve space for eye icon (files only, on hover)
-        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
         show_eye = not is_dir and is_hovered
         
         if show_eye:
-            eye_rect = QRect(x, y, EYE_ICON_SIZE, height)
+            QRect(x, y, EYE_ICON_SIZE, height)
             painter.setFont(_get_font_normal())
             painter.setPen(COLOR_TEXT_MUTED)
             # Dùng icon MDI cho con mắt luôn
@@ -285,7 +289,8 @@ class FileTreeDelegate(QStyledItemDelegate):
         painter.restore()
     
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex) -> QSize:
-        return QSize(option.rect.width(), ROW_HEIGHT)
+        rect = cast(QRect, option.rect)
+        return QSize(rect.width(), ROW_HEIGHT)
     
     # ===== Private Drawing Methods =====
     

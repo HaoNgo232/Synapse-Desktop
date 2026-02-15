@@ -4,8 +4,6 @@ Conversion Script: React Best Practices → .agent Format
 Merges 59 individual rules into 8 grouped section files
 """
 
-import os
-import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 

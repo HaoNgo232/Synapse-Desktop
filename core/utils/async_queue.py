@@ -11,7 +11,7 @@ Features:
 """
 
 import asyncio
-from typing import Any, Callable, Coroutine, Optional, List, TypeVar
+from typing import Any, Coroutine, Optional, List, TypeVar
 from dataclasses import dataclass
 
 T = TypeVar("T")

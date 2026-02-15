@@ -15,13 +15,10 @@ from pathlib import Path
 from typing import Optional, Set, Dict, List, Any
 
 from PySide6.QtCore import (
-    QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal, QThreadPool,
-    QObject, QRunnable, Slot,
+    QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal, QObject, QRunnable, Slot,
 )
-from PySide6.QtGui import QColor
 
 from core.utils.file_utils import TreeItem, scan_directory_shallow
-from core.utils.qt_utils import run_on_main_thread
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,6 @@ Identifies untyped functions, any usage, and type safety issues.
 """
 import sys
 import re
-import subprocess
 from pathlib import Path
 
 # Fix Windows console encoding for Unicode output

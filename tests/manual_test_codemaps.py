@@ -110,8 +110,11 @@ def test_graph_builder():
         codemap = builder.build_for_file(temp_path)
         
         print(f"CodeMap built for: {temp_path}")
-        print(f"  Symbols: {len(codemap.symbols)}")
-        print(f"  Relationships: {len(codemap.relationships)}")
+        if codemap:
+            print(f"  Symbols: {len(codemap.symbols)}")
+            print(f"  Relationships: {len(codemap.relationships)}")
+        else:
+            print("  CodeMap is None")
         
         # Test queries
         related = builder.get_related_symbols("method_a", depth=1, file_path=temp_path)

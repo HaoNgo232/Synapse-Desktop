@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 from pathlib import Path
 import tempfile
-import re
 
 from detect_secrets import SecretsCollection
 from detect_secrets.settings import default_settings

@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import List, Optional
 
 from services.preview_analyzer import PreviewRow, PreviewData
-from core.file_actions import ActionResult
 from services.clipboard_utils import copy_to_clipboard
 
 

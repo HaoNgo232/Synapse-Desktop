@@ -144,7 +144,7 @@ class DependencyResolver:
             self.workspace_root / "web",
         ]
         
-        config_path = None
+        config_path: Path | None = None
         for search_dir in search_dirs:
             if not search_dir.exists():
                 continue
@@ -545,7 +545,6 @@ class DependencyResolver:
         Returns:
             Resolved Path hoặc None
         """
-        import fnmatch
         
         for alias_pattern, target_paths in self._ts_paths.items():
             # Chuyển đổi TypeScript pattern sang glob-style

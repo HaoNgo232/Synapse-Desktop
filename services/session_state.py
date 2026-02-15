@@ -10,7 +10,7 @@ Lưu lại:
 
 import json
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 

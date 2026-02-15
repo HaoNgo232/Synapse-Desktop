@@ -372,7 +372,15 @@ class FileTreeModel(QAbstractItemModel):
         self._last_resolved_files.clear()
         
         try:
-            tree_item = scan_directory_shallow(workspace_path, depth=1)
+            # Get excluded patterns from settings
+            from views.settings_view_qt import get_excluded_patterns
+            excluded = get_excluded_patterns()
+            
+            tree_item = scan_directory_shallow(
+                workspace_path, 
+                depth=1,
+                excluded_patterns=excluded if excluded else None
+            )
             if tree_item:
                 self._root_tree_item = tree_item
                 self._root_node = TreeNode.from_tree_item(

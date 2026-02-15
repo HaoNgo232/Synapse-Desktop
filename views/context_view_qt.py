@@ -790,7 +790,8 @@ class ContextViewQt(QWidget):
         for p in selected:
             try:
                 rel = Path(p).relative_to(workspace)
-                patterns.append(rel.name)
+                # Use full relative path for gitignore-style matching
+                patterns.append(str(rel))
             except ValueError:
                 continue
         
@@ -965,7 +966,7 @@ class ContextViewQt(QWidget):
                 
                 # Apply on main thread
                 run_on_main_thread(lambda: self._apply_related_results(new_related, user_selected))
-            except Exception:
+            except Exception as e:
                 run_on_main_thread(
                     lambda: self._show_status(f"Related files error: {e}", is_error=True)
                 )

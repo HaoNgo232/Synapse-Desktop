@@ -65,9 +65,28 @@ pytest tests/test_token_counter.py::TestCountTokens::test_simple_text -v
 
 # Run tests with coverage
 pytest tests/ --cov=core --cov=services --cov=components -v
+```
 
-# Type checking
+### Linting & Type Checking
+
+```bash
+# Type checking with pyrefly
 pyrefly check
+
+# Check unused imports/variables with ruff
+ruff check --select F401,F841 --exclude tests/,stubs/,.agent/ .
+
+# Auto-fix unused imports/variables
+ruff check --select F401,F841 --exclude tests/,stubs/,.agent/ --fix .
+
+# Auto-fix with unsafe fixes (removes unused variables)
+ruff check --select F401,F841 --exclude tests/,stubs/,.agent/ --fix --unsafe-fixes .
+
+# Full ruff check (all rules)
+ruff check .
+
+# Format code with ruff
+ruff format .
 ```
 
 ### Performance Testing Commands

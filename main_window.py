@@ -405,6 +405,9 @@ class SynapseMainWindow(QMainWindow):
             expanded_folders=pending.get("expanded_folders", []),
         )
         self._pending_session_restore = None
+        
+        # Trigger refresh để clear cache và reset state
+        self.context_view._refresh_tree()
     
     def _save_session(self) -> None:
         """Lưu session hiện tại."""

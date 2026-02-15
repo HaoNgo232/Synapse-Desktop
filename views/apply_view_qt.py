@@ -19,6 +19,7 @@ from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.history_service import add_history_entry
 from services.preview_analyzer import (
     analyze_file_actions, PreviewRow, PreviewData,
+    generate_preview_diff_lines,
 )
 from services.error_context import (
     build_error_context_for_ai, build_general_error_context, ApplyRowResult,
@@ -264,6 +265,14 @@ class ApplyViewQt(QWidget):
             self.last_opx_text = opx_text
             
             preview_data = analyze_file_actions(file_actions, workspace)
+            
+            # Generate diff lines cho từng row để DiffViewer có data hiển thị
+            for i, row in enumerate(preview_data.rows):
+                if i < len(file_actions):
+                    row.diff_lines = generate_preview_diff_lines(
+                        file_actions[i], workspace
+                    )
+            
             self.last_preview_data = preview_data
             
             self._render_preview(preview_data)
@@ -373,7 +382,7 @@ class ApplyViewQt(QWidget):
         self._results_layout.addStretch()
     
     def _create_preview_card(self, row: PreviewRow) -> QFrame:
-        """Create a preview card widget."""
+        """Create a preview card widget with expandable diff viewer."""
         card = QFrame()
         card.setStyleSheet(
             f"background-color: {ApplyViewColors.BG_CARD}; "
@@ -383,7 +392,7 @@ class ApplyViewQt(QWidget):
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
         
-        # Header: action badge + file path + diff stats
+        # Header: action badge + file path + diff stats + View Diff button
         header = QHBoxLayout()
         
         action = row.action.lower() if hasattr(row, 'action') else "modify"
@@ -415,11 +424,73 @@ class ApplyViewQt(QWidget):
         
         layout.addLayout(header)
         
-        # Diff viewer (expandable)
-        if hasattr(row, 'diff_lines') and row.diff_lines:
+        # Description (nếu có)
+        if row.description:
+            desc_label = QLabel(row.description)
+            desc_label.setStyleSheet(
+                f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; "
+                f"padding-left: 4px;"
+            )
+            desc_label.setWordWrap(True)
+            layout.addWidget(desc_label)
+        
+        # Diff viewer (hidden by default, toggled by button)
+        has_diff = hasattr(row, 'diff_lines') and row.diff_lines
+        
+        if has_diff:
+            # Container cho diff viewer — ban đầu ẩn
+            diff_container = QFrame()
+            diff_container.setVisible(False)
+            diff_layout = QVBoxLayout(diff_container)
+            diff_layout.setContentsMargins(0, 4, 0, 0)
+            
             diff_viewer = DiffViewerWidget(row.diff_lines)
-            diff_viewer.setMaximumHeight(300)
-            layout.addWidget(diff_viewer)
+            diff_viewer.setMinimumHeight(120)
+            diff_viewer.setMaximumHeight(400)
+            diff_layout.addWidget(diff_viewer)
+            
+            # "View Diff" toggle button
+            diff_btn = QPushButton("▶ View Diff")
+            diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            diff_btn.setStyleSheet(
+                f"QPushButton {{"
+                f"  color: {ThemeColors.PRIMARY}; "
+                f"  background-color: transparent; "
+                f"  border: 1px solid {ThemeColors.PRIMARY}; "
+                f"  border-radius: 4px; "
+                f"  padding: 3px 12px; "
+                f"  font-size: 11px; "
+                f"  font-weight: 600;"
+                f"}}"
+                f"QPushButton:hover {{"
+                f"  background-color: {ThemeColors.PRIMARY}; "
+                f"  color: #FFFFFF;"
+                f"}}"
+            )
+            diff_btn.setFixedHeight(24)
+            
+            def _toggle_diff(checked=False, container=diff_container, btn=diff_btn):
+                is_visible = container.isVisible()
+                container.setVisible(not is_visible)
+                btn.setText("▼ Hide Diff" if not is_visible else "▶ View Diff")
+            
+            diff_btn.clicked.connect(_toggle_diff)
+            
+            # Button row
+            btn_row = QHBoxLayout()
+            btn_row.addWidget(diff_btn)
+            btn_row.addStretch()
+            layout.addLayout(btn_row)
+            
+            layout.addWidget(diff_container)
+        elif action != "rename":
+            # Không có diff data — hiển thị hint
+            no_diff = QLabel("No diff available (file may not exist yet)")
+            no_diff.setStyleSheet(
+                f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px; "
+                f"font-style: italic; padding-left: 4px;"
+            )
+            layout.addWidget(no_diff)
         
         return card
     

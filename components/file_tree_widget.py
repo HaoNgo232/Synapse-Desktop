@@ -15,7 +15,7 @@ from typing import Optional, Set, List, Dict
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTreeView,
-    QPushButton, QLabel, QAbstractItemView, QStyle,
+    QPushButton, QLabel, QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QSize
 from PySide6.QtGui import QIcon

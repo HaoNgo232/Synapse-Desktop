@@ -977,9 +977,10 @@ class ContextViewQt(QWidget):
                 
                 # Apply on main thread
                 run_on_main_thread(lambda: self._apply_related_results(new_related, user_selected))
-            except Exception as e:
+            except Exception as err:
+                error_msg = f"Related files error: {err}"
                 run_on_main_thread(
-                    lambda: self._show_status(f"Related files error: {e}", is_error=True)
+                    lambda: self._show_status(error_msg, is_error=True)
                 )
         
         schedule_background(resolve)

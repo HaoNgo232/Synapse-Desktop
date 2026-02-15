@@ -1,11 +1,20 @@
 """
 Session State Service - Lưu trữ và khôi phục trạng thái làm việc
 
-Lưu lại:
+CLEAN SESSION MODE (Auto on app start):
+- Workspace path: Restore từ recent folders (workspace gần nhất)
+- Instructions text: Restore từ session
+- Window size: Restore từ session
+- Selected files: CLEAR (fresh start)
+- Expanded folders: CLEAR (fresh start)
+- Active tab: CLEAR (luôn bắt đầu ở tab 0)
+
+Lưu lại khi đóng app:
 - Workspace path đang mở
-- Các files đã chọn
+- Các files đã chọn (nhưng không restore khi mở lại)
 - Nội dung instructions
-- Tab đang active
+- Tab đang active (nhưng không restore khi mở lại)
+- Window size
 """
 
 import json

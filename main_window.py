@@ -355,14 +355,20 @@ class SynapseMainWindow(QMainWindow):
             log_error(f"Error clearing memory: {e}")
     
     def _restore_session(self) -> None:
-        """Khôi phục session từ lần mở trước."""
-        session = load_session_state()
-        if not session:
-            return
+        """
+        Khôi phục session từ lần mở trước.
         
-        # Restore workspace
-        if session.workspace_path:
-            workspace = Path(session.workspace_path)
+        CLEAN SESSION MODE: Chỉ restore workspace path (từ recent folders) và instructions text.
+        Các state khác (selected files, expanded folders, active tab) sẽ bị clear để bắt đầu fresh.
+        """
+        from services.recent_folders import load_recent_folders
+        
+        session = load_session_state()
+        
+        # Restore workspace path từ recent folders (workspace gần nhất)
+        recent_folders = load_recent_folders()
+        if recent_folders:
+            workspace = Path(recent_folders[0])
             if workspace.exists() and workspace.is_dir():
                 self.workspace_path = workspace
                 self._folder_path_label.setText(str(workspace))
@@ -370,44 +376,16 @@ class SynapseMainWindow(QMainWindow):
                     f"color: {ThemeColors.TEXT_PRIMARY}; font-size: 14px;"
                 )
                 
-                # Lưu session data để restore sau khi tree load xong
-                self._pending_session_restore = {
-                    "selected_files": session.selected_files,
-                    "expanded_folders": session.expanded_folders,
-                }
-                
-                # Notify context view to load tree
+                # Notify context view to load tree (NO pending restore - fresh start)
                 self.context_view.on_workspace_changed(workspace)
-                
-                # Defer restore selection (dùng QTimer thay vì page.run_task)
-                QTimer.singleShot(500, self._restore_session_selection)
         
-        # Restore instructions
-        if session.instructions_text:
+        # Restore instructions text only (nếu có session)
+        if session and session.instructions_text:
             self.context_view.set_instructions_text(session.instructions_text)
         
-        # Restore window size
-        if session.window_width and session.window_height:
+        # Restore window size (nếu có session)
+        if session and session.window_width and session.window_height:
             self.resize(session.window_width, session.window_height)
-        
-        # Restore active tab
-        if session.active_tab_index:
-            self.tab_widget.setCurrentIndex(session.active_tab_index)
-    
-    def _restore_session_selection(self) -> None:
-        """Restore selection/expanded state sau khi tree load xong."""
-        pending = self._pending_session_restore
-        if not pending:
-            return
-        
-        self.context_view.restore_tree_state(
-            selected_files=pending.get("selected_files", []),
-            expanded_folders=pending.get("expanded_folders", []),
-        )
-        self._pending_session_restore = None
-        
-        # Trigger refresh để clear cache và reset state
-        self.context_view._refresh_tree()
     
     def _save_session(self) -> None:
         """Lưu session hiện tại."""

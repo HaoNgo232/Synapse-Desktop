@@ -1,107 +1,103 @@
 # Synapse Desktop
 
-**Copy your codebase into any AI chat — with full control over what gets sent.**
+Synapse Desktop is a desktop application that helps you:
 
-Synapse Desktop is a lightweight desktop app that lets you select files from any project, format them as a structured prompt, and paste into ChatGPT / Claude / Gemini / DeepSeek. When the AI replies with code changes, paste them back and Synapse applies the diff for you.
+1. **Select files/folders in a project** → **package them into structured prompts** to paste into ChatGPT/Claude/Gemini/DeepSeek (web).
+2. **Receive XML (OPX) responses** from AI → **preview diffs and apply changes** to your codebase (with backup/undo).
 
-```
-Your Code  ──→  [ Synapse ]  ──→  Any Web AI  ──→  [ Synapse ]  ──→  Applied Changes
-              select & copy        paste & chat       paste back        review & apply
-```
+## Key Features
+
+- **Controlled Context Selection**: Browse the directory tree, check the files/folders you want to send.
+- **Multiple Copy Modes**:
+  - **Context**: Send full content of selected files.
+  - **Smart**: Send signatures/functions/classes/docstrings (reduces tokens, ideal for review/planning).
+  - **Diff Only**: Send only git changes (staged + unstaged) for reviews or PRs.
+- **Apply AI Changes**:
+  - Paste **OPX XML** → view **visual diff** → Apply/Reject.
+  - **Auto-backup** before modification, allows for easy undo.
+  - **Fuzzy matching** to find the correct patch location even if AI formatting is slightly off.
+
+## Requirements
+
+- **Python 3.10+**
+- (Recommended) **git** for Diff Only mode
+- OS: Windows / macOS / Linux
 
 ---
 
-## Quick Start
+## Installation & Running (Quick Start)
+
+### 1) Clone repo
 
 ```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
-
-# Option 1: one-command startup script
-chmod +x start.sh
-./start.sh
-
-# Option 2: manual setup
-
-python3 -m venv .venv
-source .venv/bin/activate      # Linux/Mac
-# .venv\Scripts\activate       # Windows
-
-pip install -r requirements.txt
-python3 main_window.py
 ```
 
-> **Requires:** Python 3.10+
+### 2) Option A — Run with script (Linux/macOS)
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+### 2) Option B — Manual Setup (Windows/macOS/Linux)
+
+#### Create venv + install dependencies
+
+```bash
+python -m venv .venv
+```
+
+Activate venv:
+
+- **Linux/macOS**
+
+  ```bash
+  source .venv/bin/activate
+  ```
+
+- **Windows (PowerShell)**
+
+  ```powershell
+  .\.venv\Scripts\Activate.ps1
+  ```
+
+Install requirements and run the app:
+
+```bash
+pip install -r requirements.txt
+python main_window.py
+```
 
 ---
 
-## 60-Second Flow
+## Quick Usage (3 Steps)
 
-1. Open your project in **Context** tab.
-2. Check files/folders you want AI to see.
-3. Click **Copy Context** (or **Copy Smart** for fewer tokens).
-4. Paste prompt into ChatGPT / Claude / Gemini / DeepSeek.
-5. Copy AI XML response, paste into **Apply** tab.
+### Step 1 — Select Context
 
----
+- Open the **Context** tab
+- Choose project folder
+- Check files/folders to send to AI
 
-## How It Works (3 Steps)
+### Step 2 — Copy to AI (web)
 
-### Step 1 — Select & Copy
+- Select **Copy Context** or **Copy Smart** (fewer tokens)
+- Paste into ChatGPT/Claude/Gemini/DeepSeek and chat as usual
 
-Open a project folder. Check the files you need. Click **Copy**.
+### Step 3 — Apply AI Changes
 
-| Copy Mode          | What It Does                                                   | Best For                                          |
-| ------------------ | -------------------------------------------------------------- | ------------------------------------------------- |
-| **Copy Context**   | Full source code, wrapped in XML/Markdown/JSON                 | Implementation tasks, bug fixing                  |
-| **Copy Smart**     | Signatures & docstrings only (bodies stripped via Tree-sitter) | Architecture review, planning (~70% fewer tokens) |
-| **Copy Diff Only** | Only git changes (staged + unstaged)                           | Code review, PR descriptions                      |
-
-**Extras:**
-- **Select Related** — auto-selects imported files using dependency graph (Python/JS/TS)
-- **Secret Scan** — warns before you copy API keys or private keys to the web
-- Token counter shows exactly how much context you're sending
-
-### Step 2 — Chat with AI
-
-Paste into any web AI. The prompt is pre-formatted with file paths and structure so the AI understands your codebase layout.
-
-### Step 3 — Apply Changes
-
-Copy the AI's response (XML format). Paste into Synapse's **Apply** tab.
-
-- **Visual Diff** — see green/red line-by-line changes before applying
-- **Auto-Backup** — every apply creates a backup, one-click undo
-- **Fuzzy Matching** — even if the AI hallucinates indentation, Synapse's fuzzy search (`rapidfuzz`) still finds the right code block
+- Ask the AI to return **OPX XML**
+- Copy the XML → paste into the **Apply** tab
+- Preview diff → Apply (or Reject)
 
 ---
 
-## The 3 Tabs
+## What is OPX (Overwrite Patch XML)?
 
-| Tab         | What You Do                                              |
-| ----------- | -------------------------------------------------------- |
-| **Context** | Browse file tree, select files, copy prompt to clipboard |
-| **Apply**   | Paste AI response, preview diff, apply or reject changes |
-| **History** | See all past operations, undo any apply with one click   |
+Synapse uses OPX to describe file changes in an automatically applicable format.
 
----
-
-## Why Not Just Use an IDE Agent?
-
-|                     | IDE Agents (Copilot, Cursor) | Synapse Desktop                              |
-| ------------------- | ---------------------------- | -------------------------------------------- |
-| **Cost**            | API credits per token        | **$0** — uses your existing web subscription |
-| **Context control** | Auto (RAG) — may miss files  | **You pick exactly** what the AI sees        |
-| **Transparency**    | Hidden system prompts        | **White box** — visual diff, secret scan     |
-| **Scale**           | Good for single-file edits   | Feed **100+ file signatures** in one prompt  |
-
-Synapse is a **sidecar** — it runs alongside your editor (VS Code, Neovim, etc.), not instead of it.
-
----
-
-## OPX Protocol
-
-OPX (Overwrite Patch XML) is the format Synapse uses to apply AI-generated changes:
+Example:
 
 ```xml
 <edit file="src/app.py" op="patch">
@@ -118,43 +114,31 @@ print("hello world")
 </edit>
 ```
 
-| Operation | Description                 |
-| --------- | --------------------------- |
-| `new`     | Create a new file           |
-| `patch`   | Find & replace a code block |
-| `replace` | Overwrite entire file       |
-| `remove`  | Delete a file               |
-| `move`    | Rename or move a file       |
+Common `op` types:
+
+- `new`: create a new file
+- `patch`: find & replace a code block
+- `replace`: overwrite entire file
+- `remove`: delete a file
+- `move`: rename/move a file
 
 ---
 
-## Supported Languages (Smart Context)
+## Data Storage (local)
 
-Python, JavaScript, TypeScript, Rust, Go, Java, C#, C, C++, Ruby, PHP, Swift, CSS/SCSS/LESS, Solidity
+App data is stored locally at: `~/.synapse-desktop/`
 
----
-
-## Safety Features
-
-| Feature              | How It Works                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| **Secret Scanning**  | `detect-secrets` scans your prompt before copy — warns about API keys, tokens, passwords   |
-| **Binary Detection** | Magic-byte analysis (not just extensions) — skips executables, images, videos automatically |
-| **Visual Diff**      | Green/red line-by-line preview before any file is modified                                  |
-| **Auto-Backup**      | Every apply creates a timestamped backup in `~/.synapse-desktop/backups/`                   |
+- `settings.json`: user configuration
+- `session.json`: last workspace & session state
+- `history.json`: operation history
+- `backups/`: automatic backups before each apply
 
 ---
 
-## Data Storage
+## Security & Privacy (read before sharing prompts)
 
-All data stored locally at `~/.synapse-desktop/`:
-
-| File            | Purpose                             |
-| --------------- | ----------------------------------- |
-| `settings.json` | User preferences                    |
-| `session.json`  | Last workspace & selection state    |
-| `history.json`  | Operation history                   |
-| `backups/`      | Auto-backup files before each apply |
+- Prompts/previews may contain **absolute paths** (e.g., `C:\Users\<name>\...`), which might reveal your **username/machine structure** when pasted onto web chats.
+- If you plan to share outputs or post to public issues, use **relative paths** (none implemented yet) or manually redact sensitive information before sending.
 
 ---
 
@@ -164,6 +148,14 @@ All data stored locally at `~/.synapse-desktop/`:
 pip install pyinstaller
 ./build-appimage.sh
 ```
+
+---
+
+## Quick Troubleshooting
+
+- **Module not found**: Ensure you have run `pip install -r requirements.txt` within the correct venv.
+- **Diff Only has no data**: Check if the project is a git repo and has staged/unstaged changes.
+- **Apply fails / patch mismatch**: Try asking the AI for OPX with a longer `<find>` block (more context lines).
 
 ---
 

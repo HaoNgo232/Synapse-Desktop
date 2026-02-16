@@ -42,6 +42,7 @@ from core.prompt_generator import (
 )
 from core.tree_map_generator import generate_tree_map_only
 from core.security_check import scan_secrets_in_files_cached
+from core.utils.git_utils import get_git_diffs, get_git_logs
 from components.file_tree_widget import FileTreeWidget
 from components.token_stats_qt import TokenStatsPanelQt
 from services.clipboard_utils import copy_to_clipboard
@@ -759,12 +760,21 @@ class ContextViewQt(QWidget):
                     use_relative_paths=use_rel,
                 )
 
+            # Include Git Diff/Log khi setting bat (khac Copy Diff Only - day la them vao context)
+            git_diffs = None
+            git_logs = None
+            if get_setting("include_git_changes", True):
+                git_diffs = get_git_diffs(workspace)
+                git_logs = get_git_logs(workspace, max_commits=5)
+
             prompt = generate_prompt(
                 file_map=file_map,
                 file_contents=file_contents,
                 user_instructions=instructions,
                 output_style=self._selected_output_style,
                 include_xml_formatting=include_xml,
+                git_diffs=git_diffs,
+                git_logs=git_logs,
             )
             copy_to_clipboard(prompt)
             token_count = count_tokens(prompt)
@@ -807,10 +817,17 @@ class ContextViewQt(QWidget):
                 workspace_root=workspace,
                 use_relative_paths=use_rel,
             )
+            git_diffs = None
+            git_logs = None
+            if get_setting("include_git_changes", True):
+                git_diffs = get_git_diffs(workspace)
+                git_logs = get_git_logs(workspace, max_commits=5)
             prompt = build_smart_prompt(
                 smart_contents=smart_contents,
                 file_map=file_map,
                 user_instructions=instructions,
+                git_diffs=git_diffs,
+                git_logs=git_logs,
             )
             copy_to_clipboard(prompt)
             token_count = count_tokens(prompt)

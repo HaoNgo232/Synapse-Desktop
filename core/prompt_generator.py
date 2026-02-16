@@ -718,15 +718,19 @@ def build_smart_prompt(
     smart_contents: str,
     file_map: str,
     user_instructions: str = "",
+    git_diffs: Optional[GitDiffResult] = None,
+    git_logs: Optional[GitLogResult] = None,
 ) -> str:
     """
     Tao prompt day du cho Copy Smart - gom file_summary, directory_structure,
-    smart contents va user_instructions. Nhat quan voi Copy Context.
+    smart contents, git changes (neu bat) va user_instructions. Nhat quan voi Copy Context.
 
     Args:
         smart_contents: Output tu generate_smart_context()
         file_map: Output tu generate_file_map()
         user_instructions: Huong dan tu nguoi dung
+        git_diffs: Optional git diffs (khi Include Git Diff/Log bat)
+        git_logs: Optional git logs (khi Include Git Diff/Log bat)
 
     Returns:
         Prompt string day du
@@ -741,6 +745,17 @@ def build_smart_prompt(
 {smart_contents}
 </smart_context>
 """
+    if git_diffs or git_logs:
+        prompt += "\n<git_changes>\n"
+        if git_diffs:
+            if git_diffs.work_tree_diff:
+                prompt += f"<git_diff_worktree>\n{git_diffs.work_tree_diff}\n</git_diff_worktree>\n"
+            if git_diffs.staged_diff:
+                prompt += f"<git_diff_staged>\n{git_diffs.staged_diff}\n</git_diff_staged>\n"
+        if git_logs and git_logs.log_content:
+            prompt += f"<git_log>\n{git_logs.log_content}\n</git_log>\n"
+        prompt += "</git_changes>\n"
+
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
     return prompt.strip()

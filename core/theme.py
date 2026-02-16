@@ -11,37 +11,37 @@ from pathlib import Path
 
 class ThemeFonts:
     """Typography System - JetBrains Mono + IBM Plex Sans"""
-    
+
     _fonts_loaded = False
-    
+
     @staticmethod
     def load_fonts():
         """Load custom fonts from assets (call once at startup)"""
         if ThemeFonts._fonts_loaded:
             return
-        
+
         font_dir = Path(__file__).parent.parent / "assets" / "fonts"
-        
+
         # Load JetBrains Mono
         QFontDatabase.addApplicationFont(str(font_dir / "JetBrainsMono-Regular.ttf"))
         QFontDatabase.addApplicationFont(str(font_dir / "JetBrainsMono-Bold.ttf"))
-        
+
         # Load IBM Plex Sans
         QFontDatabase.addApplicationFont(str(font_dir / "IBMPlexSans-Regular.ttf"))
         QFontDatabase.addApplicationFont(str(font_dir / "IBMPlexSans-SemiBold.ttf"))
-        
+
         ThemeFonts._fonts_loaded = True
-    
+
     # Heading fonts (for titles, section headers)
     HEADING_LARGE = QFont("JetBrains Mono", 18, QFont.Weight.Bold)
     HEADING_MEDIUM = QFont("JetBrains Mono", 14, QFont.Weight.Bold)
     HEADING_SMALL = QFont("JetBrains Mono", 12, QFont.Weight.DemiBold)
-    
+
     # Body fonts (for descriptions, labels)
     BODY_LARGE = QFont("IBM Plex Sans", 12, QFont.Weight.Normal)
     BODY_MEDIUM = QFont("IBM Plex Sans", 11, QFont.Weight.Normal)
     BODY_SMALL = QFont("IBM Plex Sans", 10, QFont.Weight.Normal)
-    
+
     # Code fonts (for file paths, code snippets)
     CODE = QFont("JetBrains Mono", 10, QFont.Weight.Normal)
 

@@ -100,7 +100,7 @@ class MemoryMonitor:
             MemoryStats với thông tin memory usage
         """
         rss_mb = 0.0
-        
+
         # Method 1: psutil (chính xác nhất)
         try:
             mem_info = self._process.memory_info()
@@ -124,7 +124,7 @@ class MemoryMonitor:
             file_count=self._file_count,
             warning=warning,
         )
-    
+
     def _read_proc_memory(self) -> float:
         """Fallback: đọc memory từ /proc/self/status (Linux only)"""
         try:

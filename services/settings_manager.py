@@ -69,4 +69,3 @@ def get_setting(key: str, default: Any = None) -> Any:
 def set_setting(key: str, value: Any) -> bool:
     """Helper để lưu 1 setting specific"""
     return save_settings({key: value})
-

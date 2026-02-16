@@ -131,7 +131,7 @@ class FileScanner:
 
     # Constants
     THROTTLE_INTERVAL_MS = 200  # 200ms giữa các progress updates
-    
+
     # Lazy scan config
     LAZY_SCAN_THRESHOLD = 1000  # Files threshold to suggest lazy mode
 
@@ -194,7 +194,7 @@ class FileScanner:
             # Không reset _is_scanning ở đây
             # để caller có thể check trạng thái
             pass
-    
+
     def _scan_with_rust(
         self,
         root_path: Path,
@@ -203,10 +203,10 @@ class FileScanner:
     ) -> TreeItem:
         """
         Scan sử dụng scandir-rs (Rust) - nhanh hơn 3-11x so với Python.
-        
+
         Rust scanner chạy trong background thread và release GIL,
         cho phép Python code khác chạy song song.
-        
+
         NOTE: RustWalk trả về relative paths, không phải absolute paths!
         """
         from core.logging_config import log_info
@@ -215,59 +215,59 @@ class FileScanner:
             return self._scan_directory(root_path, root_path, spec, progress_callback)
 
         log_info("[FileScanner] Using scandir-rs (Rust) for fast scanning")
-        
+
         root_path_str = str(root_path)
-        
+
         # Root item
         root_item = TreeItem(
             label=root_path.name or root_path_str,
             path=root_path_str,
             is_dir=True,
         )
-        
+
         # Dict để build tree structure: absolute path -> TreeItem
         path_to_item: dict[str, TreeItem] = {root_path_str: root_item}
-        
+
         try:
             # Dùng Walk từ scandir-rs - tương tự os.walk() nhưng nhanh hơn nhiều
             # NOTE: RustWalk trả về (rel_dirpath, dirs, files) với rel_dirpath là relative path
             for rel_dirpath, dirs, files in RustWalk(root_path_str):
                 if not is_scanning():
                     break
-                
+
                 # Convert relative path to absolute path
                 # RustWalk: '' = root, 'subdir' = subdir, etc.
-                if rel_dirpath == '' or rel_dirpath == '.':
+                if rel_dirpath == "" or rel_dirpath == ".":
                     abs_dirpath = root_path_str
                 else:
                     abs_dirpath = os.path.join(root_path_str, rel_dirpath)
-                
+
                 # Update progress
                 self._progress.directories += 1
                 self._progress.current_path = abs_dirpath
                 self._emit_progress(progress_callback)
-                
+
                 # Get parent item
                 parent_item = path_to_item.get(abs_dirpath)
                 if parent_item is None:
                     # Parent không có trong tree - có thể bị ignore
                     continue
-                
+
                 # Sort dirs và files
                 dirs_sorted = sorted(dirs, key=str.lower)
                 files_sorted = sorted(files, key=str.lower)
-                
+
                 # Process directories
                 for dir_name in dirs_sorted:
                     if not is_scanning():
                         break
-                    
+
                     abs_dir_path = os.path.join(abs_dirpath, dir_name)
-                    
+
                     # Check system path
                     if is_system_path(Path(abs_dir_path)):
                         continue
-                    
+
                     # Check ignore patterns using relative path
                     try:
                         rel_path = Path(abs_dir_path).relative_to(root_path)
@@ -276,22 +276,22 @@ class FileScanner:
                             continue
                     except ValueError:
                         continue
-                    
+
                     child = TreeItem(label=dir_name, path=abs_dir_path, is_dir=True)
                     parent_item.children.append(child)
                     path_to_item[abs_dir_path] = child
-                
+
                 # Process files
                 for file_name in files_sorted:
                     if not is_scanning():
                         break
-                    
+
                     abs_file_path = os.path.join(abs_dirpath, file_name)
-                    
+
                     # Check system path
                     if is_system_path(Path(abs_file_path)):
                         continue
-                    
+
                     # Check ignore patterns
                     try:
                         rel_path = Path(abs_file_path).relative_to(root_path)
@@ -300,21 +300,22 @@ class FileScanner:
                             continue
                     except ValueError:
                         continue
-                    
+
                     self._progress.files += 1
                     parent_item.children.append(
                         TreeItem(label=file_name, path=abs_file_path, is_dir=False)
                     )
-            
+
             # Final progress
             self._emit_progress(progress_callback, force=True)
-            
+
         except Exception as e:
             from core.logging_config import log_error
+
             log_error(f"[FileScanner] Rust scanner error: {e}, falling back to Python")
             # Fallback nếu Rust scanner lỗi
             return self._scan_directory(root_path, root_path, spec, progress_callback)
-        
+
         return root_item
 
     def _build_ignore_patterns(self, root_path: Path, config: ScanConfig) -> List[str]:
@@ -375,7 +376,7 @@ class FileScanner:
                 # Separate dirs and files in single pass
                 directories: List[os.DirEntry] = []
                 files: List[os.DirEntry] = []
-                
+
                 for entry in entries_iter:
                     if not is_scanning():
                         break
@@ -386,7 +387,7 @@ class FileScanner:
                             files.append(entry)
                     except OSError:
                         continue
-                
+
         except (PermissionError, OSError):
             return item
 
@@ -403,7 +404,7 @@ class FileScanner:
                 break
 
             entry_path = Path(entry.path)
-            
+
             if is_system_path(entry_path):
                 continue
 
@@ -423,16 +424,16 @@ class FileScanner:
         # Process files in batches for better cancellation responsiveness
         BATCH_SIZE = 50
         file_count = 0
-        
+
         for entry in files:
             if file_count % BATCH_SIZE == 0 and not is_scanning():
                 break
 
             entry_path = Path(entry.path)
-            
+
             if is_system_path(entry_path):
                 continue
-            
+
             # Skip binary files (check magic bytes)
             if is_binary_file(entry_path):
                 continue
@@ -493,82 +494,82 @@ class FileScanner:
 
 
 def scan_single_level(
-        directory_path: Path,
-        root_path: Path,
-        spec: pathspec.PathSpec,
-    ) -> TreeItem:
-        """
-        Scan chỉ một level của directory (không recursive).
-        
-        Dùng cho lazy loading - scan children khi user expand folder.
-        
-        Args:
-            directory_path: Directory cần scan
-            root_path: Root workspace path (để match ignore patterns)
-            spec: PathSpec cho ignore matching
-            
-        Returns:
-            TreeItem với children là placeholder nếu có subdirs
-        """
-        if not is_scanning():
-            return TreeItem(
-                label=directory_path.name or str(directory_path),
-                path=str(directory_path),
-                is_dir=True,
-            )
-        
-        item = TreeItem(
+    directory_path: Path,
+    root_path: Path,
+    spec: pathspec.PathSpec,
+) -> TreeItem:
+    """
+    Scan chỉ một level của directory (không recursive).
+
+    Dùng cho lazy loading - scan children khi user expand folder.
+
+    Args:
+        directory_path: Directory cần scan
+        root_path: Root workspace path (để match ignore patterns)
+        spec: PathSpec cho ignore matching
+
+    Returns:
+        TreeItem với children là placeholder nếu có subdirs
+    """
+    if not is_scanning():
+        return TreeItem(
             label=directory_path.name or str(directory_path),
             path=str(directory_path),
             is_dir=True,
         )
-        
-        try:
-            entries = list(directory_path.iterdir())
-        except (PermissionError, OSError):
-            return item
-        
-        entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
-        
-        for entry in entries:
-            if not is_scanning():
-                break
-                
-            if is_system_path(entry):
-                continue
-            
-            try:
-                rel_path = entry.relative_to(root_path)
-            except ValueError:
-                continue
-            
-            rel_path_str = str(rel_path)
-            if entry.is_dir():
-                rel_path_str += "/"
-            
-            if spec.match_file(rel_path_str):
-                continue
-            
-            if entry.is_dir():
-                # Tạo placeholder - sẽ load children khi expand
-                child = TreeItem(
-                    label=entry.name,
-                    path=str(entry),
-                    is_dir=True,
-                    children=[],  # Empty - will lazy load
-                )
-                # Mark as not loaded yet
-                child._lazy_loaded = False  # type: ignore
-            else:
-                child = TreeItem(
-                    label=entry.name,
-                    path=str(entry),
-                    is_dir=False,
-                )
-            
-            item.children.append(child)
-        
+
+    item = TreeItem(
+        label=directory_path.name or str(directory_path),
+        path=str(directory_path),
+        is_dir=True,
+    )
+
+    try:
+        entries = list(directory_path.iterdir())
+    except (PermissionError, OSError):
         return item
+
+    entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
+
+    for entry in entries:
+        if not is_scanning():
+            break
+
+        if is_system_path(entry):
+            continue
+
+        try:
+            rel_path = entry.relative_to(root_path)
+        except ValueError:
+            continue
+
+        rel_path_str = str(rel_path)
+        if entry.is_dir():
+            rel_path_str += "/"
+
+        if spec.match_file(rel_path_str):
+            continue
+
+        if entry.is_dir():
+            # Tạo placeholder - sẽ load children khi expand
+            child = TreeItem(
+                label=entry.name,
+                path=str(entry),
+                is_dir=True,
+                children=[],  # Empty - will lazy load
+            )
+            # Mark as not loaded yet
+            child._lazy_loaded = False  # type: ignore
+        else:
+            child = TreeItem(
+                label=entry.name,
+                path=str(entry),
+                is_dir=False,
+            )
+
+        item.children.append(child)
+
+    return item
 
 
 def scan_directory_lazy(
@@ -580,16 +581,16 @@ def scan_directory_lazy(
 ) -> TreeItem:
     """
     Lazy scan một directory (chỉ 1 level).
-    
+
     Gọi function này khi user expand folder để load children on-demand.
-    
+
     Args:
         directory_path: Directory cần scan
         root_path: Root workspace path
         excluded_patterns: Patterns để exclude
         use_gitignore: Có dùng .gitignore không
         use_default_ignores: Có dùng default ignores không
-        
+
     Returns:
         TreeItem với immediate children only
     """
@@ -598,13 +599,13 @@ def scan_directory_lazy(
         use_gitignore=use_gitignore,
         use_default_ignores=use_default_ignores,
     )
-    
+
     scanner = FileScanner()
-    
+
     # Build ignore spec
     ignore_patterns = scanner._build_ignore_patterns(root_path, config)
     spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
-    
+
     start_scanning()
     try:
         return scan_single_level(directory_path, root_path, spec)

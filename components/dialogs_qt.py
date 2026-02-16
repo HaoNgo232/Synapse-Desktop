@@ -11,9 +11,19 @@ if TYPE_CHECKING:
     from core.utils.repo_manager import RepoManager
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QScrollArea, QFrame, QWidget,
-    QLineEdit, QCheckBox, QMessageBox, QProgressBar,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTextEdit,
+    QScrollArea,
+    QFrame,
+    QWidget,
+    QLineEdit,
+    QCheckBox,
+    QMessageBox,
+    QProgressBar,
     QGridLayout,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer
@@ -28,6 +38,7 @@ from services.clipboard_utils import copy_to_clipboard
 # Base Dialog
 # ============================================================
 
+
 class BaseDialogQt(QDialog):
     """Base class cho tất cả dialogs — cung cấp styling chung."""
 
@@ -36,9 +47,7 @@ class BaseDialogQt(QDialog):
         self.setWindowTitle(title)
         self.setModal(True)
         self.setMinimumWidth(450)
-        self.setStyleSheet(
-            f"QDialog {{ background-color: {ThemeColors.BG_SURFACE}; }}"
-        )
+        self.setStyleSheet(f"QDialog {{ background-color: {ThemeColors.BG_SURFACE}; }}")
 
     def _make_primary_btn(self, text: str) -> QPushButton:
         btn = QPushButton(text)
@@ -72,6 +81,7 @@ class BaseDialogQt(QDialog):
 # Security Dialog
 # ============================================================
 
+
 class SecurityDialogQt(BaseDialogQt):
     """Dialog khi phát hiện secrets trong content."""
 
@@ -91,6 +101,7 @@ class SecurityDialogQt(BaseDialogQt):
 
     def _build_ui(self) -> None:
         from core.security_check import format_security_warning
+
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
@@ -208,6 +219,7 @@ class SecurityDialogQt(BaseDialogQt):
 # Diff Only Dialog
 # ============================================================
 
+
 class DiffOnlyDialogQt(BaseDialogQt):
     """Dialog cho Copy Diff Only."""
 
@@ -230,12 +242,14 @@ class DiffOnlyDialogQt(BaseDialogQt):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        layout.addWidget(self._make_label(
-            "Copy only git changes instead of full source code."
-        ))
-        layout.addWidget(self._make_label(
-            "Ideal for: code review, bug fixing, feature validation.", muted=True
-        ))
+        layout.addWidget(
+            self._make_label("Copy only git changes instead of full source code.")
+        )
+        layout.addWidget(
+            self._make_label(
+                "Ideal for: code review, bug fixing, feature validation.", muted=True
+            )
+        )
 
         # Options
         form = QGridLayout()
@@ -372,6 +386,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
 # Remote Repo Dialog
 # ============================================================
 
+
 class RemoteRepoDialogQt(BaseDialogQt):
     """Dialog clone remote GitHub repositories."""
 
@@ -393,12 +408,16 @@ class RemoteRepoDialogQt(BaseDialogQt):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        layout.addWidget(self._make_label(
-            "Enter GitHub URL or shorthand (owner/repo) to clone repository."
-        ))
+        layout.addWidget(
+            self._make_label(
+                "Enter GitHub URL or shorthand (owner/repo) to clone repository."
+            )
+        )
 
         self._url_field = QLineEdit()
-        self._url_field.setPlaceholderText("owner/repo or https://github.com/owner/repo")
+        self._url_field.setPlaceholderText(
+            "owner/repo or https://github.com/owner/repo"
+        )
         layout.addWidget(self._url_field)
 
         self._progress = QProgressBar()
@@ -456,6 +475,7 @@ class RemoteRepoDialogQt(BaseDialogQt):
 # ============================================================
 # Cache Management Dialog
 # ============================================================
+
 
 class CacheManagementDialogQt(BaseDialogQt):
     """Dialog quản lý cached repositories."""
@@ -525,7 +545,9 @@ class CacheManagementDialogQt(BaseDialogQt):
 
         cached_repos = self.repo_manager.get_cached_repos()
         if not cached_repos:
-            self._list_layout.addWidget(self._make_label("No repositories cloned yet.", muted=True))
+            self._list_layout.addWidget(
+                self._make_label("No repositories cloned yet.", muted=True)
+            )
             return
 
         for repo in cached_repos:
@@ -548,7 +570,9 @@ class CacheManagementDialogQt(BaseDialogQt):
         info_layout.addWidget(name_label)
 
         size_str = self.repo_manager.format_size(repo.size_bytes)
-        time_str = repo.last_modified.strftime("%Y-%m-%d %H:%M") if repo.last_modified else ""
+        time_str = (
+            repo.last_modified.strftime("%Y-%m-%d %H:%M") if repo.last_modified else ""
+        )
         meta = QLabel(f"📁 {size_str}  🕐 {time_str}")
         meta.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
         info_layout.addWidget(meta)
@@ -582,9 +606,11 @@ class CacheManagementDialogQt(BaseDialogQt):
     @Slot()
     def _clear_all(self) -> None:
         reply = QMessageBox.question(
-            self, "Clear All",
+            self,
+            "Clear All",
             "Delete all cached repositories?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.repo_manager.clear_cache()
@@ -595,6 +621,7 @@ class CacheManagementDialogQt(BaseDialogQt):
 # ============================================================
 # Dirty Repo Dialog
 # ============================================================
+
 
 class DirtyRepoDialogQt(BaseDialogQt):
     """Dialog khi repo có uncommitted changes."""
@@ -623,10 +650,12 @@ class DirtyRepoDialogQt(BaseDialogQt):
             f"font-weight: bold; font-size: 14px; color: {ThemeColors.WARNING};"
         )
         layout.addWidget(title)
-        layout.addWidget(self._make_label(
-            f"Repository '{self.repo_name}' has uncommitted local changes.\n"
-            "What would you like to do?"
-        ))
+        layout.addWidget(
+            self._make_label(
+                f"Repository '{self.repo_name}' has uncommitted local changes.\n"
+                "What would you like to do?"
+            )
+        )
 
         btn_row = QHBoxLayout()
         cancel = self._make_outlined_btn("Cancel")
@@ -663,10 +692,12 @@ class DirtyRepoDialogQt(BaseDialogQt):
     @Slot()
     def _discard_and_pull(self) -> None:
         reply = QMessageBox.warning(
-            self, "Confirm Discard",
+            self,
+            "Confirm Discard",
             f"PERMANENTLY DELETE all local changes in '{self.repo_name}'?\n"
             "This cannot be undone!",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -690,6 +721,7 @@ class DirtyRepoDialogQt(BaseDialogQt):
 # ============================================================
 # File Preview Dialog
 # ============================================================
+
 
 class FilePreviewDialogQt(BaseDialogQt):
     """Dialog preview nội dung file với line numbers."""
@@ -724,11 +756,13 @@ class FilePreviewDialogQt(BaseDialogQt):
         header.addStretch()
 
         from core.utils.language_utils import get_language_from_path
+
         language = get_language_from_path(self.file_path)
 
         # Read content
         if self._content is None:
             from core.utils.file_utils import is_binary_file
+
             if is_binary_file(path_obj):
                 self._show_error_content(layout, "Cannot preview binary file.")
                 return
@@ -738,7 +772,9 @@ class FilePreviewDialogQt(BaseDialogQt):
             try:
                 size = path_obj.stat().st_size
                 if size > self.MAX_PREVIEW_SIZE:
-                    self._show_error_content(layout, f"File too large ({size / 1048576:.1f} MB)")
+                    self._show_error_content(
+                        layout, f"File too large ({size / 1048576:.1f} MB)"
+                    )
                     return
                 self._content = path_obj.read_text(encoding="utf-8", errors="replace")
             except Exception as e:
@@ -748,7 +784,7 @@ class FilePreviewDialogQt(BaseDialogQt):
         lines = self._content.split("\n")
         truncated = len(lines) > self.MAX_LINES
         if truncated:
-            lines = lines[:self.MAX_LINES]
+            lines = lines[: self.MAX_LINES]
             self._content = "\n".join(lines)
 
         info = QLabel(f"{language} • {len(lines)} lines")
@@ -800,14 +836,14 @@ class FilePreviewDialogQt(BaseDialogQt):
             f"}}"
         )
         self._text_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        
+
         # Apply syntax highlighting via Pygments + Dracula
         highlighted_html = self._highlight_code(self._content, language)
         if highlighted_html:
             self._text_edit.setHtml(highlighted_html)
         else:
             self._text_edit.setPlainText(self._content)
-        
+
         layout.addWidget(self._text_edit, stretch=1)
 
         if truncated:
@@ -844,6 +880,7 @@ class FilePreviewDialogQt(BaseDialogQt):
     def _copy_content(self) -> None:
         if self._content:
             from services.clipboard_utils import copy_to_clipboard
+
             success, _ = copy_to_clipboard(self._content)
             if success:
                 self._copy_btn.setText("Copied! ✅")

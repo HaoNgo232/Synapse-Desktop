@@ -135,50 +135,92 @@ BINARY_EXTENSIONS = {
 # Directory Quick Skip - dùng với os.walk để PRUNE directory TRƯỚC KHI enter
 # Key: os.walk prune in-place nên sẽ KHÔNG traverse vào các folders này
 # Bao gồm tất cả ngôn ngữ/framework phổ biến
-DIRECTORY_QUICK_SKIP: frozenset[str] = frozenset({
-    # === VCS ===
-    ".git", ".hg", ".svn",
-    # === JavaScript / Node.js ===
-    "node_modules", "bower_components", "jspm_packages",
-    ".next", ".nuxt", ".vuepress",
-    ".npm", ".yarn", ".pnpm-store",
-    ".serverless", ".fusebox", ".dynamodb",
-    ".parcel-cache", ".cache", ".rollup.cache",
-    ".webpack.cache", ".turbo",
-    # === Python ===
-    "__pycache__", ".venv", "venv", "env",
-    ".tox", ".nox", ".mypy_cache", ".pytest_cache",
-    ".ruff_cache", ".pytype", ".ipynb_checkpoints",
-    "*.egg-info",  # os.walk sẽ match exact name
-    ".eggs", "site-packages",
-    # === Rust ===
-    "target",  # Cargo build output
-    # === Java / Kotlin / Scala ===
-    ".gradle", ".mvn", ".idea",
-    ".settings", "bin",  # Eclipse
-    # === Go ===
-    "vendor",  # Go vendor
-    # === Ruby ===
-    ".bundle",
-    # === PHP ===
-    # vendor đã có ở Go section
-    # === .NET / C# ===
-    "obj", "packages",
-    # === Dart / Flutter ===
-    ".dart_tool", ".pub-cache",
-    # === Swift / iOS ===
-    ".build", "Pods", "DerivedData",
-    # === Build outputs (chung) ===
-    "dist", "build", "out", "output",
-    "coverage", "lib-cov", ".nyc_output",
-    # === IDE / Editor ===
-    ".vscode", ".idea", ".vs",
-    # === OS generated ===
-    ".DS_Store", "Thumbs.db",
-    # === Misc caches ===
-    ".sass-cache", ".eslintcache",
-    "tmp", "temp", ".tmp",
-})
+DIRECTORY_QUICK_SKIP: frozenset[str] = frozenset(
+    {
+        # === VCS ===
+        ".git",
+        ".hg",
+        ".svn",
+        # === JavaScript / Node.js ===
+        "node_modules",
+        "bower_components",
+        "jspm_packages",
+        ".next",
+        ".nuxt",
+        ".vuepress",
+        ".npm",
+        ".yarn",
+        ".pnpm-store",
+        ".serverless",
+        ".fusebox",
+        ".dynamodb",
+        ".parcel-cache",
+        ".cache",
+        ".rollup.cache",
+        ".webpack.cache",
+        ".turbo",
+        # === Python ===
+        "__pycache__",
+        ".venv",
+        "venv",
+        "env",
+        ".tox",
+        ".nox",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".pytype",
+        ".ipynb_checkpoints",
+        "*.egg-info",  # os.walk sẽ match exact name
+        ".eggs",
+        "site-packages",
+        # === Rust ===
+        "target",  # Cargo build output
+        # === Java / Kotlin / Scala ===
+        ".gradle",
+        ".mvn",
+        ".idea",
+        ".settings",
+        "bin",  # Eclipse
+        # === Go ===
+        "vendor",  # Go vendor
+        # === Ruby ===
+        ".bundle",
+        # === PHP ===
+        # vendor đã có ở Go section
+        # === .NET / C# ===
+        "obj",
+        "packages",
+        # === Dart / Flutter ===
+        ".dart_tool",
+        ".pub-cache",
+        # === Swift / iOS ===
+        ".build",
+        "Pods",
+        "DerivedData",
+        # === Build outputs (chung) ===
+        "dist",
+        "build",
+        "out",
+        "output",
+        "coverage",
+        "lib-cov",
+        ".nyc_output",
+        # === IDE / Editor ===
+        ".vscode",
+        ".idea",
+        ".vs",
+        # === OS generated ===
+        ".DS_Store",
+        "Thumbs.db",
+        # === Misc caches ===
+        ".sass-cache",
+        ".eslintcache",
+        "tmp",
+        "temp",
+        ".tmp",
+    }
+)
 
 # Extended Ignore Patterns - Port tu Repomix (src/config/defaultIgnore.ts)
 # Danh sach patterns mac dinh de ignore khi scan directory

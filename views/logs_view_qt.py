@@ -9,8 +9,14 @@ from dataclasses import dataclass
 from enum import Enum
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QPlainTextEdit, QComboBox, QCheckBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QPlainTextEdit,
+    QComboBox,
+    QCheckBox,
 )
 from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
 from PySide6.QtCore import Qt, Slot, QTimer
@@ -203,7 +209,7 @@ class LogsViewQt(QWidget):
         if self.current_filter and self.current_filter != "All Levels":
             filtered = [l for l in self.all_logs if l.level == self.current_filter]
 
-        display = filtered[-self.MAX_DISPLAY_LOGS:]
+        display = filtered[-self.MAX_DISPLAY_LOGS :]
 
         if not display:
             self._log_view.setPlainText("No logs match the current filter")
@@ -247,11 +253,10 @@ class LogsViewQt(QWidget):
     @Slot(int)
     def _toggle_debug(self, state: int) -> None:
         from core.logging_config import set_debug_mode
+
         enabled = state == Qt.CheckState.Checked.value
         set_debug_mode(enabled)
-        self._show_status(
-            "Debug mode enabled" if enabled else "Debug mode disabled"
-        )
+        self._show_status("Debug mode enabled" if enabled else "Debug mode disabled")
 
     @Slot()
     def _copy_all(self) -> None:
@@ -274,7 +279,9 @@ class LogsViewQt(QWidget):
         lines = [f"{l.timestamp} [{l.level}] {l.message}" for l in error_logs]
         success, _ = copy_to_clipboard("\n".join(lines))
         self._show_status(
-            f"Copied {len(error_logs)} error/warning logs" if success else "Copy failed",
+            f"Copied {len(error_logs)} error/warning logs"
+            if success
+            else "Copy failed",
             not success,
         )
 

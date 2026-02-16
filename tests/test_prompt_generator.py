@@ -11,9 +11,6 @@ Test các case:
 """
 
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-import tempfile
 
 from core.prompt_generator import (
     generate_prompt,

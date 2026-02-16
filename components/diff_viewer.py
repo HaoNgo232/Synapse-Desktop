@@ -14,7 +14,6 @@ from enum import Enum
 from typing import List, Optional
 
 
-
 class DiffLineType(Enum):
     """
     Loai dong trong diff output.
@@ -89,13 +88,15 @@ def generate_diff_lines(
     # Split content thanh lines
     old_lines = old_content.splitlines(keepends=True) if old_content else []
     new_lines = new_content.splitlines(keepends=True) if new_content else []
-    
+
     # Guard against very large files
     if len(old_lines) > MAX_DIFF_LINES or len(new_lines) > MAX_DIFF_LINES:
-        return [DiffLine(
-            content=f"[File too large for diff preview: {len(old_lines)}/{len(new_lines)} lines]",
-            line_type=DiffLineType.HEADER
-        )]
+        return [
+            DiffLine(
+                content=f"[File too large for diff preview: {len(old_lines)}/{len(new_lines)} lines]",
+                line_type=DiffLineType.HEADER,
+            )
+        ]
 
     # Tao unified diff
     diff_generator = difflib.unified_diff(
@@ -166,13 +167,15 @@ def generate_diff_lines(
                     new_line_no=new_line_no,
                 )
             )
-        
+
         # Early termination for very large diffs
         if len(result) >= MAX_DIFF_OUTPUT_LINES:
-            result.append(DiffLine(
-                content=f"[... truncated, showing first {MAX_DIFF_OUTPUT_LINES} lines ...]",
-                line_type=DiffLineType.HEADER
-            ))
+            result.append(
+                DiffLine(
+                    content=f"[... truncated, showing first {MAX_DIFF_OUTPUT_LINES} lines ...]",
+                    line_type=DiffLineType.HEADER,
+                )
+            )
             break
 
     return result
@@ -204,4 +207,3 @@ def generate_delete_diff_lines(old_content: str, file_path: str = "") -> List[Di
         List DiffLine voi tat ca dong la REMOVED
     """
     return generate_diff_lines(old_content, "", file_path)
-

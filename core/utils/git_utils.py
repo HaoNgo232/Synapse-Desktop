@@ -38,6 +38,7 @@ class GitLogResult:
 @dataclass
 class DiffOnlyResult:
     """Kết quả cho Copy Diff Only feature"""
+
     diff_content: str
     files_changed: int
     insertions: int
@@ -207,15 +208,15 @@ def get_diff_only(
 ) -> DiffOnlyResult:
     """
     Lấy chỉ git diff - không bao gồm source code đầy đủ.
-    
+
     Mục đích: Cho AI review các thay đổi gần đây mà không cần context toàn bộ project.
-    
+
     Args:
         workspace_path: Path đến workspace
         num_commits: Số commits gần nhất cần include (0 = chỉ uncommitted changes)
         include_staged: Bao gồm staged changes
         include_unstaged: Bao gồm unstaged changes
-    
+
     Returns:
         DiffOnlyResult với diff content và statistics
     """
@@ -226,15 +227,15 @@ def get_diff_only(
             insertions=0,
             deletions=0,
             commits_included=0,
-            error="Not a git repository"
+            error="Not a git repository",
         )
-    
+
     diff_parts: list[str] = []
     changed_files: list[str] = []  # Track changed file paths
     total_files = 0
     total_insertions = 0
     total_deletions = 0
-    
+
     try:
         # 1. Uncommitted changes (staged + unstaged)
         if include_unstaged:
@@ -264,7 +265,7 @@ def get_diff_only(
                     total_deletions += stats[2]
                     # Collect changed files
                     changed_files.extend(_extract_changed_files(result.stdout))
-        
+
         if include_staged:
             # Staged changes (index vs HEAD)
             result = subprocess.run(
@@ -291,7 +292,7 @@ def get_diff_only(
                     total_deletions += stats[2]
                     # Collect changed files
                     changed_files.extend(_extract_changed_files(result.stdout))
-        
+
         # 2. Recent commits diff
         commits_included = 0
         if num_commits > 0:
@@ -306,7 +307,7 @@ def get_diff_only(
             if result.returncode == 0 and result.stdout.strip():
                 commit_lines = result.stdout.strip().split("\n")
                 commits_included = len(commit_lines)
-                
+
                 # Get combined diff
                 diff_result = subprocess.run(
                     ["git", "diff", f"HEAD~{num_commits}..HEAD"],
@@ -316,13 +317,15 @@ def get_diff_only(
                     timeout=60,
                 )
                 if diff_result.returncode == 0 and diff_result.stdout.strip():
-                    diff_parts.append(f"\n# Recent Commits ({commits_included} commits)\n")
+                    diff_parts.append(
+                        f"\n# Recent Commits ({commits_included} commits)\n"
+                    )
                     diff_parts.append("# Commits:\n")
                     for line in commit_lines:
                         diff_parts.append(f"#   {line}\n")
                     diff_parts.append("\n")
                     diff_parts.append(diff_result.stdout)
-                    
+
                     # Get stats
                     stat_result = subprocess.run(
                         ["git", "diff", "--stat", f"HEAD~{num_commits}..HEAD"],
@@ -338,9 +341,9 @@ def get_diff_only(
                         total_deletions += stats[2]
                         # Collect changed files from commits
                         changed_files.extend(_extract_changed_files(stat_result.stdout))
-        
+
         diff_content = "".join(diff_parts)
-        
+
         # Deduplicate changed files while preserving order
         seen = set()
         unique_files = []
@@ -348,7 +351,7 @@ def get_diff_only(
             if f not in seen:
                 seen.add(f)
                 unique_files.append(f)
-        
+
         return DiffOnlyResult(
             diff_content=diff_content,
             files_changed=total_files,
@@ -356,9 +359,9 @@ def get_diff_only(
             deletions=total_deletions,
             commits_included=commits_included,
             changed_files=unique_files,
-            error=None
+            error=None,
         )
-        
+
     except subprocess.TimeoutExpired:
         return DiffOnlyResult(
             diff_content="",
@@ -366,7 +369,7 @@ def get_diff_only(
             insertions=0,
             deletions=0,
             commits_included=0,
-            error="Git command timed out"
+            error="Git command timed out",
         )
     except Exception as e:
         return DiffOnlyResult(
@@ -375,68 +378,68 @@ def get_diff_only(
             insertions=0,
             deletions=0,
             commits_included=0,
-            error=str(e)
+            error=str(e),
         )
 
 
 def _parse_diff_stats(stat_output: str) -> tuple[int, int, int]:
     """
     Parse git diff --stat output để lấy files changed, insertions, deletions.
-    
+
     Returns:
         (files_changed, insertions, deletions)
     """
     import re
-    
+
     # Last line format: "X files changed, Y insertions(+), Z deletions(-)"
     lines = stat_output.strip().split("\n")
     if not lines:
         return (0, 0, 0)
-    
+
     last_line = lines[-1]
-    
+
     files = 0
     insertions = 0
     deletions = 0
-    
+
     # Parse files changed
     files_match = re.search(r"(\d+) files? changed", last_line)
     if files_match:
         files = int(files_match.group(1))
-    
+
     # Parse insertions
     ins_match = re.search(r"(\d+) insertions?\(\+\)", last_line)
     if ins_match:
         insertions = int(ins_match.group(1))
-    
+
     # Parse deletions
     del_match = re.search(r"(\d+) deletions?\(-\)", last_line)
     if del_match:
         deletions = int(del_match.group(1))
-    
+
     return (files, insertions, deletions)
 
 
 def _extract_changed_files(stat_output: str) -> list[str]:
     """
     Extract danh sách file paths từ git diff --stat output.
-    
+
     Format của mỗi dòng: " path/to/file.py | N +++ --"
-    
+
     Args:
         stat_output: Output từ git diff --stat
-    
+
     Returns:
         List các file paths đã thay đổi
     """
     files = []
     lines = stat_output.strip().split("\n")
-    
+
     for line in lines:
         # Skip summary line (cuối cùng chứa "files changed")
         if "changed" in line and ("insertion" in line or "deletion" in line):
             continue
-        
+
         # Format: " path/to/file | stats"
         if "|" in line:
             file_part = line.split("|")[0].strip()
@@ -452,7 +455,7 @@ def _extract_changed_files(stat_output: str) -> list[str]:
                             prefix = parts[0].split("{")[0]
                             file_part = prefix + file_part.rstrip("}")
                 files.append(file_part)
-    
+
     return files
 
 
@@ -464,13 +467,13 @@ def build_diff_only_prompt(
 ) -> str:
     """
     Build prompt from diff result for Copy Diff Only feature.
-    
+
     Args:
         diff_result: DiffOnlyResult from get_diff_only()
         instructions: User instructions text
         include_changed_content: Include full content of changed files
         include_tree_structure: Include changed file tree structure
-    
+
     Returns:
         Formatted prompt string
     """
@@ -498,20 +501,25 @@ def build_diff_only_prompt(
                     content = full_path.read_text(encoding="utf-8", errors="replace")
                     if len(content) <= 50000:
                         from core.utils.language_utils import get_language_from_path
+
                         lang = get_language_from_path(str(full_path))
-                        parts.extend([
-                            f'<file path="{file_path}">',
-                            f"```{lang}",
-                            content,
-                            "```",
-                            "</file>",
-                        ])
+                        parts.extend(
+                            [
+                                f'<file path="{file_path}">',
+                                f"```{lang}",
+                                content,
+                                "```",
+                                "</file>",
+                            ]
+                        )
                 except Exception:
                     pass
         parts.append("</changed_files_content>")
 
     if instructions and instructions.strip():
-        parts.extend(["", "<user_instructions>", instructions.strip(), "</user_instructions>"])
+        parts.extend(
+            ["", "<user_instructions>", instructions.strip(), "</user_instructions>"]
+        )
 
     return "\n".join(parts)
 

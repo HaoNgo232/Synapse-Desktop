@@ -29,8 +29,11 @@ from core.dependency_resolver import DependencyResolver
 
 
 def extract_relationships(
-    file_path: str, content: str, known_symbols: Optional[Set[str]] = None,
-    tree=None, language: Optional[Language] = None
+    file_path: str,
+    content: str,
+    known_symbols: Optional[Set[str]] = None,
+    tree=None,
+    language: Optional[Language] = None,
 ) -> list[Relationship]:
     """
     Extract tất cả relationships từ file content.
@@ -129,7 +132,7 @@ def _extract_calls(
 
         relationships: list[Relationship] = []
         lines = content.split("\n")
-        
+
         # OPTIMIZATION: Build function boundaries map once
         boundaries_map = _build_function_boundaries_map(tree.root_node, lines)
 
@@ -350,14 +353,14 @@ def _build_function_boundaries_map(
 ) -> list[tuple[int, int, str]]:
     """
     Build map of function boundaries một lần để lookup O(1).
-    
+
     Returns:
         List of (start_line, end_line, function_name) tuples, sorted by start_line
-    
+
     PERFORMANCE: Build map 1 lần thay vì traverse tree mỗi lần tìm enclosing function
     """
     boundaries: list[tuple[int, int, str]] = []
-    
+
     def traverse(node):
         # Check if this node is a function/method definition
         if "function" in node.type and "definition" in node.type:
@@ -371,18 +374,14 @@ def _build_function_boundaries_map(
                     if start_row < len(lines):
                         func_name = lines[start_row][start_col:end_col]
                         break
-            
+
             if func_name:
-                boundaries.append((
-                    node.start_point[0],
-                    node.end_point[0],
-                    func_name
-                ))
-        
+                boundaries.append((node.start_point[0], node.end_point[0], func_name))
+
         # Recursively process children
         for child in node.children:
             traverse(child)
-    
+
     traverse(root_node)
     # Sort by start_line descending để tìm innermost function first
     return sorted(boundaries, key=lambda x: x[0], reverse=True)
@@ -393,21 +392,21 @@ def _find_enclosing_function_fast(
 ) -> Optional[str]:
     """
     Tìm enclosing function sử dụng binary search O(log n).
-    
+
     Args:
         target_line: Line number của target node (0-indexed)
         boundaries_map: Pre-built function boundaries, PHẢI sorted by start_line DESC
-    
+
     Returns:
         Function name hoặc None
-    
+
     OPTIMIZATION: Binary search thay vì linear scan
     """
-    
+
     # boundaries_map sorted by start_line DESC
     # Tìm function có start_line <= target_line và end_line >= target_line
     # Vì sorted DESC, innermost function sẽ match first
-    
+
     for start_line, end_line, func_name in boundaries_map:
         if start_line <= target_line <= end_line:
             return func_name
@@ -421,7 +420,7 @@ def _find_enclosing_function_fast(
 def _find_enclosing_function(root_node, target_node, lines: list[str]) -> Optional[str]:
     """
     Tìm function/method chứa target_node.
-    
+
     DEPRECATED: Sử dụng _find_enclosing_function_fast với boundaries map để performance tốt hơn.
 
     Returns:

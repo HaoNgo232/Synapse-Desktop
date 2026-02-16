@@ -77,7 +77,9 @@ def scan_for_secrets(
 
     # Tạo temp file để scan (detect-secrets cần file path)
     try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8"
+        ) as f:
             f.write(content)
             temp_path = f.name
     except (OSError, IOError):
@@ -246,7 +248,7 @@ def scan_secrets_in_files_cached(
                 try:
                     content = path.read_text(encoding="utf-8", errors="replace")
                     file_matches = scan_for_secrets(content, file_path=path_str)
-                    
+
                     mtime = path.stat().st_mtime
                     _security_scan_cache[path_str] = (mtime, file_matches)
                     all_matches.extend(file_matches)
@@ -255,8 +257,10 @@ def scan_secrets_in_files_cached(
         else:
             # For larger batches, use ThreadPoolExecutor
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            
-            def scan_single_file(item: tuple[str, Path]) -> tuple[str, float, list[SecretMatch]]:
+
+            def scan_single_file(
+                item: tuple[str, Path],
+            ) -> tuple[str, float, list[SecretMatch]]:
                 path_str, path = item
                 try:
                     content = path.read_text(encoding="utf-8", errors="replace")
@@ -265,10 +269,12 @@ def scan_secrets_in_files_cached(
                     return (path_str, mtime, file_matches)
                 except Exception:
                     return (path_str, 0.0, [])
-            
+
             with ThreadPoolExecutor(max_workers=4) as executor:
-                futures = [executor.submit(scan_single_file, item) for item in files_to_scan]
-                
+                futures = [
+                    executor.submit(scan_single_file, item) for item in files_to_scan
+                ]
+
                 for future in as_completed(futures):
                     try:
                         path_str, mtime, file_matches = future.result()

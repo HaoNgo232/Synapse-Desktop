@@ -9,7 +9,9 @@ import os
 from core.theme import ThemeColors, ThemeSpacing, ThemeRadius
 
 # Resolve absolute paths for SVG icons
-_ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+_ASSETS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
+)
 _ARROW_RIGHT = os.path.join(_ASSETS_DIR, "arrow-right.svg").replace("\\", "/")
 _ARROW_DOWN = os.path.join(_ASSETS_DIR, "arrow-down.svg").replace("\\", "/")
 
@@ -17,10 +19,10 @@ _ARROW_DOWN = os.path.join(_ASSETS_DIR, "arrow-down.svg").replace("\\", "/")
 def generate_app_stylesheet() -> str:
     """
     Tạo global QSS stylesheet cho toàn bộ application.
-    
+
     Áp dụng Dark Mode OLED theme với các color constants
     từ ThemeColors class.
-    
+
     Returns:
         QSS stylesheet string
     """

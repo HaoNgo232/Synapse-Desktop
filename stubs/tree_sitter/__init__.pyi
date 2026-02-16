@@ -1,4 +1,5 @@
 """Type stubs for tree_sitter package"""
+
 from typing import Any
 
 class Language:

@@ -48,11 +48,11 @@ def test_smart_parse_without_relationships():
     print("=" * 80)
     print("TEST 1: Smart Parse WITHOUT Relationships (Backward Compatible)")
     print("=" * 80)
-    
+
     from core.smart_context.parser import smart_parse
-    
+
     result = smart_parse("test.py", TEST_PYTHON_CODE, include_relationships=False)
-    
+
     if result:
         print("\n✓ Smart Parse successful!")
         print("\nOutput:")
@@ -68,23 +68,25 @@ def test_smart_parse_with_relationships():
     print("\n\n" + "=" * 80)
     print("TEST 2: Smart Parse WITH Relationships (CodeMaps Enabled)")
     print("=" * 80)
-    
+
     from core.smart_context.parser import smart_parse
-    
+
     result = smart_parse("test.py", TEST_PYTHON_CODE, include_relationships=True)
-    
+
     if result:
         print("\n✓ Smart Parse with relationships successful!")
         print("\nOutput:")
         print("-" * 80)
         print(result)
         print("-" * 80)
-        
+
         # Verify relationships section exists
         if "## Relationships" in result:
             print("\n✓ Relationships section found!")
         else:
-            print("\n⚠ Relationships section NOT found (might be no relationships detected)")
+            print(
+                "\n⚠ Relationships section NOT found (might be no relationships detected)"
+            )
     else:
         print("\n✗ Smart Parse failed")
 
@@ -94,14 +96,14 @@ def test_direct_relationship_extraction():
     print("\n\n" + "=" * 80)
     print("TEST 3: Direct Relationship Extraction")
     print("=" * 80)
-    
+
     from core.codemaps.relationship_extractor import extract_relationships
     from core.codemaps.types import RelationshipKind
-    
+
     relationships = extract_relationships("test.py", TEST_PYTHON_CODE)
-    
+
     print(f"\nTotal relationships extracted: {len(relationships)}")
-    
+
     # Group by kind
     by_kind = {}
     for r in relationships:
@@ -109,7 +111,7 @@ def test_direct_relationship_extraction():
         if kind not in by_kind:
             by_kind[kind] = []
         by_kind[kind].append(f"{r.source} -> {r.target} (line {r.source_line})")
-    
+
     for kind, rels in by_kind.items():
         print(f"\n{kind.upper()}:")
         for rel in rels:
@@ -121,12 +123,12 @@ def main():
     print("\n" + "=" * 80)
     print("CodeMaps Integration Demo")
     print("=" * 80)
-    
+
     try:
         test_smart_parse_without_relationships()
         test_smart_parse_with_relationships()
         test_direct_relationship_extraction()
-        
+
         print("\n\n" + "=" * 80)
         print("ALL TESTS COMPLETED ✓")
         print("=" * 80)
@@ -134,10 +136,11 @@ def main():
         print("1. Verify relationships are correctly extracted")
         print("2. Add UI toggle in ContextView for 'Include Relationships'")
         print("3. Test with real codebase files")
-        
+
     except Exception as e:
         print(f"\n\n✗ TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

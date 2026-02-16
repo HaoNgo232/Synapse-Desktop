@@ -176,7 +176,9 @@ def _node_to_symbol(
                 file_path=file_path,
                 line_start=node.start_point[0] + 1,
                 line_end=node.end_point[0] + 1,
-                signature=lines[node.start_point[0]].strip() if node.start_point[0] < len(lines) else None,
+                signature=lines[node.start_point[0]].strip()
+                if node.start_point[0] < len(lines)
+                else None,
                 parent=None,
             )
 

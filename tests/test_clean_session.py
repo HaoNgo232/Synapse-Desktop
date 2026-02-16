@@ -120,7 +120,8 @@ class TestCleanSession:
 
         # Save session với active tab = 2 (History tab)
         session = SessionState(
-            workspace_path=str(workspace), active_tab_index=2  # History tab
+            workspace_path=str(workspace),
+            active_tab_index=2,  # History tab
         )
         save_session_state(session)
 

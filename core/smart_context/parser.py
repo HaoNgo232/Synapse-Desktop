@@ -31,7 +31,7 @@ def _get_cache_key(file_path: str, content_hash: str) -> str:
 def _get_cached_relationships(file_path: str, content_hash: str) -> str | None:
     """
     Lấy cached relationships section.
-    
+
     Returns:
         Cached string nếu có, None nếu cache miss
         "" (empty string) nếu cached result là 'no relationships'
@@ -43,7 +43,7 @@ def _get_cached_relationships(file_path: str, content_hash: str) -> str | None:
 def _cache_relationships(file_path: str, content_hash: str, result: str | None) -> None:
     """
     Cache relationships section.
-    
+
     Args:
         result: Relationships section string, hoặc "" nếu không có relationships
     """
@@ -53,12 +53,14 @@ def _cache_relationships(file_path: str, content_hash: str, result: str | None) 
         keys_to_remove = list(_RELATIONSHIPS_CACHE.keys())[: _CACHE_MAX_SIZE // 4]
         for k in keys_to_remove:
             del _RELATIONSHIPS_CACHE[k]
-    
+
     key = _get_cache_key(file_path, content_hash)
     _RELATIONSHIPS_CACHE[key] = result if result else ""
 
 
-def smart_parse(file_path: str, content: str, include_relationships: bool = False) -> Optional[str]:
+def smart_parse(
+    file_path: str, content: str, include_relationships: bool = False
+) -> Optional[str]:
     """
     Parse file content và trích xuất cấu trúc code (Smart Context).
 
@@ -127,7 +129,7 @@ def smart_parse(file_path: str, content: str, include_relationships: bool = Fals
 
         # Nối các chunks với separator
         result = f"\n{CHUNK_SEPARATOR}\n".join(chunks)
-        
+
         # Append relationships section nếu enabled (reuse tree)
         if include_relationships:
             relationships_section = _build_relationships_section(
@@ -135,7 +137,7 @@ def smart_parse(file_path: str, content: str, include_relationships: bool = Fals
             )
             if relationships_section:
                 result += f"\n\n{relationships_section}"
-        
+
         return result
 
     except Exception:
@@ -148,74 +150,79 @@ def _build_relationships_section(
 ) -> Optional[str]:
     """
     Build relationships section cho Smart Context output.
-    
+
     Extract và format relationships (function calls, class inheritance)
     thành markdown section.
-    
+
     Args:
         file_path: Đường dẫn file
         content: Nội dung file
         tree: Pre-parsed AST tree (optional, để reuse - PERFORMANCE)
         language: Pre-loaded language (optional)
-    
+
     Returns:
         Formatted relationships section hoặc None nếu không có relationships
-    
+
     OPTIMIZATIONS:
     - Truyền tree để tránh double parsing (~50% faster)
     - LRU cache để tránh re-extract (~O(1) cho repeated calls)
     """
     # Tính content hash cho caching
     content_hash = hashlib.md5(content.encode()).hexdigest()[:16]
-    
+
     # Check cache
     cached = _get_cached_relationships(file_path, content_hash)
     if cached is not None:
         return cached if cached else None  # "" means no relationships
-    
+
     try:
         from core.codemaps.relationship_extractor import extract_relationships
         from core.codemaps.types import RelationshipKind
-        
+
         # Extract relationships (reuse tree nếu có)
         relationships = extract_relationships(
             file_path, content, tree=tree, language=language
         )
-        
+
         if not relationships:
             _cache_relationships(file_path, content_hash, "")  # Cache empty result
             return None
-        
+
         # Group by kind
         calls = [r for r in relationships if r.kind == RelationshipKind.CALLS]
         inherits = [r for r in relationships if r.kind == RelationshipKind.INHERITS]
         imports = [r for r in relationships if r.kind == RelationshipKind.IMPORTS]
-        
+
         # Build section
         lines = ["## Relationships"]
-        
+
         if calls:
             lines.append("\n### Function Calls")
             for rel in calls[:20]:  # Limit to 20 để tránh quá dài
-                lines.append(f"- `{rel.source}` calls `{rel.target}` (line {rel.source_line})")
-        
+                lines.append(
+                    f"- `{rel.source}` calls `{rel.target}` (line {rel.source_line})"
+                )
+
         if inherits:
             lines.append("\n### Class Inheritance")
             for rel in inherits:
-                lines.append(f"- `{rel.source}` inherits from `{rel.target}` (line {rel.source_line})")
-        
+                lines.append(
+                    f"- `{rel.source}` inherits from `{rel.target}` (line {rel.source_line})"
+                )
+
         if imports:
             lines.append("\n### Imports")
             for rel in imports[:15]:  # Limit to 15
                 lines.append(f"- Imports `{rel.target}` (line {rel.source_line})")
-        
+
         result = "\n".join(lines)
         _cache_relationships(file_path, content_hash, result)  # Cache result
         return result
-        
+
     except Exception as e:
         # Debug: log exception để biết tại sao relationships không được append
         import traceback
+
         print(f"[DEBUG] _build_relationships_section failed: {e}")
         traceback.print_exc()
         return None

@@ -6,16 +6,28 @@ from datetime import datetime
 from typing import Optional, Callable
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabel,
-    QPushButton, QListWidget, QListWidgetItem, QScrollArea,
-    QFrame, QMessageBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QSplitter,
+    QLabel,
+    QPushButton,
+    QListWidget,
+    QListWidgetItem,
+    QScrollArea,
+    QFrame,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
 
 from core.theme import ThemeColors
 from services.history_service import (
-    get_history_entries, get_entry_by_id, delete_entry,
-    clear_history, get_history_stats, HistoryEntry,
+    get_history_entries,
+    get_entry_by_id,
+    delete_entry,
+    clear_history,
+    get_history_stats,
+    HistoryEntry,
 )
 from services.clipboard_utils import copy_to_clipboard
 
@@ -260,14 +272,20 @@ class HistoryViewQt(QWidget):
             file_name = parts[1] if len(parts) > 1 else ""
             color = _ACTION_COLORS.get(action_type, ThemeColors.TEXT_SECONDARY)
 
-            action_label = QLabel(f"<span style='background-color:{color};color:#FFF;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:bold;'>{action_type}</span> {file_name}")
+            action_label = QLabel(
+                f"<span style='background-color:{color};color:#FFF;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:bold;'>{action_type}</span> {file_name}"
+            )
             action_label.setTextFormat(Qt.TextFormat.RichText)
-            action_label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};")
+            action_label.setStyleSheet(
+                f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};"
+            )
             self._detail_layout.addWidget(action_label)
 
         if len(entry.action_summary) > 10:
             more = QLabel(f"... and {len(entry.action_summary) - 10} more")
-            more.setStyleSheet(f"color: {ThemeColors.TEXT_MUTED}; font-style: italic; font-size: 10px;")
+            more.setStyleSheet(
+                f"color: {ThemeColors.TEXT_MUTED}; font-style: italic; font-size: 10px;"
+            )
             self._detail_layout.addWidget(more)
 
         # Error messages
@@ -346,9 +364,11 @@ class HistoryViewQt(QWidget):
     @Slot()
     def _confirm_clear_all(self) -> None:
         reply = QMessageBox.question(
-            self, "Clear All History?",
+            self,
+            "Clear All History?",
             "This will permanently delete all history entries. Cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
             if clear_history():

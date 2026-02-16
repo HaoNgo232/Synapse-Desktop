@@ -22,7 +22,7 @@ class TestIsBinaryFile:
     def test_binary_with_extension(self, tmp_path):
         """File có extension binary (.exe) phải được detect"""
         from core.utils.file_utils import is_binary_file
-        
+
         exe_file = tmp_path / "test.exe"
         exe_file.write_bytes(b"MZ" + b"\x00" * 100)
         assert is_binary_file(exe_file) is True
@@ -30,7 +30,7 @@ class TestIsBinaryFile:
     def test_binary_without_extension_elf(self, tmp_path):
         """ELF binary (Linux executable) KHÔNG có extension phải được detect"""
         from core.utils.file_utils import is_binary_file
-        
+
         # ELF magic bytes
         elf_binary = tmp_path / "my-program-x86_64-unknown-linux-gnu"
         elf_binary.write_bytes(b"\x7fELF" + b"\x00" * 100)
@@ -39,7 +39,7 @@ class TestIsBinaryFile:
     def test_binary_without_extension_macho(self, tmp_path):
         """Mach-O binary (macOS executable) KHÔNG có extension phải được detect"""
         from core.utils.file_utils import is_binary_file
-        
+
         # Mach-O magic bytes (64-bit)
         macho_binary = tmp_path / "my-program-aarch64-apple-darwin"
         macho_binary.write_bytes(struct.pack("<I", 0xFEEDFACF) + b"\x00" * 100)
@@ -48,7 +48,7 @@ class TestIsBinaryFile:
     def test_binary_without_extension_null_bytes(self, tmp_path):
         """File chứa null bytes phải được detect là binary"""
         from core.utils.file_utils import is_binary_file
-        
+
         binary_file = tmp_path / "some-binary-no-ext"
         binary_file.write_bytes(b"some data\x00more data\x00" + b"\x00" * 50)
         assert is_binary_file(binary_file) is True
@@ -56,7 +56,7 @@ class TestIsBinaryFile:
     def test_text_file_not_binary(self, tmp_path):
         """File text thuần KHÔNG phải binary"""
         from core.utils.file_utils import is_binary_file
-        
+
         text_file = tmp_path / "readme.txt"
         text_file.write_text("Hello world\nThis is text\n")
         assert is_binary_file(text_file) is False
@@ -64,7 +64,7 @@ class TestIsBinaryFile:
     def test_text_file_without_extension_not_binary(self, tmp_path):
         """File text KHÔNG có extension cũng KHÔNG phải binary"""
         from core.utils.file_utils import is_binary_file
-        
+
         text_file = tmp_path / "Makefile"
         text_file.write_text("all:\n\techo hello\n")
         assert is_binary_file(text_file) is False
@@ -72,7 +72,7 @@ class TestIsBinaryFile:
     def test_empty_file_not_binary(self, tmp_path):
         """File rỗng KHÔNG phải binary"""
         from core.utils.file_utils import is_binary_file
-        
+
         empty_file = tmp_path / "empty"
         empty_file.write_bytes(b"")
         assert is_binary_file(empty_file) is False
@@ -80,7 +80,7 @@ class TestIsBinaryFile:
     def test_nonexistent_file_not_binary(self, tmp_path):
         """File không tồn tại → False"""
         from core.utils.file_utils import is_binary_file
-        
+
         missing = tmp_path / "does-not-exist"
         assert is_binary_file(missing) is False
 
@@ -91,18 +91,18 @@ class TestIsBinaryByExtension:
     def test_misses_binary_without_extension(self, tmp_path):
         """EXPECTED: is_binary_by_extension MISS binary without extension"""
         from core.utils.file_utils import is_binary_by_extension
-        
+
         # ELF binary without extension
         elf_file = tmp_path / "cli-proxy-x86_64-linux"
         elf_file.write_bytes(b"\x7fELF" + b"\x00" * 100)
-        
+
         # This is the BUG - is_binary_by_extension misses it
         assert is_binary_by_extension(elf_file) is False
-        
+
     def test_detects_binary_with_extension(self, tmp_path):
         """is_binary_by_extension CAN detect .exe"""
         from core.utils.file_utils import is_binary_by_extension
-        
+
         exe_file = tmp_path / "test.exe"
         exe_file.write_bytes(b"MZ" + b"\x00" * 100)
         assert is_binary_by_extension(exe_file) is True
@@ -178,7 +178,7 @@ class TestGetSelectedPathsSkipsBinary:
 
         # Simulate: add nodes to model
         from components.file_tree_model import TreeNode
-        
+
         root_node = TreeNode("root", str(tmp_path), is_dir=True)
         bin_node = TreeNode("my-elf-binary", str(binary_file), is_dir=False)
         txt_node = TreeNode("code.py", str(text_file), is_dir=False)
@@ -272,7 +272,10 @@ class TestPromptGeneratorSkipsBinary:
 
         # Binary should be skipped
         if str(binary_file) in result:
-            assert "skipped" in result[str(binary_file)].lower() or "binary" in result[str(binary_file)].lower()
+            assert (
+                "skipped" in result[str(binary_file)].lower()
+                or "binary" in result[str(binary_file)].lower()
+            )
         # Text file content should be present
         assert "print" in result.get(str(text_file), "")
 
@@ -308,9 +311,7 @@ class TestSecurityCheckSkipsBinary:
         text_file.write_text('API_KEY = "safe_value"')
 
         # Should not crash or try to read binary
-        result = scan_secrets_in_files(
-            {str(binary_file), str(text_file)}
-        )
+        result = scan_secrets_in_files({str(binary_file), str(text_file)})
         # Result should be a list (no crash)
         assert isinstance(result, list)
 
@@ -325,7 +326,7 @@ class TestRealWorldProxypalBinaries:
 
     @pytest.mark.skipif(
         not Path("/home/hao/Desktop/proxypal-main/src-tauri/binaries").exists(),
-        reason="proxypal-main binaries not found"
+        reason="proxypal-main binaries not found",
     )
     def test_all_proxypal_binaries_detected(self):
         """Tất cả binary files trong proxypal phải được is_binary_file detect"""
@@ -333,11 +334,13 @@ class TestRealWorldProxypalBinaries:
 
         for f in self.BINARIES_DIR.iterdir():
             if f.is_file():
-                assert is_binary_file(f), f"MISSED: {f.name} ({f.stat().st_size // 1024 // 1024}MB)"
+                assert is_binary_file(f), (
+                    f"MISSED: {f.name} ({f.stat().st_size // 1024 // 1024}MB)"
+                )
 
     @pytest.mark.skipif(
         not Path("/home/hao/Desktop/proxypal-main/src-tauri/binaries").exists(),
-        reason="proxypal-main binaries not found"
+        reason="proxypal-main binaries not found",
     )
     def test_token_worker_skips_proxypal_binaries(self):
         """TokenCountWorker phải skip tất cả proxypal binaries, KHÔNG đọc file"""
@@ -349,12 +352,14 @@ class TestRealWorldProxypalBinaries:
         worker = TokenCountWorker(binary_paths)
 
         results = {}
+
         def capture_batch(batch):
             results.update(batch)
 
         worker.signals.token_counts_batch.connect(capture_batch)
 
         import time
+
         start = time.time()
         worker.run()
         elapsed = time.time() - start

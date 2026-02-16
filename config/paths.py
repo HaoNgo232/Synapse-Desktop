@@ -48,7 +48,7 @@ _LEGACY_DATA_FILES = (
 
 def _ensure_app_dir_with_migration() -> Path:
     """Lấy APP_DIR và migrate tất cả data files từ legacy path nếu cần.
-    
+
     Migrate settings.json, session.json, history.json, recent_folders.json
     để user upgrade không mất session, history, recent folders.
     """

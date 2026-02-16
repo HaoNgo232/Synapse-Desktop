@@ -38,7 +38,9 @@ class CodeMapBuilder:
         self.workspace_root = workspace_root
         self.codemaps: dict[str, CodeMap] = {}
 
-    def build_for_file(self, file_path: str, content: Optional[str] = None) -> Optional[CodeMap]:
+    def build_for_file(
+        self, file_path: str, content: Optional[str] = None
+    ) -> Optional[CodeMap]:
         """
         Build CodeMap cho một file.
 
@@ -142,7 +144,8 @@ class CodeMapBuilder:
 
             # Search trong tất cả codemaps (hoặc chỉ file_path nếu có)
             codemaps_to_search = (
-                [self.codemaps[file_path]] if file_path and file_path in self.codemaps
+                [self.codemaps[file_path]]
+                if file_path and file_path in self.codemaps
                 else self.codemaps.values()
             )
 

@@ -39,10 +39,10 @@ def build_error_context_for_ai(
 ) -> str:
     """
     Build context day du de AI hieu va fix loi.
-    
+
     FOCUSED MODE (default): Chỉ cung cấp thông tin cần thiết để fix,
     giảm context không liên quan để AI tập trung hơn.
-    
+
     ENHANCED: Include current file content để AI có thể fix ngay mà không cần
     hỏi thêm về nội dung file.
 
@@ -63,13 +63,19 @@ def build_error_context_for_ai(
     # Header summary
     success_count = sum(1 for r in row_results if r.success)
     failed_count = sum(1 for r in row_results if not r.success)
-    
+
     # FOCUSED MODE: Ngắn gọn, đi thẳng vào vấn đề
     if focused_mode and failed_count > 0:
-        sections.extend(_build_focused_error_context(
-            row_results, preview_data, original_opx, include_opx,
-            workspace_path, include_file_content
-        ))
+        sections.extend(
+            _build_focused_error_context(
+                row_results,
+                preview_data,
+                original_opx,
+                include_opx,
+                workspace_path,
+                include_file_content,
+            )
+        )
         return "\n".join(sections)
 
     # FULL MODE: Chi tiết đầy đủ (legacy behavior)
@@ -127,7 +133,7 @@ def _build_focused_error_context(
 ) -> List[str]:
     """
     Build focused error context - chỉ thông tin cần thiết để fix.
-    
+
     Format tối ưu cho AI:
     1. WHAT FAILED: File + action + error message
     2. CURRENT FILE CONTENT (so AI can see actual state)
@@ -137,33 +143,39 @@ def _build_focused_error_context(
     """
     sections: List[str] = []
     failed_rows = [r for r in row_results if not r.success]
-    
+
     sections.append("# OPX APPLY FAILED - FIX REQUIRED")
     sections.append("")
     sections.append(f"**{len(failed_rows)} operation(s) failed.**")
     sections.append("")
-    
+
     for i, result in enumerate(failed_rows, 1):
         row = _find_preview_row(preview_data, result.row_index)
-        
+
         sections.append(f"## Error {i}: {result.action.upper()} `{result.path}`")
         sections.append("")
-        
+
         # Error message - làm nổi bật
         sections.append(f"**ERROR:** `{result.message}`")
         sections.append("")
-        
+
         # Cascade failure hint
         if result.is_cascade_failure:
-            sections.append("⚠️ **CASCADE FAILURE**: A previous operation modified this file.")
-            sections.append("The search pattern may no longer match the current file content.")
+            sections.append(
+                "⚠️ **CASCADE FAILURE**: A previous operation modified this file."
+            )
+            sections.append(
+                "The search pattern may no longer match the current file content."
+            )
             sections.append("")
-        
+
         # NEW: Include current file content để AI có thể fix ngay
         if include_file_content and workspace_path:
             current_content = _read_current_file_content(result.path, workspace_path)
             if current_content:
-                sections.append("**CURRENT FILE CONTENT (after any successful operations):**")
+                sections.append(
+                    "**CURRENT FILE CONTENT (after any successful operations):**"
+                )
                 sections.append("```")
                 # Limit to 200 lines for readability
                 content_lines = current_content.split("\n")
@@ -174,7 +186,7 @@ def _build_focused_error_context(
                     sections.append(current_content)
                 sections.append("```")
                 sections.append("")
-        
+
         # Show search block that failed
         if row and row.change_blocks:
             for j, block in enumerate(row.change_blocks):
@@ -191,7 +203,7 @@ def _build_focused_error_context(
                         sections.append(search)
                     sections.append("```")
                     sections.append("")
-                    
+
                     # Intended replacement
                     content = block.get("content", "")
                     if content:
@@ -200,15 +212,17 @@ def _build_focused_error_context(
                         content_lines = content.split("\n")
                         if len(content_lines) > 10:
                             sections.append("\n".join(content_lines[:10]))
-                            sections.append(f"... ({len(content_lines) - 10} more lines)")
+                            sections.append(
+                                f"... ({len(content_lines) - 10} more lines)"
+                            )
                         else:
                             sections.append(content)
                         sections.append("```")
                         sections.append("")
-        
+
         sections.append("---")
         sections.append("")
-    
+
     # Action required - cụ thể
     sections.append("# ACTION REQUIRED")
     sections.append("")
@@ -216,7 +230,7 @@ def _build_focused_error_context(
     sections.append("2. **Update the `<find>` block** to match the CURRENT file state")
     sections.append("3. **Regenerate OPX** with corrected search patterns")
     sections.append("")
-    
+
     if include_opx:
         sections.append("**IMPORTANT: Always respond with OPX format!**")
         sections.append("")
@@ -237,7 +251,7 @@ def _build_focused_error_context(
         sections.append("</edit>")
         sections.append("```")
         sections.append("")
-    
+
     return sections
 
 
@@ -405,11 +419,11 @@ def _build_fix_instructions(include_opx: bool) -> List[str]:
 def _read_current_file_content(file_path: str, workspace_path: str) -> Optional[str]:
     """
     Đọc nội dung hiện tại của file để AI có thể thấy state thực.
-    
+
     Args:
         file_path: Relative or absolute path to file
         workspace_path: Workspace root path
-    
+
     Returns:
         File content or None if cannot read
     """
@@ -418,15 +432,15 @@ def _read_current_file_content(file_path: str, workspace_path: str) -> Optional[
         path = Path(file_path)
         if not path.is_absolute():
             path = Path(workspace_path) / file_path
-        
+
         if not path.exists() or not path.is_file():
             return None
-        
+
         # Check file size (limit to 100KB)
         if path.stat().st_size > 100000:
             return None
-        
-        return path.read_text(encoding='utf-8', errors='replace')
+
+        return path.read_text(encoding="utf-8", errors="replace")
     except Exception:
         return None
 

@@ -126,6 +126,7 @@ class LineCountService:
                 self.on_update()
             except Exception as e:
                 from core.logging_config import log_error
+
                 log_error(f"Failed to notify UI update: {e}")
 
     def request_lines_for_tree(
@@ -137,7 +138,7 @@ class LineCountService:
     ):
         """
         Request line counts cho toan bo tree.
-        
+
         PERFORMANCE: Giới hạn số files count ngay để tránh block UI.
 
         Args:
@@ -148,18 +149,20 @@ class LineCountService:
         """
         # Collect files to count
         files_to_count: List[str] = []
-        self._collect_files_to_count_list(tree, visible_only, visible_paths, files_to_count)
-        
+        self._collect_files_to_count_list(
+            tree, visible_only, visible_paths, files_to_count
+        )
+
         # Count immediate batch (won't block too much)
         immediate = files_to_count[:max_immediate]
         for path in immediate:
             self.request_line_count(path)
-        
+
         # Schedule deferred counting for remaining files
         remaining = files_to_count[max_immediate:]
         if remaining:
             self._schedule_deferred_line_counting(remaining)
-    
+
     def _collect_files_to_count_list(
         self,
         item: TreeItem,
@@ -170,27 +173,29 @@ class LineCountService:
         """Collect files into list for batch processing"""
         if visible_only and visible_paths and item.path not in visible_paths:
             return
-        
+
         if not item.is_dir:
             if item.path not in self._cache:
                 result.append(item.path)
         else:
             for child in item.children:
-                self._collect_files_to_count_list(child, visible_only, visible_paths, result)
-    
+                self._collect_files_to_count_list(
+                    child, visible_only, visible_paths, result
+                )
+
     def _schedule_deferred_line_counting(self, files: List[str]):
         """Schedule line counting for remaining files in background"""
         import threading
-        
+
         BATCH_SIZE = 100  # Tăng batch size
         BATCH_DELAY = 0.3  # 300ms - tăng delay để giảm UI pressure
-        
+
         def count_batch(batch):
             for path in batch:
                 self.request_line_count(path)
-        
+
         for i in range(0, len(files), BATCH_SIZE):
-            batch = files[i:i + BATCH_SIZE]
+            batch = files[i : i + BATCH_SIZE]
             delay = BATCH_DELAY * (i // BATCH_SIZE + 1)
             timer = threading.Timer(delay, count_batch, args=[batch])
             timer.daemon = True
@@ -225,33 +230,34 @@ class LineCountService:
         - If ends with newline: newline_count
         - Else: newline_count + 1
         """
-        
+
         try:
             file_path = Path(path)
             file_size = file_path.stat().st_size
-            
+
             # Empty file
             if file_size == 0:
                 return 0
-            
+
             # For large files (>1MB), use mmap for memory efficiency
             if file_size > 1024 * 1024:
                 return self._count_lines_mmap(file_path)
-            
+
             # For small files, read directly (faster due to less overhead)
             return self._count_lines_direct(file_path)
 
         except Exception as e:
             from core.logging_config import log_debug
+
             log_debug(f"Failed to count lines for {path}: {e}")
             return 0
-    
+
     def _count_lines_mmap(self, file_path: Path) -> int:
         """Count lines using memory-mapped file (efficient for large files)."""
         import mmap
-        
+
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 # Memory map the file
                 with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                     newline_count = 0
@@ -259,50 +265,58 @@ class LineCountService:
                     chunk_size = 1024 * 1024  # 1MB chunks
                     pos = 0
                     file_size = mm.size()
-                    
+
                     while pos < file_size:
                         end = min(pos + chunk_size, file_size)
                         chunk = mm[pos:end]
-                        newline_count += chunk.count(b'\n')
+                        newline_count += chunk.count(b"\n")
                         pos = end
-                    
+
                     # Check if ends with newline
-                    ends_with_newline = mm[-1:] == b'\n' if file_size > 0 else False
-                    
+                    ends_with_newline = mm[-1:] == b"\n" if file_size > 0 else False
+
                     return newline_count if ends_with_newline else newline_count + 1
         except Exception:
             # Fallback to direct read
             return self._count_lines_direct(file_path)
-    
+
     def _count_lines_direct(self, file_path: Path) -> int:
         """Count lines by reading file directly (efficient for small files)."""
         try:
             # Try reading as binary first (fastest)
             content_bytes = file_path.read_bytes()
-            
+
             # Check for null bytes (binary file indicator)
-            if b'\x00' in content_bytes[:1000]:
+            if b"\x00" in content_bytes[:1000]:
                 # Binary file - just count newlines
-                newline_count = content_bytes.count(b'\n')
-                return newline_count if content_bytes.endswith(b'\n') else newline_count + 1
-            
+                newline_count = content_bytes.count(b"\n")
+                return (
+                    newline_count
+                    if content_bytes.endswith(b"\n")
+                    else newline_count + 1
+                )
+
             # Text file - decode and count
             try:
-                content = content_bytes.decode('utf-8')
+                content = content_bytes.decode("utf-8")
             except UnicodeDecodeError:
                 try:
-                    content = content_bytes.decode('latin-1')
+                    content = content_bytes.decode("latin-1")
                 except UnicodeDecodeError:
                     # Fallback to binary count
-                    newline_count = content_bytes.count(b'\n')
-                    return newline_count if content_bytes.endswith(b'\n') else newline_count + 1
-            
+                    newline_count = content_bytes.count(b"\n")
+                    return (
+                        newline_count
+                        if content_bytes.endswith(b"\n")
+                        else newline_count + 1
+                    )
+
             if len(content) == 0:
                 return 0
-            
-            newline_count = content.count('\n')
-            return newline_count if content.endswith('\n') else newline_count + 1
-            
+
+            newline_count = content.count("\n")
+            return newline_count if content.endswith("\n") else newline_count + 1
+
         except Exception:
             return 0
 
@@ -320,7 +334,7 @@ class LineCountService:
     def get_folder_lines(self, folder_path: str, tree: TreeItem) -> Optional[int]:
         """
         Tinh tong lines cua folder tu cache.
-        
+
         UPDATED: Return partial sum ngay ca khi chua cache het.
         Returns None chi khi chua co bat ky file nao duoc cache.
         """
@@ -330,7 +344,7 @@ class LineCountService:
 
         total = 0
         file_paths = self._get_all_file_paths(folder_item)
-        
+
         # Neu khong co files, return None
         if not file_paths:
             return None
@@ -342,11 +356,13 @@ class LineCountService:
 
         # Return partial sum, chi return None neu chua co file nao duoc cache
         return total if total > 0 else None
-    
-    def get_folder_lines_status(self, folder_path: str, tree: TreeItem) -> tuple[int, bool]:
+
+    def get_folder_lines_status(
+        self, folder_path: str, tree: TreeItem
+    ) -> tuple[int, bool]:
         """
         Lay line count va status complete cua folder.
-        
+
         Returns:
             Tuple (total_lines, is_complete)
             - total_lines: Tong so lines da cache (co the la partial)
@@ -359,7 +375,7 @@ class LineCountService:
         total = 0
         all_cached = True
         file_paths = self._get_all_file_paths(folder_item)
-        
+
         if not file_paths:
             return (0, True)
 

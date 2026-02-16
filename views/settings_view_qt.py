@@ -8,8 +8,15 @@ import json
 from typing import Optional, Callable
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabel,
-    QPushButton, QPlainTextEdit, QCheckBox, QComboBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QSplitter,
+    QLabel,
+    QPushButton,
+    QPlainTextEdit,
+    QCheckBox,
+    QComboBox,
     QFrame,
 )
 from PySide6.QtCore import Qt, Slot, QTimer, QObject, Signal
@@ -47,6 +54,7 @@ def get_use_gitignore() -> bool:
 
 class _ExcludedChangedNotifier(QObject):
     """Notifier emit khi excluded patterns thay đổi từ bên ngoài (vd. Ignore button)."""
+
     excluded_changed = Signal()
 
 
@@ -130,7 +138,9 @@ class SettingsViewQt(QWidget):
         self._gitignore_cb.setChecked(settings.get("use_gitignore", True))
         self._gitignore_cb.stateChanged.connect(self._mark_changed)
         left_layout.addWidget(self._gitignore_cb)
-        left_layout.addWidget(self._hint_label("Hide files matching .gitignore patterns"))
+        left_layout.addWidget(
+            self._hint_label("Hide files matching .gitignore patterns")
+        )
 
         # AI Context
         left_layout.addWidget(self._section_header("AI Context"))
@@ -217,14 +227,18 @@ class SettingsViewQt(QWidget):
         right_header.addStretch()
         right_layout.addLayout(right_header)
 
-        info = QLabel("ℹ️ Exclude files/folders from File Tree & AI Context. One pattern per line.")
+        info = QLabel(
+            "ℹ️ Exclude files/folders from File Tree & AI Context. One pattern per line."
+        )
         info.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};")
         info.setWordWrap(True)
         right_layout.addWidget(info)
 
         self._excluded_field = QPlainTextEdit()
         self._excluded_field.setPlainText(settings.get("excluded_folders", ""))
-        self._excluded_field.setPlaceholderText("node_modules\ndist\nbuild\n__pycache__")
+        self._excluded_field.setPlaceholderText(
+            "node_modules\ndist\nbuild\n__pycache__"
+        )
         self._excluded_field.textChanged.connect(self._mark_changed)
         right_layout.addWidget(self._excluded_field, stretch=1)
 
@@ -318,7 +332,9 @@ class SettingsViewQt(QWidget):
             "export_version": "1.0",
         }
         success, _ = copy_to_clipboard(json.dumps(data, indent=2, ensure_ascii=False))
-        self._show_status("Exported to clipboard!" if success else "Export failed", not success)
+        self._show_status(
+            "Exported to clipboard!" if success else "Export failed", not success
+        )
 
     @Slot()
     def _import_settings(self) -> None:

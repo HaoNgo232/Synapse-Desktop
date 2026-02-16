@@ -14,14 +14,19 @@ from functools import lru_cache
 # Try import rs-bpe first (faster, Rust-based)
 try:
     from rs_bpe import openai as rs_bpe_openai
+
     HAS_RS_BPE = True
 except ImportError:
     # Stub module for type checking
     class _RsBpeStub:
         @staticmethod
-        def o200k_base(): return None
+        def o200k_base():
+            return None
+
         @staticmethod
-        def cl100k_base(): return None
+        def cl100k_base():
+            return None
+
     rs_bpe_openai = _RsBpeStub()
     HAS_RS_BPE = False
 
@@ -31,10 +36,12 @@ import tiktoken
 # Try import tokenizers for Claude
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
+
     HAS_TOKENIZERS = True
 else:
     try:
         from tokenizers import Tokenizer
+
         HAS_TOKENIZERS = True
     except ImportError:
         Tokenizer = None  # Will check HAS_TOKENIZERS before use
@@ -58,25 +65,26 @@ _cache_lock = threading.Lock()
 
 # Pre-compiled patterns for binary detection
 _BINARY_SIGNATURES = [
-    (b'\xFF\xD8\xFF', "JPEG"),
-    (b'\x89PNG', "PNG"),
-    (b'GIF8', "GIF"),
-    (b'%PDF', "PDF"),
-    (b'PK\x03\x04', "ZIP"),
-    (b'\x7FELF', "ELF"),
-    (b'MZ', "PE/EXE"),
+    (b"\xff\xd8\xff", "JPEG"),
+    (b"\x89PNG", "PNG"),
+    (b"GIF8", "GIF"),
+    (b"%PDF", "PDF"),
+    (b"PK\x03\x04", "ZIP"),
+    (b"\x7fELF", "ELF"),
+    (b"MZ", "PE/EXE"),
 ]
 
 
 def _get_current_model() -> str:
     """
     Lấy model hiện tại từ settings.
-    
+
     Returns:
         Model ID (e.g., "claude-sonnet-4.5", "gpt-4o")
     """
     try:
         from services.settings_manager import load_settings
+
         settings = load_settings()
         return settings.get("model_id", "").lower() if settings else ""
     except Exception:
@@ -86,21 +94,21 @@ def _get_current_model() -> str:
 def _get_tokenizer_repo() -> Optional[str]:
     """
     Lấy Hugging Face tokenizer repo cho model hiện tại.
-    
+
     Returns:
         Tokenizer repo (e.g., "Xenova/claude-tokenizer") hoặc None (dùng tiktoken)
     """
     try:
         from services.settings_manager import load_settings
         from config.model_config import get_model_by_id
-        
+
         settings = load_settings()
         model_id = settings.get("model_id", "")
-        
+
         model_config = get_model_by_id(model_id)
         if model_config:
             return model_config.tokenizer_repo
-        
+
         return None
     except Exception:
         return None
@@ -109,28 +117,30 @@ def _get_tokenizer_repo() -> Optional[str]:
 def _get_hf_tokenizer() -> Optional[Any]:
     """
     Lấy Hugging Face tokenizer singleton.
-    
+
     Dùng tokenizer_repo từ model config (hỗ trợ tất cả models).
     """
     global _claude_tokenizer
-    
+
     if _claude_tokenizer is not None:
         return _claude_tokenizer
-    
+
     if not HAS_TOKENIZERS:
         return None
-    
+
     tokenizer_repo = _get_tokenizer_repo()
     if not tokenizer_repo:
         return None
-    
+
     try:
         _claude_tokenizer = Tokenizer.from_pretrained(tokenizer_repo)
         from core.logging_config import log_info
+
         log_info(f"[TokenCounter] Using {tokenizer_repo} tokenizer")
         return _claude_tokenizer
     except Exception as e:
         from core.logging_config import log_error
+
         log_error(f"[TokenCounter] Failed to load tokenizer from {tokenizer_repo}: {e}")
         return None
 
@@ -144,43 +154,45 @@ def _get_encoder() -> Optional[Any]:
     - Model khác → Dùng rs-bpe (Rust, 5x faster) > tiktoken
     """
     global _encoder, _encoder_type
-    
+
     # Check if model has custom tokenizer repo
     tokenizer_repo = _get_tokenizer_repo()
     if tokenizer_repo:
         if _encoder_type == "hf" and _encoder is not None:
             return _encoder
-        
+
         _encoder = _get_hf_tokenizer()
         if _encoder is not None:
             _encoder_type = "hf"
             return _encoder
         # Fallback to OpenAI tokenizer if HF tokenizer fails
-    
+
     # For models without custom tokenizer or fallback
     if _encoder is not None and _encoder_type != "hf":
         return _encoder
-    
+
     # Thử rs-bpe trước (nhanh hơn ~5x)
     if HAS_RS_BPE:
         try:
             _encoder = rs_bpe_openai.o200k_base()
             _encoder_type = "rs_bpe"
             from core.logging_config import log_info
+
             log_info("[TokenCounter] Using rs-bpe (Rust) - 5x faster than tiktoken")
             return _encoder
         except Exception:
             pass
-        
+
         try:
             _encoder = rs_bpe_openai.cl100k_base()
             _encoder_type = "rs_bpe"
             from core.logging_config import log_info
+
             log_info("[TokenCounter] Using rs-bpe cl100k_base (Rust)")
             return _encoder
         except Exception:
             pass
-    
+
     # Fallback về tiktoken
     encodings_to_try = ["o200k_base", "cl100k_base", "p50k_base", "gpt2"]
 
@@ -189,6 +201,7 @@ def _get_encoder() -> Optional[Any]:
             _encoder = tiktoken.get_encoding(encoding_name)
             _encoder_type = "tiktoken"
             from core.logging_config import log_info
+
             log_info(f"[TokenCounter] Using tiktoken {encoding_name}")
             return _encoder
         except Exception:
@@ -221,7 +234,7 @@ def _count_tokens_cached(text_hash: int, text_len: int) -> int:
 def count_tokens(text: str) -> int:
     """
     Dem so token trong mot doan text.
-    
+
     Auto-detect model:
     - Model có tokenizer_repo → Dùng Hugging Face tokenizers
     - Model khác → Dùng rs-bpe/tiktoken
@@ -253,18 +266,19 @@ def count_tokens(text: str) -> int:
 def reset_encoder() -> None:
     """
     Reset encoder singleton khi user đổi model.
-    
+
     Gọi function này sau khi save settings với model_id mới.
     """
     global _encoder, _encoder_type, _claude_tokenizer
     _encoder = None
     _encoder_type = ""
     _claude_tokenizer = None
-    
+
     # Clear LRU cache
     _count_tokens_cached.cache_clear()
-    
+
     from core.logging_config import log_info
+
     log_info("[TokenCounter] Encoder reset - will reload on next count_tokens() call")
 
 
@@ -277,28 +291,28 @@ import mmap
 def _read_file_mmap(file_path: Path) -> Optional[str]:
     """
     Đọc file sử dụng mmap - nhanh hơn read() thông thường.
-    
+
     mmap map file trực tiếp vào virtual memory,
     giảm số lần copy data giữa kernel và user space.
-    
+
     Returns:
         Content của file hoặc None nếu không đọc được
     """
     try:
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             # Check empty file
             if f.seek(0, 2) == 0:
                 return ""
             f.seek(0)
-            
+
             # mmap file vào memory
             with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 content_bytes = mm.read()
-                return content_bytes.decode('utf-8', errors='replace')
+                return content_bytes.decode("utf-8", errors="replace")
     except Exception:
         # Fallback về read() thông thường nếu mmap fail
         try:
-            return file_path.read_text(encoding='utf-8', errors='replace')
+            return file_path.read_text(encoding="utf-8", errors="replace")
         except Exception:
             return None
 
@@ -306,23 +320,23 @@ def _read_file_mmap(file_path: Path) -> Optional[str]:
 def _count_tokens_for_file_no_cache(file_path: Path) -> int:
     """
     Đếm token cho file KHÔNG update cache.
-    
+
     Dùng cho parallel processing - tránh lock contention.
     Caller chịu trách nhiệm update cache sau.
-    
+
     Returns:
         Số token hoặc 0 nếu không đếm được
     """
     try:
         if not file_path.exists() or not file_path.is_file():
             return 0
-        
+
         stat = file_path.stat()
         if stat.st_size > MAX_BYTES or stat.st_size == 0:
             return 0
-        
+
         path_str = str(file_path)
-        
+
         # Check cache first (read-only, không cần lock heavy)
         with _cache_lock:
             cached = _file_token_cache.get(path_str)
@@ -330,19 +344,20 @@ def _count_tokens_for_file_no_cache(file_path: Path) -> int:
                 cached_mtime, cached_count = cached
                 if cached_mtime == stat.st_mtime:
                     return cached_count
-        
+
         # Check binary using comprehensive detection
         from core.utils.file_utils import is_binary_file
+
         if is_binary_file(file_path):
             return 0
-        
+
         # Read với mmap (nhanh hơn)
         content = _read_file_mmap(file_path)
         if content is None:
             return 0
-        
+
         return count_tokens(content)
-    
+
     except Exception:
         return 0
 
@@ -376,13 +391,13 @@ def count_tokens_for_file(file_path: Path) -> int:
         stat = file_path.stat()
         if stat.st_size > MAX_BYTES:
             return 0
-        
+
         # Empty files
         if stat.st_size == 0:
             return 0
 
         path_str = str(file_path)
-        
+
         # Check cache with LRU management
         with _cache_lock:
             cached = _file_token_cache.get(path_str)
@@ -395,6 +410,7 @@ def count_tokens_for_file(file_path: Path) -> int:
 
         # Check if binary using comprehensive detection
         from core.utils.file_utils import is_binary_file
+
         if is_binary_file(file_path):
             return 0
 
@@ -407,9 +423,9 @@ def count_tokens_for_file(file_path: Path) -> int:
             # Evict oldest if at capacity
             while len(_file_token_cache) >= _MAX_CACHE_SIZE:
                 _file_token_cache.popitem(last=False)  # Remove oldest
-            
+
             _file_token_cache[path_str] = (stat.st_mtime, token_count)
-        
+
         return token_count
 
     except (OSError, IOError):
@@ -422,26 +438,26 @@ def _looks_binary_fast(chunk: bytes) -> bool:
     """
     if len(chunk) == 0:
         return False
-    
+
     # Check magic signatures first (fast path)
     for sig, _ in _BINARY_SIGNATURES:
         if chunk.startswith(sig):
             return True
-    
+
     # Sample-based analysis for large chunks
     sample_size = min(len(chunk), 1000)
     sample = chunk[:sample_size]
-    
+
     # Count null bytes and non-printable
-    null_count = sample.count(b'\x00')
+    null_count = sample.count(b"\x00")
     if null_count > sample_size * 0.01:
         return True
-    
+
     # Fast non-printable check using bytes translation
     non_printable = sum(1 for b in sample if b < 32 and b not in (9, 10, 13) or b > 126)
     if non_printable > sample_size * 0.3:
         return True
-    
+
     return False
 
 
@@ -586,7 +602,7 @@ def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
     from services.token_display import is_counting_tokens
 
     results: Dict[str, int] = {}
-    
+
     # Check cancellation before starting
     if not is_counting_tokens():
         return results
@@ -600,7 +616,7 @@ def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
             results[str(path)] = count_tokens_for_file(path)
         except Exception:
             results[str(path)] = 0
-        
+
         if i > 0 and i % 3 == 0 and not is_counting_tokens():
             return results
 
@@ -610,86 +626,87 @@ def count_tokens_batch(file_paths: List[Path]) -> Dict[str, int]:
 def count_tokens_batch_parallel(
     file_paths: List[Path],
     max_workers: int = 2,  # Giảm từ 4 xuống 2 để tránh overload
-    update_cache: bool = True
+    update_cache: bool = True,
 ) -> Dict[str, int]:
     """
     Đếm token song song với ThreadPoolExecutor + mmap.
-    
-    PERFORMANCE: 
+
+    PERFORMANCE:
     - Claude models: Dùng encode_batch() (Rust, 5-10x nhanh hơn)
     - Other models: ThreadPoolExecutor (3-4x nhanh hơn sequential)
-    
+
     AN TOÀN RACE CONDITION:
     - Mỗi file đọc độc lập bởi 1 worker
     - Không update cache trong worker (tránh lock contention)
     - Collect results vào local dict
     - Update cache MỘT LẦN ở cuối với lock
-    
+
     Args:
         file_paths: Danh sách files cần đếm
         max_workers: Số workers tối đa (default 2)
         update_cache: Có update global cache không
-    
+
     Returns:
         Dict mapping path -> token count
     """
     from services.token_display import is_counting_tokens
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    
+
     # Check cancellation trước
     if not is_counting_tokens():
         return {}
-    
+
     if len(file_paths) == 0:
         return {}
-    
+
     # Auto-detect: Nếu model có tokenizer_repo, dùng batch encoding (nhanh hơn)
     tokenizer_repo = _get_tokenizer_repo()
     if tokenizer_repo and HAS_TOKENIZERS:
         return count_tokens_batch_hf(file_paths)
-    
+
     # Standard parallel processing cho non-Claude models
     results: Dict[str, int] = {}
     file_mtimes: Dict[str, float] = {}  # Để update cache sau
-    
+
     # Giới hạn workers theo số files
     num_workers = min(max_workers, len(file_paths), os.cpu_count() or 4)
-    
+
     def count_single_file(path: Path) -> Tuple[str, int, float]:
         """
         Worker function - đếm 1 file.
-        
+
         Returns: (path_str, token_count, mtime)
         """
         # Check cancellation trong worker
         if not is_counting_tokens():
             return (str(path), 0, 0)
-        
+
         try:
             # Skip binary files IMMEDIATELY (before any I/O)
             from core.utils.file_utils import is_binary_file
+
             if is_binary_file(path):
                 return (str(path), 0, 0)
-            
+
             stat = path.stat()
             count = _count_tokens_for_file_no_cache(path)
             return (str(path), count, stat.st_mtime)
         except Exception:
             return (str(path), 0, 0)
-    
+
     try:
         # Parallel execution
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
             # Submit all tasks
             futures = {executor.submit(count_single_file, p): p for p in file_paths}
-            
+
             # Collect results
             for future in as_completed(futures):
                 # Check cancellation - cancel remaining nếu cần
                 if not is_counting_tokens():
                     executor.shutdown(wait=False, cancel_futures=True)
                     break
-                
+
                 try:
                     path_str, count, mtime = future.result(timeout=10)
                     results[path_str] = count
@@ -698,7 +715,7 @@ def count_tokens_batch_parallel(
                 except Exception:
                     path = futures[future]
                     results[str(path)] = 0
-        
+
         # Update cache MỘT LẦN (an toàn, không contention trong loop)
         if update_cache and results and is_counting_tokens():
             with _cache_lock:
@@ -709,87 +726,90 @@ def count_tokens_batch_parallel(
                         while len(_file_token_cache) >= _MAX_CACHE_SIZE:
                             _file_token_cache.popitem(last=False)
                         _file_token_cache[path_str] = (mtime, count)
-    
+
     except Exception as e:
         # Fallback về sequential nếu parallel fail
         from core.logging_config import log_error
-        log_error(f"[TokenCounter] Parallel counting failed: {e}, falling back to sequential")
+
+        log_error(
+            f"[TokenCounter] Parallel counting failed: {e}, falling back to sequential"
+        )
         return count_tokens_batch(file_paths)
-    
+
     return results
 
 
 def count_tokens_batch_hf(file_paths: List[Path]) -> Dict[str, int]:
     """
     Đếm token cho models có tokenizer_repo sử dụng encode_batch() (Rust multi-thread).
-    
+
     PERFORMANCE: Nhanh hơn 5-10x so với loop từng file.
     Sử dụng Rust backend của tokenizers để xử lý batch cực nhanh.
-    
+
     Args:
         file_paths: Danh sách files cần đếm
-    
+
     Returns:
         Dict mapping path -> token count
     """
     from services.token_display import is_counting_tokens
-    
+
     if not is_counting_tokens():
         return {}
-    
+
     if len(file_paths) == 0:
         return {}
-    
+
     # Get HF tokenizer
     tokenizer = _get_hf_tokenizer()
     if tokenizer is None:
         # Fallback to standard batch processing
         return count_tokens_batch_parallel(file_paths)
-    
+
     results: Dict[str, int] = {}
     all_texts: List[str] = []
     valid_paths: List[str] = []
-    
+
     # Read all files
     for path in file_paths:
         if not is_counting_tokens():
             return results
-        
+
         try:
             # Check cache first
             stat = path.stat()
             mtime = stat.st_mtime
             path_str = str(path)
-            
+
             with _cache_lock:
                 if path_str in _file_token_cache:
                     cached_mtime, cached_count = _file_token_cache[path_str]
                     if cached_mtime == mtime:
                         results[path_str] = cached_count
                         continue
-            
+
             # Read file content
             content = _read_file_mmap(path)
             if content is None:
                 results[path_str] = 0
                 continue
-            
+
             all_texts.append(content)
             valid_paths.append(path_str)
-            
+
         except Exception:
             results[str(path)] = 0
-    
+
     # Batch encode with Rust backend (cực nhanh!)
     if all_texts and is_counting_tokens():
         try:
             encodings = tokenizer.encode_batch(all_texts)
-            
+
             # Extract token counts
             for path_str, encoding in zip(valid_paths, encodings):
                 count = len(encoding.ids)
                 results[path_str] = count
-                
+
                 # Update cache
                 with _cache_lock:
                     path_obj = Path(path_str)
@@ -798,14 +818,14 @@ def count_tokens_batch_hf(file_paths: List[Path]) -> Dict[str, int]:
                         while len(_file_token_cache) >= _MAX_CACHE_SIZE:
                             _file_token_cache.popitem(last=False)
                         _file_token_cache[path_str] = (mtime, count)
-        
+
         except Exception as e:
             from core.logging_config import log_error
+
             log_error(f"[TokenCounter] HF batch encoding failed: {e}")
             # Fallback to standard processing for remaining files
             for path_str in valid_paths:
                 if path_str not in results:
                     results[path_str] = 0
-    
-    return results
 
+    return results

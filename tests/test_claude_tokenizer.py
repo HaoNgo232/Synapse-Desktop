@@ -46,10 +46,10 @@ class TestClaudeTokenizer:
         with patch("services.settings_manager.load_settings") as mock_load:
             mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
             reset_encoder()
-            
+
             text = "Hello, world!"
             tokens = count_tokens(text)
-            
+
             # Should return positive token count
             assert tokens > 0
             assert isinstance(tokens, int)
@@ -59,10 +59,10 @@ class TestClaudeTokenizer:
         with patch("services.settings_manager.load_settings") as mock_load:
             mock_load.return_value = {"model_id": "gpt-4o"}
             reset_encoder()
-            
+
             text = "Hello, world!"
             tokens = count_tokens(text)
-            
+
             # Should return positive token count
             assert tokens > 0
             assert isinstance(tokens, int)
@@ -73,15 +73,15 @@ class TestClaudeTokenizer:
         with patch("services.settings_manager.load_settings") as mock_load:
             mock_load.return_value = {"model_id": "gpt-4o"}
             count_tokens("test")
-            
+
             # Reset
             reset_encoder()
-            
+
             # Encoder should be None after reset
             from core.token_counter import _encoder
             # Note: Can't directly access _encoder due to scope,
             # but we can verify by checking if next call reinitializes
-            
+
             # Change model and count again
             mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
             tokens = count_tokens("test")
@@ -92,7 +92,7 @@ class TestClaudeTokenizer:
         with patch("core.token_counter._get_encoder", return_value=None):
             text = "Hello, world!"
             tokens = count_tokens(text)
-            
+
             # Should use estimation (~4 chars = 1 token)
             expected = len(text) // 4
             assert tokens == max(1, expected)
@@ -103,7 +103,7 @@ class TestClaudeTokenizer:
         with patch("services.settings_manager.load_settings") as mock_load:
             mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
             reset_encoder()
-            
+
             # Test various texts
             test_cases = [
                 ("Hello", 1, 3),  # (text, min_tokens, max_tokens)
@@ -111,11 +111,12 @@ class TestClaudeTokenizer:
                 ("The quick brown fox jumps over the lazy dog", 8, 15),
                 ("def hello():\n    print('world')", 5, 12),
             ]
-            
+
             for text, min_tok, max_tok in test_cases:
                 tokens = count_tokens(text)
-                assert min_tok <= tokens <= max_tok, \
+                assert min_tok <= tokens <= max_tok, (
                     f"Text '{text}' got {tokens} tokens, expected {min_tok}-{max_tok}"
+                )
 
     def test_model_switch_reloads_encoder(self):
         """Test switching between Claude and GPT reloads encoder"""
@@ -124,16 +125,16 @@ class TestClaudeTokenizer:
             mock_load.return_value = {"model_id": "gpt-4o"}
             reset_encoder()
             tokens_gpt = count_tokens("Hello, world!")
-            
+
             # Switch to Claude
             mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
             reset_encoder()
             tokens_claude = count_tokens("Hello, world!")
-            
+
             # Both should return valid counts
             assert tokens_gpt > 0
             assert tokens_claude > 0
-            
+
             # Counts may differ slightly due to different tokenizers
             # but should be in same ballpark (within 50%)
             ratio = tokens_claude / tokens_gpt

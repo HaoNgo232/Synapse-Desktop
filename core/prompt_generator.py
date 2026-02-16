@@ -722,10 +722,11 @@ def generate_prompt(
 
         prompt += "</git_changes>\n"
 
-    if include_xml_formatting:
-        prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}"
-
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+
+    # OPX instructions ở cuối để tận dụng recency bias của LLM
+    if include_xml_formatting:
+        prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}"
 
     return prompt

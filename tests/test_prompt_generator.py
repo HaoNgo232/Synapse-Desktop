@@ -229,6 +229,21 @@ class TestGeneratePrompt:
         # Phải có OPX instructions
         assert "OPX" in result or "<edit" in result or "operation" in result.lower()
 
+    def test_user_instructions_before_opx_when_both_present(self):
+        """user_instructions phải xuất hiện trước opx_instructions (recency bias)."""
+        result = generate_prompt(
+            file_map="src/main.py",
+            file_contents="<files><file>code</file></files>",
+            user_instructions="Thêm error handling",
+            include_xml_formatting=True,
+            output_style=OutputStyle.XML,
+        )
+        ui_pos = result.find("<user_instructions>")
+        opx_pos = result.find("<opx_instructions>")
+        assert ui_pos >= 0, "user_instructions phải có trong prompt"
+        assert opx_pos >= 0, "opx_instructions phải có trong prompt"
+        assert ui_pos < opx_pos, "user_instructions phải đứng trước opx_instructions"
+
     def test_with_git_diffs(self):
         """Prompt with Git diffs included."""
         git_diffs = GitDiffResult(

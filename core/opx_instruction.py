@@ -132,6 +132,7 @@ export const config: AppConfig = {
 # Multiple changes to the same file
 - Use separate <edit op="patch"> elements for each region — one per change.
 - Order patches top-to-bottom within the file to avoid offset drift.
+- When a patch adds or removes lines, subsequent patches must reference the code AS IT WILL LOOK after previous patches are applied (not the original file).
 
 # Validity
 - Emit syntactically correct code for each file type.
@@ -144,5 +145,8 @@ export const config: AppConfig = {
 
 # Output format
 - Emit OPX inside a fenced ```xml ... ``` block for reliable copy-paste.
+
+# CRITICAL
+Your ENTIRE response must be valid OPX wrapped in ```xml. Do NOT output raw code, explanations, or markdown outside the OPX block.
 
 </opx_instructions>"""

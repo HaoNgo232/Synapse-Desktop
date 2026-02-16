@@ -248,16 +248,12 @@ class FileTreeDelegate(QStyledItemDelegate):
         _draw_file_icon(painter, x, y, label, is_dir or False, height)
         x += ICON_SIZE + SPACING
 
-        # 3. Reserve space for eye icon (files only, on hover)
-        is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
-        show_eye = not is_dir and is_hovered
-
-        if show_eye:
-            QRect(x, y, EYE_ICON_SIZE, height)
-            painter.setFont(_get_font_normal())
-            painter.setPen(COLOR_TEXT_MUTED)
-            # Dùng icon MDI cho con mắt luôn
-            eye_pixmap = _get_qta_pixmap("mdi6.eye-outline", COLOR_TEXT_MUTED, 18)
+        # 3. Eye icon cho files (luon hien, mo khi binh thuong, sang khi hover)
+        if not is_dir:
+            is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+            # Mau mo binh thuong, sang khi hover de tranh layout shift
+            eye_color = QColor("#8888AA") if is_hovered else QColor("#444466")
+            eye_pixmap = _get_qta_pixmap("mdi6.eye-outline", eye_color, 18)
             painter.drawPixmap(
                 x + (EYE_ICON_SIZE - 18) // 2, y + (height - 18) // 2, eye_pixmap
             )

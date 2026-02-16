@@ -96,7 +96,9 @@ def extract_relationships(
 
         return relationships
 
-    except Exception:
+    except Exception as e:
+        from core.logging_config import log_debug
+        log_debug(f"[RelationshipExtractor] Failed for {file_path}: {e}")
         return []
 
 
@@ -322,7 +324,7 @@ def _extract_imports(
 
                 # Try resolve via resolver. If unresolved, keep raw module path.
                 target = raw_import
-                resolved = resolver._resolve_js_import(raw_import, Path(source_dir))
+                resolved = resolver.resolve_js_import(raw_import, Path(source_dir))
                 if resolved:
                     try:
                         target = str(resolved.resolve())
@@ -391,7 +393,15 @@ def _find_enclosing_function_fast(
     target_line: int, boundaries_map: list[tuple[int, int, str]]
 ) -> Optional[str]:
     """
-    Tìm enclosing function sử dụng binary search O(log n).
+    Tìm enclosing function sử dụng pre-built boundaries map.
+
+    Linear scan qua sorted boundaries (DESC by start_line) để tìm
+    innermost function chứa target_line. Early exit khi end_line < target_line.
+
+    Complexity: O(n) worst case, nhưng nhanh hơn tree traversal vì:
+    - Boundaries map được build 1 lần per file
+    - Early exit giảm iterations trung bình
+    - No tree pointer chasing (cache-friendly)
 
     Args:
         target_line: Line number của target node (0-indexed)
@@ -399,8 +409,6 @@ def _find_enclosing_function_fast(
 
     Returns:
         Function name hoặc None
-
-    OPTIMIZATION: Binary search thay vì linear scan
     """
 
     # boundaries_map sorted by start_line DESC

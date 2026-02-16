@@ -201,9 +201,9 @@ class FileTreeModel(QAbstractItemModel):
             return self.createIndex(row, column, child)
         return QModelIndex()
 
-    def parent(
+    def parent(  # type: ignore[override]
         self, index: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> QModelIndex:  # type: ignore[override]
+    ) -> QModelIndex:
         if not index.isValid():
             return QModelIndex()
 

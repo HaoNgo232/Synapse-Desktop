@@ -82,16 +82,39 @@ def tree_item_is_dir(tree: TreeItem, path: str) -> bool:
     """
     Kiem tra path co phai la directory trong tree khong.
     Traverse tree de tim item theo path.
+
+    Returns:
+        True neu la directory, False neu la file hoac khong tim thay trong tree
     """
+    # Exact match
     if tree.path == path:
         return tree.is_dir
 
+    # Search children recursively
     for child in tree.children:
-        result = tree_item_is_dir(child, path)
-        if result is not None:
-            return result
+        if child.path == path:
+            return child.is_dir
+        if child.is_dir and child.children:
+            result = tree_item_is_dir(child, path)
+            # Only return if we actually found the path in this subtree
+            if child.path == path or any(
+                _tree_contains_path(c, path) for c in child.children
+            ):
+                return result
 
-    # Fallback: check path directly
-    from pathlib import Path
+    # Fallback: check filesystem directly
+    from pathlib import Path as FsPath
+    try:
+        return FsPath(path).is_dir()
+    except OSError:
+        return False
 
-    return Path(path).is_dir()
+
+def _tree_contains_path(tree: TreeItem, path: str) -> bool:
+    """Check xem tree co chua path khong (helper cho tree_item_is_dir)."""
+    if tree.path == path:
+        return True
+    for child in tree.children:
+        if _tree_contains_path(child, path):
+            return True
+    return False

@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QSizePolicy,
 )
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, Slot
 
 from core.theme import ThemeColors
 from core.theme_qss import generate_app_stylesheet

@@ -9,7 +9,7 @@ import os
 import threading
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List, Any, TYPE_CHECKING
-from functools import lru_cache
+
 
 # Try import rs-bpe first (faster, Rust-based)
 try:
@@ -51,6 +51,7 @@ else:
 _encoder: Optional[Any] = None
 _encoder_type: str = ""  # "rs_bpe", "tiktoken", or "claude"
 _claude_tokenizer: Optional[Any] = None
+_encoder_lock = threading.Lock()
 
 # Guardrail: skip files > 5MB
 MAX_BYTES = 5 * 1024 * 1024
@@ -147,13 +148,22 @@ def _get_hf_tokenizer() -> Optional[Any]:
 
 def _get_encoder() -> Optional[Any]:
     """
-    Lấy encoder singleton.
+    Lấy encoder singleton (thread-safe).
 
     Auto-detect model:
     - Model có tokenizer_repo → Dùng Hugging Face tokenizers
     - Model khác → Dùng rs-bpe (Rust, 5x faster) > tiktoken
     """
     global _encoder, _encoder_type
+
+    # Fast path: encoder already initialized (no lock needed for read)
+    if _encoder is not None:
+        return _encoder
+
+    with _encoder_lock:
+        # Double-check after acquiring lock
+        if _encoder is not None:
+            return _encoder
 
     # Check if model has custom tokenizer repo
     tokenizer_repo = _get_tokenizer_repo()
@@ -223,12 +233,7 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-@lru_cache(maxsize=256)
-def _count_tokens_cached(text_hash: int, text_len: int) -> int:
-    """Internal cached token counting by hash"""
-    # This is called from count_tokens with hash as key
-    # The actual text is passed separately
-    return 0  # Placeholder, actual implementation below
+
 
 
 def count_tokens(text: str) -> int:
@@ -273,9 +278,6 @@ def reset_encoder() -> None:
     _encoder = None
     _encoder_type = ""
     _claude_tokenizer = None
-
-    # Clear LRU cache
-    _count_tokens_cached.cache_clear()
 
     from core.logging_config import log_info
 

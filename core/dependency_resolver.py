@@ -350,7 +350,7 @@ class DependencyResolver:
             if lang_name == "python":
                 resolved_path = self._resolve_python_import(import_name, source_dir)
             elif lang_name in ("javascript", "typescript"):
-                resolved_path = self._resolve_js_import(import_name, source_dir)
+                resolved_path = self.resolve_js_import(import_name, source_dir)
 
             if resolved_path and resolved_path.exists():
                 resolved.add(resolved_path)
@@ -460,7 +460,7 @@ class DependencyResolver:
 
         return None
 
-    def _resolve_js_import(self, import_path: str, source_dir: Path) -> Optional[Path]:
+    def resolve_js_import(self, import_path: str, source_dir: Path) -> Optional[Path]:
         """
         Resolve JavaScript/TypeScript import thành file path.
 

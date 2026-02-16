@@ -520,6 +520,24 @@ def get_selected_file_paths(tree: TreeItem, selected_paths: set[str]) -> list[Pa
     return result
 
 
+def _find_git_root(start_path: Path) -> Path:
+    """
+    Tìm git root directory bằng cách traverse lên parent directories.
+
+    Args:
+        start_path: Thư mục bắt đầu tìm
+
+    Returns:
+        Path đến git root, hoặc start_path nếu không tìm thấy .git
+    """
+    root_path = start_path
+    while root_path.parent != root_path:
+        if (root_path / ".git").exists():
+            break
+        root_path = root_path.parent
+    return root_path
+
+
 def load_folder_children(
     folder_item: TreeItem,
     excluded_patterns: Optional[list[str]] = None,
@@ -556,24 +574,11 @@ def load_folder_children(
     if excluded_patterns:
         ignore_patterns.extend(excluded_patterns)
 
-    if use_gitignore:
-        # Tìm root path để đọc .gitignore
-        # Giả sử .gitignore ở parent directories
-        root_path = folder_path
-        while root_path.parent != root_path:
-            if (root_path / ".git").exists():
-                break
-            root_path = root_path.parent
+    root_path = _find_git_root(folder_path)
 
+    if use_gitignore:
         gitignore_patterns = _read_gitignore(root_path)
         ignore_patterns.extend(gitignore_patterns)
-    else:
-        # Default root path for caching
-        root_path = folder_path
-        while root_path.parent != root_path:
-            if (root_path / ".git").exists():
-                break
-            root_path = root_path.parent
 
     # Use cached PathSpec instead of creating new one each time
     spec = get_cached_pathspec(root_path, list(ignore_patterns))
@@ -587,13 +592,6 @@ def load_folder_children(
 
     # Sort: directories first, then alphabetically
     entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
-
-    # Get root path for relative path calculation
-    root_path = folder_path
-    while root_path.parent != root_path:
-        if (root_path / ".git").exists():
-            break
-        root_path = root_path.parent
 
     for entry in entries:
         # Check system path

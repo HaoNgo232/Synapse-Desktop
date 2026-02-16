@@ -1,32 +1,43 @@
 """
-Settings View (PySide6) - Tab cấu hình excluded folders, gitignore, security.
+Settings View (PySide6) — Redesigned single-column, card-based layout.
 
-PySide6-only implementation.
+Features:
+- Single scrollable column, max-width 720px, centered
+- Card grouping with accent dot headers
+- Toggle switches (not checkboxes) for all on/off settings
+- Tag chips for excluded patterns (not textarea)
+- Proper button hierarchy with confirm dialogs for destructive actions
 """
 
 import json
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QSplitter,
     QLabel,
     QPushButton,
-    QPlainTextEdit,
-    QCheckBox,
-    QComboBox,
+    QScrollArea,
     QFrame,
+    QMessageBox,
+    QSizePolicy,
+    QComboBox,
 )
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QPainter, QColor, QPen, QBrush
 from PySide6.QtCore import Qt, Slot, QTimer, QObject, Signal
 
 from core.theme import ThemeColors
+from components.toggle_switch import ToggleSwitch
+from components.tag_chips_widget import TagChipsWidget
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.session_state import clear_session_state
-from services.settings_manager import load_settings, save_settings
+from services.settings_manager import load_settings, save_settings, DEFAULT_SETTINGS
 
+
+# ============================================================
+# Preset profiles for excluded patterns
+# ============================================================
 
 PRESET_PROFILES = {
     "Node.js": "node_modules\ndist\nbuild\n.next\ncoverage\npackage-lock.json\npnpm-lock.yaml\nyarn.lock",
@@ -34,6 +45,11 @@ PRESET_PROFILES = {
     "Java": "target\nout\n.gradle\n.classpath\n.project\n.settings",
     "Go": "vendor\nbin\ndist\ncoverage.out",
 }
+
+
+# ============================================================
+# Public helpers (used by context_view_qt and other modules)
+# ============================================================
 
 
 def get_excluded_patterns() -> list[str]:
@@ -54,12 +70,12 @@ def get_use_gitignore() -> bool:
 
 
 def get_use_relative_paths() -> bool:
-    """Return whether to use workspace-relative paths in prompts (tranh PII)."""
+    """Return whether to use workspace-relative paths in prompts."""
     return bool(load_settings().get("use_relative_paths", True))
 
 
 class _ExcludedChangedNotifier(QObject):
-    """Notifier emit khi excluded patterns thay đổi từ bên ngoài (vd. Ignore button)."""
+    """Notifier emitted when excluded patterns change externally (e.g. Ignore button)."""
 
     excluded_changed = Signal()
 
@@ -96,8 +112,185 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
     return False
 
 
+# ============================================================
+# Helper: Accent Dot Label (section header with colored dot)
+# ============================================================
+
+
+class _AccentDotLabel(QWidget):
+    """Card header: small accent dot + title text."""
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(parent)
+        self._text = text
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # Dot
+        dot = QWidget()
+        dot.setFixedSize(8, 8)
+        dot.setStyleSheet(
+            f"background: {ThemeColors.PRIMARY}; border-radius: 4px;"
+        )
+        layout.addWidget(dot, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        # Title
+        label = QLabel(text)
+        label.setStyleSheet(
+            f"font-size: 14px; font-weight: 600; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        layout.addWidget(label)
+        layout.addStretch()
+
+
+# ============================================================
+# Helper: Toggle Row (label + description + toggle switch)
+# ============================================================
+
+
+class _ToggleRow(QWidget):
+    """A row with label, description, and toggle switch."""
+
+    toggled = Signal(bool)
+
+    def __init__(
+        self,
+        label: str,
+        description: str,
+        checked: bool = True,
+        tip: str = "",
+        parent=None,
+    ):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        # Left: label + description
+        left = QVBoxLayout()
+        left.setSpacing(3)
+
+        lbl = QLabel(label)
+        lbl.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        left.addWidget(lbl)
+
+        desc = QLabel(description)
+        desc.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+        )
+        desc.setWordWrap(True)
+        left.addWidget(desc)
+
+        if tip:
+            tip_label = QLabel(tip)
+            tip_label.setStyleSheet(
+                f"font-size: 11px; color: {ThemeColors.WARNING}; font-weight: 500;"
+            )
+            tip_label.setWordWrap(True)
+            left.addWidget(tip_label)
+
+        layout.addLayout(left, stretch=1)
+
+        # Right: toggle
+        self._toggle = ToggleSwitch(checked=checked)
+        self._toggle.toggled.connect(self.toggled.emit)
+        layout.addWidget(self._toggle, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+    def isChecked(self) -> bool:
+        return self._toggle.isChecked()
+
+    def setChecked(self, checked: bool) -> None:
+        self._toggle.setChecked(checked)
+
+
+# ============================================================
+# Helper: Card Frame
+# ============================================================
+
+
+def _make_card() -> QFrame:
+    """Create a styled settings card frame."""
+    card = QFrame()
+    card.setStyleSheet(f"""
+        QFrame {{
+            background-color: {ThemeColors.BG_SURFACE};
+            border: none;
+            border-radius: 10px;
+        }}
+    """)
+    return card
+
+
+def _make_separator() -> QFrame:
+    """Create a dashed separator line inside a card."""
+    sep = QFrame()
+    sep.setFixedHeight(1)
+    sep.setStyleSheet(f"background: transparent; border-top: 1px dashed {ThemeColors.BORDER};")
+    return sep
+
+
+def _make_ghost_btn(text: str) -> QPushButton:
+    """Ghost button style (secondary action)."""
+    btn = QPushButton(text)
+    btn.setFixedHeight(36)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn.setStyleSheet(f"""
+        QPushButton {{
+            background: transparent;
+            color: {ThemeColors.TEXT_PRIMARY};
+            border: 1px solid {ThemeColors.BORDER};
+            border-radius: 8px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 600;
+        }}
+        QPushButton:hover {{
+            background: {ThemeColors.BG_ELEVATED};
+            border-color: {ThemeColors.BORDER_LIGHT};
+        }}
+        QPushButton:pressed {{
+            background: {ThemeColors.BG_HOVER};
+        }}
+    """)
+    return btn
+
+
+def _make_danger_btn(text: str) -> QPushButton:
+    """Danger button style (destructive action)."""
+    btn = QPushButton(text)
+    btn.setFixedHeight(36)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn.setStyleSheet(f"""
+        QPushButton {{
+            background: transparent;
+            color: {ThemeColors.ERROR};
+            border: 1px solid {ThemeColors.ERROR}50;
+            border-radius: 8px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 600;
+        }}
+        QPushButton:hover {{
+            background: {ThemeColors.ERROR}15;
+            border-color: {ThemeColors.ERROR};
+        }}
+        QPushButton:pressed {{
+            background: {ThemeColors.ERROR}25;
+        }}
+    """)
+    return btn
+
+
+# ============================================================
+# Settings View
+# ============================================================
+
+
 class SettingsViewQt(QWidget):
-    """View cho Settings tab — PySide6 version."""
+    """Settings tab — single column, card-based, centered layout."""
 
     def __init__(
         self,
@@ -111,259 +304,370 @@ class SettingsViewQt(QWidget):
         _excluded_notifier.excluded_changed.connect(self._reload_excluded_from_settings)
 
     def _build_ui(self) -> None:
-        """Build Settings View UI voi 2-column layout nhat quan."""
         settings = load_settings()
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
-        layout.setSpacing(8)
+        # Root layout
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(3)
-        splitter.setStyleSheet(f"""
-            QSplitter::handle {{
-                background-color: {ThemeColors.BORDER};
-                margin: 4px 0;
+        # ── Header bar ──
+        header = QFrame()
+        header.setFixedHeight(52)
+        header.setStyleSheet(f"""
+            QFrame {{
+                background: {ThemeColors.BG_PAGE};
+                border: none;
             }}
-            QSplitter::handle:hover {{
-                background-color: {ThemeColors.PRIMARY};
+        """)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(24, 0, 24, 0)
+
+        title = QLabel("Settings")
+        title.setStyleSheet(
+            f"font-size: 16px; font-weight: 600; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+
+        self._save_btn = QPushButton("Save Settings")
+        self._save_btn.setFixedHeight(34)
+        self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 20px;
+                font-size: 13px;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background: {ThemeColors.PRIMARY_HOVER};
+            }}
+            QPushButton:pressed {{
+                background: {ThemeColors.PRIMARY_PRESSED};
+            }}
+            QPushButton:disabled {{
+                background: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_MUTED};
+            }}
+        """)
+        self._save_btn.clicked.connect(self._save_settings)
+        header_layout.addWidget(self._save_btn)
+
+        root_layout.addWidget(header)
+
+        # ── Scroll area ──
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background: {ThemeColors.BG_PAGE};
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 8px;
+                margin: 0;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {ThemeColors.BORDER};
+                border-radius: 4px;
+                min-height: 30px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {ThemeColors.PRIMARY};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0;
             }}
         """)
 
-        # Button styles
-        primary_btn_style = (
-            f"QPushButton {{"
-            f"  background-color: {ThemeColors.PRIMARY};"
-            f"  color: white;"
-            f"  border: none;"
-            f"  border-radius: 6px;"
-            f"  padding: 8px 16px;"
-            f"  font-weight: 700;"
-            f"  font-size: 12px;"
-            f"}}"
-            f"QPushButton:hover {{ background-color: {ThemeColors.PRIMARY_HOVER}; }}"
-            f"QPushButton:pressed {{ background-color: {ThemeColors.PRIMARY_PRESSED}; }}"
+        # Inner content — 3-column grid layout
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet(f"background: {ThemeColors.BG_PAGE};")
+        outer_layout = QHBoxLayout(scroll_content)
+        outer_layout.setContentsMargins(20, 20, 20, 32)
+        outer_layout.setSpacing(16)
+        outer_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Column 1
+        col1 = QWidget()
+        col1.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        col1_layout = QVBoxLayout(col1)
+        col1_layout.setContentsMargins(0, 0, 0, 0)
+        col1_layout.setSpacing(16)
+        col1_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Column 2
+        col2 = QWidget()
+        col2.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        col2_layout = QVBoxLayout(col2)
+        col2_layout.setContentsMargins(0, 0, 0, 0)
+        col2_layout.setSpacing(16)
+        col2_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Column 3
+        col3 = QWidget()
+        col3.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        col3_layout = QVBoxLayout(col3)
+        col3_layout.setContentsMargins(0, 0, 0, 0)
+        col3_layout.setSpacing(16)
+        col3_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # ─────────────────────────────
+        # CARD 1: File Tree
+        # ─────────────────────────────
+        card1 = _make_card()
+        card1_layout = QVBoxLayout(card1)
+        card1_layout.setContentsMargins(22, 22, 22, 22)
+        card1_layout.setSpacing(0)
+
+        card1_layout.addWidget(_AccentDotLabel("File Tree"))
+        card1_layout.addSpacing(18)
+
+        self._gitignore_toggle = _ToggleRow(
+            label="Respect .gitignore",
+            description="Hide files matching .gitignore patterns",
+            checked=settings.get("use_gitignore", True),
         )
-        secondary_btn_style = (
-            f"QPushButton {{"
-            f"  background-color: transparent;"
-            f"  color: {ThemeColors.TEXT_PRIMARY};"
-            f"  border: 1px solid {ThemeColors.BORDER};"
-            f"  border-radius: 6px;"
-            f"  padding: 5px 12px;"
-            f"  font-weight: 600;"
-            f"  font-size: 11px;"
-            f"}}"
-            f"QPushButton:hover {{"
-            f"  background-color: {ThemeColors.BG_HOVER};"
-            f"  border-color: {ThemeColors.BORDER_LIGHT};"
-            f"}}"
+        self._gitignore_toggle.toggled.connect(self._mark_changed)
+        card1_layout.addWidget(self._gitignore_toggle)
+
+        col1_layout.addWidget(card1)
+
+        # ─────────────────────────────
+        # CARD 2: Excluded Patterns
+        # ─────────────────────────────
+        card2 = _make_card()
+        card2_layout = QVBoxLayout(card2)
+        card2_layout.setContentsMargins(22, 22, 22, 22)
+        card2_layout.setSpacing(0)
+
+        card2_layout.addWidget(_AccentDotLabel("Excluded Patterns"))
+        card2_layout.addSpacing(8)
+
+        exc_desc = QLabel("Files and folders excluded from tree and AI context")
+        exc_desc.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
         )
-        checkbox_style = (
-            f"QCheckBox {{"
-            f"  color: {ThemeColors.TEXT_PRIMARY};"
-            f"  font-size: 11px;"
-            f"  font-weight: 500;"
-            f"  spacing: 8px;"
-            f"}}"
-            f"QCheckBox::indicator {{ width: 14px; height: 14px; }}"
+        card2_layout.addWidget(exc_desc)
+        card2_layout.addSpacing(14)
+
+        # Tag chips
+        initial_patterns = get_excluded_patterns()
+        self._tag_chips = TagChipsWidget(patterns=initial_patterns)
+        self._tag_chips.patterns_changed.connect(self._on_patterns_changed)
+        card2_layout.addWidget(self._tag_chips)
+
+        card2_layout.addSpacing(16)
+        card2_layout.addWidget(_make_separator())
+        card2_layout.addSpacing(16)
+
+        # Quick preset dropdown (styled)
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(10)
+
+        preset_label = QLabel("Quick Preset")
+        preset_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        combo_style = (
-            f"QComboBox {{"
-            f"  background-color: {ThemeColors.BG_ELEVATED};"
-            f"  border: 1px solid {ThemeColors.BORDER};"
-            f"  border-radius: 4px;"
-            f"  padding: 3px 10px;"
-            f"  color: {ThemeColors.TEXT_PRIMARY};"
-            f"  font-size: 11px;"
-            f"}}"
-        )
-
-        # ===== Left Column: Configuration =====
-        left = QFrame()
-        left.setProperty("class", "surface")
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(12, 12, 12, 12)
-        left_layout.setSpacing(10)
-
-        # Header
-        conf_title = QLabel("Configuration")
-        conf_title.setStyleSheet(
-            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
-        )
-        left_layout.addWidget(conf_title)
-
-        # File Tree Options
-        left_layout.addWidget(self._section_header("File Tree Options"))
-
-        self._gitignore_cb = QCheckBox("Respect .gitignore")
-        self._gitignore_cb.setChecked(settings.get("use_gitignore", True))
-        self._gitignore_cb.setStyleSheet(checkbox_style)
-        self._gitignore_cb.stateChanged.connect(self._mark_changed)
-        left_layout.addWidget(self._gitignore_cb)
-        left_layout.addWidget(
-            self._hint_label("An file khop voi pattern trong .gitignore")
-        )
-
-        # AI Context
-        left_layout.addWidget(self._section_header("AI Context"))
-
-        self._git_include_cb = QCheckBox("Include Git Diff/Log")
-        self._git_include_cb.setChecked(settings.get("include_git_changes", True))
-        self._git_include_cb.setStyleSheet(checkbox_style)
-        self._git_include_cb.stateChanged.connect(self._mark_changed)
-        left_layout.addWidget(self._git_include_cb)
-        left_layout.addWidget(self._hint_label("Dua thong tin thay doi git vao prompt hien tai"))
-
-        self._relative_paths_cb = QCheckBox("Use relative paths in prompts")
-        self._relative_paths_cb.setChecked(settings.get("use_relative_paths", True))
-        self._relative_paths_cb.setStyleSheet(checkbox_style)
-        self._relative_paths_cb.stateChanged.connect(self._mark_changed)
-        left_layout.addWidget(self._relative_paths_cb)
-        left_layout.addWidget(
-            self._hint_label("Dùng đường dẫn tương đối để tránh lộ thong tin hệ thong (PII)")
-        )
-
-        # Security
-        left_layout.addWidget(self._section_header("Security"))
-
-        self._security_cb = QCheckBox("Enable Security Check")
-        self._security_cb.setChecked(settings.get("enable_security_check", True))
-        self._security_cb.setStyleSheet(checkbox_style)
-        self._security_cb.stateChanged.connect(self._mark_changed)
-        left_layout.addWidget(self._security_cb)
-        left_layout.addWidget(self._hint_label("Quet secrets (API keys, passwords) truoc khi copy"))
-
-        # Presets
-        left_layout.addWidget(self._section_header("Quick Presets"))
+        preset_row.addWidget(preset_label)
 
         self._preset_combo = QComboBox()
-        self._preset_combo.addItem("Select a profile...")
+        self._preset_combo.setFixedWidth(180)
+        self._preset_combo.setFixedHeight(32)
+        self._preset_combo.addItem("Select profile...")
         for name in PRESET_PROFILES:
             self._preset_combo.addItem(name)
-        self._preset_combo.setStyleSheet(combo_style)
+        self._preset_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {ThemeColors.BG_PAGE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-size: 12px;
+            }}
+            QComboBox:hover {{
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                selection-background-color: {ThemeColors.PRIMARY};
+                selection-color: white;
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 6px;
+                padding: 4px;
+            }}
+            QComboBox QAbstractItemView::item {{
+                padding: 6px 12px;
+            }}
+        """)
         self._preset_combo.currentTextChanged.connect(self._load_preset)
-        left_layout.addWidget(self._preset_combo)
+        preset_row.addWidget(self._preset_combo)
+        preset_row.addStretch()
 
-        # Session
-        left_layout.addWidget(self._section_header("Session"))
+        preset_desc = QLabel("Merge preset patterns into current list")
+        preset_desc.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};"
+        )
+        preset_row.addWidget(preset_desc)
 
-        clear_session_btn = QPushButton("Clear Saved Session")
-        clear_session_btn.setStyleSheet(secondary_btn_style)
-        clear_session_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        clear_session_btn.clicked.connect(self._clear_session)
-        left_layout.addWidget(clear_session_btn)
-        left_layout.addWidget(self._hint_label("Reset workspace va danh sach file dang mo"))
+        card2_layout.addLayout(preset_row)
 
-        left_layout.addStretch()
+        col1_layout.addWidget(card2)
+        col1_layout.addStretch()
 
-        # Save / Reset buttons
-        save_btn = QPushButton("Save Settings")
-        save_btn.setStyleSheet(primary_btn_style)
-        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        save_btn.clicked.connect(self._save_settings)
-        left_layout.addWidget(save_btn)
+        # ─────────────────────────────
+        # CARD 3: AI Context
+        # ─────────────────────────────
+        card3 = _make_card()
+        card3_layout = QVBoxLayout(card3)
+        card3_layout.setContentsMargins(22, 22, 22, 22)
+        card3_layout.setSpacing(0)
 
-        action_row = QHBoxLayout()
-        action_row.setSpacing(6)
-        reset_btn = QPushButton("Reset")
-        reset_btn.setStyleSheet(secondary_btn_style)
-        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset_btn.clicked.connect(self._reset_settings)
-        action_row.addWidget(reset_btn)
+        card3_layout.addWidget(_AccentDotLabel("AI Context"))
+        card3_layout.addSpacing(18)
 
-        export_btn = QPushButton("Export")
-        export_btn.setStyleSheet(secondary_btn_style)
-        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._git_toggle = _ToggleRow(
+            label="Include Git Diff/Log",
+            description="Include recent git changes in AI context",
+            checked=settings.get("include_git_changes", True),
+        )
+        self._git_toggle.toggled.connect(self._mark_changed)
+        card3_layout.addWidget(self._git_toggle)
+
+        card3_layout.addSpacing(16)
+        card3_layout.addWidget(_make_separator())
+        card3_layout.addSpacing(16)
+
+        self._relative_toggle = _ToggleRow(
+            label="Use Relative Paths",
+            description="Use paths relative to workspace root in prompts",
+            checked=settings.get("use_relative_paths", True),
+            tip="Recommended for privacy when sharing prompts",
+        )
+        self._relative_toggle.toggled.connect(self._mark_changed)
+        card3_layout.addWidget(self._relative_toggle)
+
+        col2_layout.addWidget(card3)
+
+        # ─────────────────────────────
+        # CARD 4: Security
+        # ─────────────────────────────
+        card4 = _make_card()
+        card4_layout = QVBoxLayout(card4)
+        card4_layout.setContentsMargins(22, 22, 22, 22)
+        card4_layout.setSpacing(0)
+
+        card4_layout.addWidget(_AccentDotLabel("Security"))
+        card4_layout.addSpacing(18)
+
+        self._security_toggle = _ToggleRow(
+            label="Enable Security Scan",
+            description="Scan for API keys, passwords, and secrets before copying",
+            checked=settings.get("enable_security_check", True),
+        )
+        self._security_toggle.toggled.connect(self._mark_changed)
+        card4_layout.addWidget(self._security_toggle)
+
+        col2_layout.addWidget(card4)
+        col2_layout.addStretch()
+
+        # ─────────────────────────────
+        # CARD 5: Data & Session
+        # ─────────────────────────────
+        card5 = _make_card()
+        card5_layout = QVBoxLayout(card5)
+        card5_layout.setContentsMargins(22, 22, 22, 22)
+        card5_layout.setSpacing(0)
+
+        card5_layout.addWidget(_AccentDotLabel("Data & Session"))
+        card5_layout.addSpacing(18)
+
+        # Clear Session
+        clear_btn = _make_ghost_btn("Clear Saved Session")
+        clear_btn.clicked.connect(self._clear_session)
+        card5_layout.addWidget(clear_btn)
+        card5_layout.addSpacing(6)
+
+        clear_desc = QLabel("Reset workspace and open files state")
+        clear_desc.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+        )
+        card5_layout.addWidget(clear_desc)
+
+        card5_layout.addSpacing(16)
+        card5_layout.addWidget(_make_separator())
+        card5_layout.addSpacing(16)
+
+        # Export / Import row
+        ei_row = QHBoxLayout()
+        ei_row.setSpacing(12)
+
+        export_btn = _make_ghost_btn("Export Settings")
         export_btn.clicked.connect(self._export_settings)
-        action_row.addWidget(export_btn)
+        ei_row.addWidget(export_btn)
 
-        import_btn = QPushButton("Import")
-        import_btn.setStyleSheet(secondary_btn_style)
-        import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        import_btn = _make_ghost_btn("Import Settings")
         import_btn.clicked.connect(self._import_settings)
-        action_row.addWidget(import_btn)
-        left_layout.addLayout(action_row)
+        ei_row.addWidget(import_btn)
 
+        card5_layout.addLayout(ei_row)
+
+        card5_layout.addSpacing(16)
+        card5_layout.addWidget(_make_separator())
+        card5_layout.addSpacing(16)
+
+        # Reset All — danger style
+        reset_btn = _make_danger_btn("Reset All to Defaults")
+        reset_btn.clicked.connect(self._reset_settings)
+        card5_layout.addWidget(reset_btn)
+
+        col3_layout.addWidget(card5)
+
+        # Status label (full width at bottom)
         self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: 11px; font-weight: 600;")
-        left_layout.addWidget(self._status)
-
-        splitter.addWidget(left)
-
-        # ===== Right Column: Excluded Patterns =====
-        right = QFrame()
-        right.setProperty("class", "surface")
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(16, 12, 16, 12)
-        right_layout.setSpacing(10)
-
-        exc_title = QLabel("Excluded Patterns")
-        exc_title.setStyleSheet(
-            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
+        self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; border-radius: 6px; padding: 8px;"
         )
-        right_layout.addWidget(exc_title)
+        self._status.hide()
+        col3_layout.addWidget(self._status)
 
-        info = QLabel(
-            "An file/folder khoi File Tree va AI Context. Moi pattern tren mot dong."
-        )
-        info.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};")
-        info.setWordWrap(True)
-        right_layout.addWidget(info)
+        col3_layout.addStretch()
 
-        self._excluded_field = QPlainTextEdit()
-        self._excluded_field.setPlainText(settings.get("excluded_folders", ""))
-        self._excluded_field.setPlaceholderText(
-            "node_modules\ndist\nbuild\n__pycache__"
-        )
-        self._excluded_field.setFont(QFont("JetBrains Mono, monospace", 10))
-        self._excluded_field.setStyleSheet(
-            f"QPlainTextEdit {{ "
-            f"  background-color: {ThemeColors.BG_ELEVATED}; "
-            f"  border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 6px; "
-            f"  padding: 8px; "
-            f"}}"
-        )
-        self._excluded_field.textChanged.connect(self._mark_changed)
-        right_layout.addWidget(self._excluded_field, stretch=1)
+        # Add columns to outer layout
+        outer_layout.addWidget(col1, stretch=1)
+        outer_layout.addWidget(col2, stretch=1)
+        outer_layout.addWidget(col3, stretch=1)
 
-        splitter.addWidget(right)
-
-        splitter.setStretchFactor(0, 4)
-        splitter.setStretchFactor(1, 6)
-
-        layout.addWidget(splitter)
-
-    # ===== Helpers =====
-
-    def _section_header(self, text: str) -> QLabel:
-        """Helper tao tieu de section voi style nhat quan."""
-        label = QLabel(text.upper())
-        label.setStyleSheet(
-            f"font-size: 10px; font-weight: 700; "
-            f"color: {ThemeColors.TEXT_MUTED}; margin-top: 12px; letter-spacing: 0.5px;"
-        )
-        return label
-
-    def _hint_label(self, text: str) -> QLabel:
-        """Helper tao thong tin huong dan phu."""
-        label = QLabel(text)
-        label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; padding-left: 2px;")
-        label.setWordWrap(True)
-        return label
+        scroll.setWidget(scroll_content)
+        root_layout.addWidget(scroll, stretch=1)
 
     # ===== Slots =====
 
     @Slot()
     def _reload_excluded_from_settings(self) -> None:
-        """Cập nhật nội dung excluded field từ settings (khi user ignore item từ Context tab)."""
-        settings = load_settings()
-        new_text = settings.get("excluded_folders", "")
-        self._excluded_field.blockSignals(True)
-        self._excluded_field.setPlainText(new_text)
-        self._excluded_field.blockSignals(False)
+        """Reload tag chips when patterns change externally (e.g. Ignore button)."""
+        patterns = get_excluded_patterns()
+        self._tag_chips.set_patterns(patterns)
+
+    @Slot(list)
+    def _on_patterns_changed(self, patterns: list) -> None:
+        """Handle tag chips change."""
+        self._mark_changed()
 
     @Slot()
     def _mark_changed(self) -> None:
@@ -371,45 +675,130 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _save_settings(self) -> None:
+        # Collect patterns from tag chips
+        patterns = self._tag_chips.get_patterns()
+        excluded_text = "\n".join(patterns)
+
         settings_data = {
-            "excluded_folders": self._excluded_field.toPlainText(),
-            "use_gitignore": self._gitignore_cb.isChecked(),
-            "enable_security_check": self._security_cb.isChecked(),
-            "include_git_changes": self._git_include_cb.isChecked(),
-            "use_relative_paths": self._relative_paths_cb.isChecked(),
+            "excluded_folders": excluded_text,
+            "use_gitignore": self._gitignore_toggle.isChecked(),
+            "enable_security_check": self._security_toggle.isChecked(),
+            "include_git_changes": self._git_toggle.isChecked(),
+            "use_relative_paths": self._relative_toggle.isChecked(),
         }
         if save_settings(settings_data):
             self._has_unsaved = False
-            self._show_status("Settings saved!")
+
+            # Button feedback
+            self._save_btn.setText("Saved")
+            self._save_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {ThemeColors.SUCCESS_BG};
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 0 20px;
+                    font-size: 13px;
+                    font-weight: 700;
+                }}
+            """)
+            QTimer.singleShot(2000, self._reset_save_btn)
+
             if self.on_settings_changed:
                 self.on_settings_changed()
         else:
             self._show_status("Error saving settings", is_error=True)
 
+    def _reset_save_btn(self) -> None:
+        self._save_btn.setText("Save Settings")
+        self._save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 20px;
+                font-size: 13px;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background: {ThemeColors.PRIMARY_HOVER};
+            }}
+            QPushButton:pressed {{
+                background: {ThemeColors.PRIMARY_PRESSED};
+            }}
+            QPushButton:disabled {{
+                background: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_MUTED};
+            }}
+        """)
+
     @Slot()
     def _reset_settings(self) -> None:
-        default = "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage"
-        self._excluded_field.setPlainText(default)
-        self._gitignore_cb.setChecked(True)
-        self._security_cb.setChecked(True)
-        self._git_include_cb.setChecked(True)
-        self._relative_paths_cb.setChecked(True)
-        self._show_status("Reset to defaults (not saved yet)")
+        reply = QMessageBox.warning(
+            self,
+            "Reset All Settings",
+            "Reset all settings to defaults? This cannot be undone.",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Apply defaults
+        default_patterns = [
+            p.strip()
+            for p in DEFAULT_SETTINGS.get("excluded_folders", "").splitlines()
+            if p.strip() and not p.strip().startswith("#")
+        ]
+        self._tag_chips.set_patterns(default_patterns)
+        self._gitignore_toggle.setChecked(True)
+        self._security_toggle.setChecked(True)
+        self._git_toggle.setChecked(True)
+        self._relative_toggle.setChecked(True)
+        self._mark_changed()
+        self._show_status("Reset to defaults. Click Save to apply.")
 
     @Slot(str)
     def _load_preset(self, name: str) -> None:
-        if name == "Select a profile..." or name not in PRESET_PROFILES:
+        if name == "Select profile..." or name not in PRESET_PROFILES:
             return
-        current = self._excluded_field.toPlainText().rstrip()
-        preset = PRESET_PROFILES[name]
-        if current:
-            self._excluded_field.setPlainText(f"{current}\n# {name} preset\n{preset}")
-        else:
-            self._excluded_field.setPlainText(f"# {name} preset\n{preset}")
-        self._show_status(f"Loaded {name} preset (not saved yet)")
+
+        preset_text = PRESET_PROFILES[name]
+        preset_patterns = [
+            p.strip()
+            for p in preset_text.splitlines()
+            if p.strip()
+        ]
+
+        # Merge into existing patterns (avoid duplicates)
+        current = self._tag_chips.get_patterns()
+        for p in preset_patterns:
+            if p not in current:
+                current.append(p)
+
+        self._tag_chips.set_patterns(current)
+        self._mark_changed()
+
+        # Reset combo to placeholder
+        self._preset_combo.blockSignals(True)
+        self._preset_combo.setCurrentIndex(0)
+        self._preset_combo.blockSignals(False)
+
+        self._show_status(f"Merged {name} preset patterns. Click Save to apply.")
 
     @Slot()
     def _clear_session(self) -> None:
+        reply = QMessageBox.question(
+            self,
+            "Clear Saved Session",
+            "Clear saved session? This will reset your workspace state.",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
         if clear_session_state():
             self._show_status("Session cleared. Restart to see effect.")
         else:
@@ -417,50 +806,96 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _export_settings(self) -> None:
+        patterns = self._tag_chips.get_patterns()
         data = {
-            "excluded_folders": self._excluded_field.toPlainText(),
-            "use_gitignore": self._gitignore_cb.isChecked(),
-            "include_git_changes": self._git_include_cb.isChecked(),
-            "use_relative_paths": self._relative_paths_cb.isChecked(),
+            "excluded_folders": "\n".join(patterns),
+            "use_gitignore": self._gitignore_toggle.isChecked(),
+            "include_git_changes": self._git_toggle.isChecked(),
+            "use_relative_paths": self._relative_toggle.isChecked(),
+            "enable_security_check": self._security_toggle.isChecked(),
             "export_version": "1.0",
         }
         success, _ = copy_to_clipboard(json.dumps(data, indent=2, ensure_ascii=False))
         self._show_status(
-            "Exported to clipboard!" if success else "Export failed", not success
+            "Settings exported to clipboard" if success else "Export failed",
+            is_error=not success,
         )
 
     @Slot()
     def _import_settings(self) -> None:
         success, text = get_clipboard_text()
         if not success or not text:
-            self._show_status("Clipboard empty", is_error=True)
+            self._show_status("Clipboard is empty", is_error=True)
             return
+
         try:
             imported = json.loads(text)
             if "excluded_folders" not in imported:
                 self._show_status("Invalid settings format", is_error=True)
                 return
-            self._excluded_field.setPlainText(imported.get("excluded_folders", ""))
-            self._gitignore_cb.setChecked(imported.get("use_gitignore", True))
-            self._git_include_cb.setChecked(imported.get("include_git_changes", True))
-            self._relative_paths_cb.setChecked(
-                imported.get("use_relative_paths", True)
-            )
-            self._show_status("Imported! Click Save to apply.")
         except json.JSONDecodeError:
             self._show_status("Invalid JSON in clipboard", is_error=True)
+            return
 
-    # ===== Public =====
+        reply = QMessageBox.question(
+            self,
+            "Import Settings",
+            "Import settings from clipboard? This will overwrite current settings.",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Apply imported settings
+        exc_text = imported.get("excluded_folders", "")
+        patterns = [
+            p.strip()
+            for p in exc_text.splitlines()
+            if p.strip() and not p.strip().startswith("#")
+        ]
+        self._tag_chips.set_patterns(patterns)
+        self._gitignore_toggle.setChecked(imported.get("use_gitignore", True))
+        self._git_toggle.setChecked(imported.get("include_git_changes", True))
+        self._relative_toggle.setChecked(imported.get("use_relative_paths", True))
+        self._security_toggle.setChecked(imported.get("enable_security_check", True))
+        self._mark_changed()
+        self._show_status("Imported. Click Save to apply.")
+
+    # ===== Public API =====
 
     def has_unsaved_changes(self) -> bool:
         return self._has_unsaved
 
+    # ===== Helpers =====
+
     def _show_status(self, message: str, is_error: bool = False) -> None:
-        """Hien thi status message, tu dong clear sau 4s neu thanh cong."""
-        color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {color};"
-        )
+        if not message:
+            self._status.hide()
+            return
+
+        if is_error:
+            bg = "#FCA5A5"
+            text_color = "#450A0A"
+            border = ThemeColors.ERROR
+        else:
+            bg = "#6EE7B7"
+            text_color = "#022C22"
+            border = ThemeColors.SUCCESS
+
+        self._status.setStyleSheet(f"""
+            QLabel {{
+                font-size: 12px;
+                font-weight: 600;
+                color: {text_color};
+                background: {bg};
+                border-radius: 6px;
+                padding: 8px 14px;
+                border: 1px solid {border};
+            }}
+        """)
         self._status.setText(message)
+        self._status.show()
+
         if not is_error:
-            QTimer.singleShot(4000, lambda: self._status.setText(""))
+            QTimer.singleShot(4000, self._status.hide)

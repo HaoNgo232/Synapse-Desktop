@@ -18,6 +18,7 @@ DEFAULT_SETTINGS = {
     "model_id": "claude-sonnet-4.5",  # Default model
     "enable_security_check": True,  # Enable security check
     "include_git_changes": True,  # Integrate git diff/log in prompt
+    "use_relative_paths": True,  # Xuat path tuong doi workspace (tranh PII trong prompt)
 }
 
 

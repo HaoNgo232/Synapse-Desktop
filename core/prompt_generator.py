@@ -13,6 +13,41 @@ from pathlib import Path
 from typing import Optional
 
 from core.utils.file_utils import TreeItem, is_binary_file
+
+
+def _path_for_display(
+    path: Path,
+    workspace_root: Optional[Path],
+    use_relative_paths: bool,
+) -> str:
+    """
+    Tra ve path de hien thi trong prompt/XML.
+
+    Khi use_relative_paths=True va workspace_root duoc cung cap, tra ve path
+    tuong doi tu workspace root (tranh PII - absolute path chua username/machine).
+    Fallback: tra ve absolute path nhu logic cu.
+
+    Args:
+        path: Duong dan file/dir
+        workspace_root: Workspace root (None neu khong co)
+        use_relative_paths: True = xuat relative, False = xuat absolute
+
+    Returns:
+        Path string de dung trong output
+    """
+    if not use_relative_paths or not workspace_root:
+        return str(path)
+    try:
+        resolved = path.resolve()
+        root_resolved = Path(workspace_root).resolve()
+        rel = str(resolved.relative_to(root_resolved))
+        # Root "." -> hien thi ten folder workspace (vd. synapse-desktop) cho ro rang
+        if rel == ".":
+            return root_resolved.name.lower()
+        return rel
+    except ValueError:
+        # Path khong nam trong workspace (vd. symlink) -> fallback absolute
+        return str(path)
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.utils.language_utils import get_language_from_path
 from core.utils.git_utils import GitDiffResult, GitLogResult
@@ -48,6 +83,49 @@ SUMMARY_NOTES = """- Some files may have been excluded based on .gitignore rules
 - Binary files are not included in this packed representation.
 - Files exceeding the maximum size limit have been skipped.
 - The repository structure may not be complete if certain directories were excluded."""
+
+# Smart Context - chi signatures/docstrings, khong full content
+SMART_SUMMARY_PURPOSE = """This file contains a SMART representation of selected files: code structure only (signatures, docstrings, class/function declarations). Implementation bodies are stripped via Tree-sitter parsing. Use for architecture review, planning, or when token budget is limited."""
+
+SMART_SUMMARY_FORMAT = """The content is organized as follows:
+1. This summary section (file_summary)
+2. Repository structure (directory_structure)
+3. Smart context blocks, each with:
+   - File path and [Smart Context] marker
+   - Code signatures, docstrings, declarations only (no implementation bodies)
+4. User instructions (if provided)"""
+
+SMART_SUMMARY_NOTES = """- Only supported languages (Python, JS/TS, etc.) are parsed; others may be skipped.
+- Binary and oversized files are excluded.
+- Use file path to distinguish between files."""
+
+
+def generate_smart_summary_xml() -> str:
+    """
+    Tao file_summary cho Smart Context mode.
+
+    Mo ta rang day la code structure (signatures, docstrings) chua khong phai full content.
+    """
+    return f"""<file_summary>
+{GENERATION_HEADER}
+
+<purpose>
+{SMART_SUMMARY_PURPOSE}
+</purpose>
+
+<file_format>
+{SMART_SUMMARY_FORMAT}
+</file_format>
+
+<usage_guidelines>
+{SUMMARY_USAGE_GUIDELINES}
+</usage_guidelines>
+
+<notes>
+{SMART_SUMMARY_NOTES}
+</notes>
+</file_summary>
+"""
 
 
 def generate_file_summary_xml() -> str:
@@ -113,7 +191,12 @@ def calculate_markdown_delimiter(contents: list[str]) -> str:
     return "`" * max(3, max_backticks + 1)
 
 
-def generate_file_map(tree: TreeItem, selected_paths: set[str]) -> str:
+def generate_file_map(
+    tree: TreeItem,
+    selected_paths: set[str],
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
+) -> str:
     """
     Tao file map string tu tree structure.
     Chi hien thi cac items duoc chon hoac co children duoc chon.
@@ -121,6 +204,8 @@ def generate_file_map(tree: TreeItem, selected_paths: set[str]) -> str:
     Args:
         tree: TreeItem root
         selected_paths: Set cac duong dan duoc tick
+        workspace_root: Workspace root de convert sang relative path (optional)
+        use_relative_paths: True = xuat path tuong doi workspace (tranh PII)
 
     Returns:
         File map string voi ASCII tree visualization
@@ -129,7 +214,10 @@ def generate_file_map(tree: TreeItem, selected_paths: set[str]) -> str:
 
     # Neu root duoc chon hoac co descendants duoc chon
     if _has_selected_descendant(tree, selected_paths):
-        lines.append(tree.path)  # Root path
+        root_display = _path_for_display(
+            Path(tree.path), workspace_root, use_relative_paths
+        )
+        lines.append(root_display)
 
         # Filter children
         filtered_children = _filter_selected_tree(tree.children, selected_paths)
@@ -196,7 +284,10 @@ def _build_tree_string(items: list[TreeItem], prefix: str, lines: list[str]) -> 
 
 
 def generate_file_contents(
-    selected_paths: set[str], max_file_size: int = 1024 * 1024
+    selected_paths: set[str],
+    max_file_size: int = 1024 * 1024,
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tao file contents string cho cac files duoc chon.
@@ -285,19 +376,23 @@ def generate_file_contents(
             output.write("\n")
         first = False
 
+        path_display = _path_for_display(path, workspace_root, use_relative_paths)
         if error:
-            output.write(f"File: {path}\n*** Skipped: {error} ***\n")
+            output.write(f"File: {path_display}\n*** Skipped: {error} ***\n")
         elif content is not None:
             language = get_language_from_path(str(path))
             output.write(
-                f"File: {path}\n{delimiter}{language}\n{content}\n{delimiter}\n"
+                f"File: {path_display}\n{delimiter}{language}\n{content}\n{delimiter}\n"
             )
 
     return output.getvalue().strip()
 
 
 def generate_file_contents_xml(
-    selected_paths: set[str], max_file_size: int = 1024 * 1024
+    selected_paths: set[str],
+    max_file_size: int = 1024 * 1024,
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tạo file contents theo Repomix XML format.
@@ -326,10 +421,12 @@ def generate_file_contents_xml(
             if not path.is_file():
                 continue
 
+            path_display = _path_for_display(path, workspace_root, use_relative_paths)
+
             # Skip binary files (check magic bytes, not just extension)
             if is_binary_file(path):
                 file_elements.append(
-                    f'<file path="{html.escape(str(path))}" skipped="true">Binary file</file>'
+                    f'<file path="{html.escape(path_display)}" skipped="true">Binary file</file>'
                 )
                 continue
 
@@ -338,7 +435,7 @@ def generate_file_contents_xml(
                 file_size = path.stat().st_size
                 if file_size > max_file_size:
                     file_elements.append(
-                        f'<file path="{html.escape(str(path))}" skipped="true">File too large ({file_size // 1024}KB)</file>'
+                        f'<file path="{html.escape(path_display)}" skipped="true">File too large ({file_size // 1024}KB)</file>'
                     )
                     continue
             except OSError:
@@ -349,12 +446,13 @@ def generate_file_contents_xml(
             # Escape XML special characters trong content
             escaped_content = html.escape(content)
             file_elements.append(
-                f'<file path="{html.escape(str(path))}">\n{escaped_content}\n</file>'
+                f'<file path="{html.escape(path_display)}">\n{escaped_content}\n</file>'
             )
 
         except (OSError, IOError) as e:
+            path_display = _path_for_display(path, workspace_root, use_relative_paths)
             file_elements.append(
-                f'<file path="{html.escape(str(path))}" skipped="true">Error: {html.escape(str(e))}</file>'
+                f'<file path="{html.escape(path_display)}" skipped="true">Error: {html.escape(str(e))}</file>'
             )
 
     if not file_elements:
@@ -364,7 +462,10 @@ def generate_file_contents_xml(
 
 
 def generate_file_contents_json(
-    selected_paths: set[str], max_file_size: int = 1024 * 1024
+    selected_paths: set[str],
+    max_file_size: int = 1024 * 1024,
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tạo file contents theo JSON format.
@@ -392,16 +493,18 @@ def generate_file_contents_json(
             if not path.is_file():
                 continue
 
+            path_display = _path_for_display(path, workspace_root, use_relative_paths)
+
             # Skip binary files (check magic bytes, not just extension)
             if is_binary_file(path):
-                files_dict[str(path)] = "Binary file (skipped)"
+                files_dict[path_display] = "Binary file (skipped)"
                 continue
 
             # Skip files that are too large
             try:
                 file_size = path.stat().st_size
                 if file_size > max_file_size:
-                    files_dict[str(path)] = (
+                    files_dict[path_display] = (
                         f"File too large ({file_size // 1024}KB) (skipped)"
                     )
                     continue
@@ -410,16 +513,20 @@ def generate_file_contents_json(
 
             # Read content
             content = path.read_text(encoding="utf-8", errors="replace")
-            files_dict[str(path)] = content
+            files_dict[path_display] = content
 
         except (OSError, IOError) as e:
-            files_dict[str(path)] = f"Error reading file: {e}"
+            path_display = _path_for_display(path, workspace_root, use_relative_paths)
+            files_dict[path_display] = f"Error reading file: {e}"
 
     return json.dumps(files_dict, ensure_ascii=False)
 
 
 def generate_file_contents_plain(
-    selected_paths: set[str], max_file_size: int = 1024 * 1024
+    selected_paths: set[str],
+    max_file_size: int = 1024 * 1024,
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tạo file contents theo định dạng Plain Text.
@@ -449,8 +556,9 @@ def generate_file_contents_plain(
             if not path.is_file():
                 continue
 
+            path_display = _path_for_display(path, workspace_root, use_relative_paths)
             # Header cho mỗi file
-            file_header = f"File: {path_str}\n{separator}"
+            file_header = f"File: {path_display}\n{separator}"
 
             # Content handling
             content_display = ""
@@ -477,8 +585,9 @@ def generate_file_contents_plain(
             file_elements.append(f"{file_header}\n{content_display}\n{separator}")
 
         except (OSError, IOError) as e:
+            path_display = _path_for_display(path, workspace_root, use_relative_paths)
             file_elements.append(
-                f"File: {path_str}\n{separator}\nError reading file: {e}\n{separator}"
+                f"File: {path_display}\n{separator}\nError reading file: {e}\n{separator}"
             )
 
     if not file_elements:
@@ -491,6 +600,8 @@ def generate_smart_context(
     selected_paths: set[str],
     max_file_size: int = 1024 * 1024,
     include_relationships: bool = False,
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tao Smart Context string - chi chua code structure (signatures, docstrings).
@@ -591,15 +702,48 @@ def generate_smart_context(
     contents_append = contents.append
 
     for path, smart_content, error in file_data:
+        path_display = _path_for_display(path, workspace_root, use_relative_paths)
         if error:
-            contents_append(f"File: {path}\n*** Skipped: {error} ***\n")
+            contents_append(f"File: {path_display}\n*** Skipped: {error} ***\n")
         elif smart_content is not None:
             language = get_language_from_path(str(path))
             contents_append(
-                f"File: {path} [Smart Context]\n{delimiter}{language}\n{smart_content}\n{delimiter}\n"
+                f"File: {path_display} [Smart Context]\n{delimiter}{language}\n{smart_content}\n{delimiter}\n"
             )
 
     return "\n".join(contents).strip()
+
+
+def build_smart_prompt(
+    smart_contents: str,
+    file_map: str,
+    user_instructions: str = "",
+) -> str:
+    """
+    Tao prompt day du cho Copy Smart - gom file_summary, directory_structure,
+    smart contents va user_instructions. Nhat quan voi Copy Context.
+
+    Args:
+        smart_contents: Output tu generate_smart_context()
+        file_map: Output tu generate_file_map()
+        user_instructions: Huong dan tu nguoi dung
+
+    Returns:
+        Prompt string day du
+    """
+    file_summary = generate_smart_summary_xml()
+    prompt = f"""{file_summary}
+<directory_structure>
+{file_map}
+</directory_structure>
+
+<smart_context>
+{smart_contents}
+</smart_context>
+"""
+    if user_instructions and user_instructions.strip():
+        prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+    return prompt.strip()
 
 
 def generate_prompt(

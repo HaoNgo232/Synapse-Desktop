@@ -8,12 +8,19 @@ can noi dung files. Huu ich khi:
 - Khong can AI doc code cu the
 """
 
+from pathlib import Path
+from typing import Optional
+
 from core.utils.file_utils import TreeItem
 from core.prompt_generator import generate_file_map
 
 
 def generate_tree_map_only(
-    tree: TreeItem, selected_paths: set[str], user_instructions: str = ""
+    tree: TreeItem,
+    selected_paths: set[str],
+    user_instructions: str = "",
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tao prompt chi co tree map (khong co file contents).
@@ -22,11 +29,18 @@ def generate_tree_map_only(
         tree: TreeItem root cua file tree
         selected_paths: Set cac duong dan duoc chon
         user_instructions: Huong dan tu nguoi dung (optional)
+        workspace_root: Workspace root de convert sang relative path (optional)
+        use_relative_paths: True = xuat path tuong doi workspace (tranh PII)
 
     Returns:
         Prompt string chi chua file_map va user_instructions
     """
-    file_map = generate_file_map(tree, selected_paths)
+    file_map = generate_file_map(
+        tree,
+        selected_paths,
+        workspace_root=workspace_root,
+        use_relative_paths=use_relative_paths,
+    )
 
     prompt = f"""<file_map>
 {file_map}
@@ -40,7 +54,11 @@ def generate_tree_map_only(
 
 
 def generate_tree_map_with_summary(
-    tree: TreeItem, selected_paths: set[str], user_instructions: str = ""
+    tree: TreeItem,
+    selected_paths: set[str],
+    user_instructions: str = "",
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
 ) -> str:
     """
     Tao prompt co tree map va summary count (khong co file contents).
@@ -50,11 +68,18 @@ def generate_tree_map_with_summary(
         tree: TreeItem root cua file tree
         selected_paths: Set cac duong dan duoc chon
         user_instructions: Huong dan tu nguoi dung (optional)
+        workspace_root: Workspace root de convert sang relative path (optional)
+        use_relative_paths: True = xuat path tuong doi workspace (tranh PII)
 
     Returns:
         Prompt string chua file_map, summary va user_instructions
     """
-    file_map = generate_file_map(tree, selected_paths)
+    file_map = generate_file_map(
+        tree,
+        selected_paths,
+        workspace_root=workspace_root,
+        use_relative_paths=use_relative_paths,
+    )
 
     # Count files va folders
     file_count = sum(1 for p in selected_paths if not tree_item_is_dir(tree, p))

@@ -38,6 +38,7 @@ from core.prompt_generator import (
     generate_file_contents_json,
     generate_file_contents_plain,
     generate_smart_context,
+    build_smart_prompt,
 )
 from core.tree_map_generator import generate_tree_map_only
 from core.security_check import scan_secrets_in_files_cached
@@ -46,7 +47,11 @@ from components.token_stats_qt import TokenStatsPanelQt
 from services.clipboard_utils import copy_to_clipboard
 from services.file_watcher import FileWatcher, WatcherCallbacks
 from services.settings_manager import get_setting, set_setting
-from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+from views.settings_view_qt import (
+    get_excluded_patterns,
+    get_use_gitignore,
+    get_use_relative_paths,
+)
 from config.output_format import (
     OutputStyle,
     OUTPUT_FORMATS,
@@ -721,18 +726,38 @@ class ContextViewQt(QWidget):
         """Execute copy context."""
         try:
             selected_path_strs = {str(p) for p in file_paths}
+            use_rel = get_use_relative_paths()
             # Use full scan to avoid missing deep branches from lazy tree model.
             tree_item = self._scan_full_tree(workspace)
             file_map = (
-                generate_file_map(tree_item, selected_path_strs) if tree_item else ""
+                generate_file_map(
+                    tree_item,
+                    selected_path_strs,
+                    workspace_root=workspace,
+                    use_relative_paths=use_rel,
+                )
+                if tree_item
+                else ""
             )
 
             if self._selected_output_style == OutputStyle.XML:
-                file_contents = generate_file_contents_xml(selected_path_strs)
+                file_contents = generate_file_contents_xml(
+                    selected_path_strs,
+                    workspace_root=workspace,
+                    use_relative_paths=use_rel,
+                )
             elif self._selected_output_style == OutputStyle.JSON:
-                file_contents = generate_file_contents_json(selected_path_strs)
+                file_contents = generate_file_contents_json(
+                    selected_path_strs,
+                    workspace_root=workspace,
+                    use_relative_paths=use_rel,
+                )
             else:
-                file_contents = generate_file_contents_plain(selected_path_strs)
+                file_contents = generate_file_contents_plain(
+                    selected_path_strs,
+                    workspace_root=workspace,
+                    use_relative_paths=use_rel,
+                )
 
             prompt = generate_prompt(
                 file_map=file_map,
@@ -764,12 +789,29 @@ class ContextViewQt(QWidget):
 
         try:
             selected_path_strs = {str(p) for p in file_paths}
-            prompt = generate_smart_context(
+            use_rel = get_use_relative_paths()
+            tree_item = self._scan_full_tree(workspace)
+            file_map = (
+                generate_file_map(
+                    tree_item,
+                    selected_path_strs,
+                    workspace_root=workspace,
+                    use_relative_paths=use_rel,
+                )
+                if tree_item
+                else ""
+            )
+            smart_contents = generate_smart_context(
                 selected_paths=selected_path_strs,
                 include_relationships=True,
+                workspace_root=workspace,
+                use_relative_paths=use_rel,
             )
-            if instructions:
-                prompt = f"{prompt}\n\n<instructions>\n{instructions}\n</instructions>"
+            prompt = build_smart_prompt(
+                smart_contents=smart_contents,
+                file_map=file_map,
+                user_instructions=instructions,
+            )
             copy_to_clipboard(prompt)
             token_count = count_tokens(prompt)
             self._show_status(f"Smart context copied! ({token_count:,} tokens)")
@@ -800,7 +842,13 @@ class ContextViewQt(QWidget):
                 if hasattr(self, "_instructions_field")
                 else ""
             )
-            tree_map = generate_tree_map_only(tree_item, selected_strs, instructions)
+            tree_map = generate_tree_map_only(
+                tree_item,
+                selected_strs,
+                instructions,
+                workspace_root=workspace,
+                use_relative_paths=get_use_relative_paths(),
+            )
             success, msg = copy_to_clipboard(tree_map)
             if success:
                 token_count = count_tokens(tree_map)
@@ -841,10 +889,20 @@ class ContextViewQt(QWidget):
             from components.dialogs_qt import DiffOnlyDialogQt
             from core.utils.git_utils import build_diff_only_prompt
 
+            def _build_diff_prompt(diff_result, instructions, include_content, include_tree):
+                return build_diff_only_prompt(
+                    diff_result,
+                    instructions,
+                    include_content,
+                    include_tree,
+                    workspace_root=workspace,
+                    use_relative_paths=get_use_relative_paths(),
+                )
+
             dialog = DiffOnlyDialogQt(
                 parent=self,
                 workspace=workspace,
-                build_prompt_callback=build_diff_only_prompt,
+                build_prompt_callback=_build_diff_prompt,
                 instructions=self._instructions_field.toPlainText(),
                 on_success=lambda msg: self._show_status(msg),
             )

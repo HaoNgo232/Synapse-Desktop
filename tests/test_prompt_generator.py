@@ -20,6 +20,7 @@ from core.prompt_generator import (
     generate_file_contents_json,
     generate_file_contents_plain,
     generate_smart_context,
+    build_smart_prompt,
     calculate_markdown_delimiter,
 )
 from core.utils.file_utils import TreeItem
@@ -126,6 +127,29 @@ class TestGenerateFileMap:
         assert "selected.py" in result
         # Unselected file không nên xuất hiện
         assert "unselected.py" not in result
+
+    def test_root_shows_workspace_name_when_relative(self, tmp_path):
+        """Khi use_relative_paths, root hien thi ten folder workspace (vd. synapse-desktop)."""
+        ws = tmp_path / "my-project"
+        ws.mkdir()
+        file_path = ws / "main.py"
+        file_path.write_text("x = 1")
+
+        tree = TreeItem(
+            label="my-project",
+            path=str(ws),
+            is_dir=True,
+            children=[
+                TreeItem(label="main.py", path=str(file_path), is_dir=False, children=[])
+            ],
+        )
+        result = generate_file_map(
+            tree, {str(file_path)}, workspace_root=ws, use_relative_paths=True
+        )
+
+        # Root phai la "my-project" (lowercase), khong phai "."
+        assert "my-project" in result
+        assert result.strip().startswith("my-project")
 
 
 class TestGenerateFileContents:
@@ -357,6 +381,35 @@ class MyClass:
         assert isinstance(result, str)
 
 
+class TestBuildSmartPrompt:
+    """Test build_smart_prompt() - full prompt voi file_summary, directory_structure."""
+
+    def test_includes_file_summary_and_directory_structure(self):
+        """build_smart_prompt phai co file_summary, directory_structure, smart_context."""
+        result = build_smart_prompt(
+            smart_contents="File: src/main.py [Smart Context]\n```python\ndef foo(): pass\n```",
+            file_map="synapse-desktop\n└── src\n    └── main.py",
+            user_instructions="Add error handling",
+        )
+        assert "<file_summary>" in result
+        assert "<directory_structure>" in result
+        assert "<smart_context>" in result
+        assert "<user_instructions>" in result
+        assert "Add error handling" in result
+        assert "synapse-desktop" in result
+
+    def test_without_instructions(self):
+        """Khi khong co instructions, khong co user_instructions tag."""
+        result = build_smart_prompt(
+            smart_contents="File: a.py\n```python\nx=1\n```",
+            file_map=".",
+            user_instructions="",
+        )
+        assert "<file_summary>" in result
+        assert "<smart_context>" in result
+        assert "<user_instructions>" not in result
+
+
 class TestPromptStructure:
     """Test overall prompt structure."""
 
@@ -437,6 +490,38 @@ class TestRepomixXmlFormat:
 
         assert 'skipped="true"' in result
         assert "Binary file" in result
+
+    def test_xml_use_relative_paths(self, tmp_path):
+        """Khi use_relative_paths=True, path xuat tuong doi workspace (tranh PII)."""
+        sub = tmp_path / "src"
+        sub.mkdir()
+        file_path = sub / "main.py"
+        file_path.write_text("print('hi')")
+
+        result = generate_file_contents_xml(
+            {str(file_path)},
+            workspace_root=tmp_path,
+            use_relative_paths=True,
+        )
+
+        # Path phai la relative, khong chua absolute
+        assert 'path="src/main.py"' in result
+        assert str(tmp_path) not in result
+
+    def test_xml_use_relative_paths_off_fallback(self, tmp_path):
+        """Khi use_relative_paths=False, giu nguyen absolute path (logic cu)."""
+        file_path = tmp_path / "main.py"
+        file_path.write_text("x = 1")
+
+        result = generate_file_contents_xml(
+            {str(file_path)},
+            workspace_root=tmp_path,
+            use_relative_paths=False,
+        )
+
+        # Absolute path phai co trong output
+        assert str(tmp_path) in result
+        assert "main.py" in result
 
     def test_generate_prompt_with_xml_style(self):
         """generate_prompt uses correct tags for XML style."""

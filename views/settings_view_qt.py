@@ -52,6 +52,11 @@ def get_use_gitignore() -> bool:
     return bool(load_settings().get("use_gitignore", True))
 
 
+def get_use_relative_paths() -> bool:
+    """Return whether to use workspace-relative paths in prompts (tranh PII)."""
+    return bool(load_settings().get("use_relative_paths", True))
+
+
 class _ExcludedChangedNotifier(QObject):
     """Notifier emit khi excluded patterns thay đổi từ bên ngoài (vd. Ignore button)."""
 
@@ -150,6 +155,14 @@ class SettingsViewQt(QWidget):
         self._git_include_cb.stateChanged.connect(self._mark_changed)
         left_layout.addWidget(self._git_include_cb)
         left_layout.addWidget(self._hint_label("Include recent git changes in context"))
+
+        self._relative_paths_cb = QCheckBox("Use relative paths in prompts")
+        self._relative_paths_cb.setChecked(settings.get("use_relative_paths", True))
+        self._relative_paths_cb.stateChanged.connect(self._mark_changed)
+        left_layout.addWidget(self._relative_paths_cb)
+        left_layout.addWidget(
+            self._hint_label("Paths relative to workspace (avoids PII in shared prompts)")
+        )
 
         # Security
         left_layout.addWidget(self._section_header("Security"))
@@ -286,6 +299,7 @@ class SettingsViewQt(QWidget):
             "use_gitignore": self._gitignore_cb.isChecked(),
             "enable_security_check": self._security_cb.isChecked(),
             "include_git_changes": self._git_include_cb.isChecked(),
+            "use_relative_paths": self._relative_paths_cb.isChecked(),
         }
         if save_settings(settings_data):
             self._has_unsaved = False
@@ -302,6 +316,7 @@ class SettingsViewQt(QWidget):
         self._gitignore_cb.setChecked(True)
         self._security_cb.setChecked(True)
         self._git_include_cb.setChecked(True)
+        self._relative_paths_cb.setChecked(True)
         self._show_status("Reset to defaults (not saved yet)")
 
     @Slot(str)
@@ -329,6 +344,7 @@ class SettingsViewQt(QWidget):
             "excluded_folders": self._excluded_field.toPlainText(),
             "use_gitignore": self._gitignore_cb.isChecked(),
             "include_git_changes": self._git_include_cb.isChecked(),
+            "use_relative_paths": self._relative_paths_cb.isChecked(),
             "export_version": "1.0",
         }
         success, _ = copy_to_clipboard(json.dumps(data, indent=2, ensure_ascii=False))
@@ -350,6 +366,9 @@ class SettingsViewQt(QWidget):
             self._excluded_field.setPlainText(imported.get("excluded_folders", ""))
             self._gitignore_cb.setChecked(imported.get("use_gitignore", True))
             self._git_include_cb.setChecked(imported.get("include_git_changes", True))
+            self._relative_paths_cb.setChecked(
+                imported.get("use_relative_paths", True)
+            )
             self._show_status("Imported! Click Save to apply.")
         except json.JSONDecodeError:
             self._show_status("Invalid JSON in clipboard", is_error=True)

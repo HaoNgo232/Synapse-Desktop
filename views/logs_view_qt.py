@@ -61,65 +61,120 @@ class LogsViewQt(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        """Build Logs View UI voi toolbar va formatted log display."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
 
-        # Header
+        # Header: title + count
         header = QHBoxLayout()
-        title = QLabel("🖥️ Logs")
+        header.setSpacing(8)
+        title = QLabel("Logs")
         title.setStyleSheet(
-            f"font-weight: 600; font-size: 20px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(title)
         header.addStretch()
         self._count_label = QLabel("0 logs")
         self._count_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-size: 11px; font-weight: 500; color: {ThemeColors.TEXT_MUTED};"
         )
         header.addWidget(self._count_label)
         layout.addLayout(header)
 
         # Toolbar
         toolbar = QHBoxLayout()
+        toolbar.setSpacing(8)
+
+        # Stylings
+        combo_style = (
+            f"QComboBox {{"
+            f"  background-color: {ThemeColors.BG_ELEVATED};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-radius: 4px;"
+            f"  padding: 2px 8px;"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  font-size: 11px;"
+            f"}}"
+        )
+        checkbox_style = (
+            f"QCheckBox {{"
+            f"  color: {ThemeColors.TEXT_SECONDARY};"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QCheckBox::indicator {{ width: 14px; height: 14px; }}"
+        )
+        secondary_btn_style = (
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-radius: 4px;"
+            f"  padding: 4px 10px;"
+            f"  font-weight: 600;"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.BG_HOVER};"
+            f"  border-color: {ThemeColors.BORDER_LIGHT};"
+            f"}}"
+        )
 
         self._filter_combo = QComboBox()
         self._filter_combo.addItems(["All Levels", "DEBUG", "INFO", "WARNING", "ERROR"])
-        self._filter_combo.setFixedWidth(130)
+        self._filter_combo.setFixedWidth(110)
+        self._filter_combo.setStyleSheet(combo_style)
         self._filter_combo.currentTextChanged.connect(self._on_filter_changed)
         toolbar.addWidget(self._filter_combo)
 
         self._auto_scroll = QCheckBox("Auto-scroll")
         self._auto_scroll.setChecked(True)
+        self._auto_scroll.setStyleSheet(checkbox_style)
         toolbar.addWidget(self._auto_scroll)
 
         self._debug_mode = QCheckBox("Debug Mode")
+        self._debug_mode.setToolTip("Ghi log muc DEBUG ra file")
+        self._debug_mode.setStyleSheet(checkbox_style)
         self._debug_mode.stateChanged.connect(self._toggle_debug)
         toolbar.addWidget(self._debug_mode)
 
         toolbar.addStretch()
 
         load_btn = QPushButton("Load Logs")
-        load_btn.setProperty("class", "outlined")
+        load_btn.setStyleSheet(secondary_btn_style)
+        load_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         load_btn.clicked.connect(self._load_logs)
         toolbar.addWidget(load_btn)
 
         copy_all_btn = QPushButton("Copy All")
-        copy_all_btn.setProperty("class", "outlined")
+        copy_all_btn.setStyleSheet(secondary_btn_style)
+        copy_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_all_btn.clicked.connect(self._copy_all)
         toolbar.addWidget(copy_all_btn)
 
         copy_err_btn = QPushButton("Copy Errors")
-        copy_err_btn.setProperty("class", "outlined")
         copy_err_btn.setStyleSheet(
-            f"color: {ThemeColors.WARNING}; border: 1px solid {ThemeColors.WARNING}; "
-            f"border-radius: 6px; padding: 6px 12px;"
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.WARNING};"
+            f"  border: 1px solid {ThemeColors.WARNING};"
+            f"  border-radius: 4px;"
+            f"  padding: 4px 10px;"
+            f"  font-weight: 600;"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.WARNING};"
+            f"  color: white;"
+            f"}}"
         )
+        copy_err_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_err_btn.clicked.connect(self._copy_errors)
         toolbar.addWidget(copy_err_btn)
 
-        clear_btn = QPushButton("Clear Display")
-        clear_btn.setProperty("class", "outlined")
+        clear_btn = QPushButton("Clear")
+        clear_btn.setStyleSheet(secondary_btn_style)
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         clear_btn.clicked.connect(self._clear_display)
         toolbar.addWidget(clear_btn)
 
@@ -128,24 +183,27 @@ class LogsViewQt(QWidget):
         # Log display
         self._log_view = QPlainTextEdit()
         self._log_view.setReadOnly(True)
-        self._log_view.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 11))
+        # Use a better mono font stack
+        self._log_view.setFont(QFont("JetBrains Mono, Fira Code, Source Code Pro, monospace", 10))
         self._log_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self._log_view.setStyleSheet(
             f"QPlainTextEdit {{ "
-            f"background-color: {ThemeColors.BG_SURFACE}; "
-            f"border: 1px solid {ThemeColors.BORDER}; "
-            f"border-radius: 8px; padding: 12px; }}"
+            f"  background-color: {ThemeColors.BG_ELEVATED}; "
+            f"  border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 6px; "
+            f"  padding: 8px; "
+            f"}}"
         )
         layout.addWidget(self._log_view, stretch=1)
 
         # Status bar
         status_row = QHBoxLayout()
-        dir_label = QLabel(f"Log directory: {LOG_DIR}")
-        dir_label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
+        dir_label = QLabel(f"Path: {LOG_DIR}")
+        dir_label.setStyleSheet(f"font-size: 10px; color: {ThemeColors.TEXT_MUTED};")
         status_row.addWidget(dir_label)
         status_row.addStretch()
         self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: 12px;")
+        self._status.setStyleSheet(f"font-size: 11px; font-weight: 600;")
         status_row.addWidget(self._status)
         layout.addLayout(status_row)
 
@@ -235,11 +293,11 @@ class LogsViewQt(QWidget):
             # Message
             msg_fmt = QTextCharFormat()
             msg_fmt.setForeground(QColor(ThemeColors.TEXT_PRIMARY))
-            # Background for errors
+            # Background for errors (tinted)
             if log.level == "ERROR":
-                msg_fmt.setBackground(QColor("#2D1F1F"))
+                msg_fmt.setBackground(QColor("#450A0A"))  # Dark red tint
             elif log.level == "WARNING":
-                msg_fmt.setBackground(QColor("#2D2A1F"))
+                msg_fmt.setBackground(QColor("#422006"))  # Dark amber tint
             cursor.insertText(log.message, msg_fmt)
 
         if self._auto_scroll.isChecked():
@@ -294,8 +352,11 @@ class LogsViewQt(QWidget):
         self._show_status("Display cleared")
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
+        """Hien thi status message, tu dong clear sau 4s neu thanh cong."""
         color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status.setStyleSheet(f"font-size: 12px; color: {color};")
+        self._status.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {color};"
+        )
         self._status.setText(message)
         if not is_error:
             QTimer.singleShot(4000, lambda: self._status.setText(""))

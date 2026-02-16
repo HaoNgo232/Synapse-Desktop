@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
 )
+from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt, Slot, QTimer, QObject, Signal
 
 from core.theme import ThemeColors
@@ -110,41 +111,99 @@ class SettingsViewQt(QWidget):
         _excluded_notifier.excluded_changed.connect(self._reload_excluded_from_settings)
 
     def _build_ui(self) -> None:
+        """Build Settings View UI voi 2-column layout nhat quan."""
         settings = load_settings()
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(16)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(3)
+        splitter.setStyleSheet(f"""
+            QSplitter::handle {{
+                background-color: {ThemeColors.BORDER};
+                margin: 4px 0;
+            }}
+            QSplitter::handle:hover {{
+                background-color: {ThemeColors.PRIMARY};
+            }}
+        """)
+
+        # Button styles
+        primary_btn_style = (
+            f"QPushButton {{"
+            f"  background-color: {ThemeColors.PRIMARY};"
+            f"  color: white;"
+            f"  border: none;"
+            f"  border-radius: 6px;"
+            f"  padding: 8px 16px;"
+            f"  font-weight: 700;"
+            f"  font-size: 12px;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {ThemeColors.PRIMARY_HOVER}; }}"
+            f"QPushButton:pressed {{ background-color: {ThemeColors.PRIMARY_PRESSED}; }}"
+        )
+        secondary_btn_style = (
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-radius: 6px;"
+            f"  padding: 5px 12px;"
+            f"  font-weight: 600;"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.BG_HOVER};"
+            f"  border-color: {ThemeColors.BORDER_LIGHT};"
+            f"}}"
+        )
+        checkbox_style = (
+            f"QCheckBox {{"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  font-size: 11px;"
+            f"  font-weight: 500;"
+            f"  spacing: 8px;"
+            f"}}"
+            f"QCheckBox::indicator {{ width: 14px; height: 14px; }}"
+        )
+        combo_style = (
+            f"QComboBox {{"
+            f"  background-color: {ThemeColors.BG_ELEVATED};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-radius: 4px;"
+            f"  padding: 3px 10px;"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  font-size: 11px;"
+            f"}}"
+        )
 
         # ===== Left Column: Configuration =====
         left = QFrame()
         left.setProperty("class", "surface")
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
-        left_layout.setSpacing(12)
+        left_layout.setContentsMargins(12, 12, 12, 12)
+        left_layout.setSpacing(10)
 
         # Header
-        left_header = QHBoxLayout()
-        left_header.addWidget(QLabel("⚙️"))
         conf_title = QLabel("Configuration")
         conf_title.setStyleSheet(
-            f"font-weight: 600; font-size: 16px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        left_header.addWidget(conf_title)
-        left_header.addStretch()
-        left_layout.addLayout(left_header)
+        left_layout.addWidget(conf_title)
 
         # File Tree Options
         left_layout.addWidget(self._section_header("File Tree Options"))
 
         self._gitignore_cb = QCheckBox("Respect .gitignore")
         self._gitignore_cb.setChecked(settings.get("use_gitignore", True))
+        self._gitignore_cb.setStyleSheet(checkbox_style)
         self._gitignore_cb.stateChanged.connect(self._mark_changed)
         left_layout.addWidget(self._gitignore_cb)
         left_layout.addWidget(
-            self._hint_label("Hide files matching .gitignore patterns")
+            self._hint_label("An file khop voi pattern trong .gitignore")
         )
 
         # AI Context
@@ -152,16 +211,18 @@ class SettingsViewQt(QWidget):
 
         self._git_include_cb = QCheckBox("Include Git Diff/Log")
         self._git_include_cb.setChecked(settings.get("include_git_changes", True))
+        self._git_include_cb.setStyleSheet(checkbox_style)
         self._git_include_cb.stateChanged.connect(self._mark_changed)
         left_layout.addWidget(self._git_include_cb)
-        left_layout.addWidget(self._hint_label("Include recent git changes in context"))
+        left_layout.addWidget(self._hint_label("Dua thong tin thay doi git vao prompt hien tai"))
 
         self._relative_paths_cb = QCheckBox("Use relative paths in prompts")
         self._relative_paths_cb.setChecked(settings.get("use_relative_paths", True))
+        self._relative_paths_cb.setStyleSheet(checkbox_style)
         self._relative_paths_cb.stateChanged.connect(self._mark_changed)
         left_layout.addWidget(self._relative_paths_cb)
         left_layout.addWidget(
-            self._hint_label("Paths relative to workspace (avoids PII in shared prompts)")
+            self._hint_label("Dùng đường dẫn tương đối để tránh lộ thong tin hệ thong (PII)")
         )
 
         # Security
@@ -169,9 +230,10 @@ class SettingsViewQt(QWidget):
 
         self._security_cb = QCheckBox("Enable Security Check")
         self._security_cb.setChecked(settings.get("enable_security_check", True))
+        self._security_cb.setStyleSheet(checkbox_style)
         self._security_cb.stateChanged.connect(self._mark_changed)
         left_layout.addWidget(self._security_cb)
-        left_layout.addWidget(self._hint_label("Scan for secrets before copying"))
+        left_layout.addWidget(self._hint_label("Quet secrets (API keys, passwords) truoc khi copy"))
 
         # Presets
         left_layout.addWidget(self._section_header("Quick Presets"))
@@ -180,6 +242,7 @@ class SettingsViewQt(QWidget):
         self._preset_combo.addItem("Select a profile...")
         for name in PRESET_PROFILES:
             self._preset_combo.addItem(name)
+        self._preset_combo.setStyleSheet(combo_style)
         self._preset_combo.currentTextChanged.connect(self._load_preset)
         left_layout.addWidget(self._preset_combo)
 
@@ -187,38 +250,44 @@ class SettingsViewQt(QWidget):
         left_layout.addWidget(self._section_header("Session"))
 
         clear_session_btn = QPushButton("Clear Saved Session")
-        clear_session_btn.setProperty("class", "outlined")
+        clear_session_btn.setStyleSheet(secondary_btn_style)
+        clear_session_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         clear_session_btn.clicked.connect(self._clear_session)
         left_layout.addWidget(clear_session_btn)
-        left_layout.addWidget(self._hint_label("Resets workspace and open files state"))
+        left_layout.addWidget(self._hint_label("Reset workspace va danh sach file dang mo"))
 
         left_layout.addStretch()
 
         # Save / Reset buttons
         save_btn = QPushButton("Save Settings")
-        save_btn.setProperty("class", "primary")
+        save_btn.setStyleSheet(primary_btn_style)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.clicked.connect(self._save_settings)
         left_layout.addWidget(save_btn)
 
         action_row = QHBoxLayout()
+        action_row.setSpacing(6)
         reset_btn = QPushButton("Reset")
-        reset_btn.setProperty("class", "outlined")
+        reset_btn.setStyleSheet(secondary_btn_style)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         reset_btn.clicked.connect(self._reset_settings)
         action_row.addWidget(reset_btn)
 
         export_btn = QPushButton("Export")
-        export_btn.setProperty("class", "outlined")
+        export_btn.setStyleSheet(secondary_btn_style)
+        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         export_btn.clicked.connect(self._export_settings)
         action_row.addWidget(export_btn)
 
         import_btn = QPushButton("Import")
-        import_btn.setProperty("class", "outlined")
+        import_btn.setStyleSheet(secondary_btn_style)
+        import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         import_btn.clicked.connect(self._import_settings)
         action_row.addWidget(import_btn)
         left_layout.addLayout(action_row)
 
         self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: 12px;")
+        self._status.setStyleSheet(f"font-size: 11px; font-weight: 600;")
         left_layout.addWidget(self._status)
 
         splitter.addWidget(left)
@@ -227,23 +296,19 @@ class SettingsViewQt(QWidget):
         right = QFrame()
         right.setProperty("class", "surface")
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(20, 20, 20, 20)
-        right_layout.setSpacing(12)
+        right_layout.setContentsMargins(16, 12, 16, 12)
+        right_layout.setSpacing(10)
 
-        right_header = QHBoxLayout()
-        right_header.addWidget(QLabel("📁"))
         exc_title = QLabel("Excluded Patterns")
         exc_title.setStyleSheet(
-            f"font-weight: 600; font-size: 16px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        right_header.addWidget(exc_title)
-        right_header.addStretch()
-        right_layout.addLayout(right_header)
+        right_layout.addWidget(exc_title)
 
         info = QLabel(
-            "ℹ️ Exclude files/folders from File Tree & AI Context. One pattern per line."
+            "An file/folder khoi File Tree va AI Context. Moi pattern tren mot dong."
         )
-        info.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY}; font-weight: 500;")
+        info.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};")
         info.setWordWrap(True)
         right_layout.addWidget(info)
 
@@ -252,29 +317,41 @@ class SettingsViewQt(QWidget):
         self._excluded_field.setPlaceholderText(
             "node_modules\ndist\nbuild\n__pycache__"
         )
+        self._excluded_field.setFont(QFont("JetBrains Mono, monospace", 10))
+        self._excluded_field.setStyleSheet(
+            f"QPlainTextEdit {{ "
+            f"  background-color: {ThemeColors.BG_ELEVATED}; "
+            f"  border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 6px; "
+            f"  padding: 8px; "
+            f"}}"
+        )
         self._excluded_field.textChanged.connect(self._mark_changed)
         right_layout.addWidget(self._excluded_field, stretch=1)
 
         splitter.addWidget(right)
 
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 3)
+        splitter.setStretchFactor(0, 4)
+        splitter.setStretchFactor(1, 6)
 
         layout.addWidget(splitter)
 
     # ===== Helpers =====
 
     def _section_header(self, text: str) -> QLabel:
-        label = QLabel(text)
+        """Helper tao tieu de section voi style nhat quan."""
+        label = QLabel(text.upper())
         label.setStyleSheet(
-            f"font-size: 13px; font-weight: 600; "
-            f"color: {ThemeColors.TEXT_SECONDARY}; margin-top: 10px;"
+            f"font-size: 10px; font-weight: 700; "
+            f"color: {ThemeColors.TEXT_MUTED}; margin-top: 12px; letter-spacing: 0.5px;"
         )
         return label
 
     def _hint_label(self, text: str) -> QLabel:
+        """Helper tao thong tin huong dan phu."""
         label = QLabel(text)
-        label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
+        label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; padding-left: 2px;")
+        label.setWordWrap(True)
         return label
 
     # ===== Slots =====
@@ -379,8 +456,11 @@ class SettingsViewQt(QWidget):
         return self._has_unsaved
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
+        """Hien thi status message, tu dong clear sau 4s neu thanh cong."""
         color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status.setStyleSheet(f"font-size: 12px; color: {color};")
+        self._status.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {color};"
+        )
         self._status.setText(message)
         if not is_error:
             QTimer.singleShot(4000, lambda: self._status.setText(""))

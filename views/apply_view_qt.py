@@ -525,60 +525,77 @@ class ApplyViewQt(QWidget):
         self._results_layout.addStretch()
 
     def _create_preview_card(self, row: PreviewRow) -> QFrame:
-        """Create a preview card widget with expandable diff viewer."""
+        """Tao preview card voi left accent border theo action type va expandable diff viewer."""
         card = QFrame()
-        card.setStyleSheet(
-            f"background-color: {ApplyViewColors.BG_CARD}; "
-            f"border: 1px solid {ThemeColors.BORDER}; "
-            f"border-radius: 8px; padding: 12px;"
-        )
-        layout = QVBoxLayout(card)
-        layout.setSpacing(8)
-
-        # Header: action badge + file path + diff stats + View Diff button
-        header = QHBoxLayout()
 
         action = row.action.lower() if hasattr(row, "action") else "modify"
         fg, bg = ACTION_COLORS.get(
             action, (ThemeColors.PRIMARY, ThemeColors.BG_ELEVATED)
         )
 
+        # Card style: left accent border theo action color
+        card.setStyleSheet(
+            f"QFrame {{"
+            f"  background-color: {ThemeColors.BG_ELEVATED};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-left: 3px solid {fg};"
+            f"  border-radius: 6px;"
+            f"  padding: 10px 12px;"
+            f"}}"
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        # Header: action badge + file path + diff stats
+        header = QHBoxLayout()
+        header.setSpacing(8)
+
+        # Action badge
         badge = QLabel(action.upper())
         badge.setStyleSheet(
             f"color: {fg}; background-color: {bg}; "
-            f"border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: bold;"
+            f"border: none; border-radius: 3px; "
+            f"padding: 2px 8px; font-size: 10px; font-weight: 700;"
         )
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(20)
         header.addWidget(badge)
 
+        # File path (monospace)
         file_label = QLabel(row.path)
-        file_label.setStyleSheet(f"color: {ThemeColors.TEXT_PRIMARY}; font-size: 13px;")
+        file_label.setStyleSheet(
+            f"color: {ThemeColors.TEXT_PRIMARY}; font-size: 12px; "
+            f"font-family: 'JetBrains Mono', 'Fira Code', monospace; "
+            f"border: none;"
+        )
         header.addWidget(file_label)
         header.addStretch()
 
-        # Diff stats
+        # Diff stats (+added / -removed)
         if row.changes:
             if row.changes.added > 0:
                 add_label = QLabel(f"+{row.changes.added}")
                 add_label.setStyleSheet(
-                    f"color: {ApplyViewColors.DIFF_ADD}; font-size: 12px;"
+                    f"color: {ApplyViewColors.DIFF_ADD}; font-size: 11px; "
+                    f"font-weight: 700; border: none;"
                 )
                 header.addWidget(add_label)
             if row.changes.removed > 0:
                 rm_label = QLabel(f"-{row.changes.removed}")
                 rm_label.setStyleSheet(
-                    f"color: {ApplyViewColors.DIFF_REMOVE}; font-size: 12px;"
+                    f"color: {ApplyViewColors.DIFF_REMOVE}; font-size: 11px; "
+                    f"font-weight: 700; border: none;"
                 )
                 header.addWidget(rm_label)
 
         layout.addLayout(header)
 
-        # Description (nếu có)
+        # Description (neu co)
         if row.description:
             desc_label = QLabel(row.description)
             desc_label.setStyleSheet(
-                f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; "
-                f"padding-left: 4px;"
+                f"color: {ThemeColors.PRIMARY}; font-size: 12px; "
+                f"padding-left: 4px; border: none;"
             )
             desc_label.setWordWrap(True)
             layout.addWidget(desc_label)
@@ -587,9 +604,10 @@ class ApplyViewQt(QWidget):
         has_diff = hasattr(row, "diff_lines") and row.diff_lines
 
         if has_diff:
-            # Container cho diff viewer — ban đầu ẩn
+            # Container cho diff viewer - ban dau an
             diff_container = QFrame()
             diff_container.setVisible(False)
+            diff_container.setStyleSheet("border: none;")
             diff_layout = QVBoxLayout(diff_container)
             diff_layout.setContentsMargins(0, 4, 0, 0)
 
@@ -598,22 +616,23 @@ class ApplyViewQt(QWidget):
             diff_viewer.setMaximumHeight(400)
             diff_layout.addWidget(diff_viewer)
 
-            # "View Diff" toggle button
-            diff_btn = QPushButton("▶ View Diff")
+            # Toggle button
+            diff_btn = QPushButton("View Diff")
             diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             diff_btn.setStyleSheet(
                 f"QPushButton {{"
-                f"  color: {ThemeColors.PRIMARY}; "
-                f"  background-color: transparent; "
-                f"  border: 1px solid {ThemeColors.PRIMARY}; "
-                f"  border-radius: 4px; "
-                f"  padding: 3px 12px; "
-                f"  font-size: 11px; "
+                f"  color: {ThemeColors.PRIMARY};"
+                f"  background-color: transparent;"
+                f"  border: 1px solid {ThemeColors.BORDER};"
+                f"  border-radius: 4px;"
+                f"  padding: 3px 12px;"
+                f"  font-size: 11px;"
                 f"  font-weight: 600;"
                 f"}}"
                 f"QPushButton:hover {{"
-                f"  background-color: {ThemeColors.PRIMARY}; "
-                f"  color: #FFFFFF;"
+                f"  background-color: {ThemeColors.PRIMARY};"
+                f"  color: white;"
+                f"  border-color: {ThemeColors.PRIMARY};"
                 f"}}"
             )
             diff_btn.setFixedHeight(24)
@@ -621,7 +640,7 @@ class ApplyViewQt(QWidget):
             def _toggle_diff(checked=False, container=diff_container, btn=diff_btn):
                 is_visible = container.isVisible()
                 container.setVisible(not is_visible)
-                btn.setText("▼ Hide Diff" if not is_visible else "▶ View Diff")
+                btn.setText("Hide Diff" if not is_visible else "View Diff")
 
             diff_btn.clicked.connect(_toggle_diff)
 
@@ -633,44 +652,91 @@ class ApplyViewQt(QWidget):
 
             layout.addWidget(diff_container)
         elif action != "rename":
-            # Không có diff data — hiển thị hint
+            # Khong co diff data - hien thi hint
             no_diff = QLabel("No diff available (file may not exist yet)")
             no_diff.setStyleSheet(
-                f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; "
-                f"font-style: italic; padding-left: 4px;"
+                f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 11px; "
+                f"font-style: italic; padding-left: 4px; border: none;"
             )
             layout.addWidget(no_diff)
 
         return card
 
     def _create_result_card(self, result: ActionResult) -> QFrame:
-        """Create a result card (success/error)."""
+        """Tao result card (success/error) voi left accent border."""
         card = QFrame()
+        action = result.action.lower() if hasattr(result, "action") else "modify"
 
         if result.success:
+            accent_color = ApplyViewColors.SUCCESS_TEXT
             card.setStyleSheet(
-                f"background-color: #052E16; border: 1px solid #166534; "
-                f"border-radius: 8px; padding: 12px;"
+                f"QFrame {{"
+                f"  background-color: #052E16;"
+                f"  border: 1px solid #166534;"
+                f"  border-left: 3px solid {accent_color};"
+                f"  border-radius: 6px;"
+                f"  padding: 8px 12px;"
+                f"}}"
             )
         else:
+            accent_color = ApplyViewColors.ERROR_TEXT
             card.setStyleSheet(
-                f"background-color: #450A0A; border: 1px solid #991B1B; "
-                f"border-radius: 8px; padding: 12px;"
+                f"QFrame {{"
+                f"  background-color: #450A0A;"
+                f"  border: 1px solid #991B1B;"
+                f"  border-left: 3px solid {accent_color};"
+                f"  border-radius: 6px;"
+                f"  padding: 8px 12px;"
+                f"}}"
             )
 
         layout = QVBoxLayout(card)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
 
-        icon = "✅" if result.success else "❌"
-        status_label = QLabel(f"{icon} {result.path}")
-        status_label.setStyleSheet(
-            f"color: {ApplyViewColors.SUCCESS_TEXT if result.success else ApplyViewColors.ERROR_TEXT}; "
-            f"font-size: 13px;"
+        # Header: status icon + action badge + file path
+        header = QHBoxLayout()
+        header.setSpacing(8)
+
+        # Status icon
+        icon_text = "OK" if result.success else "FAIL"
+        icon_color = ApplyViewColors.SUCCESS_TEXT if result.success else ApplyViewColors.ERROR_TEXT
+        icon_label = QLabel(icon_text)
+        icon_label.setStyleSheet(
+            f"color: {icon_color}; font-size: 10px; font-weight: 700; border: none;"
         )
-        layout.addWidget(status_label)
+        header.addWidget(icon_label)
 
+        # Action badge
+        fg, bg = ACTION_COLORS.get(
+            action, (ThemeColors.PRIMARY, ThemeColors.BG_ELEVATED)
+        )
+        badge = QLabel(action.upper())
+        badge.setStyleSheet(
+            f"color: {fg}; background-color: {bg}; border: none; "
+            f"border-radius: 3px; padding: 1px 6px; font-size: 10px; font-weight: 700;"
+        )
+        badge.setFixedHeight(18)
+        header.addWidget(badge)
+
+        # File path (monospace)
+        path_label = QLabel(result.path)
+        path_label.setStyleSheet(
+            f"color: {icon_color}; font-size: 12px; "
+            f"font-family: 'JetBrains Mono', 'Fira Code', monospace; "
+            f"font-weight: 600; border: none;"
+        )
+        header.addWidget(path_label)
+        header.addStretch()
+        layout.addLayout(header)
+
+        # Error message (neu co)
         if result.message:
             msg = QLabel(result.message)
-            msg.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px;")
+            msg.setStyleSheet(
+                f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; "
+                f"padding-left: 4px; border: none;"
+            )
             msg.setWordWrap(True)
             layout.addWidget(msg)
 
@@ -685,8 +751,11 @@ class ApplyViewQt(QWidget):
         self._copy_error_btn.hide()
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
+        """Hien thi status message, tu dong clear sau 5s neu thanh cong."""
         color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status_label.setStyleSheet(f"font-size: 12px; color: {color};")
+        self._status_label.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {color};"
+        )
         self._status_label.setText(message)
         if message and not is_error:
             QTimer.singleShot(5000, lambda: self._status_label.setText(""))

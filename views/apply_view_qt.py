@@ -91,121 +91,215 @@ class ApplyViewQt(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(16)
+        """Build Apply View voi 2-panel splitter (40:60)."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(3)
+        splitter.setStyleSheet(f"""
+            QSplitter::handle {{
+                background-color: {ThemeColors.BORDER};
+                margin: 4px 0;
+            }}
+            QSplitter::handle:hover {{
+                background-color: {ThemeColors.PRIMARY};
+            }}
+        """)
 
-        # Left: OPX Input
+        # Left: OPX Input (~40%)
         left = self._build_left_panel()
         splitter.addWidget(left)
 
-        # Right: Preview/Results
+        # Right: Preview/Results (~60%)
         right = self._build_right_panel()
         splitter.addWidget(right)
 
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
+        # Ty le 40:60 cho input:preview
+        splitter.setStretchFactor(0, 40)
+        splitter.setStretchFactor(1, 60)
+        splitter.setSizes([500, 750])
 
         layout.addWidget(splitter)
 
     def _build_left_panel(self) -> QFrame:
+        """Build left panel: OPX input voi compact header va styled buttons."""
         panel = QFrame()
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
-        # Header
+        # Header: title + workspace indicator
         header = QHBoxLayout()
-        title_layout = QHBoxLayout()
-        title_layout.setSpacing(8)
+        header.setSpacing(8)
+
         title_label = QLabel("OPX Input")
         title_label.setStyleSheet(
-            f"font-weight: 600; font-size: 15px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        title_layout.addWidget(title_label)
-        header.addLayout(title_layout)
+        header.addWidget(title_label)
         header.addStretch()
 
-        # Workspace indicator
-        self._workspace_label = QLabel("No workspace selected")
+        # Workspace indicator nho gon
+        self._workspace_label = QLabel("No workspace")
         self._workspace_label.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_SECONDARY}; "
-            f"background-color: {ApplyViewColors.BG_CARD}; "
-            f"border: 1px solid {ThemeColors.BORDER}; "
-            f"border-radius: 6px; padding: 4px 10px;"
+            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; font-weight: 500;"
         )
         header.addWidget(self._workspace_label)
         layout.addLayout(header)
 
-        # Description
-        desc = QLabel("Paste OPX code from AI chat below:")
-        desc.setStyleSheet(f"font-size: 13px; color: {ThemeColors.TEXT_SECONDARY}; font-weight: 500;")
-        layout.addWidget(desc)
-
-        # OPX input
+        # OPX input textarea
         self._opx_input = QPlainTextEdit()
         self._opx_input.setPlaceholderText(
-            "Paste the LLM's OPX XML response here...\n\n"
-            'Example:\n<edit file="path/to/file" op="patch">\n  ...\n</edit>'
+            "Paste OPX XML response tu AI chat...\n\n"
+            'Vi du:\n<edit file="path/to/file" op="patch">\n  ...\n</edit>'
         )
+        self._opx_input.setStyleSheet(f"""
+            QPlainTextEdit {{
+                font-family: 'JetBrains Mono', 'Fira Code', monospace;
+                font-size: 12px;
+                background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 6px;
+                padding: 8px;
+            }}
+            QPlainTextEdit:focus {{
+                border-color: {ThemeColors.PRIMARY};
+            }}
+        """)
         layout.addWidget(self._opx_input, stretch=1)
 
-        # Buttons
+        # Button row voi styled buttons
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        # Secondary style cho Paste/Clear/Preview
+        secondary_style = (
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-radius: 6px;"
+            f"  padding: 7px 14px;"
+            f"  font-weight: 600;"
+            f"  font-size: 12px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.BG_HOVER};"
+            f"  border-color: {ThemeColors.BORDER_LIGHT};"
+            f"}}"
+        )
+
+        # Danger style cho Clear
+        danger_style = (
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.ERROR};"
+            f"  border: 1px solid {ThemeColors.ERROR};"
+            f"  border-radius: 6px;"
+            f"  padding: 7px 14px;"
+            f"  font-weight: 600;"
+            f"  font-size: 12px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.ERROR};"
+            f"  color: white;"
+            f"}}"
+        )
 
         paste_btn = QPushButton("Paste")
-        paste_btn.setProperty("class", "outlined")
+        paste_btn.setStyleSheet(secondary_style)
+        paste_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         paste_btn.clicked.connect(self._paste_from_clipboard)
         btn_row.addWidget(paste_btn)
 
         clear_btn = QPushButton("Clear")
-        clear_btn.setProperty("class", "danger")
+        clear_btn.setStyleSheet(danger_style)
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         clear_btn.clicked.connect(self._clear_input)
         btn_row.addWidget(clear_btn)
 
         btn_row.addStretch()
 
         preview_btn = QPushButton("Preview")
-        preview_btn.setProperty("class", "outlined")
+        preview_btn.setStyleSheet(secondary_style)
+        preview_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         preview_btn.clicked.connect(self._preview_changes)
         btn_row.addWidget(preview_btn)
 
+        # Primary CTA: Apply Changes
         apply_btn = QPushButton("Apply Changes")
-        apply_btn.setProperty("class", "primary")
+        apply_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 18px;
+                font-weight: 700;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.PRIMARY_HOVER};
+            }}
+            QPushButton:pressed {{
+                background-color: {ThemeColors.PRIMARY_PRESSED};
+            }}
+        """)
+        apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         apply_btn.clicked.connect(self._apply_changes)
         btn_row.addWidget(apply_btn)
 
         layout.addLayout(btn_row)
 
-        # Status
+        # Status label
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet(f"font-size: 12px;")
+        self._status_label.setStyleSheet(
+            f"font-size: 11px; font-weight: 500;"
+        )
         layout.addWidget(self._status_label)
 
         return panel
 
     def _build_right_panel(self) -> QFrame:
+        """Build right panel: Preview/Results voi scroll area."""
         panel = QFrame()
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
-        # Header
+        # Header: title + Copy Error Context btn
         header = QHBoxLayout()
         title = QLabel("Preview")
         title.setStyleSheet(
-            f"font-weight: 600; font-size: 15px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(title)
         header.addStretch()
 
-        # Copy error context button
+        # Copy error context button (an mac dinh, hien khi co loi)
         self._copy_error_btn = QPushButton("Copy Error Context")
-        self._copy_error_btn.setProperty("class", "danger")
+        self._copy_error_btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.ERROR};"
+            f"  border: 1px solid {ThemeColors.ERROR};"
+            f"  border-radius: 6px;"
+            f"  padding: 5px 12px;"
+            f"  font-weight: 600;"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.ERROR};"
+            f"  color: white;"
+            f"}}"
+        )
+        self._copy_error_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_error_btn.clicked.connect(self._copy_error_context)
         self._copy_error_btn.hide()
         header.addWidget(self._copy_error_btn)
@@ -219,13 +313,14 @@ class ApplyViewQt(QWidget):
         self._results_container = QWidget()
         self._results_layout = QVBoxLayout(self._results_container)
         self._results_layout.setContentsMargins(0, 0, 0, 0)
-        self._results_layout.setSpacing(12)
+        self._results_layout.setSpacing(8)
         self._results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Empty state
-        empty_label = QLabel("Paste OPX code and click Preview to see changes")
+        empty_label = QLabel("Paste OPX va nhan Preview de xem truoc cac thay doi")
         empty_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_SECONDARY}; font-style: italic; font-size: 13px; padding: 40px;"
+            f"color: {ThemeColors.TEXT_MUTED}; font-style: italic; "
+            f"font-size: 12px; padding: 32px;"
         )
         empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._results_layout.addWidget(empty_label)

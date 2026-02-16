@@ -138,7 +138,7 @@ App data is stored locally at: `~/.synapse-desktop/`
 ## Security & Privacy (read before sharing prompts)
 
 - Prompts/previews may contain **absolute paths** (e.g., `C:\Users\<name>\...`), which might reveal your **username/machine structure** when pasted onto web chats.
-- If you plan to share outputs or post to public issues, use **relative paths** (none implemented yet) or manually redact sensitive information before sending.
+- If you plan to share outputs or post to public issues, use **relative paths** (default: relative, can be toggled in the Settings tab) or manually redact sensitive information before sending.
 
 ---
 

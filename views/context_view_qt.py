@@ -222,20 +222,6 @@ class ContextViewQt(QWidget):
         refresh_btn.clicked.connect(self._refresh_tree)
         layout.addWidget(refresh_btn)
 
-        # Remote repos dropdown
-        remote_btn = QToolButton()
-        remote_btn.setIcon(QIcon(os.path.join(assets_dir, "cloud.svg")))
-        remote_btn.setIconSize(QSize(16, 16))
-        remote_btn.setToolTip("Remote Repositories")
-        remote_btn.setStyleSheet(icon_btn_style)
-        remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        remote_menu = QMenu(remote_btn)
-        remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
-        remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
-        remote_btn.setMenu(remote_menu)
-        layout.addWidget(remote_btn)
-
         # Separator nho
         sep1 = QFrame()
         sep1.setFixedWidth(1)
@@ -270,63 +256,94 @@ class ContextViewQt(QWidget):
         sep2.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
         layout.addWidget(sep2)
 
-        # Related files toggle
-        related_active_style = (
-            f"QToolButton {{ "
-            f"  background: {ThemeColors.SUCCESS}; border: none; "
-            f"  border-radius: 6px; padding: 4px 10px; font-size: 11px; "
-            f"  color: #FFFFFF; font-weight: 600; "
-            f"}} "
-            f"QToolButton:hover {{ "
-            f"  background: #059669; "
-            f"}}"
-        )
-        related_inactive_style = (
-            f"QToolButton {{ "
-            f"  background: transparent; border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 6px; padding: 4px 10px; font-size: 11px; "
-            f"  color: {ThemeColors.TEXT_SECONDARY}; font-weight: 500; "
-            f"}} "
-            f"QToolButton:hover {{ "
-            f"  background: {ThemeColors.BG_HOVER}; "
-            f"  color: {ThemeColors.TEXT_PRIMARY}; "
-            f"}}"
-        )
-        self._related_active_style = related_active_style
-        self._related_inactive_style = related_inactive_style
+        # Remote repos dropdown
+        remote_btn = QToolButton()
+        remote_btn.setIcon(QIcon(os.path.join(assets_dir, "cloud.png")))
+        remote_btn.setIconSize(QSize(16, 16))
+        remote_btn.setToolTip("Remote Repositories")
+        remote_btn.setStyleSheet(icon_btn_style)
+        remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        remote_menu = QMenu(remote_btn)
+        remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
+        remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
+        remote_btn.setMenu(remote_menu)
+        layout.addWidget(remote_btn)
 
-        self._related_btn = QToolButton()
-        self._related_btn.setText("Related")
-        self._related_btn.setToolTip("Auto-select files imported by your selection")
-        self._related_btn.setStyleSheet(related_inactive_style)
-        self._related_btn.setCheckable(True)
-        self._related_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._related_btn.clicked.connect(self._toggle_related_mode)
-        layout.addWidget(self._related_btn)
+        # Related files dropdown menu with presets
+        self._related_menu_btn = QToolButton()
+        self._related_menu_btn.setIcon(QIcon(os.path.join(assets_dir, "layers.svg")))
+        self._related_menu_btn.setText("Related: Off")
+        self._related_menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._related_menu_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._related_menu_btn.setIconSize(QSize(14, 14))
+        self._related_menu_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: {ThemeColors.BG_ELEVATED};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 11px;
+                color: {ThemeColors.TEXT_PRIMARY};
+                font-weight: 500;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.BG_HOVER};
+            }}
+            QToolButton::menu-indicator {{
+                width: 0px;
+            }}
+        """)
+        self._related_menu_btn.setToolTip("Auto-select related files with depth presets")
+        self._related_menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # Depth spinbox
-        level_label = QLabel("Depth")
-        level_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px;"
-        )
-        layout.addWidget(level_label)
+        # Create menu with presets
+        related_menu = QMenu(self._related_menu_btn)
+        related_menu.setStyleSheet(f"""
+            QMenu {{
+                background: {ThemeColors.BG_ELEVATED};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 8px 16px;
+                border-radius: 4px;
+                color: {ThemeColors.TEXT_PRIMARY};
+            }}
+            QMenu::item:selected {{
+                background: {ThemeColors.BG_HOVER};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: {ThemeColors.BORDER};
+                margin: 4px 8px;
+            }}
+        """)
 
-        self._related_level_spin = QSpinBox()
-        self._related_level_spin.setRange(1, 5)
-        self._related_level_spin.setValue(1)
-        self._related_level_spin.setToolTip("Relationship depth")
-        self._related_level_spin.setFixedWidth(40)
-        self._related_level_spin.setFixedHeight(24)
-        self._related_level_spin.setStyleSheet(
-            f"QSpinBox {{ "
-            f"  background: {ThemeColors.BG_ELEVATED}; color: {ThemeColors.TEXT_PRIMARY}; "
-            f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; "
-            f"  padding: 1px; font-size: 11px; "
-            f"}} "
-            f"QSpinBox::up-button, QSpinBox::down-button {{ width: 10px; }}"
-        )
-        self._related_level_spin.valueChanged.connect(self._on_related_level_changed)
-        layout.addWidget(self._related_level_spin)
+        # Menu actions without icons
+        off_action = related_menu.addAction("Off")
+        related_menu.addSeparator()
+        
+        direct_action = related_menu.addAction("Direct (depth 1)")
+        nearby_action = related_menu.addAction("Nearby (depth 2)")
+        deep_action = related_menu.addAction("Deep (depth 3)")
+        deeper_action = related_menu.addAction("Deeper (depth 4)")
+        deepest_action = related_menu.addAction("Deepest (depth 5)")
+
+        # Connect actions
+        off_action.triggered.connect(lambda: self._set_related_mode(False, 0))
+        direct_action.triggered.connect(lambda: self._set_related_mode(True, 1))
+        nearby_action.triggered.connect(lambda: self._set_related_mode(True, 2))
+        deep_action.triggered.connect(lambda: self._set_related_mode(True, 3))
+        deeper_action.triggered.connect(lambda: self._set_related_mode(True, 4))
+        deepest_action.triggered.connect(lambda: self._set_related_mode(True, 5))
+
+        self._related_menu_btn.setMenu(related_menu)
+        layout.addWidget(self._related_menu_btn)
+        
+        # Track current depth for internal use
+        self._related_depth = 1
 
         # Stretch de day token counter sang ben phai
         layout.addStretch()
@@ -1277,19 +1294,18 @@ class ContextViewQt(QWidget):
 
     # ===== Related Files =====
 
-    @Slot()
-    def _toggle_related_mode(self) -> None:
-        """Toggle related files mode on/off."""
-        if self._related_mode_active:
-            self._deactivate_related_mode()
-        else:
+    def _set_related_mode(self, active: bool, depth: int) -> None:
+        """Set related mode with specific depth preset."""
+        if active:
+            self._related_depth = depth
             self._activate_related_mode()
+        else:
+            self._deactivate_related_mode()
 
     def _activate_related_mode(self) -> None:
         """Activate related mode and resolve for current selection."""
         self._related_mode_active = True
-        self._related_btn.setChecked(True)
-        self._related_btn.setStyleSheet(self._related_active_style)
+        self._update_related_button_text()
         self._resolve_related_files()
 
     def _deactivate_related_mode(self) -> None:
@@ -1302,21 +1318,22 @@ class ContextViewQt(QWidget):
 
         self._last_added_related_files.clear()
         self._related_mode_active = False
-        self._related_btn.setChecked(False)
-        self._related_btn.setText("Related")
-        self._related_btn.setStyleSheet(self._related_inactive_style)
-
-    @Slot(int)
-    def _on_related_level_changed(self, value: int) -> None:
-        """Handle level spinbox change — re-resolve if mode active."""
-        if self._related_mode_active:
-            # Remove old related files first
-            if self._last_added_related_files:
-                self.file_tree_widget.remove_paths_from_selection(
-                    self._last_added_related_files
-                )
-                self._last_added_related_files.clear()
-            self._resolve_related_files()
+        self._related_menu_btn.setText("Related: Off")
+        
+    def _update_related_button_text(self) -> None:
+        """Update button text based on current depth and count."""
+        if not self._related_mode_active:
+            self._related_menu_btn.setText("Related: Off")
+            return
+            
+        depth_names = {1: "Direct", 2: "Nearby", 3: "Deep", 4: "Deeper", 5: "Deepest"}
+        depth_name = depth_names.get(self._related_depth, f"Depth {self._related_depth}")
+        count = len(self._last_added_related_files)
+        
+        if count > 0:
+            self._related_menu_btn.setText(f"Related: {depth_name} ({count})")
+        else:
+            self._related_menu_btn.setText(f"Related: {depth_name}")
 
     def _resolve_related_files(self) -> None:
         """Resolve related files for all currently selected files."""
@@ -1347,7 +1364,7 @@ class ContextViewQt(QWidget):
             self._related_btn.setText("Related")
             return
 
-        depth = self._related_level_spin.value()
+        depth = self._related_depth
 
         # Resolve in background to avoid UI freeze
         def resolve():
@@ -1400,10 +1417,10 @@ class ContextViewQt(QWidget):
             self._last_added_related_files = new_related
 
             count = len(new_related)
-            self._related_btn.setText(f"Related ({count})")
+            self._update_related_button_text()
             if count > 0:
                 self._show_status(
-                    f"Found {count} related files (depth={self._related_level_spin.value()})"
+                    f"Found {count} related files (depth={self._related_depth})"
                 )
             else:
                 self._show_status("No related files found")

@@ -27,7 +27,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QStatusBar,
 )
-from PySide6.QtCore import Qt, Slot, QTimer
+from PySide6.QtCore import Qt, Slot, QTimer, QSize
+from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors, ThemeFonts, apply_theme
 from core.utils.qt_utils import (
@@ -237,8 +238,10 @@ class SynapseMainWindow(QMainWindow):
         layout.addWidget(clear_btn)
 
         # ── Recent folders button (outline style with dropdown) ──
+        assets_dir = Path(__file__).parent / "assets"
         self._recent_btn = QToolButton()
-        self._recent_btn.setText("▾ Recent")
+        self._recent_btn.setIcon(QIcon(str(assets_dir / "clock-arrow-down.svg")))
+        self._recent_btn.setIconSize(QSize(18, 18))
         self._recent_btn.setToolTip("Recent folders (Ctrl+R)")
         self._recent_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._recent_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -248,7 +251,7 @@ class SynapseMainWindow(QMainWindow):
                 color: {ThemeColors.TEXT_SECONDARY};
                 border: 1px solid {ThemeColors.BORDER};
                 border-radius: {ThemeFonts.SIZE_BODY // 2}px;
-                padding: 4px 14px;
+                padding: 6px 10px;
                 font-size: {ThemeFonts.SIZE_BODY}px;
                 font-weight: 500;
             }}

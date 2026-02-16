@@ -71,7 +71,7 @@ class HistoryViewQt(QWidget):
 
         self._stats_label = QLabel("")
         self._stats_label.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(self._stats_label)
 
@@ -273,11 +273,11 @@ class HistoryViewQt(QWidget):
             color = _ACTION_COLORS.get(action_type, ThemeColors.TEXT_SECONDARY)
 
             action_label = QLabel(
-                f"<span style='background-color:{color};color:#FFF;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:bold;'>{action_type}</span> {file_name}"
+                f"<span style='background-color:{color};color:#FFF;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:bold;'>{action_type}</span> {file_name}"
             )
             action_label.setTextFormat(Qt.TextFormat.RichText)
             action_label.setStyleSheet(
-                f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};"
+                f"font-size: 12px; color: {ThemeColors.TEXT_PRIMARY};"
             )
             self._detail_layout.addWidget(action_label)
 

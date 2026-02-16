@@ -359,8 +359,8 @@ class FileTreeDelegate(QStyledItemDelegate):
                 int(y + CHECKBOX_SIZE // 2),
             )
         else:
-            # Empty checkbox
-            painter.setPen(QPen(COLOR_BORDER, 1))
+            # Empty checkbox — dùng màu sáng hơn để dễ nhìn trên dark bg
+            painter.setPen(QPen(QColor("#64748B"), 1.5))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(cb_rect, 3, 3)
 
@@ -378,15 +378,15 @@ class FileTreeDelegate(QStyledItemDelegate):
         badge_y = y + (row_height - BADGE_HEIGHT) / 2
         badge_rect = QRectF(x, badge_y, width, BADGE_HEIGHT)
 
-        # Background
+        # Background — tăng alpha để dễ đọc hơn trên dark bg
         bg_color = QColor(color)
-        bg_color.setAlpha(30)
+        bg_color.setAlpha(55)
         path = QPainterPath()
         path.addRoundedRect(badge_rect, BADGE_RADIUS, BADGE_RADIUS)
         painter.fillPath(path, bg_color)
 
-        # Border
-        painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 80), 1))
+        # Border — tăng alpha cho rõ hơn
+        painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 140), 1))
         painter.drawRoundedRect(badge_rect, BADGE_RADIUS, BADGE_RADIUS)
 
         # Text

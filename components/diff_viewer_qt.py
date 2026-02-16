@@ -75,7 +75,7 @@ class DiffViewerWidget(QWidget):
                 fmt.setBackground(QColor(DiffColors.HEADER_BG))
                 fmt.setForeground(QColor(DiffColors.HEADER_TEXT))
             else:
-                fmt.setForeground(QColor("#94A3B8"))  # Muted text for context
+                fmt.setForeground(QColor("#CBD5E1"))  # Brighter muted text for context
 
             # Line number prefix
             prefix = ""

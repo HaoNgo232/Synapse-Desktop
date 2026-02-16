@@ -266,7 +266,7 @@ class ContextViewQt(QWidget):
 
         self._token_count_label = QLabel("0 tokens")
         self._token_count_label.setStyleSheet(
-            f"font-weight: 600; font-size: 13px; color: {ThemeColors.PRIMARY};"
+            f"font-weight: 700; font-size: 14px; color: {ThemeColors.PRIMARY};"
         )
         header.addWidget(self._token_count_label)
         layout.addLayout(header)
@@ -314,7 +314,7 @@ class ContextViewQt(QWidget):
         format_layout = QHBoxLayout()
         format_label = QLabel("Output Format:")
         format_label.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
         )
         format_layout.addWidget(format_label)
 
@@ -1191,23 +1191,25 @@ class ContextViewQt(QWidget):
             return
 
         if is_error:
-            bg_color = "#FEE2E2"  # Light red background
-            text_color = "#7F1D1D"  # Darker red text (tăng tương phản)
+            bg_color = "#FCA5A5"  # Brighter red background
+            text_color = "#450A0A"  # Very dark red text — high contrast
+            border_color = "#DC2626"  # Solid red border
             icon = "⚠"
         else:
-            bg_color = "#A7F3D0"  # Darker green background (tăng tương phản)
-            text_color = "#064E3B"  # Darker green text
+            bg_color = "#6EE7B7"  # Brighter green background
+            text_color = "#022C22"  # Very dark green text — high contrast
+            border_color = "#059669"  # Solid green border
             icon = "✓"
 
         self._status_label.setStyleSheet(f"""
             QLabel {{
                 font-size: 13px;
-                font-weight: 600;
+                font-weight: 700;
                 color: {text_color};
                 background-color: {bg_color};
                 border-radius: 6px;
-                padding: 8px 12px;
-                border: 1px solid {text_color}66;
+                padding: 10px 14px;
+                border: 2px solid {border_color};
             }}
         """)
         self._status_label.setText(f"{icon} {message}")

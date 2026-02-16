@@ -243,7 +243,7 @@ class SettingsViewQt(QWidget):
         info = QLabel(
             "ℹ️ Exclude files/folders from File Tree & AI Context. One pattern per line."
         )
-        info.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};")
+        info.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY}; font-weight: 500;")
         info.setWordWrap(True)
         right_layout.addWidget(info)
 
@@ -274,7 +274,7 @@ class SettingsViewQt(QWidget):
 
     def _hint_label(self, text: str) -> QLabel:
         label = QLabel(text)
-        label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};")
+        label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
         return label
 
     # ===== Slots =====

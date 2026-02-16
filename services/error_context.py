@@ -223,34 +223,51 @@ def _build_focused_error_context(
         sections.append("---")
         sections.append("")
 
-    # Action required - cụ thể
+    # Successful operations context (AI can biet file nao da thay doi)
+    success_rows = [r for r in row_results if r.success]
+    if success_rows:
+        sections.append("## Successfully Applied (already in codebase)")
+        sections.append("")
+        for sr in success_rows:
+            sections.append(f"- {sr.action.upper()} `{sr.path}` - {sr.message}")
+        sections.append("")
+        sections.append(
+            "**Note:** These changes are already applied. "
+            "Account for them when fixing failed operations."
+        )
+        sections.append("")
+        sections.append("---")
+        sections.append("")
+
+    # Action required - huong dan ro rang cho IDE agent (da co edit tool san)
     sections.append("# ACTION REQUIRED")
     sections.append("")
-    sections.append("1. **Read the current file content** to see what changed")
-    sections.append("2. **Update the `<find>` block** to match the CURRENT file state")
-    sections.append("3. **Regenerate OPX** with corrected search patterns")
+    sections.append(
+        "Fix the failed operations above. All information you need is provided. "
+        "Do NOT ask questions - start fixing immediately."
+    )
     sections.append("")
-
-    if include_opx:
-        sections.append("**IMPORTANT: Always respond with OPX format!**")
-        sections.append("")
-        sections.append("Generate corrected OPX using this format:")
-        sections.append("```xml")
-        sections.append('<edit file="path/to/file" op="patch">')
-        sections.append("  <why>Description of fix</why>")
-        sections.append("  <find>")
-        sections.append("<<<")
-        sections.append("exact text to find (copy from current file content above)")
-        sections.append(">>>")
-        sections.append("  </find>")
-        sections.append("  <put>")
-        sections.append("<<<")
-        sections.append("replacement text")
-        sections.append(">>>")
-        sections.append("  </put>")
-        sections.append("</edit>")
-        sections.append("```")
-        sections.append("")
+    sections.append("**For each failed operation:**")
+    sections.append(
+        "1. Open the file listed above"
+    )
+    sections.append(
+        "2. Find the section that needs to be changed "
+        "(use the CURRENT FILE CONTENT and the failed search block as reference)"
+    )
+    sections.append(
+        "3. Apply the intended replacement shown above"
+    )
+    sections.append(
+        "4. If a cascade failure occurred, the file was already modified by "
+        "a previous operation - find the NEW text in the file and apply the change there"
+    )
+    sections.append("")
+    sections.append(
+        "**IMPORTANT:** Only fix the FAILED operations. "
+        "Successful operations are already applied - do NOT touch them."
+    )
+    sections.append("")
 
     return sections
 
@@ -385,33 +402,26 @@ def _build_change_block_details(block: dict, index: int) -> List[str]:
 
 
 def _build_fix_instructions(include_opx: bool) -> List[str]:
-    """Build instructions cho AI de fix"""
+    """Build instructions cho IDE agent de fix truc tiep."""
     instructions = [
         "",
         "# Instructions to Fix",
         "",
-        "Please analyze the errors above and understand the current state of each file.",
+        "Analyze the errors above and fix the failed operations directly.",
+        "Do NOT ask questions - all information you need is above.",
         "",
-        "**Key points to fix:**",
-        "1. Search patterns that failed - they need to match the CURRENT file content",
-        "2. Cascade failures - previous operations changed the file, update your patterns accordingly",
-        "3. File structure - ensure you understand the full context of each file",
+        "**Steps:**",
+        "1. Open each failed file",
+        "2. Find the code section that needs changing (refer to the search patterns and current file state)",
+        "3. Apply the intended replacement using your edit tools",
         "",
         "**For cascade failures:**",
-        "- Update search patterns to match the file state AFTER previous operations",
-        '- Consider using occurrence="last" if multiple matches exist',
-        "- Make search patterns more specific by including more surrounding context",
+        "- A previous operation already changed the file",
+        "- Find the NEW text in the file (after previous changes) and apply the fix there",
+        "",
+        "**IMPORTANT:** Only fix FAILED operations. Successful ones are already applied.",
         "",
     ]
-
-    if include_opx:
-        instructions.append(
-            "Generate new OPX with corrected operations based on the current file states."
-        )
-    else:
-        instructions.append(
-            "Provide the corrected code changes that should be applied to fix these issues."
-        )
 
     return instructions
 
@@ -459,26 +469,31 @@ def build_general_error_context(
     error_message: str,
     file_path: Optional[str] = None,
     additional_context: Optional[str] = None,
+    workspace_path: Optional[str] = None,
 ) -> str:
     """
-    Build context cho loi bat ky trong app (khong chi Apply).
+    Build context day du cho loi bat ky trong app.
+
+    Cung cap du thong tin de AI co the fix ngay ma khong can hoi lai:
+    - Error details
+    - File content hien tai (neu co OPX -> extract file paths -> doc content)
+    - OPX goc duoc format trong code block
+    - Prompt ro rang yeu cau respond bang OPX format
 
     Args:
-        error_type: Loai loi (e.g., "Parse Error", "File Error")
+        error_type: Loai loi (e.g., "Parse Error", "Apply Error")
         error_message: Message loi
         file_path: File lien quan (optional)
-        additional_context: Context them (optional)
+        additional_context: Context them, thuong la OPX goc (optional)
+        workspace_path: Workspace root path de doc file content (optional)
 
     Returns:
-        String context cho AI
+        String context day du cho AI fix ngay
     """
     sections = [
-        f"## Error Type: {error_type}",
+        f"# {error_type.upper()} - FIX REQUIRED",
         "",
-        f"**Error Message:**",
-        "```",
-        error_message,
-        "```",
+        f"**Error:** `{error_message}`",
         "",
     ]
 
@@ -490,30 +505,86 @@ def build_general_error_context(
             ]
         )
 
+    # Neu additional_context la OPX, extract file paths va doc content hien tai
+    if additional_context and workspace_path:
+        affected_files = _extract_file_paths_from_opx(additional_context)
+        if affected_files:
+            sections.append("## Current File Contents")
+            sections.append("")
+            sections.append(
+                "Below are the CURRENT contents of files that need to be fixed. "
+                "Use these to locate the exact code sections that need changes."
+            )
+            sections.append("")
+            for fp in affected_files:
+                content = _read_current_file_content(fp, workspace_path)
+                if content:
+                    sections.append(f"### `{fp}`")
+                    sections.append("```")
+                    content_lines = content.split("\n")
+                    if len(content_lines) > 300:
+                        sections.append("\n".join(content_lines[:300]))
+                        sections.append(
+                            f"... ({len(content_lines) - 300} more lines)"
+                        )
+                    else:
+                        sections.append(content)
+                    sections.append("```")
+                    sections.append("")
+
+    # OPX goc (format trong code block)
     if additional_context:
         sections.extend(
             [
-                "**Additional Context:**",
-                additional_context,
+                "## Original OPX (Failed)",
+                "",
+                "```xml",
+                additional_context.strip(),
+                "```",
                 "",
             ]
         )
 
+    # Prompt huong dan cho IDE agent (da co edit tool san, khong can OPX)
     sections.extend(
         [
             "---",
             "",
-            "# Instructions",
+            "# ACTION REQUIRED",
             "",
-            "Please analyze this error and provide:",
-            "1. Root cause of the error",
-            "2. Step-by-step fix instructions",
-            "3. Any code changes needed (in OPX format if applicable)",
+            "Fix the failed operations based on the error and current file contents above.",
+            "All information you need is provided. Do NOT ask questions - start fixing immediately.",
+            "",
+            "**For each failed operation:**",
+            "1. Open the affected file",
+            "2. Find the section that needs to be changed (use the current file contents "
+            "and the original OPX intent as reference)",
+            "3. Apply the intended change directly using your edit tools",
+            "",
+            "**IMPORTANT:** Only fix the FAILED operations. "
+            "Successful operations (if any) are already applied - do NOT touch them.",
             "",
         ]
     )
 
     return "\n".join(sections)
+
+
+def _extract_file_paths_from_opx(opx_text: str) -> List[str]:
+    """
+    Extract danh sach file paths tu OPX text.
+    Tim cac attribute file="..." trong <edit> tags.
+    """
+    import re
+    pattern = re.compile(r'<\s*edit\b[^>]*\bfile\s*=\s*"([^"]*)"', re.IGNORECASE)
+    paths = []
+    seen: set = set()
+    for match in pattern.finditer(opx_text):
+        fp = match.group(1)
+        if fp and fp not in seen:
+            paths.append(fp)
+            seen.add(fp)
+    return paths
 
 
 def copy_error_to_clipboard(context: str) -> bool:

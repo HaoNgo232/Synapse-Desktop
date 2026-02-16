@@ -73,7 +73,7 @@ class BaseDialogQt(QDialog):
 
     def _make_status_label(self) -> QLabel:
         label = QLabel("")
-        label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
+        label.setStyleSheet(f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};")
         return label
 
 
@@ -170,7 +170,7 @@ class SecurityDialogQt(BaseDialogQt):
         # Info text
         info = QLabel("Please review your content before sharing with AI tools.")
         info.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY}; font-style: italic;"
+            f"font-size: 13px; color: {ThemeColors.WARNING}; font-weight: 500;"
         )
         layout.addWidget(info)
 
@@ -247,7 +247,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         )
         layout.addWidget(
             self._make_label(
-                "Ideal for: code review, bug fixing, feature validation.", muted=True
+                "Ideal for: code review, bug fixing, feature validation."
             )
         )
 
@@ -574,7 +574,7 @@ class CacheManagementDialogQt(BaseDialogQt):
             repo.last_modified.strftime("%Y-%m-%d %H:%M") if repo.last_modified else ""
         )
         meta = QLabel(f"📁 {size_str}  🕐 {time_str}")
-        meta.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
+        meta.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};")
         info_layout.addWidget(meta)
         card_layout.addLayout(info_layout, stretch=1)
 

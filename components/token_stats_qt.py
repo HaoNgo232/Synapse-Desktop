@@ -145,7 +145,7 @@ class TokenStatsPanelQt(QWidget):
         # Details
         self._details_label = QLabel("")
         self._details_label.setStyleSheet(
-            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};"
+            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
         )
         layout.addWidget(self._details_label)
 

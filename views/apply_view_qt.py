@@ -132,8 +132,9 @@ class ApplyViewQt(QWidget):
         # Workspace indicator
         self._workspace_label = QLabel("No workspace selected")
         self._workspace_label.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_MUTED}; "
+            f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_SECONDARY}; "
             f"background-color: {ApplyViewColors.BG_CARD}; "
+            f"border: 1px solid {ThemeColors.BORDER}; "
             f"border-radius: 6px; padding: 4px 10px;"
         )
         header.addWidget(self._workspace_label)
@@ -141,7 +142,7 @@ class ApplyViewQt(QWidget):
 
         # Description
         desc = QLabel("Paste OPX code from AI chat below:")
-        desc.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};")
+        desc.setStyleSheet(f"font-size: 13px; color: {ThemeColors.TEXT_SECONDARY}; font-weight: 500;")
         layout.addWidget(desc)
 
         # OPX input
@@ -224,7 +225,7 @@ class ApplyViewQt(QWidget):
         # Empty state
         empty_label = QLabel("Paste OPX code and click Preview to see changes")
         empty_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; font-style: italic; padding: 40px;"
+            f"color: {ThemeColors.TEXT_SECONDARY}; font-style: italic; font-size: 13px; padding: 40px;"
         )
         empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._results_layout.addWidget(empty_label)
@@ -294,7 +295,11 @@ class ApplyViewQt(QWidget):
 
     @Slot()
     def _apply_changes(self) -> None:
-        """Apply OPX changes."""
+        """
+        Apply OPX changes.
+        Sau khi apply, populate last_apply_results va last_preview_data
+        de Copy Error Context co du thong tin chi tiet cho AI fix.
+        """
         opx_text = self._opx_input.toPlainText().strip()
         if not opx_text:
             self._show_status("No OPX content to apply", is_error=True)
@@ -326,7 +331,22 @@ class ApplyViewQt(QWidget):
                 self._show_status("No valid OPX actions found", is_error=True)
                 return
 
+            # Auto-generate preview data neu chua co (user nhan Apply ma khong Preview truoc)
+            if not self.last_preview_data:
+                self.last_preview_data = analyze_file_actions(file_actions, workspace)
+                for i, row in enumerate(self.last_preview_data.rows):
+                    if i < len(file_actions):
+                        row.diff_lines = generate_preview_diff_lines(
+                            file_actions[i], workspace
+                        )
+
+            self.last_opx_text = opx_text
+
             results = apply_file_actions(file_actions, [workspace])
+
+            # Convert ActionResult -> ApplyRowResult de Copy Error co context day du
+            self.last_apply_results = _convert_to_row_results(results, file_actions)
+
             self._render_results(results)
 
             # Save to history
@@ -355,18 +375,28 @@ class ApplyViewQt(QWidget):
 
     @Slot()
     def _copy_error_context(self) -> None:
-        """Copy error context for AI debugging."""
+        """
+        Copy error context day du cho AI debugging.
+        Uu tien dung build_error_context_for_ai (co file content, search pattern, OPX instruction).
+        Fallback sang build_general_error_context neu khong co apply results.
+        """
+        workspace = self.get_workspace()
+        ws_str = str(workspace) if workspace else None
+
         if self.last_apply_results and self.last_preview_data:
             context = build_error_context_for_ai(
                 preview_data=self.last_preview_data,
                 row_results=self.last_apply_results,
                 original_opx=self.last_opx_text,
+                workspace_path=ws_str,
+                include_file_content=True,
             )
         else:
             context = build_general_error_context(
                 error_type="Apply Error",
                 error_message="Unknown error during apply",
                 additional_context=self.last_opx_text,
+                workspace_path=ws_str,
             )
         copy_to_clipboard(context)
         self._show_status("Error context copied!")
@@ -511,7 +541,7 @@ class ApplyViewQt(QWidget):
             # Không có diff data — hiển thị hint
             no_diff = QLabel("No diff available (file may not exist yet)")
             no_diff.setStyleSheet(
-                f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px; "
+                f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; "
                 f"font-style: italic; padding-left: 4px;"
             )
             layout.addWidget(no_diff)
@@ -565,3 +595,39 @@ class ApplyViewQt(QWidget):
         self._status_label.setText(message)
         if message and not is_error:
             QTimer.singleShot(5000, lambda: self._status_label.setText(""))
+
+
+def _convert_to_row_results(
+    results: List[ActionResult],
+    file_actions: list,
+) -> List[ApplyRowResult]:
+    """
+    Convert List[ActionResult] tu file_actions module sang List[ApplyRowResult]
+    de error_context module co du data cho AI fix.
+
+    Detect cascade failures: khi file da duoc modify thanh cong boi operation truoc,
+    cac operation sau tren cung file co the fail do search pattern khong con match.
+    """
+    row_results: List[ApplyRowResult] = []
+    # Track files da duoc modify thanh cong de detect cascade
+    modified_files: set = set()
+
+    for i, result in enumerate(results):
+        is_cascade = (
+            not result.success
+            and result.path in modified_files
+        )
+        row_results.append(
+            ApplyRowResult(
+                row_index=i,
+                path=result.path,
+                action=result.action,
+                success=result.success,
+                message=result.message,
+                is_cascade_failure=is_cascade,
+            )
+        )
+        if result.success:
+            modified_files.add(result.path)
+
+    return row_results

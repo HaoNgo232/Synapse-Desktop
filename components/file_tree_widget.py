@@ -96,7 +96,7 @@ class FileTreeWidget(QWidget):
 
         self._match_count_label = QLabel("")
         self._match_count_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px;"
+            f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; font-weight: 500;"
         )
         search_layout.addWidget(self._match_count_label)
 
@@ -136,7 +136,8 @@ class FileTreeWidget(QWidget):
         self._select_all_btn.setFixedSize(36, 28)
         self._select_all_btn.setToolTip("Select All")
         self._select_all_btn.setStyleSheet(
-            "QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }"
+            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
+            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
         )
         actions_layout.addWidget(self._select_all_btn)
 
@@ -148,7 +149,8 @@ class FileTreeWidget(QWidget):
         self._deselect_all_btn.setFixedSize(36, 28)
         self._deselect_all_btn.setToolTip("Deselect All")
         self._deselect_all_btn.setStyleSheet(
-            "QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }"
+            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
+            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
         )
         actions_layout.addWidget(self._deselect_all_btn)
 
@@ -160,7 +162,8 @@ class FileTreeWidget(QWidget):
         self._collapse_btn.setFixedSize(36, 28)
         self._collapse_btn.setToolTip("Collapse All")
         self._collapse_btn.setStyleSheet(
-            "QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }"
+            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
+            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
         )
         actions_layout.addWidget(self._collapse_btn)
 
@@ -172,7 +175,8 @@ class FileTreeWidget(QWidget):
         self._expand_btn.setFixedSize(36, 28)
         self._expand_btn.setToolTip("Expand All")
         self._expand_btn.setStyleSheet(
-            "QPushButton { color: #94A3B8; } QPushButton:hover { color: #E2E8F0; }"
+            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
+            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
         )
         actions_layout.addWidget(self._expand_btn)
 

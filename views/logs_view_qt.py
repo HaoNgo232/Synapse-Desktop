@@ -75,7 +75,7 @@ class LogsViewQt(QWidget):
         header.addStretch()
         self._count_label = QLabel("0 logs")
         self._count_label.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(self._count_label)
         layout.addLayout(header)
@@ -141,7 +141,7 @@ class LogsViewQt(QWidget):
         # Status bar
         status_row = QHBoxLayout()
         dir_label = QLabel(f"Log directory: {LOG_DIR}")
-        dir_label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
+        dir_label.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
         status_row.addWidget(dir_label)
         status_row.addStretch()
         self._status = QLabel("")

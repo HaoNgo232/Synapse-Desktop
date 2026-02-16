@@ -134,160 +134,162 @@ class ContextViewQt(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Xây dựng UI."""
+        """Xay dung UI voi top toolbar + 3-panel splitter (30:45:25)."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
+
+        # Top toolbar: controls + token counter
+        toolbar = self._build_toolbar()
+        layout.addWidget(toolbar)
 
         # Main splitter: files | instructions | actions
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(3)
+        splitter.setStyleSheet(f"""
+            QSplitter::handle {{
+                background-color: {ThemeColors.BORDER};
+                margin: 4px 0;
+            }}
+            QSplitter::handle:hover {{
+                background-color: {ThemeColors.PRIMARY};
+            }}
+        """)
 
-        # Left panel - File tree
+        # Left panel - File tree (~30%)
         left_panel = self._build_left_panel()
         splitter.addWidget(left_panel)
 
-        # Center panel - Instructions and output format
+        # Center panel - Instructions (~45%)
         center_panel = self._build_instructions_panel()
         splitter.addWidget(center_panel)
 
-        # Right panel - Action shortcuts and stats
+        # Right panel - Actions + Token stats (~25%)
         action_panel = self._build_actions_panel()
         splitter.addWidget(action_panel)
 
-        # Width balance for typical laptop screens
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
-        splitter.setStretchFactor(2, 1)
-        splitter.setSizes([720, 480, 340])
+        # Ty le 30:45:25 cho 3 panel
+        splitter.setStretchFactor(0, 30)
+        splitter.setStretchFactor(1, 45)
+        splitter.setStretchFactor(2, 25)
+        splitter.setSizes([420, 630, 350])
 
         layout.addWidget(splitter)
 
-    def _build_left_panel(self) -> QFrame:
-        """Build left panel với file tree."""
-        panel = QFrame()
-        panel.setProperty("class", "surface")
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+    def _build_toolbar(self) -> QFrame:
+        """Build top toolbar chua controls va token counter."""
+        from PySide6.QtWidgets import QSizePolicy
 
-        # Header row: title + token summary
-        title_row = QHBoxLayout()
-        title_row.setSpacing(8)
+        toolbar = QFrame()
+        toolbar.setFixedHeight(40)
+        toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        toolbar.setStyleSheet(f"""
+            QFrame {{
+                background-color: {ThemeColors.BG_SURFACE};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+            }}
+        """)
+        layout = QHBoxLayout(toolbar)
+        layout.setContentsMargins(8, 2, 8, 2)
+        layout.setSpacing(4)
 
-        # Get assets directory
         assets_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
         )
 
-        files_label = QLabel("Files")
-        files_label.setStyleSheet(
-            f"font-weight: 700; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
-        )
-        title_row.addWidget(files_label)
-
-        self._selection_meta_label = QLabel("0 selected")
-        self._selection_meta_label.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};"
-        )
-        title_row.addWidget(self._selection_meta_label)
-
-        title_row.addStretch()
-
-        self._token_count_label = QLabel("0 tokens")
-        self._token_count_label.setStyleSheet(
-            f"font-weight: 700; font-size: 14px; color: {ThemeColors.PRIMARY};"
-        )
-        title_row.addWidget(self._token_count_label)
-        layout.addLayout(title_row)
-
-        # Controls row
-        controls_row = QHBoxLayout()
-        controls_row.setSpacing(6)
-
-        # Push controls to the right
-        controls_row.addStretch()
-
-        # --- Action buttons (compact, icon-only with tooltips) ---
-        btn_style = (
+        # Style cho toolbar icon buttons
+        icon_btn_style = (
             f"QToolButton {{ "
-            f"  background: {ThemeColors.BG_SURFACE}; border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 8px; padding: 6px 10px; font-size: 12px; "
-            f"  color: {ThemeColors.TEXT_SECONDARY}; min-width: 32px; min-height: 32px; "
-            f"  font-weight: 500; "
+            f"  background: transparent; border: none; "
+            f"  border-radius: 6px; padding: 5px; "
+            f"  color: {ThemeColors.TEXT_SECONDARY}; "
             f"}} "
             f"QToolButton:hover {{ "
-            f"  background: {ThemeColors.PRIMARY}; color: #FFFFFF; "
-            f"  border-color: {ThemeColors.PRIMARY}; "
+            f"  background: {ThemeColors.BG_HOVER}; "
+            f"  color: {ThemeColors.TEXT_PRIMARY}; "
             f"}}"
         )
 
-        # Refresh
+        # Refresh button
         refresh_btn = QToolButton()
         refresh_btn.setIcon(QIcon(os.path.join(assets_dir, "refresh.svg")))
-        refresh_btn.setIconSize(QSize(18, 18))
+        refresh_btn.setIconSize(QSize(16, 16))
         refresh_btn.setToolTip("Refresh file tree (F5)")
-        refresh_btn.setStyleSheet(btn_style)
+        refresh_btn.setStyleSheet(icon_btn_style)
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self._refresh_tree)
-        controls_row.addWidget(refresh_btn)
+        layout.addWidget(refresh_btn)
 
-        # Remote repos (dropdown)
+        # Remote repos dropdown
         remote_btn = QToolButton()
         remote_btn.setIcon(QIcon(os.path.join(assets_dir, "cloud.svg")))
-        remote_btn.setIconSize(QSize(18, 18))
+        remote_btn.setIconSize(QSize(16, 16))
         remote_btn.setToolTip("Remote Repositories")
-        remote_btn.setStyleSheet(btn_style)
+        remote_btn.setStyleSheet(icon_btn_style)
         remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         remote_menu = QMenu(remote_btn)
         remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
         remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
         remote_btn.setMenu(remote_menu)
-        controls_row.addWidget(remote_btn)
+        layout.addWidget(remote_btn)
 
-        # Ignore
+        # Separator nho
+        sep1 = QFrame()
+        sep1.setFixedWidth(1)
+        sep1.setFixedHeight(20)
+        sep1.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
+        layout.addWidget(sep1)
+
+        # Ignore button
         ignore_btn = QToolButton()
         ignore_btn.setIcon(QIcon(os.path.join(assets_dir, "ban.svg")))
-        ignore_btn.setIconSize(QSize(18, 18))
+        ignore_btn.setIconSize(QSize(16, 16))
         ignore_btn.setToolTip("Ignore selected files")
-        ignore_btn.setStyleSheet(btn_style)
+        ignore_btn.setStyleSheet(icon_btn_style)
         ignore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ignore_btn.clicked.connect(self._add_to_ignore)
-        controls_row.addWidget(ignore_btn)
+        layout.addWidget(ignore_btn)
 
-        # Undo ignore
+        # Undo ignore button
         undo_btn = QToolButton()
         undo_btn.setIcon(QIcon(os.path.join(assets_dir, "undo.svg")))
-        undo_btn.setIconSize(QSize(18, 18))
+        undo_btn.setIconSize(QSize(16, 16))
         undo_btn.setToolTip("Undo last ignore")
-        undo_btn.setStyleSheet(btn_style)
+        undo_btn.setStyleSheet(icon_btn_style)
         undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         undo_btn.clicked.connect(self._undo_ignore)
-        controls_row.addWidget(undo_btn)
+        layout.addWidget(undo_btn)
 
-        controls_row.addSpacing(8)
+        # Separator
+        sep2 = QFrame()
+        sep2.setFixedWidth(1)
+        sep2.setFixedHeight(20)
+        sep2.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
+        layout.addWidget(sep2)
 
-        # --- Related files toggle ---
+        # Related files toggle
         related_active_style = (
             f"QToolButton {{ "
-            f"  background: {ThemeColors.SUCCESS}; border: 1px solid {ThemeColors.SUCCESS}; "
-            f"  border-radius: 8px; padding: 6px 12px; font-size: 12px; "
-            f"  color: #FFFFFF; min-height: 32px; font-weight: 600; "
+            f"  background: {ThemeColors.SUCCESS}; border: none; "
+            f"  border-radius: 6px; padding: 4px 10px; font-size: 11px; "
+            f"  color: #FFFFFF; font-weight: 600; "
             f"}} "
             f"QToolButton:hover {{ "
-            f"  background: #059669; border-color: #059669; "
+            f"  background: #059669; "
             f"}}"
         )
         related_inactive_style = (
             f"QToolButton {{ "
-            f"  background: {ThemeColors.BG_SURFACE}; border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 8px; padding: 6px 12px; font-size: 12px; "
-            f"  color: {ThemeColors.TEXT_SECONDARY}; min-height: 32px; font-weight: 500; "
+            f"  background: transparent; border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 6px; padding: 4px 10px; font-size: 11px; "
+            f"  color: {ThemeColors.TEXT_SECONDARY}; font-weight: 500; "
             f"}} "
             f"QToolButton:hover {{ "
-            f"  background: {ThemeColors.PRIMARY}; color: #FFFFFF; "
-            f"  border-color: {ThemeColors.PRIMARY}; "
+            f"  background: {ThemeColors.BG_HOVER}; "
+            f"  color: {ThemeColors.TEXT_PRIMARY}; "
             f"}}"
         )
         self._related_active_style = related_active_style
@@ -300,37 +302,79 @@ class ContextViewQt(QWidget):
         self._related_btn.setCheckable(True)
         self._related_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._related_btn.clicked.connect(self._toggle_related_mode)
-        controls_row.addWidget(self._related_btn)
+        layout.addWidget(self._related_btn)
 
-        # Level spinbox
+        # Depth spinbox
         level_label = QLabel("Depth")
         level_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; font-weight: 500;"
+            f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px;"
         )
-        controls_row.addWidget(level_label)
+        layout.addWidget(level_label)
 
         self._related_level_spin = QSpinBox()
         self._related_level_spin.setRange(1, 5)
         self._related_level_spin.setValue(1)
-        self._related_level_spin.setToolTip(
-            "Relationship depth (1=direct imports, 2+=nested)"
-        )
-        self._related_level_spin.setFixedWidth(45)
-        self._related_level_spin.setFixedHeight(28)
+        self._related_level_spin.setToolTip("Relationship depth")
+        self._related_level_spin.setFixedWidth(40)
+        self._related_level_spin.setFixedHeight(24)
         self._related_level_spin.setStyleSheet(
             f"QSpinBox {{ "
             f"  background: {ThemeColors.BG_ELEVATED}; color: {ThemeColors.TEXT_PRIMARY}; "
             f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; "
-            f"  padding: 2px; font-size: 12px; "
+            f"  padding: 1px; font-size: 11px; "
             f"}} "
-            f"QSpinBox::up-button, QSpinBox::down-button {{ width: 12px; }}"
+            f"QSpinBox::up-button, QSpinBox::down-button {{ width: 10px; }}"
         )
         self._related_level_spin.valueChanged.connect(self._on_related_level_changed)
-        controls_row.addWidget(self._related_level_spin)
+        layout.addWidget(self._related_level_spin)
 
-        layout.addLayout(controls_row)
+        # Stretch de day token counter sang ben phai
+        layout.addStretch()
 
-        # File tree widget
+        # Selection meta label
+        self._selection_meta_label = QLabel("0 selected")
+        self._selection_meta_label.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; font-weight: 500;"
+        )
+        layout.addWidget(self._selection_meta_label)
+
+        # Separator truoc token counter
+        sep3 = QFrame()
+        sep3.setFixedWidth(1)
+        sep3.setFixedHeight(20)
+        sep3.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
+        layout.addWidget(sep3)
+
+        # Token counter noi bat
+        self._token_count_label = QLabel("0 tokens")
+        self._token_count_label.setStyleSheet(
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.PRIMARY};"
+        )
+        layout.addWidget(self._token_count_label)
+
+        return toolbar
+
+    def _build_left_panel(self) -> QFrame:
+        """Build left panel chi chua header + file tree (controls da len toolbar)."""
+        panel = QFrame()
+        panel.setProperty("class", "surface")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        # Header: "Files" title
+        header = QHBoxLayout()
+        header.setSpacing(6)
+
+        files_label = QLabel("Files")
+        files_label.setStyleSheet(
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        header.addWidget(files_label)
+        header.addStretch()
+        layout.addLayout(header)
+
+        # File tree widget (da co san search bar, select/deselect all)
         self.file_tree_widget = FileTreeWidget()
         self.file_tree_widget.selection_changed.connect(self._on_selection_changed)
         self.file_tree_widget.file_preview_requested.connect(self._preview_file)
@@ -340,52 +384,69 @@ class ContextViewQt(QWidget):
         return panel
 
     def _build_instructions_panel(self) -> QFrame:
-        """Build center panel with instructions and output format."""
+        """Build center panel voi instructions textarea va format selector."""
         panel = QFrame()
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
-        # Instructions
+        # Header row: title + word count
+        header = QHBoxLayout()
         instr_label = QLabel("Instructions")
         instr_label.setStyleSheet(
-            f"font-weight: 700; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        layout.addWidget(instr_label)
+        header.addWidget(instr_label)
+        header.addStretch()
 
-        instr_hint = QLabel("Describe your request, expected output, and constraints.")
-        instr_hint.setWordWrap(True)
-        instr_hint.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};"
+        # Word/char counter
+        self._word_count_label = QLabel("0 words")
+        self._word_count_label.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};"
         )
-        layout.addWidget(instr_hint)
+        header.addWidget(self._word_count_label)
+        layout.addLayout(header)
 
+        # Textarea - chiem toan bo khong gian con lai
         self._instructions_field = QTextEdit()
         self._instructions_field.setPlaceholderText(
-            "Enter your task instructions here..."
+            "Mo ta yeu cau cua ban...\n\n"
+            "Vi du:\n"
+            "- Refactor module X thanh Y\n"
+            "- Fix bug: [mo ta loi]\n"
+            "- Them feature: [mo ta chuc nang]\n\n"
+            "Kem theo: output format, constraints, edge cases..."
         )
-        self._instructions_field.setMinimumHeight(360)
         self._instructions_field.setStyleSheet(f"""
             QTextEdit {{
                 font-family: 'IBM Plex Sans', sans-serif;
                 font-size: 13px;
-                line-height: 1.6;
+                background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 6px;
+                padding: 8px;
+            }}
+            QTextEdit:focus {{
+                border-color: {ThemeColors.PRIMARY};
             }}
         """)
         self._instructions_field.textChanged.connect(self._on_instructions_changed)
-        layout.addWidget(self._instructions_field)
+        layout.addWidget(self._instructions_field, stretch=1)
 
-        # Format selector
+        # Bottom row: format selector
         format_layout = QHBoxLayout()
-        format_label = QLabel("Output Format:")
+        format_layout.setSpacing(6)
+
+        format_label = QLabel("Format:")
         format_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_SECONDARY};"
         )
         format_layout.addWidget(format_label)
 
         self._format_combo = QComboBox()
-        self._format_combo.setFixedWidth(160)
+        self._format_combo.setFixedWidth(140)
         for cfg in OUTPUT_FORMATS.values():
             self._format_combo.addItem(cfg.name, cfg.id)
 
@@ -404,201 +465,209 @@ class ContextViewQt(QWidget):
         format_layout.addStretch()
         layout.addLayout(format_layout)
 
-        layout.addStretch()
-
         return panel
 
     def _build_actions_panel(self) -> QFrame:
-        """Build right panel with copy actions, status, and token stats."""
+        """Build right panel: Token stats (top) -> Copy buttons -> Status (bottom)."""
         panel = QFrame()
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
 
-        actions_label = QLabel("Actions")
-        actions_label.setStyleSheet(
-            f"font-weight: 700; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
-        )
-        layout.addWidget(actions_label)
-
-        # Action buttons
-        actions = self._build_action_buttons()
-        layout.addWidget(actions)
-
-        # Status toast (nổi bật hơn)
-        self._status_label = QLabel("")
-        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status_label.setMinimumHeight(40)
-        self._status_label.setStyleSheet(f"""
-            QLabel {{
-                font-size: 13px;
-                font-weight: 600;
-                color: white;
-                background-color: transparent;
-                border-radius: 8px;
-                padding: 10px 16px;
-            }}
-        """)
-        self._status_label.hide()  # Ẩn mặc định
-        layout.addWidget(self._status_label)
-
-        # Token stats panel
+        # Token stats panel (model selector + budget bar) o tren cung
         self._token_stats = TokenStatsPanelQt()
         self._token_stats.model_changed.connect(self._on_model_changed)
         layout.addWidget(self._token_stats)
+
+        # Separator giua stats va buttons
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
+        layout.addWidget(sep)
+
+        # Action buttons voi visual hierarchy ro rang
+        actions = self._build_action_buttons()
+        layout.addWidget(actions)
+
+        # Status toast
+        self._status_label = QLabel("")
+        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 12px;
+                font-weight: 600;
+                color: white;
+                background-color: transparent;
+                border-radius: 6px;
+                padding: 8px 12px;
+            }}
+        """)
+        self._status_label.hide()
+        layout.addWidget(self._status_label)
 
         layout.addStretch()
 
         return panel
 
     def _build_action_buttons(self) -> QWidget:
-        """Build action buttons. Luu ref vao self de disable/enable khi copy."""
+        """Build copy buttons voi visual hierarchy: CTA -> Secondary -> Tertiary."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
-        # Row 1: Copy Diff Only
-        row1 = QHBoxLayout()
-        self._diff_btn = QPushButton("Copy Diff Only")
-        self._diff_btn.setStyleSheet(
-            f"""
+        # Style chung cho secondary buttons (ghost style)
+        secondary_style = (
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  border: 1px solid {ThemeColors.BORDER};"
+            f"  border-radius: 6px;"
+            f"  padding: 8px 12px;"
+            f"  font-weight: 600;"
+            f"  font-size: 12px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.BG_HOVER};"
+            f"  border-color: {ThemeColors.BORDER_LIGHT};"
+            f"}}"
+            f"QPushButton:pressed {{"
+            f"  background-color: {ThemeColors.BG_ELEVATED};"
+            f"}}"
+            f"QPushButton:disabled {{"
+            f"  color: {ThemeColors.TEXT_MUTED};"
+            f"  border-color: {ThemeColors.BG_ELEVATED};"
+            f"}}"
+        )
+
+        # Tertiary style (nhe nhang, border dashed subtle)
+        tertiary_style = (
+            f"QPushButton {{"
+            f"  background-color: transparent;"
+            f"  color: {ThemeColors.TEXT_SECONDARY};"
+            f"  border: 1px dashed {ThemeColors.BORDER};"
+            f"  border-radius: 6px;"
+            f"  padding: 7px 12px;"
+            f"  font-weight: 500;"
+            f"  font-size: 12px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {ThemeColors.BG_HOVER};"
+            f"  color: {ThemeColors.TEXT_PRIMARY};"
+            f"  border-style: solid;"
+            f"}}"
+            f"QPushButton:disabled {{"
+            f"  color: {ThemeColors.TEXT_MUTED};"
+            f"  border-color: {ThemeColors.BG_ELEVATED};"
+            f"}}"
+        )
+
+        # === PRIMARY CTA: Copy + OPX (lon nhat, noi bat nhat) ===
+        self._opx_btn = QPushButton("Copy + OPX")
+        self._opx_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: #8B5CF6;
+                background-color: {ThemeColors.PRIMARY};
                 color: white;
                 border: none;
                 border-radius: 8px;
-                padding: 10px 16px;
-                font-weight: 600;
-                font-size: 12px;
+                padding: 12px 16px;
+                font-weight: 700;
+                font-size: 13px;
             }}
             QPushButton:hover {{
-                background-color: #7C3AED;
+                background-color: {ThemeColors.PRIMARY_HOVER};
             }}
             QPushButton:pressed {{
-                background-color: #6D28D9;
+                background-color: {ThemeColors.PRIMARY_PRESSED};
             }}
-            """
-        )
-        self._diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
-        self._diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._diff_btn.clicked.connect(self._show_diff_only_dialog)
-        row1.addWidget(self._diff_btn)
-        layout.addLayout(row1)
-
-        # Row 2: Copy Tree Map + Copy Smart
-        row2 = QHBoxLayout()
-        self._tree_map_btn = QPushButton("Copy Tree Map")
-        self._tree_map_btn.setStyleSheet(
-            f"""
-            QPushButton {{
-                background-color: transparent;
-                color: {ThemeColors.TEXT_PRIMARY};
-                border: 2px solid {ThemeColors.BORDER};
-                border-radius: 8px;
-                padding: 10px 16px;
-                font-weight: 600;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: {ThemeColors.BG_SURFACE};
-                border-color: {ThemeColors.BORDER_LIGHT};
-            }}
-            QPushButton:pressed {{
+            QPushButton:disabled {{
                 background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_MUTED};
             }}
-            """
-        )
-        self._tree_map_btn.setToolTip("Copy only file structure")
-        self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tree_map_btn.clicked.connect(self._copy_tree_map_only)
-        row2.addWidget(self._tree_map_btn)
+        """)
+        self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
+        self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
+        layout.addWidget(self._opx_btn)
 
+        # === SECONDARY: Copy Context ===
+        self._copy_btn = QPushButton("Copy Context")
+        self._copy_btn.setStyleSheet(secondary_style)
+        self._copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
+        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
+        layout.addWidget(self._copy_btn)
+
+
+        # === SECONDARY: Copy Smart ===
         self._smart_btn = QPushButton("Copy Smart")
-        self._smart_btn.setProperty("custom-style", "orange")  # Prevent global override
-        self._smart_btn.setStyleSheet(
-            f"""
+        self._smart_btn.setProperty("custom-style", "orange")
+        self._smart_btn.setStyleSheet(f"""
             QPushButton[custom-style="orange"] {{
+                background-color: transparent;
                 color: {ThemeColors.WARNING};
-                border: 2px solid {ThemeColors.WARNING};
-                background-color: {ThemeColors.BG_PAGE};
-                border-radius: 8px;
-                padding: 10px 16px;
+                border: 1px solid {ThemeColors.WARNING};
+                border-radius: 6px;
+                padding: 8px 12px;
                 font-weight: 600;
                 font-size: 12px;
             }}
             QPushButton[custom-style="orange"]:hover {{
                 background-color: {ThemeColors.WARNING};
                 color: white;
-                border-color: {ThemeColors.WARNING};
             }}
             QPushButton[custom-style="orange"]:pressed {{
                 background-color: #D97706;
-                border-color: #D97706;
                 color: white;
             }}
-            """
-        )
+            QPushButton[custom-style="orange"]:disabled {{
+                color: {ThemeColors.TEXT_MUTED};
+                border-color: {ThemeColors.BG_ELEVATED};
+            }}
+        """)
         self._smart_btn.setToolTip("Copy code structure only (Smart Context)")
         self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._smart_btn.clicked.connect(self._copy_smart_context)
-        row2.addWidget(self._smart_btn)
-        layout.addLayout(row2)
+        layout.addWidget(self._smart_btn)
 
-        # Row 3: Copy Context + Copy + OPX
-        row3 = QHBoxLayout()
-        self._copy_btn = QPushButton("Copy Context")
-        self._copy_btn.setStyleSheet(
-            f"""
+        # === SECONDARY: Copy Diff Only ===
+        self._diff_btn = QPushButton("Copy Diff Only")
+        self._diff_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
-                color: {ThemeColors.TEXT_PRIMARY};
-                border: 2px solid {ThemeColors.BORDER};
-                border-radius: 8px;
-                padding: 10px 16px;
+                color: #A78BFA;
+                border: 1px solid #8B5CF6;
+                border-radius: 6px;
+                padding: 8px 12px;
                 font-weight: 600;
                 font-size: 12px;
             }}
             QPushButton:hover {{
-                background-color: {ThemeColors.BG_SURFACE};
-                border-color: {ThemeColors.BORDER_LIGHT};
-            }}
-            QPushButton:pressed {{
-                background-color: {ThemeColors.BG_ELEVATED};
-            }}
-            """
-        )
-        self._copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
-        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
-        row3.addWidget(self._copy_btn)
-
-        self._opx_btn = QPushButton("Copy + OPX")
-        self._opx_btn.setStyleSheet(
-            f"""
-            QPushButton {{
-                background-color: {ThemeColors.PRIMARY};
+                background-color: #8B5CF6;
                 color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 16px;
-                font-weight: 600;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: {ThemeColors.PRIMARY_HOVER};
             }}
             QPushButton:pressed {{
-                background-color: #1E40AF;
+                background-color: #7C3AED;
+                color: white;
             }}
-            """
-        )
-        self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
-        self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
-        row3.addWidget(self._opx_btn)
-        layout.addLayout(row3)
+            QPushButton:disabled {{
+                color: {ThemeColors.TEXT_MUTED};
+                border-color: {ThemeColors.BG_ELEVATED};
+            }}
+        """)
+        self._diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
+        self._diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._diff_btn.clicked.connect(self._show_diff_only_dialog)
+        layout.addWidget(self._diff_btn)
+
+        # === TERTIARY: Copy Tree Map ===
+        self._tree_map_btn = QPushButton("Copy Tree Map")
+        self._tree_map_btn.setStyleSheet(tertiary_style)
+        self._tree_map_btn.setToolTip("Copy only file structure")
+        self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tree_map_btn.clicked.connect(self._copy_tree_map_only)
+        layout.addWidget(self._tree_map_btn)
 
         return widget
 
@@ -706,7 +775,10 @@ class ContextViewQt(QWidget):
 
     @Slot()
     def _on_instructions_changed(self) -> None:
-        """Handle instructions text change."""
+        """Handle instructions text change - cap nhat word count va token display."""
+        text = self._instructions_field.toPlainText()
+        word_count = len(text.split()) if text.strip() else 0
+        self._word_count_label.setText(f"{word_count} words")
         QTimer.singleShot(150, self._update_token_display)
 
     @Slot(int)

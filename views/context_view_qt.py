@@ -1094,10 +1094,11 @@ class ContextViewQt(QWidget):
             if not tree_item:
                 raise ValueError("No file tree loaded")
 
-            # Neu khong co selection => generate full project tree map
-            paths = selected_strs
-            if not paths:
-                paths = self._collect_all_tree_paths(tree_item)
+            # Collect valid paths from scanned tree (respect gitignore/excluded)
+            valid_paths = self._collect_all_tree_paths(tree_item)
+
+            # Filter selected paths to only include valid ones
+            paths = selected_strs & valid_paths if selected_strs else valid_paths
 
             return generate_tree_map_only(
                 tree_item,

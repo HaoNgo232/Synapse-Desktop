@@ -233,9 +233,6 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-
-
-
 def count_tokens(text: str) -> int:
     """
     Dem so token trong mot doan text.

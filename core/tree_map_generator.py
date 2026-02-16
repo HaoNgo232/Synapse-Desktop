@@ -104,6 +104,7 @@ def tree_item_is_dir(tree: TreeItem, path: str) -> bool:
 
     # Fallback: check filesystem directly
     from pathlib import Path as FsPath
+
     try:
         return FsPath(path).is_dir()
     except OSError:

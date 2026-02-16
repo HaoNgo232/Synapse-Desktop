@@ -425,6 +425,9 @@ class SynapseMainWindow(QMainWindow):
 
 def main() -> None:
     """Entry point."""
+    from config.paths import ensure_app_directories
+    ensure_app_directories()
+
     app = QApplication(sys.argv)
     app.setApplicationName("Synapse Desktop")
     app.setOrganizationName("Synapse")

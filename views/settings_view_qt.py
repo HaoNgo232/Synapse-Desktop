@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QPushButton, QPlainTextEdit, QCheckBox, QComboBox,
     QFrame,
 )
-from PySide6.QtCore import Qt, Slot, QTimer
+from PySide6.QtCore import Qt, Slot, QTimer, QObject, Signal
 
 from core.theme import ThemeColors
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
@@ -45,6 +45,14 @@ def get_use_gitignore() -> bool:
     return bool(load_settings().get("use_gitignore", True))
 
 
+class _ExcludedChangedNotifier(QObject):
+    """Notifier emit khi excluded patterns thay đổi từ bên ngoài (vd. Ignore button)."""
+    excluded_changed = Signal()
+
+
+_excluded_notifier = _ExcludedChangedNotifier()
+
+
 def add_excluded_patterns(patterns: list[str]) -> bool:
     """Append new exclude patterns, avoiding duplicates."""
     settings = load_settings()
@@ -55,7 +63,10 @@ def add_excluded_patterns(patterns: list[str]) -> bool:
         if normalized and normalized not in merged:
             merged.append(normalized)
     settings["excluded_folders"] = "\n".join(merged)
-    return save_settings(settings)
+    if save_settings(settings):
+        _excluded_notifier.excluded_changed.emit()
+        return True
+    return False
 
 
 def remove_excluded_patterns(patterns: list[str]) -> bool:
@@ -65,7 +76,10 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
     existing = get_excluded_patterns()
     filtered = [p for p in existing if p not in to_remove]
     settings["excluded_folders"] = "\n".join(filtered)
-    return save_settings(settings)
+    if save_settings(settings):
+        _excluded_notifier.excluded_changed.emit()
+        return True
+    return False
 
 
 class SettingsViewQt(QWidget):
@@ -80,6 +94,7 @@ class SettingsViewQt(QWidget):
         self.on_settings_changed = on_settings_changed
         self._has_unsaved = False
         self._build_ui()
+        _excluded_notifier.excluded_changed.connect(self._reload_excluded_from_settings)
 
     def _build_ui(self) -> None:
         settings = load_settings()
@@ -236,6 +251,15 @@ class SettingsViewQt(QWidget):
         return label
 
     # ===== Slots =====
+
+    @Slot()
+    def _reload_excluded_from_settings(self) -> None:
+        """Cập nhật nội dung excluded field từ settings (khi user ignore item từ Context tab)."""
+        settings = load_settings()
+        new_text = settings.get("excluded_folders", "")
+        self._excluded_field.blockSignals(True)
+        self._excluded_field.setPlainText(new_text)
+        self._excluded_field.blockSignals(False)
 
     @Slot()
     def _mark_changed(self) -> None:

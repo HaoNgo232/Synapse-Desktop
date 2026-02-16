@@ -15,7 +15,7 @@ from typing import Optional, Set, List, Dict
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QTreeView,
-    QPushButton, QLabel, QAbstractItemView,
+    QPushButton, QLabel, QAbstractItemView, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QSize
 from PySide6.QtGui import QIcon
@@ -42,6 +42,7 @@ class FileTreeWidget(QWidget):
     selection_changed = Signal(set)
     file_preview_requested = Signal(str)
     token_counting_done = Signal()  # Emitted khi batch token counting hoàn thành
+    search_results_changed = Signal(int)  # Emitted với số kết quả search
     
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -61,6 +62,7 @@ class FileTreeWidget(QWidget):
         
         # State
         self._pending_search: str = ""
+        self._last_search_results: List[str] = []  # Full paths from flat index search
         
         # Build UI
         self._build_ui()
@@ -86,6 +88,23 @@ class FileTreeWidget(QWidget):
             f"color: {ThemeColors.TEXT_MUTED}; font-size: 11px;"
         )
         search_layout.addWidget(self._match_count_label)
+        
+        # "Select All" button — visible only when search has results
+        self._select_results_btn = QPushButton("Select All")
+        self._select_results_btn.setFixedHeight(24)
+        self._select_results_btn.setStyleSheet(
+            f"QPushButton {{ "
+            f"  background-color: {ThemeColors.PRIMARY}; color: white; "
+            f"  border: none; border-radius: 4px; padding: 2px 10px; "
+            f"  font-size: 11px; font-weight: 600; "
+            f"}} "
+            f"QPushButton:hover {{ background-color: {ThemeColors.PRIMARY_HOVER}; }}"
+        )
+        self._select_results_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._select_results_btn.setToolTip("Select all search results")
+        self._select_results_btn.clicked.connect(self._on_select_search_results)
+        self._select_results_btn.hide()  # Hidden by default
+        search_layout.addWidget(self._select_results_btn)
         
         layout.addLayout(search_layout)
         
@@ -159,6 +178,7 @@ class FileTreeWidget(QWidget):
         """Connect all signals."""
         # Search
         self._search_field.textChanged.connect(self._on_search_changed)
+        self._search_field.returnPressed.connect(self._on_search_return_pressed)
         
         # Actions
         self._select_all_btn.clicked.connect(self._on_select_all)
@@ -190,6 +210,8 @@ class FileTreeWidget(QWidget):
         self._match_count_label.setText("")
         self._delegate.set_search_query("")
         self._filter_proxy.set_search_query("")
+        self._last_search_results = []
+        self._select_results_btn.hide()
         
         self._model.load_tree(workspace_path)
         
@@ -244,6 +266,10 @@ class FileTreeWidget(QWidget):
         """Get underlying model."""
         return self._model
     
+    def get_search_results(self) -> List[str]:
+        """Get current search result paths (from flat index)."""
+        return self._last_search_results
+    
     def cleanup(self) -> None:
         """Cleanup resources."""
         if self._current_token_worker:
@@ -258,20 +284,87 @@ class FileTreeWidget(QWidget):
         """Handle search text change với debounce."""
         self._pending_search = text
         self._search_debounce.start()
+
+    @Slot()
+    def _on_search_return_pressed(self) -> None:
+        """Handle Enter trong search field: expand all trước rồi apply search ngay.
+        
+        Kết quả tìm kiếm (filter proxy) phụ thuộc vào nodes đã load trong model.
+        Lazy loading chỉ load children khi expand, nên expandAll() trước để đảm bảo
+        filter có đủ tree để match. Chỉ expand khi có query để tránh load toàn bộ
+        tree khi user nhấn Enter với ô search trống.
+        """
+        self._search_debounce.stop()
+        query = (self._pending_search or "").strip()
+        expanded = False
+        if query:
+            try:
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+                QApplication.processEvents()
+                self._tree_view.expandAll()
+                expanded = True
+            except Exception as e:
+                logger.warning(f"Expand all before search: {e}")
+            finally:
+                QApplication.restoreOverrideCursor()
+        self._apply_search(skip_expand=expanded)
     
-    def _apply_search(self) -> None:
-        """Apply search filter (debounced)."""
+    def _apply_search(self, skip_expand: bool = False) -> None:
+        """Apply search filter (debounced).
+        
+        Uses flat search index for accurate results independent of lazy loading,
+        then applies filter proxy for visual filtering of loaded tree nodes.
+        
+        Args:
+            skip_expand: True nếu expandAll đã được gọi trước đó (vd. từ returnPressed).
+        """
         query = self._pending_search
         self._filter_proxy.set_search_query(query)
         self._delegate.set_search_query(query)
         
         if query:
-            # Expand all để show matches
-            self._tree_view.expandAll()
-            match_count = self._filter_proxy.get_match_count()
-            self._match_count_label.setText(f"{match_count} matches")
+            # Use flat index for accurate full-tree search
+            self._last_search_results = self._model.search_files(query)
+            match_count = len(self._last_search_results)
+            
+            # Expand visible tree để filter có đủ nodes để match. Hiển thị wait cursor
+            # khi expandAll chạy lâu trên project lớn. Skip nếu đã expand (returnPressed).
+            if not skip_expand:
+                try:
+                    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+                    QApplication.processEvents()
+                    self._tree_view.expandAll()
+                finally:
+                    QApplication.restoreOverrideCursor()
+            
+            # Show match count from flat index (accurate)
+            if match_count > 0:
+                self._match_count_label.setText(f"{match_count} files found")
+                self._select_results_btn.setText(f"Select All Results ({match_count})")
+                self._select_results_btn.setStyleSheet(
+                    f"QPushButton {{ "
+                    f"  background-color: {ThemeColors.PRIMARY}; color: white; "
+                    f"  border: none; border-radius: 4px; padding: 2px 10px; "
+                    f"  font-size: 11px; font-weight: 600; "
+                    f"}} "
+                    f"QPushButton:hover {{ background-color: {ThemeColors.PRIMARY_HOVER}; }}"
+                )
+                self._select_results_btn.show()
+            else:
+                # Fallback to filter proxy count (for loaded nodes)
+                proxy_count = self._filter_proxy.get_match_count()
+                self._match_count_label.setText(
+                    f"{proxy_count} matches" if proxy_count > 0 else "No matches"
+                )
+                self._last_search_results = []
+                self._select_results_btn.hide()
+            
+            self.search_results_changed.emit(match_count)
         else:
+            self._last_search_results = []
             self._match_count_label.setText("")
+            self._select_results_btn.hide()
+            self.search_results_changed.emit(0)
         
         # Trigger repaint
         self._tree_view.viewport().update()
@@ -354,6 +447,27 @@ class FileTreeWidget(QWidget):
             file_path = self._model.data(source_index, FileTreeRoles.FILE_PATH_ROLE)
             if file_path:
                 self.file_preview_requested.emit(file_path)
+    
+    @Slot()
+    def _on_select_search_results(self) -> None:
+        """Select all files from search results."""
+        if not self._last_search_results:
+            return
+        
+        paths_to_add = set(self._last_search_results)
+        added = self._model.add_paths_to_selection(paths_to_add)
+        
+        if added > 0:
+            # Update button text to indicate selection was made
+            self._select_results_btn.setText(f"Selected ({added})")
+            self._select_results_btn.setStyleSheet(
+                f"QPushButton {{ "
+                f"  background-color: {ThemeColors.SUCCESS}; color: white; "
+                f"  border: none; border-radius: 4px; padding: 2px 10px; "
+                f"  font-size: 11px; font-weight: 600; "
+                f"}} "
+                f"QPushButton:hover {{ background-color: #059669; }}"
+            )
     
     @Slot(set)
     def _on_model_selection_changed(self, selected: set) -> None:

@@ -160,6 +160,11 @@ class FileTreeModel(QAbstractItemModel):
         # Generation counter — incremented on load_tree() to invalidate stale workers
         self._generation: int = 0
         self._generation_lock = threading.Lock()
+        
+        # Flat search index: maps lowercase filename -> list of full paths
+        # Built via os.walk in background, independent of lazy tree loading
+        self._search_index: Dict[str, List[str]] = {}
+        self._search_index_ready = False
     
     # ===== QAbstractItemModel Interface =====
     
@@ -379,6 +384,8 @@ class FileTreeModel(QAbstractItemModel):
         self._path_to_node.clear()
         self._folder_state_cache.clear()
         self._last_resolved_files.clear()
+        self._search_index.clear()
+        self._search_index_ready = False
         
         try:
             # Get excluded patterns from settings
@@ -407,6 +414,10 @@ class FileTreeModel(QAbstractItemModel):
             self._invisible_root.children = []
         
         self.endResetModel()
+        
+        # Build flat search index in background (independent of lazy loading)
+        if workspace_path.exists():
+            self._build_search_index_async(workspace_path)
     
     def get_selected_paths(self) -> List[str]:
         """
@@ -694,6 +705,105 @@ class FileTreeModel(QAbstractItemModel):
         """Current generation counter. Workers compare this to detect staleness."""
         with self._generation_lock:
             return self._generation
+    
+    def _build_search_index_async(self, workspace_path: Path) -> None:
+        """Build flat search index trong background thread via os.walk.
+        
+        Dùng cùng logic ignore với load_folder_children: pathspec (EXTENDED_IGNORE,
+        excluded patterns, gitignore), is_binary_file, is_system_path.
+        Đảm bảo search results khớp với items hiển thị trong tree.
+        """
+        generation = self.generation  # Snapshot
+        
+        def _build():
+            from core.constants import DIRECTORY_QUICK_SKIP, EXTENDED_IGNORE_PATTERNS
+            from core.utils.file_utils import (
+                is_binary_file, is_system_path,
+                get_cached_pathspec, _read_gitignore,
+            )
+            from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+            
+            # Build pathspec giống _collect_files_from_disk
+            ignore_patterns: List[str] = [".git", ".hg", ".svn"]
+            ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
+            excluded = get_excluded_patterns()
+            if excluded:
+                ignore_patterns.extend(excluded)
+            
+            # Tìm git root từ workspace
+            root_path = workspace_path
+            while root_path.parent != root_path:
+                if (root_path / ".git").exists():
+                    break
+                root_path = root_path.parent
+            
+            if get_use_gitignore():
+                gitignore_patterns = _read_gitignore(root_path)
+                ignore_patterns.extend(gitignore_patterns)
+            
+            spec = get_cached_pathspec(root_path, list(ignore_patterns))
+            root_path_str = str(root_path)
+            
+            index: Dict[str, List[str]] = {}
+            try:
+                for dirpath, dirnames, filenames in os.walk(str(workspace_path)):
+                    if self.generation != generation:
+                        return
+                    
+                    dirnames[:] = sorted(d for d in dirnames if d not in DIRECTORY_QUICK_SKIP)
+                    
+                    for filename in filenames:
+                        full_path = os.path.join(dirpath, filename)
+                        entry = Path(full_path)
+                        
+                        if is_system_path(entry) or is_binary_file(entry):
+                            continue
+                        
+                        try:
+                            rel_path_str = os.path.relpath(full_path, root_path_str)
+                        except ValueError:
+                            rel_path_str = filename
+                        
+                        if spec.match_file(rel_path_str):
+                            continue
+                        
+                        key = filename.lower()
+                        if key not in index:
+                            index[key] = []
+                        index[key].append(full_path)
+            except Exception:
+                pass
+            
+            # Check và ghi phải atomic để tránh race: load_tree có thể đã chạy giữa
+            # check và write, khiến thread cũ ghi đè index mới bằng data stale.
+            with self._generation_lock:
+                if self._generation == generation:
+                    self._search_index = index
+                    self._search_index_ready = True
+        
+        thread = threading.Thread(target=_build, daemon=True)
+        thread.start()
+    
+    def search_files(self, query: str) -> List[str]:
+        """
+        Search files by query using flat index.
+        
+        Returns list of full paths matching query (case-insensitive substring).
+        Independent of lazy loading — works even if folders are not expanded.
+        """
+        if not self._search_index_ready:
+            return []
+        query_lower = (query or "").lower().strip()
+        if not query_lower:
+            return []
+        results: List[str] = []
+        
+        for filename_lower, paths in self._search_index.items():
+            if query_lower in filename_lower:
+                results.extend(paths)
+        
+        results.sort()
+        return results
     
     def clear_token_cache(self) -> None:
         """Clear token cache."""

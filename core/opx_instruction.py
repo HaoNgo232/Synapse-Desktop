@@ -129,9 +129,20 @@ export const config: AppConfig = {
 - If a match may occur multiple times, set occurrence="first|last|N" on <find>.
 - Preserve indentation to fit the surrounding code.
 
+# Multiple changes to the same file
+- Use separate <edit op="patch"> elements for each region — one per change.
+- Order patches top-to-bottom within the file to avoid offset drift.
+
 # Validity
 - Emit syntactically correct code for each file type.
 - Avoid CDATA; write raw XML as shown.
 - Do not mix move with other operations for the same file in one edit.
+- Every <edit> MUST have both file and op attributes.
+- op="patch" MUST have both <find> and <put> children.
+- op="new" and op="replace" MUST have <put>.
+- op="move" MUST have <to file="..." />.
+
+# Output format
+- Emit OPX inside a fenced ```xml ... ``` block for reliable copy-paste.
 
 </opx_instructions>"""

@@ -242,7 +242,7 @@ class SynapseMainWindow(QMainWindow):
                 background-color: {ThemeColors.PRIMARY_HOVER};
             }}
             QPushButton:pressed {{
-                background-color: #1E40AF;
+                background-color: {ThemeColors.PRIMARY_PRESSED};
             }}
         """)
         open_btn.clicked.connect(self._open_folder_dialog)

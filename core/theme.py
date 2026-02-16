@@ -49,9 +49,10 @@ class ThemeFonts:
 class ThemeColors:
     """Dark Mode OLED Theme Colors - Developer Tools Edition"""
 
-    # Primary - Blue 500
-    PRIMARY = "#3B82F6"
-    PRIMARY_HOVER = "#2563EB"
+    # Primary - Blue 600/700 (giam do sang de tang tuong phan tren nen dark)
+    PRIMARY = "#2563EB"  # Blue 600
+    PRIMARY_HOVER = "#1D4ED8"  # Blue 700
+    PRIMARY_PRESSED = "#1E40AF"  # Blue 800
 
     # Backgrounds - OLED Deep Black
     BG_PAGE = "#0F172A"  # Slate 900 - Main background
@@ -66,13 +67,21 @@ class ThemeColors:
 
     # Borders - Subtle on Dark
     BORDER = "#334155"  # Slate 700
-    BORDER_FOCUS = "#3B82F6"  # Blue 500
+    BORDER_FOCUS = "#2563EB"  # Blue 600 - cung voi PRIMARY
     BORDER_LIGHT = "#475569"  # Slate 600 - Lighter border
 
-    # Status
+    # Status (text/border)
     SUCCESS = "#10B981"  # Emerald 500
     WARNING = "#F59E0B"  # Amber 500
     ERROR = "#EF4444"  # Red 500
+
+    # Semantic button backgrounds - ghi de len global, phan biet nut dac thu
+    ERROR_BG = "#DC2626"  # Red 600 - nut danger/delete
+    ERROR_BG_HOVER = "#B91C1C"  # Red 700
+    SUCCESS_BG = "#059669"  # Emerald 600 - nut success/confirm
+    SUCCESS_BG_HOVER = "#047857"  # Emerald 700
+    WARNING_BG = "#D97706"  # Amber 600 - nut canh bao
+    WARNING_BG_HOVER = "#B45309"  # Amber 700
 
     # Icons
     ICON_FOLDER = "#F59E0B"  # Amber 500

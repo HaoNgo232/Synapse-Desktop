@@ -45,12 +45,73 @@ def get_global_stylesheet() -> str:
     }}
     
     QPushButton:pressed {{
-        background-color: #1E40AF;
+        background-color: {ThemeColors.PRIMARY_PRESSED};
     }}
     
     QPushButton:disabled {{
         background-color: {ThemeColors.BG_ELEVATED};
         color: {ThemeColors.TEXT_MUTED};
+    }}
+    
+    /* Primary - giong default, ro rang */
+    QPushButton[class="primary"] {{
+        background-color: {ThemeColors.PRIMARY};
+        color: white;
+        border: none;
+    }}
+    QPushButton[class="primary"]:hover {{
+        background-color: {ThemeColors.PRIMARY_HOVER};
+    }}
+    QPushButton[class="primary"]:pressed {{
+        background-color: {ThemeColors.PRIMARY_PRESSED};
+    }}
+    
+    /* Outlined - nen trong suot, vien ro de tang tuong phan (tab Apply, ...) */
+    QPushButton[class="outlined"] {{
+        background-color: transparent;
+        color: #CBD5E1;
+        border: 1px solid {ThemeColors.BORDER_LIGHT};
+    }}
+    QPushButton[class="outlined"]:hover {{
+        background-color: {ThemeColors.BG_ELEVATED};
+        color: {ThemeColors.TEXT_PRIMARY};
+        border-color: #64748B;
+    }}
+    QPushButton[class="outlined"]:pressed {{
+        background-color: {ThemeColors.BORDER};
+    }}
+    
+    /* Danger/Delete - nen do, ghi de global */
+    QPushButton[class="danger"] {{
+        background-color: {ThemeColors.ERROR_BG};
+        color: white;
+        border: none;
+    }}
+    QPushButton[class="danger"]:hover {{
+        background-color: {ThemeColors.ERROR_BG_HOVER};
+    }}
+    QPushButton[class="danger"]:pressed {{
+        background-color: #991B1B;
+    }}
+    
+    /* Success - nut xac nhan */
+    QPushButton[class="success"] {{
+        background-color: {ThemeColors.SUCCESS_BG};
+        color: white;
+        border: none;
+    }}
+    QPushButton[class="success"]:hover {{
+        background-color: {ThemeColors.SUCCESS_BG_HOVER};
+    }}
+    
+    /* Warning - nut canh bao */
+    QPushButton[class="warning"] {{
+        background-color: {ThemeColors.WARNING_BG};
+        color: white;
+        border: none;
+    }}
+    QPushButton[class="warning"]:hover {{
+        background-color: {ThemeColors.WARNING_BG_HOVER};
     }}
     
     /* Flat buttons (secondary style) */

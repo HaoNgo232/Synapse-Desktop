@@ -162,7 +162,7 @@ class ApplyViewQt(QWidget):
         btn_row.addWidget(paste_btn)
 
         clear_btn = QPushButton("Clear")
-        clear_btn.setProperty("class", "outlined")
+        clear_btn.setProperty("class", "danger")
         clear_btn.clicked.connect(self._clear_input)
         btn_row.addWidget(clear_btn)
 

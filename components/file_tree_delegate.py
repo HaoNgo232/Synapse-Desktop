@@ -42,6 +42,8 @@ CHECKBOX_SIZE = 16
 BADGE_HEIGHT = 18
 BADGE_PADDING_H = 6
 BADGE_RADIUS = 4
+BADGE_Y_OFFSET = 3
+BADGE_RIGHT_INSET = 2
 SPACING = 6
 EYE_ICON_SIZE = 24
 
@@ -262,25 +264,36 @@ class FileTreeDelegate(QStyledItemDelegate):
             x += EYE_ICON_SIZE + SPACING
 
         # 4. Calculate available space for label (excluding badges)
-        right_x = rect.right() - SPACING
-        badges_width = 0
+        right_x = rect.right() - BADGE_RIGHT_INSET
+        badge_items: list[tuple[str, QColor]] = []
 
         if token_count is not None and token_count > 0:
-            badges_width += self._badge_width(self._format_count(token_count)) + SPACING
+            token_text = self._format_count(token_count)
+            badge_color = COLOR_PRIMARY if is_dir else COLOR_SUCCESS
+            badge_items.append((token_text, badge_color))
         if line_count is not None and line_count > 0:
-            badges_width += self._badge_width(f"{line_count}L") + SPACING
+            badge_items.append((f"{line_count}L", COLOR_PRIMARY))
 
-        label_max_width = right_x - x - badges_width - SPACING
+        badges_total_width = 0
+        if badge_items:
+            badges_total_width = sum(
+                self._badge_width(text) for text, _ in badge_items
+            ) + SPACING * (len(badge_items) - 1)
+
+        label_max_width = right_x - x
+        if badge_items:
+            label_max_width -= badges_total_width + SPACING
 
         # 5. Draw label (with search highlight)
         painter.setFont(_get_font_bold() if is_dir else _get_font_normal())
         painter.setPen(COLOR_TEXT_PRIMARY)
 
         fm = QFontMetrics(painter.font())
+        safe_label_width = max(int(label_max_width), 50)
         elided_label = fm.elidedText(
-            label, Qt.TextElideMode.ElideRight, max(label_max_width, 50)
+            label, Qt.TextElideMode.ElideRight, safe_label_width
         )
-        label_rect = QRect(x, y, int(label_max_width), height)
+        label_rect = QRect(x, y, safe_label_width, height)
 
         if self._search_query and self._search_query in label.lower():
             self._draw_highlighted_text(painter, label_rect, elided_label, height)
@@ -291,24 +304,17 @@ class FileTreeDelegate(QStyledItemDelegate):
                 elided_label,
             )
 
-        # 6. Draw badges (right-aligned)
-        badge_x = right_x
+        # 6. Draw badges (placed next to label)
+        if badge_items:
+            label_width = min(fm.horizontalAdvance(elided_label), safe_label_width)
+            badge_x = x + label_width + SPACING
+            if badge_x + badges_total_width > right_x:
+                badge_x = max(x, right_x - badges_total_width)
 
-        if line_count is not None and line_count > 0:
-            line_text = f"{line_count}L"
-            bw = self._badge_width(line_text)
-            badge_x -= bw
-            self._draw_badge(painter, badge_x, y, bw, height, line_text, COLOR_PRIMARY)
-            badge_x -= SPACING
-
-        if token_count is not None and token_count > 0:
-            token_text = self._format_count(token_count)
-            bw = self._badge_width(token_text)
-            badge_x -= bw
-            # Folder totals use primary color (blue), file counts use green
-            badge_color = COLOR_PRIMARY if is_dir else COLOR_SUCCESS
-            self._draw_badge(painter, badge_x, y, bw, height, token_text, badge_color)
-            badge_x -= SPACING
+            for text, color in badge_items:
+                bw = self._badge_width(text)
+                self._draw_badge(painter, badge_x, y, bw, height, text, color)
+                badge_x += bw + SPACING
 
         painter.restore()
 
@@ -375,23 +381,24 @@ class FileTreeDelegate(QStyledItemDelegate):
         color: QColor,
     ) -> None:
         """Draw badge nhỏ cho token/line count."""
-        badge_y = y + (row_height - BADGE_HEIGHT) / 2
+        badge_y = y + (row_height - BADGE_HEIGHT) / 2 + BADGE_Y_OFFSET
         badge_rect = QRectF(x, badge_y, width, BADGE_HEIGHT)
 
         # Background — tăng alpha để dễ đọc hơn trên dark bg
         bg_color = QColor(color)
-        bg_color.setAlpha(55)
+        bg_color.setAlpha(90)
         path = QPainterPath()
         path.addRoundedRect(badge_rect, BADGE_RADIUS, BADGE_RADIUS)
         painter.fillPath(path, bg_color)
 
         # Border — tăng alpha cho rõ hơn
-        painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 140), 1))
+        painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 200), 1))
         painter.drawRoundedRect(badge_rect, BADGE_RADIUS, BADGE_RADIUS)
 
         # Text
         painter.setFont(_get_font_small())
-        painter.setPen(color)
+        text_color = QColor(color).lighter(160)
+        painter.setPen(text_color)
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, text)
 
     def _badge_width(self, text: str) -> int:

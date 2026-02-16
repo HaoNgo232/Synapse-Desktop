@@ -1,14 +1,16 @@
 """
-Theme QSS Generator - Tạo Qt Stylesheet từ ThemeColors
+Theme QSS Generator — Synapse Desktop Design System
 
-Giữ nguyên tất cả color constants từ core/theme.py.
+Generates a comprehensive Qt stylesheet from ThemeColors / ThemeSpacing / ThemeRadius.
+Inspired by VS Code & JetBrains dark themes: subtle borders, clear hierarchy,
+smooth hover transitions, thin scrollbars, and clean typography.
 """
 
 import os
 
-from core.theme import ThemeColors, ThemeSpacing, ThemeRadius
+from core.theme import ThemeColors, ThemeSpacing, ThemeRadius, ThemeFonts
 
-# Resolve absolute paths for SVG icons
+# Resolve absolute paths for SVG icons used in tree-view branch indicators
 _ASSETS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
 )
@@ -18,24 +20,25 @@ _ARROW_DOWN = os.path.join(_ASSETS_DIR, "arrow-down.svg").replace("\\", "/")
 
 def generate_app_stylesheet() -> str:
     """
-    Tạo global QSS stylesheet cho toàn bộ application.
-
-    Áp dụng Dark Mode OLED theme với các color constants
-    từ ThemeColors class.
+    Generate the global QSS stylesheet for the entire application.
 
     Returns:
-        QSS stylesheet string
+        Complete QSS string ready to apply via QApplication.setStyleSheet().
     """
     return f"""
-    /* ===== GLOBAL ===== */
+    /* ================================================================
+       GLOBAL — base font, background, text color
+       ================================================================ */
     QMainWindow, QWidget {{
         background-color: {ThemeColors.BG_PAGE};
         color: {ThemeColors.TEXT_PRIMARY};
-        font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
-        font-size: 13px;
+        font-family: {ThemeFonts.FAMILY_BODY};
+        font-size: {ThemeFonts.SIZE_BODY}px;
     }}
 
-    /* ===== LABELS ===== */
+    /* ================================================================
+       LABELS
+       ================================================================ */
     QLabel {{
         color: {ThemeColors.TEXT_PRIMARY};
         background: transparent;
@@ -47,15 +50,17 @@ def generate_app_stylesheet() -> str:
         color: {ThemeColors.TEXT_SECONDARY};
     }}
     QLabel[class="heading"] {{
-        font-size: 16px;
+        font-size: {ThemeFonts.SIZE_TITLE}px;
         font-weight: 600;
     }}
     QLabel[class="title"] {{
-        font-size: 20px;
-        font-weight: 600;
+        font-size: {ThemeFonts.SIZE_HEADING}px;
+        font-weight: 700;
     }}
 
-    /* ===== FRAMES / PANELS ===== */
+    /* ================================================================
+       FRAMES / PANELS
+       ================================================================ */
     QFrame {{
         background-color: transparent;
         border: none;
@@ -77,7 +82,9 @@ def generate_app_stylesheet() -> str:
         padding: {ThemeSpacing.MD}px;
     }}
 
-    /* ===== SEPARATORS ===== */
+    /* ================================================================
+       SEPARATORS
+       ================================================================ */
     QFrame[frameShape="4"] /* HLine */ {{
         background-color: {ThemeColors.BORDER};
         max-height: 1px;
@@ -89,7 +96,9 @@ def generate_app_stylesheet() -> str:
         border: none;
     }}
 
-    /* ===== TAB WIDGET ===== */
+    /* ================================================================
+       TAB WIDGET — Bottom-border accent style (VS Code look)
+       ================================================================ */
     QTabWidget::pane {{
         background-color: {ThemeColors.BG_PAGE};
         border: none;
@@ -97,27 +106,32 @@ def generate_app_stylesheet() -> str:
     }}
     QTabBar {{
         background-color: {ThemeColors.BG_SURFACE};
+        qproperty-drawBase: 0;
     }}
     QTabBar::tab {{
-        background-color: {ThemeColors.BG_SURFACE};
-        color: {ThemeColors.TEXT_SECONDARY};
-        padding: 10px 20px;
+        background-color: transparent;
+        color: {ThemeColors.TAB_INACTIVE_TEXT};
+        padding: 10px 24px;
         border: none;
-        border-bottom: 2px solid transparent;
+        border-bottom: 3px solid transparent;
         font-weight: 500;
-        min-width: 80px;
+        font-size: {ThemeFonts.SIZE_BODY}px;
+        min-width: 90px;
     }}
     QTabBar::tab:selected {{
-        color: {ThemeColors.PRIMARY};
-        border-bottom: 2px solid {ThemeColors.PRIMARY};
-        background-color: {ThemeColors.BG_PAGE};
-    }}
-    QTabBar::tab:hover {{
         color: {ThemeColors.TEXT_PRIMARY};
-        background-color: {ThemeColors.BG_ELEVATED};
+        border-bottom: 3px solid {ThemeColors.TAB_ACTIVE_BORDER};
+        background-color: {ThemeColors.TAB_ACTIVE_BG};
+        font-weight: 700;
+    }}
+    QTabBar::tab:hover:!selected {{
+        color: {ThemeColors.TEXT_PRIMARY};
+        background-color: rgba(124, 111, 255, 0.08);
     }}
 
-    /* ===== BUTTONS ===== */
+    /* ================================================================
+       BUTTONS — Default is secondary/outlined
+       ================================================================ */
     QPushButton {{
         background-color: {ThemeColors.BG_ELEVATED};
         color: {ThemeColors.TEXT_PRIMARY};
@@ -139,6 +153,11 @@ def generate_app_stylesheet() -> str:
         background-color: {ThemeColors.BG_SURFACE};
         border-color: {ThemeColors.BORDER};
     }}
+    QPushButton:focus {{
+        border-color: {ThemeColors.BORDER_FOCUS};
+    }}
+
+    /* Primary — accent background, white text */
     QPushButton[class="primary"] {{
         background-color: {ThemeColors.PRIMARY};
         color: #FFFFFF;
@@ -150,19 +169,22 @@ def generate_app_stylesheet() -> str:
     QPushButton[class="primary"]:pressed {{
         background-color: {ThemeColors.PRIMARY_PRESSED};
     }}
+
+    /* Outlined — transparent bg, visible border */
     QPushButton[class="outlined"] {{
         background-color: transparent;
-        color: #CBD5E1;
+        color: {ThemeColors.TEXT_PRIMARY};
         border: 1px solid {ThemeColors.BORDER_LIGHT};
     }}
     QPushButton[class="outlined"]:hover {{
         background-color: {ThemeColors.BG_ELEVATED};
-        color: {ThemeColors.TEXT_PRIMARY};
-        border-color: #64748B;
+        border-color: {ThemeColors.PRIMARY};
     }}
     QPushButton[class="outlined"]:pressed {{
-        background-color: {ThemeColors.BORDER};
+        background-color: {ThemeColors.BG_HOVER};
     }}
+
+    /* Flat / Ghost — no border, subtle hover */
     QPushButton[class="flat"] {{
         background-color: transparent;
         color: {ThemeColors.TEXT_SECONDARY};
@@ -172,7 +194,8 @@ def generate_app_stylesheet() -> str:
         color: {ThemeColors.TEXT_PRIMARY};
         background-color: {ThemeColors.BG_ELEVATED};
     }}
-    /* Danger/Delete - mau nen do, ghi de global */
+
+    /* Danger — red background */
     QPushButton[class="danger"] {{
         background-color: {ThemeColors.ERROR_BG};
         color: #FFFFFF;
@@ -184,7 +207,8 @@ def generate_app_stylesheet() -> str:
     QPushButton[class="danger"]:pressed {{
         background-color: #991B1B;
     }}
-    /* Success - nut xac nhan/thanh cong */
+
+    /* Success — green background */
     QPushButton[class="success"] {{
         background-color: {ThemeColors.SUCCESS_BG};
         color: #FFFFFF;
@@ -193,7 +217,8 @@ def generate_app_stylesheet() -> str:
     QPushButton[class="success"]:hover {{
         background-color: {ThemeColors.SUCCESS_BG_HOVER};
     }}
-    /* Warning - nut canh bao */
+
+    /* Warning — amber background */
     QPushButton[class="warning"] {{
         background-color: {ThemeColors.WARNING_BG};
         color: #FFFFFF;
@@ -203,58 +228,72 @@ def generate_app_stylesheet() -> str:
         background-color: {ThemeColors.WARNING_BG_HOVER};
     }}
 
+    /* ================================================================
+       TOOL BUTTONS
+       ================================================================ */
     QToolButton {{
         background-color: transparent;
         color: {ThemeColors.TEXT_SECONDARY};
         border: none;
-        border-radius: {ThemeRadius.SM}px;
-        padding: 4px;
+        border-radius: {ThemeRadius.MD}px;
+        padding: 6px;
     }}
     QToolButton:hover {{
         background-color: {ThemeColors.BG_ELEVATED};
         color: {ThemeColors.TEXT_PRIMARY};
     }}
 
-    /* ===== TEXT INPUTS ===== */
+    /* ================================================================
+       TEXT INPUTS
+       ================================================================ */
     QLineEdit {{
         background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
         border: 1px solid {ThemeColors.BORDER};
         border-radius: {ThemeRadius.MD}px;
-        padding: 6px 10px;
+        padding: 6px 12px;
         selection-background-color: {ThemeColors.PRIMARY};
     }}
     QLineEdit:focus {{
-        border-color: {ThemeColors.PRIMARY};
+        border-color: {ThemeColors.BORDER_FOCUS};
+    }}
+    QLineEdit:hover {{
+        border-color: {ThemeColors.BORDER_LIGHT};
     }}
     QLineEdit::placeholder {{
         color: {ThemeColors.TEXT_MUTED};
     }}
+
     QTextEdit, QPlainTextEdit {{
-        background-color: {ThemeColors.BG_PAGE};
+        background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
         border: 1px solid {ThemeColors.BORDER};
-        border-radius: {ThemeRadius.MD}px;
-        padding: 8px;
+        border-radius: {ThemeRadius.LG}px;
+        padding: {ThemeSpacing.SM}px;
         selection-background-color: {ThemeColors.PRIMARY};
-        font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
-        font-size: 13px;
+        font-family: {ThemeFonts.FAMILY_MONO};
+        font-size: {ThemeFonts.SIZE_BODY}px;
     }}
     QTextEdit:focus, QPlainTextEdit:focus {{
-        border-color: {ThemeColors.PRIMARY};
+        border-color: {ThemeColors.BORDER_FOCUS};
     }}
 
-    /* ===== COMBOBOX ===== */
+    /* ================================================================
+       COMBOBOX
+       ================================================================ */
     QComboBox {{
         background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
         border: 1px solid {ThemeColors.BORDER};
         border-radius: {ThemeRadius.MD}px;
-        padding: 4px 28px 4px 10px;
+        padding: 4px 28px 4px 12px;
         min-height: 28px;
     }}
+    QComboBox:hover {{
+        border-color: {ThemeColors.BORDER_LIGHT};
+    }}
     QComboBox:focus {{
-        border-color: {ThemeColors.PRIMARY};
+        border-color: {ThemeColors.BORDER_FOCUS};
     }}
     QComboBox::drop-down {{
         border: none;
@@ -274,17 +313,20 @@ def generate_app_stylesheet() -> str:
         selection-background-color: {ThemeColors.PRIMARY};
         selection-color: #FFFFFF;
         outline: 0;
+        border-radius: {ThemeRadius.MD}px;
     }}
 
-    /* ===== CHECKBOX ===== */
+    /* ================================================================
+       CHECKBOX
+       ================================================================ */
     QCheckBox {{
         color: {ThemeColors.TEXT_PRIMARY};
-        spacing: 8px;
+        spacing: {ThemeSpacing.SM}px;
     }}
     QCheckBox::indicator {{
         width: 18px;
         height: 18px;
-        border-radius: 4px;
+        border-radius: {ThemeRadius.SM}px;
         border: 1px solid {ThemeColors.BORDER_LIGHT};
         background-color: transparent;
     }}
@@ -296,7 +338,9 @@ def generate_app_stylesheet() -> str:
         border-color: {ThemeColors.PRIMARY};
     }}
 
-    /* ===== PROGRESS BAR ===== */
+    /* ================================================================
+       PROGRESS BAR
+       ================================================================ */
     QProgressBar {{
         background-color: {ThemeColors.BG_SURFACE};
         border: none;
@@ -304,14 +348,16 @@ def generate_app_stylesheet() -> str:
         min-height: 10px;
         max-height: 10px;
         text-align: center;
-        color: transparent; /* Hide text */
+        color: transparent;
     }}
     QProgressBar::chunk {{
         background-color: {ThemeColors.PRIMARY};
         border-radius: 5px;
     }}
 
-    /* ===== SCROLLBAR ===== */
+    /* ================================================================
+       SCROLLBARS — thin, rounded, subtle
+       ================================================================ */
     QScrollBar:vertical {{
         background: transparent;
         width: 8px;
@@ -351,7 +397,9 @@ def generate_app_stylesheet() -> str:
         background: transparent;
     }}
 
-    /* ===== TREE VIEW ===== */
+    /* ================================================================
+       TREE VIEW
+       ================================================================ */
     QTreeView {{
         background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
@@ -393,7 +441,9 @@ def generate_app_stylesheet() -> str:
         image: none;
     }}
 
-    /* ===== LIST WIDGET ===== */
+    /* ================================================================
+       LIST WIDGET
+       ================================================================ */
     QListWidget {{
         background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
@@ -413,13 +463,17 @@ def generate_app_stylesheet() -> str:
         color: {ThemeColors.TEXT_PRIMARY};
     }}
 
-    /* ===== SCROLL AREA ===== */
+    /* ================================================================
+       SCROLL AREA
+       ================================================================ */
     QScrollArea {{
         background-color: transparent;
         border: none;
     }}
 
-    /* ===== SPLITTER ===== */
+    /* ================================================================
+       SPLITTER — highlight handle on hover
+       ================================================================ */
     QSplitter::handle {{
         background-color: {ThemeColors.BORDER};
     }}
@@ -433,7 +487,9 @@ def generate_app_stylesheet() -> str:
         background-color: {ThemeColors.PRIMARY};
     }}
 
-    /* ===== MENU ===== */
+    /* ================================================================
+       MENU
+       ================================================================ */
     QMenu {{
         background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
@@ -454,23 +510,29 @@ def generate_app_stylesheet() -> str:
         margin: 4px 8px;
     }}
 
-    /* ===== DIALOG ===== */
+    /* ================================================================
+       DIALOG
+       ================================================================ */
     QDialog {{
         background-color: {ThemeColors.BG_SURFACE};
         color: {ThemeColors.TEXT_PRIMARY};
     }}
 
-    /* ===== TOOLTIP ===== */
+    /* ================================================================
+       TOOLTIP
+       ================================================================ */
     QToolTip {{
         background-color: {ThemeColors.BG_ELEVATED};
         color: {ThemeColors.TEXT_PRIMARY};
         border: 1px solid {ThemeColors.BORDER};
         border-radius: {ThemeRadius.SM}px;
         padding: 4px 8px;
-        font-size: 12px;
+        font-size: {ThemeFonts.SIZE_CAPTION}px;
     }}
 
-    /* ===== GROUP BOX ===== */
+    /* ================================================================
+       GROUP BOX
+       ================================================================ */
     QGroupBox {{
         background-color: {ThemeColors.BG_SURFACE};
         border: 1px solid {ThemeColors.BORDER};
@@ -484,5 +546,20 @@ def generate_app_stylesheet() -> str:
         subcontrol-origin: margin;
         subcontrol-position: top left;
         padding: 0 8px;
+    }}
+
+    /* ================================================================
+       STATUS BAR  (footer)
+       ================================================================ */
+    QStatusBar {{
+        background-color: {ThemeColors.BG_SURFACE};
+        color: {ThemeColors.TEXT_SECONDARY};
+        border-top: 1px solid {ThemeColors.BORDER};
+        font-size: {ThemeFonts.SIZE_CAPTION}px;
+        min-height: 28px;
+        max-height: 32px;
+    }}
+    QStatusBar::item {{
+        border: none;
     }}
     """

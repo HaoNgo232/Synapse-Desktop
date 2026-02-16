@@ -1,111 +1,150 @@
 """
-Dark Mode OLED Theme - Core Design System
+Synapse Desktop Design System — Dark Theme
 
-Centralized theme configuration following UI/UX Pro Max guidelines.
-Style: Dark Mode (OLED) + Minimalism for Developer Tools
+Inspired by VS Code / JetBrains dark themes.
+Centralized color palette, typography, spacing, and radius tokens.
+All views and components reference these constants for visual consistency.
 """
 
 from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtWidgets import QApplication
 from pathlib import Path
 
 
 class ThemeFonts:
-    """Typography System - JetBrains Mono + IBM Plex Sans"""
+    """Typography System — Segoe UI / SF Pro + JetBrains Mono"""
 
     _fonts_loaded = False
 
+    # Font family stacks
+    FAMILY_BODY = '"Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif'
+    FAMILY_MONO = '"JetBrains Mono", "Fira Code", "Consolas", monospace'
+
     @staticmethod
     def load_fonts():
-        """Load custom fonts from assets (call once at startup)"""
+        """Load custom fonts from assets (call once at startup)."""
         if ThemeFonts._fonts_loaded:
             return
 
         font_dir = Path(__file__).parent.parent / "assets" / "fonts"
 
-        # Load JetBrains Mono
-        QFontDatabase.addApplicationFont(str(font_dir / "JetBrainsMono-Regular.ttf"))
-        QFontDatabase.addApplicationFont(str(font_dir / "JetBrainsMono-Bold.ttf"))
-
-        # Load IBM Plex Sans
-        QFontDatabase.addApplicationFont(str(font_dir / "IBMPlexSans-Regular.ttf"))
-        QFontDatabase.addApplicationFont(str(font_dir / "IBMPlexSans-SemiBold.ttf"))
+        for name in (
+            "JetBrainsMono-Regular.ttf",
+            "JetBrainsMono-Bold.ttf",
+            "IBMPlexSans-Regular.ttf",
+            "IBMPlexSans-SemiBold.ttf",
+        ):
+            path = font_dir / name
+            if path.exists():
+                QFontDatabase.addApplicationFont(str(path))
 
         ThemeFonts._fonts_loaded = True
 
-    # Heading fonts (for titles, section headers)
-    HEADING_LARGE = QFont("JetBrains Mono", 18, QFont.Weight.Bold)
-    HEADING_MEDIUM = QFont("JetBrains Mono", 14, QFont.Weight.Bold)
-    HEADING_SMALL = QFont("JetBrains Mono", 12, QFont.Weight.DemiBold)
+    # Size scale (px): 11 caption → 13 body → 15 subtitle → 18 title → 24 heading
+    SIZE_CAPTION = 11
+    SIZE_BODY = 13
+    SIZE_SUBTITLE = 15
+    SIZE_TITLE = 18
+    SIZE_HEADING = 24
 
-    # Body fonts (for descriptions, labels)
-    BODY_LARGE = QFont("IBM Plex Sans", 12, QFont.Weight.Normal)
-    BODY_MEDIUM = QFont("IBM Plex Sans", 11, QFont.Weight.Normal)
-    BODY_SMALL = QFont("IBM Plex Sans", 10, QFont.Weight.Normal)
+    # Pre-built QFont objects
+    HEADING_LARGE = QFont("Segoe UI", 24, QFont.Weight.Bold)
+    HEADING_MEDIUM = QFont("Segoe UI", 18, QFont.Weight.Bold)
+    HEADING_SMALL = QFont("Segoe UI", 15, QFont.Weight.DemiBold)
 
-    # Code fonts (for file paths, code snippets)
-    CODE = QFont("JetBrains Mono", 10, QFont.Weight.Normal)
+    BODY_LARGE = QFont("Segoe UI", 15, QFont.Weight.Normal)
+    BODY_MEDIUM = QFont("Segoe UI", 13, QFont.Weight.Normal)
+    BODY_SMALL = QFont("Segoe UI", 11, QFont.Weight.Normal)
+
+    CODE = QFont("JetBrains Mono", 13, QFont.Weight.Normal)
+    CODE_SMALL = QFont("JetBrains Mono", 11, QFont.Weight.Normal)
 
 
 class ThemeColors:
-    """Dark Mode OLED Theme Colors - Developer Tools Edition"""
+    """
+    Dark Theme Color Palette — VS Code / JetBrains inspired.
 
-    # Primary - Blue 600/700 (giam do sang de tang tuong phan tren nen dark)
-    PRIMARY = "#2563EB"  # Blue 600
-    PRIMARY_HOVER = "#1D4ED8"  # Blue 700
-    PRIMARY_PRESSED = "#1E40AF"  # Blue 800
+    Naming convention kept backward-compatible with existing codebase.
+    """
 
-    # Backgrounds - OLED Deep Black
-    BG_PAGE = "#0F172A"  # Slate 900 - Main background
-    BG_SURFACE = "#1E293B"  # Slate 800 - Cards, panels
-    BG_ELEVATED = "#334155"  # Slate 700 - Hover states
-    BG_HOVER = "#475569"  # Slate 600 - Interactive hover
+    # ── Accent (tím pastel — buttons, selected, focus rings) ──
+    PRIMARY = "#7C6FFF"
+    PRIMARY_HOVER = "#6B5FEE"
+    PRIMARY_PRESSED = "#5A4FDD"
+    ACCENT = PRIMARY  # alias
 
-    # Text - High Contrast on Dark
-    TEXT_PRIMARY = "#F1F5F9"  # Slate 100 - Main text
-    TEXT_SECONDARY = "#94A3B8"  # Slate 400 - Muted text
-    TEXT_MUTED = "#64748B"  # Slate 500 - Very muted
+    # ── Backgrounds ──
+    BG_PAGE = "#1E1E2E"        # base — main window background
+    BG_SURFACE = "#262637"     # surface — panels, sidebars, cards
+    BG_ELEVATED = "#2D2D44"    # elevated surface — hover, dropdowns
+    BG_HOVER = "#363652"       # interactive hover on elevated
 
-    # Borders - Subtle on Dark
-    BORDER = "#334155"  # Slate 700
-    BORDER_FOCUS = "#2563EB"  # Blue 600 - cung voi PRIMARY
-    BORDER_LIGHT = "#475569"  # Slate 600 - Lighter border
+    # ── Text ──
+    TEXT_PRIMARY = "#E0E0F0"
+    TEXT_SECONDARY = "#8888AA"
+    TEXT_MUTED = "#666688"      # very muted (disabled, hints)
 
-    # Status (text/border)
-    SUCCESS = "#10B981"  # Emerald 500
-    WARNING = "#F59E0B"  # Amber 500
-    ERROR = "#EF4444"  # Red 500
+    # ── Borders ──
+    BORDER = "#3E3E5E"         # subtle
+    BORDER_FOCUS = "#5E5EFF"   # accent — focus rings
+    BORDER_LIGHT = "#4E4E6E"   # slightly lighter
 
-    # Semantic button backgrounds - ghi de len global, phan biet nut dac thu
-    ERROR_BG = "#DC2626"  # Red 600 - nut danger/delete
-    ERROR_BG_HOVER = "#B91C1C"  # Red 700
-    SUCCESS_BG = "#059669"  # Emerald 600 - nut success/confirm
-    SUCCESS_BG_HOVER = "#047857"  # Emerald 700
-    WARNING_BG = "#D97706"  # Amber 600 - nut canh bao
-    WARNING_BG_HOVER = "#B45309"  # Amber 700
+    # ── Status colors (text / icons) ──
+    SUCCESS = "#4ADE80"
+    WARNING = "#FBBF24"
+    ERROR = "#F87171"
+    INFO = "#60A5FA"
 
-    # Icons
-    ICON_FOLDER = "#F59E0B"  # Amber 500
-    ICON_FILE = "#64748B"  # Slate 500
+    # ── Semantic button backgrounds ──
+    ERROR_BG = "#DC2626"
+    ERROR_BG_HOVER = "#B91C1C"
+    SUCCESS_BG = "#059669"
+    SUCCESS_BG_HOVER = "#047857"
+    WARNING_BG = "#D97706"
+    WARNING_BG_HOVER = "#B45309"
+    INFO_BG = "#2563EB"
+    INFO_BG_HOVER = "#1D4ED8"
 
-    # Search
-    SEARCH_HIGHLIGHT = "#422006"  # Amber 950 - Dark amber bg
+    # ── File tree icons ──
+    ICON_FOLDER = "#FBBF24"
+    ICON_FILE = "#8888AA"
+
+    # ── Search highlight ──
+    SEARCH_HIGHLIGHT = "#422006"
+
+    # ── Tab bar specific ──
+    TAB_ACTIVE_BG = "#2D2D44"
+    TAB_ACTIVE_BORDER = "#7C6FFF"
+    TAB_INACTIVE_TEXT = "#8888AA"
 
 
 class ThemeSpacing:
-    """Spacing constants for consistent layouts"""
+    """8-px grid spacing system."""
 
     XS = 4
     SM = 8
     MD = 12
     LG = 16
-    XL = 20
-    XXL = 24
+    XL = 24
+    XXL = 32
 
 
 class ThemeRadius:
-    """Border radius constants"""
+    """Border radius tokens."""
 
     SM = 4
-    MD = 6
-    LG = 8
-    XL = 12
+    MD = 6       # small buttons
+    LG = 8       # cards
+    XL = 12      # large panels
+
+
+def generate_stylesheet() -> str:
+    """Generate global QSS from the centralized theme system."""
+    from core.theme_qss import generate_app_stylesheet
+
+    return generate_app_stylesheet()
+
+
+def apply_theme(app: QApplication) -> None:
+    """Apply the global design-system stylesheet to the QApplication."""
+    app.setStyleSheet(generate_stylesheet())

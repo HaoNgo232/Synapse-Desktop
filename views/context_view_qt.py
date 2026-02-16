@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QSpinBox,
 )
-from PySide6.QtCore import Qt, Slot, QTimer, QSize
+from PySide6.QtCore import Qt, Slot, QTimer, QSize, Signal, QRunnable, QThreadPool, QObject
 from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
@@ -62,6 +62,45 @@ from config.output_format import (
 from core.dependency_resolver import DependencyResolver
 
 
+class CopyTaskWorker(QRunnable):
+    """
+    Background worker cho cac copy operations nang (scan tree, doc files, count tokens).
+
+    Chay heavy work tren background thread, emit ket qua ve main thread
+    qua signals de copy clipboard va cap nhat UI.
+    """
+
+    class Signals(QObject):
+        """Signals de giao tiep voi main thread."""
+        # Emit (prompt_text, token_count) khi task hoan thanh
+        finished = Signal(str, int)
+        # Emit error message khi co loi
+        error = Signal(str)
+
+    def __init__(self, task_fn):
+        """
+        Khoi tao worker voi mot task function.
+
+        Args:
+            task_fn: Callable tra ve prompt string. Chay tren background thread.
+        """
+        super().__init__()
+        self.task_fn = task_fn
+        self.signals = self.Signals()
+        self.setAutoDelete(True)
+
+    @Slot()
+    def run(self):
+        """Chay task function va emit ket qua hoac error."""
+        try:
+            prompt = self.task_fn()
+            from core.token_counter import count_tokens as _count
+            token_count = _count(prompt)
+            self.signals.finished.emit(prompt, token_count)
+        except Exception as e:
+            self.signals.error.emit(str(e))
+
+
 class ContextViewQt(QWidget):
     """View cho Context tab - PySide6 version."""
 
@@ -85,6 +124,7 @@ class ContextViewQt(QWidget):
         self._pending_refresh = False
         self._token_generation = 0
         self._status_timer: Optional[QTimer] = None  # Fix race condition
+        self._current_copy_worker: Optional[CopyTaskWorker] = None  # Track copy worker
 
         # Services
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
@@ -97,22 +137,29 @@ class ContextViewQt(QWidget):
         """Xây dựng UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(0)
+        layout.setSpacing(12)
 
-        # Main splitter: left (file tree) | right (instructions + actions)
+        # Main splitter: files | instructions | actions
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
 
-        # Left panel - File Tree
+        # Left panel - File tree
         left_panel = self._build_left_panel()
         splitter.addWidget(left_panel)
 
-        # Right panel - Instructions + Actions
-        right_panel = self._build_right_panel()
-        splitter.addWidget(right_panel)
+        # Center panel - Instructions and output format
+        center_panel = self._build_instructions_panel()
+        splitter.addWidget(center_panel)
 
-        # Set stretch: left=2, right=1
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 1)
+        # Right panel - Action shortcuts and stats
+        action_panel = self._build_actions_panel()
+        splitter.addWidget(action_panel)
+
+        # Width balance for typical laptop screens
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(2, 1)
+        splitter.setSizes([720, 480, 340])
 
         layout.addWidget(splitter)
 
@@ -122,11 +169,11 @@ class ContextViewQt(QWidget):
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
-        # Header: "Files" + actions + token count
-        header = QHBoxLayout()
-        header.setSpacing(6)
+        # Header row: title + token summary
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
 
         # Get assets directory
         assets_dir = os.path.join(
@@ -135,12 +182,31 @@ class ContextViewQt(QWidget):
 
         files_label = QLabel("Files")
         files_label.setStyleSheet(
-            f"font-weight: 600; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        header.addWidget(files_label)
+        title_row.addWidget(files_label)
 
-        # Push buttons to the right
-        header.addStretch()
+        self._selection_meta_label = QLabel("0 selected")
+        self._selection_meta_label.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};"
+        )
+        title_row.addWidget(self._selection_meta_label)
+
+        title_row.addStretch()
+
+        self._token_count_label = QLabel("0 tokens")
+        self._token_count_label.setStyleSheet(
+            f"font-weight: 700; font-size: 14px; color: {ThemeColors.PRIMARY};"
+        )
+        title_row.addWidget(self._token_count_label)
+        layout.addLayout(title_row)
+
+        # Controls row
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(6)
+
+        # Push controls to the right
+        controls_row.addStretch()
 
         # --- Action buttons (compact, icon-only with tooltips) ---
         btn_style = (
@@ -164,7 +230,7 @@ class ContextViewQt(QWidget):
         refresh_btn.setStyleSheet(btn_style)
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self._refresh_tree)
-        header.addWidget(refresh_btn)
+        controls_row.addWidget(refresh_btn)
 
         # Remote repos (dropdown)
         remote_btn = QToolButton()
@@ -178,7 +244,7 @@ class ContextViewQt(QWidget):
         remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
         remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
         remote_btn.setMenu(remote_menu)
-        header.addWidget(remote_btn)
+        controls_row.addWidget(remote_btn)
 
         # Ignore
         ignore_btn = QToolButton()
@@ -188,7 +254,7 @@ class ContextViewQt(QWidget):
         ignore_btn.setStyleSheet(btn_style)
         ignore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ignore_btn.clicked.connect(self._add_to_ignore)
-        header.addWidget(ignore_btn)
+        controls_row.addWidget(ignore_btn)
 
         # Undo ignore
         undo_btn = QToolButton()
@@ -198,9 +264,9 @@ class ContextViewQt(QWidget):
         undo_btn.setStyleSheet(btn_style)
         undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         undo_btn.clicked.connect(self._undo_ignore)
-        header.addWidget(undo_btn)
+        controls_row.addWidget(undo_btn)
 
-        header.addSpacing(8)
+        controls_row.addSpacing(8)
 
         # --- Related files toggle ---
         related_active_style = (
@@ -234,14 +300,14 @@ class ContextViewQt(QWidget):
         self._related_btn.setCheckable(True)
         self._related_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._related_btn.clicked.connect(self._toggle_related_mode)
-        header.addWidget(self._related_btn)
+        controls_row.addWidget(self._related_btn)
 
         # Level spinbox
         level_label = QLabel("Depth")
         level_label.setStyleSheet(
             f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; font-weight: 500;"
         )
-        header.addWidget(level_label)
+        controls_row.addWidget(level_label)
 
         self._related_level_spin = QSpinBox()
         self._related_level_spin.setRange(1, 5)
@@ -260,16 +326,9 @@ class ContextViewQt(QWidget):
             f"QSpinBox::up-button, QSpinBox::down-button {{ width: 12px; }}"
         )
         self._related_level_spin.valueChanged.connect(self._on_related_level_changed)
-        header.addWidget(self._related_level_spin)
+        controls_row.addWidget(self._related_level_spin)
 
-        header.addSpacing(8)
-
-        self._token_count_label = QLabel("0 tokens")
-        self._token_count_label.setStyleSheet(
-            f"font-weight: 700; font-size: 14px; color: {ThemeColors.PRIMARY};"
-        )
-        header.addWidget(self._token_count_label)
-        layout.addLayout(header)
+        layout.addLayout(controls_row)
 
         # File tree widget
         self.file_tree_widget = FileTreeWidget()
@@ -280,26 +339,33 @@ class ContextViewQt(QWidget):
 
         return panel
 
-    def _build_right_panel(self) -> QFrame:
-        """Build right panel với instructions, format selector, action buttons."""
+    def _build_instructions_panel(self) -> QFrame:
+        """Build center panel with instructions and output format."""
         panel = QFrame()
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         # Instructions
         instr_label = QLabel("Instructions")
         instr_label.setStyleSheet(
-            f"font-weight: 600; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
+            f"font-weight: 700; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
         )
         layout.addWidget(instr_label)
+
+        instr_hint = QLabel("Describe your request, expected output, and constraints.")
+        instr_hint.setWordWrap(True)
+        instr_hint.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_MUTED};"
+        )
+        layout.addWidget(instr_hint)
 
         self._instructions_field = QTextEdit()
         self._instructions_field.setPlaceholderText(
             "Enter your task instructions here..."
         )
-        self._instructions_field.setMinimumHeight(280)  # Tăng từ 200 lên 280
+        self._instructions_field.setMinimumHeight(360)
         self._instructions_field.setStyleSheet(f"""
             QTextEdit {{
                 font-family: 'IBM Plex Sans', sans-serif;
@@ -338,6 +404,24 @@ class ContextViewQt(QWidget):
         format_layout.addStretch()
         layout.addLayout(format_layout)
 
+        layout.addStretch()
+
+        return panel
+
+    def _build_actions_panel(self) -> QFrame:
+        """Build right panel with copy actions, status, and token stats."""
+        panel = QFrame()
+        panel.setProperty("class", "surface")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        actions_label = QLabel("Actions")
+        actions_label.setStyleSheet(
+            f"font-weight: 700; font-size: 14px; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        layout.addWidget(actions_label)
+
         # Action buttons
         actions = self._build_action_buttons()
         layout.addWidget(actions)
@@ -369,7 +453,7 @@ class ContextViewQt(QWidget):
         return panel
 
     def _build_action_buttons(self) -> QWidget:
-        """Build action buttons."""
+        """Build action buttons. Luu ref vao self de disable/enable khi copy."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -377,8 +461,8 @@ class ContextViewQt(QWidget):
 
         # Row 1: Copy Diff Only
         row1 = QHBoxLayout()
-        diff_btn = QPushButton("Copy Diff Only")
-        diff_btn.setStyleSheet(
+        self._diff_btn = QPushButton("Copy Diff Only")
+        self._diff_btn.setStyleSheet(
             f"""
             QPushButton {{
                 background-color: #8B5CF6;
@@ -397,16 +481,16 @@ class ContextViewQt(QWidget):
             }}
             """
         )
-        diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
-        diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        diff_btn.clicked.connect(self._show_diff_only_dialog)
-        row1.addWidget(diff_btn)
+        self._diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
+        self._diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._diff_btn.clicked.connect(self._show_diff_only_dialog)
+        row1.addWidget(self._diff_btn)
         layout.addLayout(row1)
 
         # Row 2: Copy Tree Map + Copy Smart
         row2 = QHBoxLayout()
-        tree_map_btn = QPushButton("Copy Tree Map")
-        tree_map_btn.setStyleSheet(
+        self._tree_map_btn = QPushButton("Copy Tree Map")
+        self._tree_map_btn.setStyleSheet(
             f"""
             QPushButton {{
                 background-color: transparent;
@@ -426,14 +510,14 @@ class ContextViewQt(QWidget):
             }}
             """
         )
-        tree_map_btn.setToolTip("Copy only file structure")
-        tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        tree_map_btn.clicked.connect(self._copy_tree_map_only)
-        row2.addWidget(tree_map_btn)
+        self._tree_map_btn.setToolTip("Copy only file structure")
+        self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tree_map_btn.clicked.connect(self._copy_tree_map_only)
+        row2.addWidget(self._tree_map_btn)
 
-        smart_btn = QPushButton("Copy Smart")
-        smart_btn.setProperty("custom-style", "orange")  # Prevent global override
-        smart_btn.setStyleSheet(
+        self._smart_btn = QPushButton("Copy Smart")
+        self._smart_btn.setProperty("custom-style", "orange")  # Prevent global override
+        self._smart_btn.setStyleSheet(
             f"""
             QPushButton[custom-style="orange"] {{
                 color: {ThemeColors.WARNING};
@@ -456,16 +540,16 @@ class ContextViewQt(QWidget):
             }}
             """
         )
-        smart_btn.setToolTip("Copy code structure only (Smart Context)")
-        smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        smart_btn.clicked.connect(self._copy_smart_context)
-        row2.addWidget(smart_btn)
+        self._smart_btn.setToolTip("Copy code structure only (Smart Context)")
+        self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._smart_btn.clicked.connect(self._copy_smart_context)
+        row2.addWidget(self._smart_btn)
         layout.addLayout(row2)
 
         # Row 3: Copy Context + Copy + OPX
         row3 = QHBoxLayout()
-        copy_btn = QPushButton("Copy Context")
-        copy_btn.setStyleSheet(
+        self._copy_btn = QPushButton("Copy Context")
+        self._copy_btn.setStyleSheet(
             f"""
             QPushButton {{
                 background-color: transparent;
@@ -485,13 +569,13 @@ class ContextViewQt(QWidget):
             }}
             """
         )
-        copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
-        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
-        row3.addWidget(copy_btn)
+        self._copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
+        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
+        row3.addWidget(self._copy_btn)
 
-        opx_btn = QPushButton("Copy + OPX")
-        opx_btn.setStyleSheet(
+        self._opx_btn = QPushButton("Copy + OPX")
+        self._opx_btn.setStyleSheet(
             f"""
             QPushButton {{
                 background-color: {ThemeColors.PRIMARY};
@@ -510,10 +594,10 @@ class ContextViewQt(QWidget):
             }}
             """
         )
-        opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
-        opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
-        row3.addWidget(opx_btn)
+        self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
+        self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
+        row3.addWidget(self._opx_btn)
         layout.addLayout(row3)
 
         return widget
@@ -659,6 +743,7 @@ class ContextViewQt(QWidget):
             file_tokens=total_file_tokens,
             instruction_tokens=instruction_tokens,
         )
+        self._selection_meta_label.setText(f"{file_count:,} selected")
 
     @Slot(str)
     def _on_model_changed(self, model_id: str) -> None:
@@ -717,6 +802,65 @@ class ContextViewQt(QWidget):
         except Exception as e:
             self._show_status(f"Error: {e}", is_error=True)
 
+    # ===== Background Copy Helpers =====
+
+    def _set_copy_buttons_enabled(self, enabled: bool) -> None:
+        """
+        Enable/disable tat ca copy buttons.
+
+        Goi khi bat dau/ket thuc copy operation de tranh user
+        nhan nhieu lan khi dang xu ly.
+        """
+        for btn in (
+            self._diff_btn,
+            self._tree_map_btn,
+            self._smart_btn,
+            self._copy_btn,
+            self._opx_btn,
+        ):
+            btn.setEnabled(enabled)
+
+    def _run_copy_in_background(
+        self,
+        task_fn,
+        success_template: str = "Copied! ({token_count:,} tokens)",
+    ) -> None:
+        """
+        Chay mot copy task tren background thread.
+
+        Flow:
+        1. Disable tat ca copy buttons
+        2. Hien thi "Dang chuan bi..."
+        3. Start CopyTaskWorker tren QThreadPool
+        4. Khi xong: copy to clipboard (main thread), show status, enable buttons
+
+        Args:
+            task_fn: Callable tra ve prompt string (chay tren background thread)
+            success_template: Template cho status message, co {token_count}
+        """
+        self._set_copy_buttons_enabled(False)
+        self._show_status("Dang chuan bi...")
+
+        worker = CopyTaskWorker(task_fn)
+        self._current_copy_worker = worker
+
+        def on_finished(prompt: str, token_count: int):
+            """Callback khi worker hoan thanh (chay tren main thread qua signal)."""
+            self._current_copy_worker = None
+            copy_to_clipboard(prompt)
+            self._show_status(success_template.format(token_count=token_count))
+            self._set_copy_buttons_enabled(True)
+
+        def on_error(error_msg: str):
+            """Callback khi worker gap loi."""
+            self._current_copy_worker = None
+            self._show_status(f"Error: {error_msg}", is_error=True)
+            self._set_copy_buttons_enabled(True)
+
+        worker.signals.finished.connect(on_finished)
+        worker.signals.error.connect(on_error)
+        QThreadPool.globalInstance().start(worker)
+
     def _do_copy_context(
         self,
         workspace: Path,
@@ -724,11 +868,21 @@ class ContextViewQt(QWidget):
         instructions: str,
         include_xml: bool,
     ) -> None:
-        """Execute copy context."""
-        try:
-            selected_path_strs = {str(p) for p in file_paths}
-            use_rel = get_use_relative_paths()
-            # Use full scan to avoid missing deep branches from lazy tree model.
+        """
+        Execute copy context tren background thread.
+
+        Heavy work (scan tree, doc files, generate prompt, count tokens)
+        chay background de UI khong bi freeze.
+        """
+        # Snapshot tat ca inputs truoc khi chuyen sang background thread
+        selected_path_strs = {str(p) for p in file_paths}
+        use_rel = get_use_relative_paths()
+        output_style = self._selected_output_style
+        include_git = get_setting("include_git_changes", True)
+
+        def task():
+            """Heavy work - chay tren background thread."""
+            # Scan full tree tu disk (I/O bound)
             tree_item = self._scan_full_tree(workspace)
             file_map = (
                 generate_file_map(
@@ -741,13 +895,14 @@ class ContextViewQt(QWidget):
                 else ""
             )
 
-            if self._selected_output_style == OutputStyle.XML:
+            # Doc noi dung files (I/O bound)
+            if output_style == OutputStyle.XML:
                 file_contents = generate_file_contents_xml(
                     selected_path_strs,
                     workspace_root=workspace,
                     use_relative_paths=use_rel,
                 )
-            elif self._selected_output_style == OutputStyle.JSON:
+            elif output_style == OutputStyle.JSON:
                 file_contents = generate_file_contents_json(
                     selected_path_strs,
                     workspace_root=workspace,
@@ -760,30 +915,33 @@ class ContextViewQt(QWidget):
                     use_relative_paths=use_rel,
                 )
 
-            # Include Git Diff/Log khi setting bat (khac Copy Diff Only - day la them vao context)
+            # Git diff/log (subprocess)
             git_diffs = None
             git_logs = None
-            if get_setting("include_git_changes", True):
+            if include_git:
                 git_diffs = get_git_diffs(workspace)
                 git_logs = get_git_logs(workspace, max_commits=5)
 
-            prompt = generate_prompt(
+            # Generate prompt (CPU bound)
+            return generate_prompt(
                 file_map=file_map,
                 file_contents=file_contents,
                 user_instructions=instructions,
-                output_style=self._selected_output_style,
+                output_style=output_style,
                 include_xml_formatting=include_xml,
                 git_diffs=git_diffs,
                 git_logs=git_logs,
             )
-            copy_to_clipboard(prompt)
-            token_count = count_tokens(prompt)
-            self._show_status(f"Copied! ({token_count:,} tokens)")
-        except Exception as e:
-            self._show_status(f"Error: {e}", is_error=True)
+
+        self._run_copy_in_background(task, "Copied! ({token_count:,} tokens)")
 
     def _copy_smart_context(self) -> None:
-        """Copy smart context (code structure only)."""
+        """
+        Copy smart context (code structure only) tren background thread.
+
+        Smart context chi generate code structure (symbols, relationships)
+        thay vi noi dung file day du.
+        """
         workspace = self.get_workspace()
         if not workspace:
             self._show_status("No workspace selected", is_error=True)
@@ -794,12 +952,15 @@ class ContextViewQt(QWidget):
             self._show_status("No files selected", is_error=True)
             return
 
+        # Snapshot inputs truoc khi chuyen sang background
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
+        selected_path_strs = {str(p) for p in file_paths}
         instructions = self._instructions_field.toPlainText()
+        use_rel = get_use_relative_paths()
+        include_git = get_setting("include_git_changes", True)
 
-        try:
-            selected_path_strs = {str(p) for p in file_paths}
-            use_rel = get_use_relative_paths()
+        def task():
+            """Heavy work - chay tren background thread."""
             tree_item = self._scan_full_tree(workspace)
             file_map = (
                 generate_file_map(
@@ -819,61 +980,64 @@ class ContextViewQt(QWidget):
             )
             git_diffs = None
             git_logs = None
-            if get_setting("include_git_changes", True):
+            if include_git:
                 git_diffs = get_git_diffs(workspace)
                 git_logs = get_git_logs(workspace, max_commits=5)
-            prompt = build_smart_prompt(
+            return build_smart_prompt(
                 smart_contents=smart_contents,
                 file_map=file_map,
                 user_instructions=instructions,
                 git_diffs=git_diffs,
                 git_logs=git_logs,
             )
-            copy_to_clipboard(prompt)
-            token_count = count_tokens(prompt)
-            self._show_status(f"Smart context copied! ({token_count:,} tokens)")
-        except Exception as e:
-            self._show_status(f"Error: {e}", is_error=True)
+
+        self._run_copy_in_background(
+            task, "Smart context copied! ({token_count:,} tokens)"
+        )
 
     def _copy_tree_map_only(self) -> None:
-        """Copy tree map only."""
+        """
+        Copy tree map only tren background thread.
+
+        Generate cau truc cay thu muc va copy clipboard.
+        """
         workspace = self.get_workspace()
         if not workspace:
             self._show_status("No workspace selected", is_error=True)
             return
 
-        try:
-            selected_files = self.file_tree_widget.get_selected_paths()
-            selected_strs = set(selected_files) if selected_files else set()
+        # Snapshot inputs
+        selected_files = self.file_tree_widget.get_selected_paths()
+        selected_strs = set(selected_files) if selected_files else set()
+        instructions = (
+            self._instructions_field.toPlainText()
+            if hasattr(self, "_instructions_field")
+            else ""
+        )
+        use_rel = get_use_relative_paths()
+
+        def task():
+            """Heavy work - chay tren background thread."""
             tree_item = self._scan_full_tree(workspace)
             if not tree_item:
-                self._show_status("No file tree loaded", is_error=True)
-                return
+                raise ValueError("No file tree loaded")
 
-            # No selection => generate full project tree map from full scan.
-            if not selected_strs:
-                selected_strs = self._collect_all_tree_paths(tree_item)
+            # Neu khong co selection => generate full project tree map
+            paths = selected_strs
+            if not paths:
+                paths = self._collect_all_tree_paths(tree_item)
 
-            instructions = (
-                self._instructions_field.toPlainText()
-                if hasattr(self, "_instructions_field")
-                else ""
-            )
-            tree_map = generate_tree_map_only(
+            return generate_tree_map_only(
                 tree_item,
-                selected_strs,
+                paths,
                 instructions,
                 workspace_root=workspace,
-                use_relative_paths=get_use_relative_paths(),
+                use_relative_paths=use_rel,
             )
-            success, msg = copy_to_clipboard(tree_map)
-            if success:
-                token_count = count_tokens(tree_map)
-                self._show_status(f"Tree map copied! ({token_count:,} tokens)")
-            else:
-                self._show_status(f"Copy failed: {msg}", is_error=True)
-        except Exception as e:
-            self._show_status(f"Error: {e}", is_error=True)
+
+        self._run_copy_in_background(
+            task, "Tree map copied! ({token_count:,} tokens)"
+        )
 
     def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
         """Collect all node paths from a TreeItem tree."""
@@ -1066,7 +1230,7 @@ class ContextViewQt(QWidget):
         self._last_added_related_files.clear()
         self._related_mode_active = False
         self._related_btn.setChecked(False)
-        self._related_btn.setText("🔗 Related")
+        self._related_btn.setText("Related")
         self._related_btn.setStyleSheet(self._related_inactive_style)
 
     @Slot(int)
@@ -1107,7 +1271,7 @@ class ContextViewQt(QWidget):
                     self._last_added_related_files
                 )
                 self._last_added_related_files.clear()
-            self._related_btn.setText("🔗 Related")
+            self._related_btn.setText("Related")
             return
 
         depth = self._related_level_spin.value()
@@ -1163,7 +1327,7 @@ class ContextViewQt(QWidget):
             self._last_added_related_files = new_related
 
             count = len(new_related)
-            self._related_btn.setText(f"🔗 Related ({count})")
+            self._related_btn.setText(f"Related ({count})")
             if count > 0:
                 self._show_status(
                     f"Found {count} related files (depth={self._related_level_spin.value()})"

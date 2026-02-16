@@ -1056,7 +1056,7 @@ class TokenCountWorker(QRunnable):
         self.signals = self.Signals()
         self.setAutoDelete(True)
         self._cancelled = False
-        self._batch_size = 25
+        self._batch_size = 80
         self._generation = generation  # Snapshot at creation time
 
     def cancel(self) -> None:

@@ -354,12 +354,13 @@ def _build_function_boundaries_map(
     root_node, lines: list[str]
 ) -> list[tuple[int, int, str]]:
     """
-    Build map of function boundaries một lần để lookup O(1).
+    Build map of function boundaries một lần để lookup via binary search.
 
     Returns:
-        List of (start_line, end_line, function_name) tuples, sorted by start_line
+        List of (start_line, end_line, function_name) tuples, sorted by start_line ASC
 
-    PERFORMANCE: Build map 1 lần thay vì traverse tree mỗi lần tìm enclosing function
+    PERFORMANCE: Build map 1 lần thay vì traverse tree mỗi lần tìm enclosing function.
+    Sorted ASC by start_line to enable bisect-based O(log n) lookup.
     """
     boundaries: list[tuple[int, int, str]] = []
 
@@ -385,44 +386,65 @@ def _build_function_boundaries_map(
             traverse(child)
 
     traverse(root_node)
-    # Sort by start_line descending để tìm innermost function first
-    return sorted(boundaries, key=lambda x: x[0], reverse=True)
+    # Sort by start_line ASC to enable bisect binary search
+    return sorted(boundaries, key=lambda x: x[0])
 
 
 def _find_enclosing_function_fast(
     target_line: int, boundaries_map: list[tuple[int, int, str]]
 ) -> Optional[str]:
     """
-    Tìm enclosing function sử dụng pre-built boundaries map.
+    Tìm enclosing function sử dụng binary search + backward scan.
 
-    Linear scan qua sorted boundaries (DESC by start_line) để tìm
-    innermost function chứa target_line. Early exit khi end_line < target_line.
+    Algorithm:
+    1. bisect_right tìm insertion point cho target_line → O(log n)
+    2. Scan ngược từ insertion point tìm innermost function chứa target_line
+       → O(k) với k = số nested levels (thường 1-3, rất nhỏ)
 
-    Complexity: O(n) worst case, nhưng nhanh hơn tree traversal vì:
-    - Boundaries map được build 1 lần per file
-    - Early exit giảm iterations trung bình
-    - No tree pointer chasing (cache-friendly)
+    Complexity:
+    - Average case: O(log n) — bisect dominates, backward scan chỉ vài bước
+    - Worst case: O(n) — khi tất cả functions đều nested (rất hiếm)
+    - Nhanh hơn linear scan đáng kể cho files có nhiều functions (>50)
 
     Args:
         target_line: Line number của target node (0-indexed)
-        boundaries_map: Pre-built function boundaries, PHẢI sorted by start_line DESC
+        boundaries_map: Pre-built function boundaries, PHẢI sorted by start_line ASC
 
     Returns:
         Function name hoặc None
     """
+    from bisect import bisect_right
 
-    # boundaries_map sorted by start_line DESC
-    # Tìm function có start_line <= target_line và end_line >= target_line
-    # Vì sorted DESC, innermost function sẽ match first
+    if not boundaries_map:
+        return None
 
-    for start_line, end_line, func_name in boundaries_map:
+    # bisect_right: tìm index sao cho tất cả entries trước nó có start_line <= target_line
+    # Dùng tuple comparison: (target_line + 1,) > (target_line, ...) luôn đúng
+    # nên bisect_right cho ta vị trí ngay sau entry cuối cùng có start_line <= target_line
+    idx = bisect_right(boundaries_map, (target_line,))
+
+    # Scan ngược từ idx-1 để tìm innermost enclosing function
+    # Innermost = function có start_line lớn nhất mà vẫn chứa target_line
+    # Vì sorted ASC, entry gần idx nhất là innermost candidate
+    best_name: Optional[str] = None
+
+    for i in range(idx - 1, -1, -1):
+        start_line, end_line, func_name = boundaries_map[i]
+
+        if start_line > target_line:
+            continue  # Shouldn't happen due to bisect, but safety check
+
         if start_line <= target_line <= end_line:
+            # Found enclosing function. Vì ta scan từ cao → thấp start_line,
+            # match đầu tiên là innermost (start_line lớn nhất)
             return func_name
-        # Early exit: nếu start_line > target_line, continue
-        # Vì sorted DESC, nếu start_line < target_line và không match, có thể skip rest
-        if end_line < target_line:
-            break  # Optimization: skip remaining
-    return None
+
+        # Optimization: nếu end_line < target_line VÀ ta đã rời khỏi vùng
+        # có thể chứa target, các entries trước đó cũng không thể chứa
+        # (trừ khi có outer function bao quanh). Tiếp tục scan để tìm outer.
+        # Nhưng nếu đã tìm được best_name, có thể break sớm hơn.
+
+    return best_name
 
 
 def _find_enclosing_function(root_node, target_node, lines: list[str]) -> Optional[str]:

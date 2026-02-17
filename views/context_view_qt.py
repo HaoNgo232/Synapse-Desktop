@@ -559,6 +559,7 @@ class ContextViewQt(QWidget):
     def _build_action_buttons(self) -> QWidget:
         """Build copy buttons voi visual hierarchy: CTA -> Secondary -> Tertiary."""
         widget = QWidget()
+        widget.setStyleSheet("background-color: transparent; border: none;")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -714,7 +715,7 @@ class ContextViewQt(QWidget):
 
         # === TERTIARY: Copy Tree Map ===
         self._tree_map_btn = QPushButton("Copy Tree Map")
-        self._tree_map_btn.setStyleSheet(tertiary_style)
+        self._tree_map_btn.setStyleSheet(secondary_style)
         self._tree_map_btn.setToolTip("Copy only file structure")
         self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tree_map_btn.clicked.connect(self._copy_tree_map_only)

@@ -136,6 +136,38 @@ class FileTreeModel(QAbstractItemModel):
     - Token/line count via custom roles
     - Background token counting
     - Path-based O(1) index lookup
+
+    === ARCHITECTURE NOTES (QUAN TRONG - DOC TRUOC KHI SUA) ===
+
+    1. SELECTION MODEL:
+       - `_selected_paths` la source of truth cho selection state.
+       - Khi check folder: folder + TAT CA loaded children duoc them vao.
+       - Khi uncheck node: node + children + TAT CA ANCESTORS bi xoa.
+         Ly do: neu ancestor folder van trong _selected_paths,
+         get_selected_paths() se collect LAI files da uncheck.
+       - Visual tri-state (Checked/Partial/Unchecked) do _get_folder_check_state()
+         tinh tu CHILDREN, KHONG tu folder's own _selected_paths membership.
+
+    2. TOKEN COUNTING PIPELINE:
+       selection_changed -> debounce 300ms -> _start_token_counting()
+       -> get_selected_paths() [MAIN THREAD, co the block]
+       -> TokenCountWorker [BACKGROUND THREAD]
+       -> token_counts_batch signal -> update_token_counts_batch() [MAIN THREAD]
+
+    3. STALE DATA PROTECTION:
+       - `_selection_generation`: tang moi khi selection doi.
+       - `_resolved_for_generation`: generation ma _last_resolved_files duoc compute.
+       - get_total_tokens() CHI dung _last_resolved_files khi
+         _resolved_for_generation == _selection_generation.
+       - Worker batch results bi DISCARD neu selection da thay doi.
+
+    4. PERFORMANCE:
+       - setData() dung TARGETED emit (node + subtree + ancestors),
+         KHONG dung _emit_tree_checkstate_changed() (emit toan bo tree).
+       - _emit_tree_checkstate_changed() chi dung cho BULK operations
+         (select_all, deselect_all, set_selected_paths, add/remove_paths).
+       - batch_size = 25 de spread repaint load. Tang lon hon = nhieu
+         dataChanged signals cung luc = lag UI.
     """
 
     # Signals
@@ -148,30 +180,43 @@ class FileTreeModel(QAbstractItemModel):
         self._root_node: Optional[TreeNode] = None
         self._invisible_root = TreeNode("", "", is_dir=True, is_loaded=True)
 
-        # Selection state
+        # === SELECTION STATE ===
+        # Chua paths cua tat ca nodes dang selected (ca files va folders).
+        # QUAN TRONG: Khi uncheck 1 node, tat ca ANCESTOR folders cung bi xoa
+        # khoi set nay (xem _deselect_node + _remove_ancestors_from_selected).
+        # Neu khong lam dieu nay, get_selected_paths() se collect lai files da uncheck.
         self._selected_paths: Set[str] = set()
 
-        # Token cache
+        # === TOKEN COUNTING CACHE & GENERATION ===
+        # Token cache: path -> token count (persist qua cac selection changes)
         self._token_cache: Dict[str, int] = {}
 
         # Line count cache
         self._line_cache: Dict[str, int] = {}
 
-        # Folder check state cache
+        # Folder check state cache (cleared moi khi selection doi)
         self._folder_state_cache: Dict[str, Qt.CheckState] = {}
 
-        # Path -> QModelIndex mapping cho O(1) lookup
+        # Path -> TreeNode mapping cho O(1) lookup
         self._path_to_node: Dict[str, TreeNode] = {}
 
-        # Last resolved file paths (set by token counting to track deep files)
+        # === STALE DATA PROTECTION ===
+        # _last_resolved_files: set files duoc resolve boi background token counting.
+        # BAT BUOC phai clear khi selection thay doi, neu khong get_total_tokens()
+        # se doc stale data va hien thi token count SAI.
         self._last_resolved_files: Set[str] = set()
 
-        # Selection generation — tang mỗi khi selection thay đổi
-        # Dùng để validate _last_resolved_files còn fresh hay stale
+        # _selection_generation: tang moi khi selection thay doi (check/uncheck).
+        # Dung de:
+        # 1. Validate _last_resolved_files con fresh hay stale
+        # 2. Discard worker batch results tu selection cu
+        # MOI method thay doi selection PHAI tang counter nay.
         self._selection_generation: int = 0
 
-        # Generation mà _last_resolved_files được compute
-        # Chỉ dùng _last_resolved_files khi giá trị này == _selection_generation
+        # _resolved_for_generation: generation snapshot luc _last_resolved_files duoc compute.
+        # get_total_tokens() CHI dung _last_resolved_files khi:
+        #   _resolved_for_generation == _selection_generation
+        # Neu khong khop → fallback sang _selected_paths (luon up-to-date).
         self._resolved_for_generation: int = -1
 
         # Workspace root
@@ -547,9 +592,19 @@ class FileTreeModel(QAbstractItemModel):
         self, node: TreeNode, result: List[str], seen: Set[str]
     ) -> None:
         """
-        Collect tất cả files từ node. Nếu subfolder chưa loaded,
-        scan filesystem trực tiếp thay vì bỏ qua.
+        Collect TAT CA files tu node (recursive). Neu subfolder chua loaded,
+        scan filesystem truc tiep thay vi bo qua.
         Skip binary/image files.
+
+        CANH BAO: Method nay KHONG kiem tra _selected_paths cho children.
+        No collect TAT CA files duoi node, bat ke selection state.
+        Vi vay, truoc khi goi method nay, PHAI dam bao node thuc su
+        can collect tat ca files (vi du: node la folder duoc select toan bo).
+
+        Neu folder co children bi uncheck, KHONG goi method nay cho folder do.
+        Thay vao do, de get_selected_paths() xu ly tung child rieng le.
+        Xem _deselect_node() + _remove_ancestors_from_selected() de hieu
+        tai sao ancestor folders bi xoa khoi _selected_paths.
         """
         from core.utils.file_utils import is_binary_file
 
@@ -1001,11 +1056,35 @@ class FileTreeModel(QAbstractItemModel):
                 self._select_node(child)
 
     def _deselect_node(self, node: TreeNode) -> None:
-        """Deselect node và tất cả children (recursive)."""
+        """Deselect node va tat ca children (recursive).
+
+        Dong thoi xoa tat ca ancestor folders khoi _selected_paths.
+        Ly do: neu parent folder van trong _selected_paths,
+        get_selected_paths() se goi _collect_files_deep(parent)
+        va collect LAI tat ca files (ke ca files vua uncheck).
+        Visual state khong bi anh huong vi _get_folder_check_state()
+        tinh tri-state tu children, khong dung _selected_paths cua folder.
+        """
         self._selected_paths.discard(node.path)
         if node.is_dir:
             for child in node.children:
                 self._deselect_node(child)
+
+        # FIX: Xoa tat ca ancestor folders khoi _selected_paths
+        # De get_selected_paths() khong collect lai files da uncheck
+        self._remove_ancestors_from_selected(node)
+
+    def _remove_ancestors_from_selected(self, node: TreeNode) -> None:
+        """Xoa tat ca ancestor folders khoi _selected_paths.
+
+        Khi mot child bi deselect, parent folder khong con o trang thai
+        'fully selected' nua → khong nen nam trong _selected_paths.
+        Cac sibling van giu nguyen selection cua chung.
+        """
+        current = node.parent
+        while current is not None and current is not self._invisible_root:
+            self._selected_paths.discard(current.path)
+            current = current.parent
 
     def _select_all_recursive(self, node: TreeNode) -> None:
         """Recursively select tất cả nodes."""
@@ -1015,11 +1094,18 @@ class FileTreeModel(QAbstractItemModel):
 
     def _get_folder_check_state(self, node: TreeNode) -> Qt.CheckState:
         """
-        Tính tri-state check state cho folder.
+        Tinh tri-state check state cho folder.
 
-        - Checked: tất cả loaded children đều selected
-        - PartiallyChecked: một số children selected
-        - Unchecked: không có children selected
+        - Checked: tat ca loaded children deu selected
+        - PartiallyChecked: mot so children selected
+        - Unchecked: khong co children selected
+
+        QUAN TRONG: Method nay tinh state tu CHILDREN's presence
+        trong _selected_paths, KHONG tu folder's OWN presence.
+        Vi vay, viec xoa folder khoi _selected_paths (trong _deselect_node)
+        KHONG anh huong visual state cua folder.
+        Day la by design — cho phep _deselect_node xoa ancestors
+        ma khong lam sai visual.
         """
         cached = self._folder_state_cache.get(node.path)
         if cached is not None:

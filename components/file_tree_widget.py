@@ -505,18 +505,38 @@ class FileTreeWidget(QWidget):
 
     @Slot(set)
     def _on_model_selection_changed(self, selected: set) -> None:
-        """Forward model selection changes và trigger token counting."""
+        """Forward model selection changes va trigger token counting.
+
+        PIPELINE: User check/uncheck -> setData() -> selection_changed signal
+        -> _on_model_selection_changed() -> debounce 300ms -> _start_token_counting()
+
+        Debounce 300ms de:
+        - Gop nhieu selection changes lien tiep (vi du: rapid click)
+        - Cho setData() hoan thanh targeted emit truoc khi bat dau counting
+        - Tranh spam background workers
+        """
         self.selection_changed.emit(selected)
 
         # Debounce token counting
         self._token_debounce.start()
 
     def _start_token_counting(self) -> None:
-        """Start background token counting cho selected files."""
-        # Cancel previous worker
-        if self._current_token_worker:
-            self._current_token_worker.cancel()
-            self._current_token_worker = None
+        """Start background token counting cho selected files.
+
+        FLOW:
+        1. Cancel worker cu (neu dang chay)
+        2. Snapshot _selection_generation TRUOC KHI goi get_selected_paths()
+        3. get_selected_paths() co the BLOCK main thread (scan disk cho unloaded folders)
+        4. Kiem tra: neu selection da doi trong luc scan -> bo ket qua (stale)
+        5. Luu _last_resolved_files + danh dau _resolved_for_generation
+        6. Filter uncached files va start TokenCountWorker
+
+        CANH BAO VE PERFORMANCE:
+        - get_selected_paths() chay tren MAIN THREAD va co the block UI
+          neu co folders lon chua loaded (can scan disk via os.walk).
+        - Day la bottleneck chinh con lai. Xem xet dung _search_index
+          de resolve files thay vi scan disk (se tranh hoan toan block).
+        """
 
         # Snapshot selection generation truoc khi resolve files
         sel_gen = self._model._selection_generation

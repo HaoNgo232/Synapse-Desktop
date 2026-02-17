@@ -248,21 +248,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         _draw_file_icon(painter, x, y, label, is_dir or False, height)
         x += ICON_SIZE + SPACING
 
-        # 3. Eye icon cho files (luon hien, mo khi binh thuong, sang khi hover)
-        if not is_dir:
-            is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
-            # Mau mo binh thuong, sang khi hover de tranh layout shift
-            eye_color = QColor("#8888AA") if is_hovered else QColor("#444466")
-            eye_pixmap = _get_qta_pixmap("mdi6.eye-outline", eye_color, 18)
-            painter.drawPixmap(
-                x + (EYE_ICON_SIZE - 18) // 2, y + (height - 18) // 2, eye_pixmap
-            )
-            x += EYE_ICON_SIZE + SPACING
-
-        # 4. Calculate available space for label (excluding badges)
-        right_x = rect.right() - BADGE_RIGHT_INSET
+        # 3. Process Badges and Eye Icon widths to determine Label space
+        # Badges vung khao sat
         badge_items: list[tuple[str, QColor]] = []
-
         if token_count is not None and token_count > 0:
             token_text = self._format_count(token_count)
             badge_color = COLOR_PRIMARY if is_dir else COLOR_SUCCESS
@@ -276,20 +264,28 @@ class FileTreeDelegate(QStyledItemDelegate):
                 self._badge_width(text) for text, _ in badge_items
             ) + SPACING * (len(badge_items) - 1)
 
-        label_max_width = right_x - x
-        if badge_items:
-            label_max_width -= badges_total_width + SPACING
+        # Eye icon width (chi cho files)
+        eye_reserve = (EYE_ICON_SIZE + SPACING) if not is_dir else 0
+
+        # SPACE CALCULATION
+        right_x_limit = rect.right() - BADGE_RIGHT_INSET
+        available_for_label_and_eye = (
+            right_x_limit - x - (SPACING if badge_items else 0) - badges_total_width
+        )
+
+        label_max_width = available_for_label_and_eye - eye_reserve
+        label_max_width = max(int(label_max_width), 40)
 
         # 5. Draw label (with search highlight)
         painter.setFont(_get_font_bold() if is_dir else _get_font_normal())
         painter.setPen(COLOR_TEXT_PRIMARY)
 
         fm = QFontMetrics(painter.font())
-        safe_label_width = max(int(label_max_width), 50)
         elided_label = fm.elidedText(
-            label, Qt.TextElideMode.ElideRight, safe_label_width
+            label, Qt.TextElideMode.ElideRight, label_max_width
         )
-        label_rect = QRect(x, y, safe_label_width, height)
+        label_width = fm.horizontalAdvance(elided_label)
+        label_rect = QRect(x, y, label_width, height)
 
         if self._search_query and self._search_query in label.lower():
             self._draw_highlighted_text(painter, label_rect, elided_label, height)
@@ -300,12 +296,28 @@ class FileTreeDelegate(QStyledItemDelegate):
                 elided_label,
             )
 
-        # 6. Draw badges (placed next to label)
+        current_x = x + label_width + SPACING
+
+        # 6. Draw Eye icon (chi cho files) - NGAY SAU TEN FILE
+        if not is_dir:
+            is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+            eye_color = QColor("#8888AA") if is_hovered else QColor("#444466")
+            eye_inner_size = 16  # Nho lai mot chut de hop voi text
+            eye_pixmap = _get_qta_pixmap("mdi6.eye-outline", eye_color, eye_inner_size)
+
+            painter.drawPixmap(
+                int(current_x + (EYE_ICON_SIZE - eye_inner_size) // 2),
+                int(y + (height - eye_inner_size) // 2),
+                eye_pixmap,
+            )
+            current_x += EYE_ICON_SIZE + SPACING
+
+        # 7. Draw badges
         if badge_items:
-            label_width = min(fm.horizontalAdvance(elided_label), safe_label_width)
-            badge_x = x + label_width + SPACING
-            if badge_x + badges_total_width > right_x:
-                badge_x = max(x, right_x - badges_total_width)
+            # Shift badges neu thieu cho hoac de can doi
+            badge_x = current_x
+            if badge_x + badges_total_width > right_x_limit:
+                badge_x = right_x_limit - badges_total_width
 
             for text, color in badge_items:
                 bw = self._badge_width(text)
@@ -322,49 +334,63 @@ class FileTreeDelegate(QStyledItemDelegate):
 
     # ===== Hit Testing =====
 
-    @staticmethod
-    def get_hit_zone(item_rect: QRect, click_x: int, is_dir: bool) -> str:
-        """Xac dinh vung nao duoc click, dung CUNG layout constants voi paint().
+    def get_hit_zone(self, item_rect: QRect, click_x: int, index: QModelIndex) -> str:
+        """Xac dinh vung nao duoc click.
 
-        Layout moi row (file):
-            [SPACING][Checkbox 16][SPACING][Icon 16][SPACING][Eye 24][SPACING][Label...]
-        Layout moi row (folder):
-            [SPACING][Checkbox 16][SPACING][Icon 16][SPACING][Label...]
-
-        Tat ca constants (SPACING, CHECKBOX_SIZE, ICON_SIZE, EYE_ICON_SIZE) la
-        module-level constants duoc dung boi ca paint() va method nay.
-        => Zone luon khop chinh xac voi nhung gi delegate ve len man hinh.
-
-        Args:
-            item_rect: Visual rect cua item (da tru indentation boi Qt)
-            click_x: Toa do x cua mouse click
-            is_dir: True neu la folder
-
-        Returns:
-            'checkbox': Vung checkbox + file icon (toggle check/uncheck)
-            'eye': Vung eye icon (preview file, chi co cho files)
-            'other': Label, badges, khoang trong (khong trigger gi)
+        Phai tinh toan lai y het layout trong paint() vi eye icon hien tai
+        nam ngay sau label (dynamic position).
         """
+        is_dir = index.data(FileTreeRoles.IS_DIR_ROLE)
+        label = index.data(Qt.ItemDataRole.DisplayRole) or ""
+        token_count = index.data(FileTreeRoles.TOKEN_COUNT_ROLE)
+        line_count = index.data(FileTreeRoles.LINE_COUNT_ROLE)
+
         x = item_rect.x() + SPACING
-
-        # Checkbox (16px) + spacing sau no
         x += CHECKBOX_SIZE + SPACING
-
-        # File/Folder Icon (16px) + spacing sau no
-        # Gop chung voi checkbox zone (click icon = toggle, target lon hon de bo)
         x += ICON_SIZE + SPACING
 
-        # Tat ca click truoc diem nay → zone "checkbox"
+        # Click vao checkbox/icon zone
         if click_x < x:
             return "checkbox"
 
-        # Eye icon (24px) — chi co cho files, khong co cho folders
+        # Tinh toan label_width de biet eye icon bat dau tu dau
+        # Logic phai TRUNG KHOP voi paint()
+        badge_items_count = 0
+        badges_total_width = 0
+        if token_count is not None and token_count > 0:
+            badges_total_width += self._badge_width(self._format_count(token_count))
+            badge_items_count += 1
+        if line_count is not None and line_count > 0:
+            badges_total_width += self._badge_width(f"{line_count}L")
+            badge_items_count += 1
+        if badge_items_count > 0:
+            badges_total_width += SPACING * (badge_items_count - 1)
+
+        eye_reserve = (EYE_ICON_SIZE + SPACING) if not is_dir else 0
+        right_x_limit = item_rect.right() - BADGE_RIGHT_INSET
+        available_for_label_and_eye = (
+            right_x_limit
+            - x
+            - (SPACING if badge_items_count > 0 else 0)
+            - badges_total_width
+        )
+
+        label_max_width = max(int(available_for_label_and_eye - eye_reserve), 40)
+
+        painter_font = _get_font_bold() if is_dir else _get_font_normal()
+        fm = QFontMetrics(painter_font)
+        elided_label = fm.elidedText(
+            label, Qt.TextElideMode.ElideRight, label_max_width
+        )
+        label_width = fm.horizontalAdvance(elided_label)
+
+        # Eye zone: ngay sau label_width
         if not is_dir:
-            eye_end = x + EYE_ICON_SIZE
-            if click_x < eye_end:
+            eye_start = x + label_width + SPACING
+            eye_end = eye_start + EYE_ICON_SIZE
+            if eye_start <= click_x < eye_end:
                 return "eye"
 
-        # Phan con lai: label, badges, khoang trong
         return "other"
 
     # ===== Private Drawing Methods =====

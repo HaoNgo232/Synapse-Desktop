@@ -320,6 +320,53 @@ class FileTreeDelegate(QStyledItemDelegate):
         rect = cast(QRect, option.rect)
         return QSize(rect.width(), ROW_HEIGHT)
 
+    # ===== Hit Testing =====
+
+    @staticmethod
+    def get_hit_zone(item_rect: QRect, click_x: int, is_dir: bool) -> str:
+        """Xac dinh vung nao duoc click, dung CUNG layout constants voi paint().
+
+        Layout moi row (file):
+            [SPACING][Checkbox 16][SPACING][Icon 16][SPACING][Eye 24][SPACING][Label...]
+        Layout moi row (folder):
+            [SPACING][Checkbox 16][SPACING][Icon 16][SPACING][Label...]
+
+        Tat ca constants (SPACING, CHECKBOX_SIZE, ICON_SIZE, EYE_ICON_SIZE) la
+        module-level constants duoc dung boi ca paint() va method nay.
+        => Zone luon khop chinh xac voi nhung gi delegate ve len man hinh.
+
+        Args:
+            item_rect: Visual rect cua item (da tru indentation boi Qt)
+            click_x: Toa do x cua mouse click
+            is_dir: True neu la folder
+
+        Returns:
+            'checkbox': Vung checkbox + file icon (toggle check/uncheck)
+            'eye': Vung eye icon (preview file, chi co cho files)
+            'other': Label, badges, khoang trong (khong trigger gi)
+        """
+        x = item_rect.x() + SPACING
+
+        # Checkbox (16px) + spacing sau no
+        x += CHECKBOX_SIZE + SPACING
+
+        # File/Folder Icon (16px) + spacing sau no
+        # Gop chung voi checkbox zone (click icon = toggle, target lon hon de bo)
+        x += ICON_SIZE + SPACING
+
+        # Tat ca click truoc diem nay → zone "checkbox"
+        if click_x < x:
+            return "checkbox"
+
+        # Eye icon (24px) — chi co cho files, khong co cho folders
+        if not is_dir:
+            eye_end = x + EYE_ICON_SIZE
+            if click_x < eye_end:
+                return "eye"
+
+        # Phan con lai: label, badges, khoang trong
+        return "other"
+
     # ===== Private Drawing Methods =====
 
     def _draw_checkbox(

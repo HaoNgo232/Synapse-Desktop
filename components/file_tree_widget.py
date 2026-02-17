@@ -24,17 +24,13 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QSize
+from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QSize, QEvent
 from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
 from core.utils.qt_utils import DebouncedTimer
-from components.file_tree_model import FileTreeModel, TokenCountWorker
-from components.file_tree_delegate import (
-    FileTreeDelegate,
-    EYE_ICON_SIZE,
-    SPACING as DELEGATE_SPACING,
-)
+from components.file_tree_model import FileTreeModel, TokenCountWorker, FileTreeRoles
+from components.file_tree_delegate import FileTreeDelegate
 from components.file_tree_filter import FileTreeFilterProxy
 
 logger = logging.getLogger(__name__)
@@ -199,6 +195,9 @@ class FileTreeWidget(QWidget):
         )
         self._tree_view.setMouseTracking(True)  # Enable hover for eye icon
 
+        # Event filter de xu ly click theo zone — thay the clicked/doubleClicked
+        self._tree_view.viewport().installEventFilter(self)
+
         layout.addWidget(self._tree_view, stretch=1)
 
     def _connect_signals(self) -> None:
@@ -213,9 +212,8 @@ class FileTreeWidget(QWidget):
         self._collapse_btn.clicked.connect(self._on_collapse_all)
         self._expand_btn.clicked.connect(self._on_expand_all)
 
-        # Tree interaction
-        self._tree_view.clicked.connect(self._on_item_clicked)
-        self._tree_view.doubleClicked.connect(self._on_item_double_clicked)
+        # Tree interaction: xu ly qua eventFilter (khong dung clicked/doubleClicked)
+        # => Moi zone (checkbox, eye, label) co 1 chuc nang duy nhat, khong xung dot
 
         # Model selection changes
         self._model.selection_changed.connect(self._on_model_selection_changed)
@@ -421,66 +419,75 @@ class FileTreeWidget(QWidget):
 
             logging.getLogger(__name__).warning(f"Error during expand all: {e}")
 
-    @Slot(QModelIndex)
-    def _on_item_clicked(self, proxy_index: QModelIndex) -> None:
-        """Handle item click — toggle checkbox or preview if eye icon clicked."""
+    def eventFilter(self, watched, event) -> bool:
+        """Intercept mouse events tren tree viewport de xu ly click theo zone.
+
+        Thay the hoan toan clicked/doubleClicked signals. Moi zone chi co
+        1 chuc nang duy nhat, khong xung dot:
+
+        | Zone              | File          | Folder         |
+        |-------------------|---------------|----------------|
+        | Checkbox + Icon   | Toggle check  | Toggle check   |
+        | Eye icon          | Preview       | (khong co)     |
+        | Label, badges     | Khong lam gi  | Khong lam gi   |
+        | Arrow (Qt native) | (khong co)    | Expand/Collapse|
+
+        Zone duoc xac dinh boi FileTreeDelegate.get_hit_zone() — dung
+        CUNG constants voi paint() nen luon chinh xac 100%.
+        """
+        if watched is not self._tree_view.viewport():
+            return super().eventFilter(watched, event)
+
+        # Xu ly ca Press va DblClick de chong moi double-click side effect
+        if event.type() not in (
+            QEvent.Type.MouseButtonPress,
+            QEvent.Type.MouseButtonDblClick,
+        ):
+            return super().eventFilter(watched, event)
+
+        if event.button() != Qt.MouseButton.LeftButton:
+            return super().eventFilter(watched, event)
+
+        pos = event.position().toPoint()
+        proxy_index = self._tree_view.indexAt(pos)
+
+        if not proxy_index.isValid():
+            return False
+
+        item_rect = self._tree_view.visualRect(proxy_index)
+
+        # Click trong vung indentation/arrow → de Qt xu ly expand/collapse
+        if pos.x() < item_rect.x():
+            return False
+
         source_index = self._filter_proxy.mapToSource(proxy_index)
         if not source_index.isValid():
-            return
-
-        from components.file_tree_model import FileTreeRoles
+            return False
 
         is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
+        zone = FileTreeDelegate.get_hit_zone(item_rect, pos.x(), is_dir or False)
 
-        # Check if click was on the eye icon area (now on the left, next to file icon)
-        if not is_dir:
-            cursor_pos = self._tree_view.viewport().mapFromGlobal(
-                self._tree_view.cursor().pos()
+        if zone == "checkbox":
+            # Toggle check/uncheck
+            current = self._model.data(source_index, Qt.ItemDataRole.CheckStateRole)
+            new_state = (
+                Qt.CheckState.Unchecked
+                if current == Qt.CheckState.Checked
+                else Qt.CheckState.Checked
             )
-            item_rect = self._tree_view.visualRect(proxy_index)
+            self._model.setData(source_index, new_state, Qt.ItemDataRole.CheckStateRole)
+            return True  # Da xu ly, khong truyen tiep
 
-            # Toạ độ X của con mắt (bên trái, sau icon file)
-            # Checkbox (16) + Icon (16) + 3 * SPACING (6)
-            eye_x_start = item_rect.left() + 16 + 16 + (3 * DELEGATE_SPACING)
-            eye_x_end = eye_x_start + EYE_ICON_SIZE + 4
-
-            if eye_x_start <= cursor_pos.x() <= eye_x_end:
-                file_path = self._model.data(source_index, FileTreeRoles.FILE_PATH_ROLE)
-                if file_path:
-                    self.file_preview_requested.emit(file_path)
-                return
-
-        # Toggle check state
-        current_state = self._model.data(source_index, Qt.ItemDataRole.CheckStateRole)
-        new_state = (
-            Qt.CheckState.Unchecked
-            if current_state == Qt.CheckState.Checked
-            else Qt.CheckState.Checked
-        )
-        self._model.setData(source_index, new_state, Qt.ItemDataRole.CheckStateRole)
-
-    @Slot(QModelIndex)
-    def _on_item_double_clicked(self, proxy_index: QModelIndex) -> None:
-        """Handle double click — preview file or toggle expand."""
-        source_index = self._filter_proxy.mapToSource(proxy_index)
-        if not source_index.isValid():
-            return
-
-        from components.file_tree_model import FileTreeRoles
-
-        is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
-
-        if is_dir:
-            # Toggle expand
-            if self._tree_view.isExpanded(proxy_index):
-                self._tree_view.collapse(proxy_index)
-            else:
-                self._tree_view.expand(proxy_index)
-        else:
+        if zone == "eye":
             # Preview file
             file_path = self._model.data(source_index, FileTreeRoles.FILE_PATH_ROLE)
             if file_path:
                 self.file_preview_requested.emit(file_path)
+            return True  # Da xu ly, khong truyen tiep
+
+        # Zone "other" (label, badges, khoang trong)
+        # Khong lam gi — de Qt xu ly default (hover highlight, etc.)
+        return False
 
     @Slot()
     def _on_select_search_results(self) -> None:
@@ -613,7 +620,6 @@ class FileTreeWidget(QWidget):
             index = self._filter_proxy.index(row, 0, parent)
             if index.isValid() and self._tree_view.isExpanded(index):
                 source_idx = self._filter_proxy.mapToSource(index)
-                from components.file_tree_model import FileTreeRoles
 
                 path = self._model.data(source_idx, FileTreeRoles.FILE_PATH_ROLE)
                 if path:
@@ -628,7 +634,6 @@ class FileTreeWidget(QWidget):
                 continue
 
             source_idx = self._filter_proxy.mapToSource(index)
-            from components.file_tree_model import FileTreeRoles
 
             path = self._model.data(source_idx, FileTreeRoles.FILE_PATH_ROLE)
             is_dir = self._model.data(source_idx, FileTreeRoles.IS_DIR_ROLE)

@@ -518,17 +518,28 @@ class FileTreeWidget(QWidget):
             self._current_token_worker.cancel()
             self._current_token_worker = None
 
-        # get_selected_paths() now discovers deep files from disk
+        # Snapshot selection generation truoc khi resolve files
+        sel_gen = self._model._selection_generation
+
+        # get_selected_paths() discovers deep files from disk
         selected_files = self._model.get_selected_paths()
+
+        # Kiem tra: selection co thay doi trong luc resolve khong?
+        if self._model._selection_generation != sel_gen:
+            # Selection da thay doi — ket qua resolve nay da stale, bo qua
+            return
+
         if not selected_files:
             self._model._last_resolved_files.clear()
+            self._model._resolved_for_generation = -1
             self.token_counting_done.emit()
             return
 
-        # Track resolved files for accurate total counting
+        # Track resolved files + danh dau generation cho freshness check
         self._model._last_resolved_files = set(selected_files)
+        self._model._resolved_for_generation = sel_gen
 
-        # Filter files chưa có trong cache
+        # Filter files chua co trong cache
         uncached = [f for f in selected_files if f not in self._model._token_cache]
 
         if not uncached:
@@ -549,14 +560,21 @@ class FileTreeWidget(QWidget):
     def _on_token_counts_batch(self, counts: Dict[str, int]) -> None:
         """Handle token count batch results (main thread via signal).
 
-        Discard results if generation has changed (workspace switched).
+        Discard results neu:
+        1. Workspace da thay doi (generation check)
+        2. Selection da thay doi sau khi worker bat dau (selection generation check)
         """
-        # Check if this worker's results are still relevant
         worker = self._current_token_worker
         if worker is not None and hasattr(worker, "generation"):
+            # Guard 1: Workspace switch — discard stale workspace results
             if worker.generation != self._model.generation:
-                # Stale results from old workspace — discard
                 return
+
+        # Guard 2: Selection change — discard results tu selection cu
+        # Neu _resolved_for_generation != _selection_generation,
+        # nghia la user da check/uncheck SAU khi worker bat dau
+        if self._model._resolved_for_generation != self._model._selection_generation:
+            return
 
         self._model.update_token_counts_batch(counts)
         self.token_counting_done.emit()

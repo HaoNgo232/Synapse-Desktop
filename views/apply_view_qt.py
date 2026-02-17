@@ -36,6 +36,7 @@ from services.error_context import (
     ApplyRowResult,
 )
 from components.diff_viewer_qt import DiffViewerWidget
+from components.toast_qt import toast_success, toast_error
 
 
 class ApplyViewColors:
@@ -261,11 +262,6 @@ class ApplyViewQt(QWidget):
         btn_row.addWidget(apply_btn)
 
         layout.addLayout(btn_row)
-
-        # Status label
-        self._status_label = QLabel("")
-        self._status_label.setStyleSheet(f"font-size: 11px; font-weight: 500;")
-        layout.addWidget(self._status_label)
 
         return panel
 
@@ -759,14 +755,14 @@ class ApplyViewQt(QWidget):
         self._copy_error_btn.hide()
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
-        """Hien thi status message, tu dong clear sau 5s neu thanh cong."""
-        color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status_label.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {color};"
-        )
-        self._status_label.setText(message)
-        if message and not is_error:
-            QTimer.singleShot(5000, lambda: self._status_label.setText(""))
+        """Hien thi thong bao qua he thong toast toan cuc."""
+        if not message:
+            return
+
+        if is_error:
+            toast_error(message)
+        else:
+            toast_success(message)
 
 
 def _convert_to_row_results(

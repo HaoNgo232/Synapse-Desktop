@@ -33,6 +33,7 @@ from components.tag_chips_widget import TagChipsWidget
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.session_state import clear_session_state
 from services.settings_manager import load_settings, save_settings, DEFAULT_SETTINGS
+from components.toast_qt import toast_success, toast_error
 
 
 # ============================================================
@@ -636,17 +637,6 @@ class SettingsViewQt(QWidget):
 
         col3_layout.addWidget(card5)
 
-        # Status label (full width at bottom)
-        self._status = QLabel("")
-        self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; border-radius: 6px; padding: 8px;"
-        )
-        self._status.hide()
-        col3_layout.addWidget(self._status)
-
-        col3_layout.addStretch()
-
         # Add columns to outer layout
         outer_layout.addWidget(col1, stretch=1)
         outer_layout.addWidget(col2, stretch=1)
@@ -872,34 +862,11 @@ class SettingsViewQt(QWidget):
     # ===== Helpers =====
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
+        """Hien thi thong bao qua he thong toast toan cuc."""
         if not message:
-            self._status.hide()
             return
 
         if is_error:
-            bg = "#FCA5A5"
-            text_color = "#450A0A"
-            border = ThemeColors.ERROR
+            toast_error(message)
         else:
-            bg = "#6EE7B7"
-            text_color = "#022C22"
-            border = ThemeColors.SUCCESS
-
-        self._status.setStyleSheet(
-            f"""
-            QLabel {{
-                font-size: 12px;
-                font-weight: 600;
-                color: {text_color};
-                background: {bg};
-                border-radius: 6px;
-                padding: 8px 14px;
-                border: 1px solid {border};
-            }}
-        """
-        )
-        self._status.setText(message)
-        self._status.show()
-
-        if not is_error:
-            QTimer.singleShot(4000, self._status.hide)
+            toast_success(message)

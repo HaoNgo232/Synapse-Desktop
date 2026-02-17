@@ -24,6 +24,7 @@ from PySide6.QtCore import Qt, Slot, QTimer
 from core.theme import ThemeColors
 from core.logging_config import LOG_DIR
 from services.clipboard_utils import copy_to_clipboard
+from components.toast_qt import toast_success, toast_error
 
 
 class LogLevel(Enum):
@@ -204,9 +205,6 @@ class LogsViewQt(QWidget):
         dir_label.setStyleSheet(f"font-size: 10px; color: {ThemeColors.TEXT_MUTED};")
         status_row.addWidget(dir_label)
         status_row.addStretch()
-        self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: 11px; font-weight: 600;")
-        status_row.addWidget(self._status)
         layout.addLayout(status_row)
 
     # ===== Public =====
@@ -356,11 +354,11 @@ class LogsViewQt(QWidget):
         self._show_status("Display cleared")
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
-        """Hien thi status message, tu dong clear sau 4s neu thanh cong."""
-        color = ThemeColors.ERROR if is_error else ThemeColors.SUCCESS
-        self._status.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {color};"
-        )
-        self._status.setText(message)
-        if not is_error:
-            QTimer.singleShot(4000, lambda: self._status.setText(""))
+        """Hien thi thong bao qua he thong toast toan cuc."""
+        if not message:
+            return
+
+        if is_error:
+            toast_error(message)
+        else:
+            toast_success(message)

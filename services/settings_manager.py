@@ -8,9 +8,13 @@ File: ~/.synapse-desktop/settings.json
 """
 
 import json
+import threading
 from typing import Dict, Any
 
 from config.paths import SETTINGS_FILE
+
+# Thread-safe lock để tránh race condition khi save settings
+_settings_lock = threading.Lock()
 
 DEFAULT_SETTINGS = {
     "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",
@@ -42,7 +46,7 @@ def load_settings() -> Dict[str, Any]:
 
 def save_settings(settings: Dict[str, Any]) -> bool:
     """
-    Save settings ra file.
+    Save settings ra file (thread-safe).
 
     Args:
         settings: Dict settings cần lưu (sẽ merge với settings hiện tại để tránh mất dữ liệu)
@@ -50,15 +54,16 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     Returns:
         True nếu save thành công.
     """
-    try:
-        current = load_settings()
-        updated = {**current, **settings}
+    with _settings_lock:
+        try:
+            current = load_settings()
+            updated = {**current, **settings}
 
-        SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(updated, indent=2), encoding="utf-8")
-        return True
-    except (OSError, IOError):
-        return False
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            SETTINGS_FILE.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+            return True
+        except (OSError, IOError):
+            return False
 
 
 def get_setting(key: str, default: Any = None) -> Any:

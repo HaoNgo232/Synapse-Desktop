@@ -48,6 +48,8 @@ def _path_for_display(
     except ValueError:
         # Path khong nam trong workspace (vd. symlink) -> fallback absolute
         return str(path)
+
+
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from core.utils.language_utils import get_language_from_path
 from core.utils.git_utils import GitDiffResult, GitLogResult
@@ -751,7 +753,9 @@ def build_smart_prompt(
             if git_diffs.work_tree_diff:
                 prompt += f"<git_diff_worktree>\n{git_diffs.work_tree_diff}\n</git_diff_worktree>\n"
             if git_diffs.staged_diff:
-                prompt += f"<git_diff_staged>\n{git_diffs.staged_diff}\n</git_diff_staged>\n"
+                prompt += (
+                    f"<git_diff_staged>\n{git_diffs.staged_diff}\n</git_diff_staged>\n"
+                )
         if git_logs and git_logs.log_content:
             prompt += f"<git_log>\n{git_logs.log_content}\n</git_log>\n"
         prompt += "</git_changes>\n"

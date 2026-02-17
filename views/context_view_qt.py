@@ -21,7 +21,16 @@ from PySide6.QtWidgets import (
     QMenu,
     QSpinBox,
 )
-from PySide6.QtCore import Qt, Slot, QTimer, QSize, Signal, QRunnable, QThreadPool, QObject
+from PySide6.QtCore import (
+    Qt,
+    Slot,
+    QTimer,
+    QSize,
+    Signal,
+    QRunnable,
+    QThreadPool,
+    QObject,
+)
 from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
@@ -72,6 +81,7 @@ class CopyTaskWorker(QRunnable):
 
     class Signals(QObject):
         """Signals de giao tiep voi main thread."""
+
         # Emit (prompt_text, token_count) khi task hoan thanh
         finished = Signal(str, int)
         # Emit error message khi co loi
@@ -95,6 +105,7 @@ class CopyTaskWorker(QRunnable):
         try:
             prompt = self.task_fn()
             from core.token_counter import count_tokens as _count
+
             token_count = _count(prompt)
             self.signals.finished.emit(prompt, token_count)
         except Exception as e:
@@ -147,7 +158,8 @@ class ContextViewQt(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
         splitter.setHandleWidth(3)
-        splitter.setStyleSheet(f"""
+        splitter.setStyleSheet(
+            f"""
             QSplitter::handle {{
                 background-color: {ThemeColors.BORDER};
                 margin: 4px 0;
@@ -155,7 +167,8 @@ class ContextViewQt(QWidget):
             QSplitter::handle:hover {{
                 background-color: {ThemeColors.PRIMARY};
             }}
-        """)
+        """
+        )
 
         # Left panel - File tree (~30%)
         left_panel = self._build_left_panel()
@@ -184,13 +197,15 @@ class ContextViewQt(QWidget):
         toolbar = QFrame()
         toolbar.setFixedHeight(40)
         toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        toolbar.setStyleSheet(f"""
+        toolbar.setStyleSheet(
+            f"""
             QFrame {{
                 background-color: {ThemeColors.BG_SURFACE};
                 border: 1px solid {ThemeColors.BORDER};
                 border-radius: 8px;
             }}
-        """)
+        """
+        )
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(8, 2, 8, 2)
         layout.setSpacing(4)
@@ -274,10 +289,15 @@ class ContextViewQt(QWidget):
         self._related_menu_btn = QToolButton()
         self._related_menu_btn.setIcon(QIcon(os.path.join(assets_dir, "layers.svg")))
         self._related_menu_btn.setText("Related: Off")
-        self._related_menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self._related_menu_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._related_menu_btn.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self._related_menu_btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
         self._related_menu_btn.setIconSize(QSize(14, 14))
-        self._related_menu_btn.setStyleSheet(f"""
+        self._related_menu_btn.setStyleSheet(
+            f"""
             QToolButton {{
                 background: {ThemeColors.BG_ELEVATED};
                 border: 1px solid {ThemeColors.BORDER};
@@ -293,13 +313,17 @@ class ContextViewQt(QWidget):
             QToolButton::menu-indicator {{
                 width: 0px;
             }}
-        """)
-        self._related_menu_btn.setToolTip("Auto-select related files with depth presets")
+        """
+        )
+        self._related_menu_btn.setToolTip(
+            "Auto-select related files with depth presets"
+        )
         self._related_menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         # Create menu with presets
         related_menu = QMenu(self._related_menu_btn)
-        related_menu.setStyleSheet(f"""
+        related_menu.setStyleSheet(
+            f"""
             QMenu {{
                 background: {ThemeColors.BG_ELEVATED};
                 border: 1px solid {ThemeColors.BORDER};
@@ -319,12 +343,13 @@ class ContextViewQt(QWidget):
                 background: {ThemeColors.BORDER};
                 margin: 4px 8px;
             }}
-        """)
+        """
+        )
 
         # Menu actions without icons
         off_action = related_menu.addAction("Off")
         related_menu.addSeparator()
-        
+
         direct_action = related_menu.addAction("Direct (depth 1)")
         nearby_action = related_menu.addAction("Nearby (depth 2)")
         deep_action = related_menu.addAction("Deep (depth 3)")
@@ -341,7 +366,7 @@ class ContextViewQt(QWidget):
 
         self._related_menu_btn.setMenu(related_menu)
         layout.addWidget(self._related_menu_btn)
-        
+
         # Track current depth for internal use
         self._related_depth = 1
 
@@ -435,7 +460,8 @@ class ContextViewQt(QWidget):
             "- Them feature: [mo ta chuc nang]\n\n"
             "Kem theo: output format, constraints, edge cases..."
         )
-        self._instructions_field.setStyleSheet(f"""
+        self._instructions_field.setStyleSheet(
+            f"""
             QTextEdit {{
                 font-family: 'IBM Plex Sans', sans-serif;
                 font-size: 13px;
@@ -448,7 +474,8 @@ class ContextViewQt(QWidget):
             QTextEdit:focus {{
                 border-color: {ThemeColors.PRIMARY};
             }}
-        """)
+        """
+        )
         self._instructions_field.textChanged.connect(self._on_instructions_changed)
         layout.addWidget(self._instructions_field, stretch=1)
 
@@ -510,7 +537,8 @@ class ContextViewQt(QWidget):
         # Status toast
         self._status_label = QLabel("")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status_label.setStyleSheet(f"""
+        self._status_label.setStyleSheet(
+            f"""
             QLabel {{
                 font-size: 12px;
                 font-weight: 600;
@@ -519,7 +547,8 @@ class ContextViewQt(QWidget):
                 border-radius: 6px;
                 padding: 8px 12px;
             }}
-        """)
+        """
+        )
         self._status_label.hide()
         layout.addWidget(self._status_label)
 
@@ -582,7 +611,8 @@ class ContextViewQt(QWidget):
 
         # === PRIMARY CTA: Copy + OPX (lon nhat, noi bat nhat) ===
         self._opx_btn = QPushButton("Copy + OPX")
-        self._opx_btn.setStyleSheet(f"""
+        self._opx_btn.setStyleSheet(
+            f"""
             QPushButton {{
                 background-color: {ThemeColors.PRIMARY};
                 color: white;
@@ -602,7 +632,8 @@ class ContextViewQt(QWidget):
                 background-color: {ThemeColors.BG_ELEVATED};
                 color: {ThemeColors.TEXT_MUTED};
             }}
-        """)
+        """
+        )
         self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
         self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
@@ -616,11 +647,11 @@ class ContextViewQt(QWidget):
         self._copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
         layout.addWidget(self._copy_btn)
 
-
         # === SECONDARY: Copy Smart ===
         self._smart_btn = QPushButton("Copy Smart")
         self._smart_btn.setProperty("custom-style", "orange")
-        self._smart_btn.setStyleSheet(f"""
+        self._smart_btn.setStyleSheet(
+            f"""
             QPushButton[custom-style="orange"] {{
                 background-color: transparent;
                 color: {ThemeColors.WARNING};
@@ -642,7 +673,8 @@ class ContextViewQt(QWidget):
                 color: {ThemeColors.TEXT_MUTED};
                 border-color: {ThemeColors.BG_ELEVATED};
             }}
-        """)
+        """
+        )
         self._smart_btn.setToolTip("Copy code structure only (Smart Context)")
         self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._smart_btn.clicked.connect(self._copy_smart_context)
@@ -650,7 +682,8 @@ class ContextViewQt(QWidget):
 
         # === SECONDARY: Copy Diff Only ===
         self._diff_btn = QPushButton("Copy Diff Only")
-        self._diff_btn.setStyleSheet(f"""
+        self._diff_btn.setStyleSheet(
+            f"""
             QPushButton {{
                 background-color: transparent;
                 color: #A78BFA;
@@ -672,7 +705,8 @@ class ContextViewQt(QWidget):
                 color: {ThemeColors.TEXT_MUTED};
                 border-color: {ThemeColors.BG_ELEVATED};
             }}
-        """)
+        """
+        )
         self._diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
         self._diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._diff_btn.clicked.connect(self._show_diff_only_dialog)
@@ -704,9 +738,7 @@ class ContextViewQt(QWidget):
         if self._related_mode_active:
             self._related_mode_active = False
             self._last_added_related_files.clear()
-            self._related_btn.setChecked(False)
-            self._related_btn.setText("Related")
-            self._related_btn.setStyleSheet(self._related_inactive_style)
+            self._related_menu_btn.setText("Related: Off")
 
         # 3. Clear security scan cache for old workspace
         from core.security_check import clear_security_cache
@@ -812,7 +844,12 @@ class ContextViewQt(QWidget):
     # ===== Token Counting =====
 
     def _update_token_display(self) -> None:
-        """Update token count display từ cached values. Không trigger counting."""
+        """Update token count display tu cached values. Khong trigger counting.
+
+        Hien thi file tokens + instruction tokens tren toolbar.
+        Tooltip canh bao rang actual copy se co them overhead
+        (tree map, git, OPX, XML structure).
+        """
         model = self.file_tree_widget.get_model()
         file_count = model.get_selected_file_count()
 
@@ -825,6 +862,17 @@ class ContextViewQt(QWidget):
         total = total_file_tokens + instruction_tokens
 
         self._token_count_label.setText(f"{total:,} tokens")
+
+        # Tooltip canh bao overhead khi copy
+        self._token_count_label.setToolTip(
+            f"{total_file_tokens:,} file tokens + {instruction_tokens:,} instruction tokens\n\n"
+            "Luu y: Khi copy, prompt thuc te se lon hon do co them:\n"
+            "- Tree map (cau truc thu muc)\n"
+            "- Git changes (diff + log)\n"
+            "- OPX instructions (neu dung Copy + OPX)\n"
+            "- XML/JSON tags wrapping\n\n"
+            "Hover len status message sau khi copy de xem breakdown chi tiet."
+        )
 
         # Update stats panel
         self._token_stats.update_stats(
@@ -913,6 +961,7 @@ class ContextViewQt(QWidget):
         self,
         task_fn,
         success_template: str = "Copied! ({token_count:,} tokens)",
+        pre_snapshot: Optional[dict] = None,
     ) -> None:
         """
         Chay mot copy task tren background thread.
@@ -921,11 +970,14 @@ class ContextViewQt(QWidget):
         1. Disable tat ca copy buttons
         2. Hien thi "Dang chuan bi..."
         3. Start CopyTaskWorker tren QThreadPool
-        4. Khi xong: copy to clipboard (main thread), show status, enable buttons
+        4. Khi xong: copy to clipboard, show breakdown (neu co snapshot), enable buttons
 
         Args:
             task_fn: Callable tra ve prompt string (chay tren background thread)
             success_template: Template cho status message, co {token_count}
+            pre_snapshot: Dict snapshot cac gia tri token truoc khi copy.
+                Keys: file_tokens, instruction_tokens, include_opx, copy_mode.
+                Dung de tinh overhead = total - file_tokens - instruction_tokens.
         """
         self._set_copy_buttons_enabled(False)
         self._show_status("Dang chuan bi...")
@@ -937,7 +989,13 @@ class ContextViewQt(QWidget):
             """Callback khi worker hoan thanh (chay tren main thread qua signal)."""
             self._current_copy_worker = None
             copy_to_clipboard(prompt)
-            self._show_status(success_template.format(token_count=token_count))
+
+            if pre_snapshot:
+                # Tinh breakdown tu snapshot va total tokens
+                self._show_copy_breakdown(token_count, pre_snapshot)
+            else:
+                self._show_status(success_template.format(token_count=token_count))
+
             self._set_copy_buttons_enabled(True)
 
         def on_error(error_msg: str):
@@ -1022,7 +1080,20 @@ class ContextViewQt(QWidget):
                 git_logs=git_logs,
             )
 
-        self._run_copy_in_background(task, "Copied! ({token_count:,} tokens)")
+        # Snapshot token values truoc khi background task chay
+        # de tinh overhead sau khi copy hoan thanh
+        pre_snapshot = {
+            "file_tokens": self.file_tree_widget.get_total_tokens(),
+            "instruction_tokens": count_tokens(instructions) if instructions else 0,
+            "include_opx": include_xml,
+            "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
+        }
+
+        self._run_copy_in_background(
+            task,
+            "Copied! ({token_count:,} tokens)",
+            pre_snapshot=pre_snapshot,
+        )
 
     def _copy_smart_context(self) -> None:
         """
@@ -1050,6 +1121,7 @@ class ContextViewQt(QWidget):
 
         def task():
             """Heavy work - chay tren background thread."""
+            assert workspace is not None  # Type narrowing
             tree_item = self._scan_full_tree(workspace)
             file_map = (
                 generate_file_map(
@@ -1080,8 +1152,18 @@ class ContextViewQt(QWidget):
                 git_logs=git_logs,
             )
 
+        # Snapshot token values truoc khi chay background task
+        pre_snapshot = {
+            "file_tokens": self.file_tree_widget.get_total_tokens(),
+            "instruction_tokens": count_tokens(instructions) if instructions else 0,
+            "include_opx": False,
+            "copy_mode": "Copy Smart",
+        }
+
         self._run_copy_in_background(
-            task, "Smart context copied! ({token_count:,} tokens)"
+            task,
+            "Smart context copied! ({token_count:,} tokens)",
+            pre_snapshot=pre_snapshot,
         )
 
     def _copy_tree_map_only(self) -> None:
@@ -1107,6 +1189,7 @@ class ContextViewQt(QWidget):
 
         def task():
             """Heavy work - chay tren background thread."""
+            assert workspace is not None  # Type narrowing
             tree_item = self._scan_full_tree(workspace)
             if not tree_item:
                 raise ValueError("No file tree loaded")
@@ -1125,8 +1208,18 @@ class ContextViewQt(QWidget):
                 use_relative_paths=use_rel,
             )
 
+        # Snapshot (tree map chi co instruction tokens, khong co file content)
+        pre_snapshot = {
+            "file_tokens": 0,
+            "instruction_tokens": count_tokens(instructions) if instructions else 0,
+            "include_opx": False,
+            "copy_mode": "Copy Tree Map",
+        }
+
         self._run_copy_in_background(
-            task, "Tree map copied! ({token_count:,} tokens)"
+            task,
+            "Tree map copied! ({token_count:,} tokens)",
+            pre_snapshot=pre_snapshot,
         )
 
     def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
@@ -1160,7 +1253,9 @@ class ContextViewQt(QWidget):
             from components.dialogs_qt import DiffOnlyDialogQt
             from core.utils.git_utils import build_diff_only_prompt
 
-            def _build_diff_prompt(diff_result, instructions, include_content, include_tree):
+            def _build_diff_prompt(
+                diff_result, instructions, include_content, include_tree
+            ):
                 return build_diff_only_prompt(
                     diff_result,
                     instructions,
@@ -1319,17 +1414,19 @@ class ContextViewQt(QWidget):
         self._last_added_related_files.clear()
         self._related_mode_active = False
         self._related_menu_btn.setText("Related: Off")
-        
+
     def _update_related_button_text(self) -> None:
         """Update button text based on current depth and count."""
         if not self._related_mode_active:
             self._related_menu_btn.setText("Related: Off")
             return
-            
+
         depth_names = {1: "Direct", 2: "Nearby", 3: "Deep", 4: "Deeper", 5: "Deepest"}
-        depth_name = depth_names.get(self._related_depth, f"Depth {self._related_depth}")
+        depth_name = depth_names.get(
+            self._related_depth, f"Depth {self._related_depth}"
+        )
         count = len(self._last_added_related_files)
-        
+
         if count > 0:
             self._related_menu_btn.setText(f"Related: {depth_name} ({count})")
         else:
@@ -1361,7 +1458,7 @@ class ContextViewQt(QWidget):
                     self._last_added_related_files
                 )
                 self._last_added_related_files.clear()
-            self._related_btn.setText("Related")
+            self._update_related_button_text()
             return
 
         depth = self._related_depth
@@ -1429,6 +1526,109 @@ class ContextViewQt(QWidget):
 
     # ===== Helpers =====
 
+    def _show_copy_breakdown(self, total_tokens: int, pre_snapshot: dict) -> None:
+        """Hien thi token breakdown chi tiet sau khi copy.
+
+        Tinh overhead = total - file_tokens - instruction_tokens.
+        OPX tokens duoc uoc luong tu XML_FORMATTING_INSTRUCTIONS constant.
+        Phan con lai la overhead tu tree map, git changes, XML structure.
+
+        Args:
+            total_tokens: Tong so tokens cua prompt da copy (tu CopyTaskWorker)
+            pre_snapshot: Dict snapshot tu truoc khi copy:
+                - file_tokens: Token count tu UI cache
+                - instruction_tokens: Token count tu textarea
+                - include_opx: Co bao gom OPX instructions khong
+                - copy_mode: Ten copy mode ("Copy + OPX", "Copy Context", ...)
+        """
+        file_t = pre_snapshot.get("file_tokens", 0)
+        instr_t = pre_snapshot.get("instruction_tokens", 0)
+        include_opx = pre_snapshot.get("include_opx", False)
+        copy_mode = pre_snapshot.get("copy_mode", "Copied")
+
+        # Uoc luong OPX tokens tu constant (chi tinh 1 lan)
+        opx_t = 0
+        if include_opx:
+            try:
+                from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+
+                opx_t = count_tokens(XML_FORMATTING_INSTRUCTIONS)
+            except ImportError:
+                opx_t = 0
+
+        # Overhead = tat ca nhung gi UI khong hien thi:
+        # tree map + git changes + XML tags + file_summary header
+        overhead = total_tokens - file_t - instr_t - opx_t
+        overhead = max(0, overhead)  # Tranh gia tri am do sai lech tokenizer
+
+        # Build breakdown parts
+        parts = []
+        if file_t > 0:
+            parts.append(f"{file_t:,} files")
+        if instr_t > 0:
+            parts.append(f"{instr_t:,} instr")
+        if opx_t > 0:
+            parts.append(f"{opx_t:,} OPX")
+        if overhead > 0:
+            parts.append(f"{overhead:,} overhead")
+
+        breakdown_text = " + ".join(parts) if parts else ""
+
+        # Hien thi status message voi breakdown
+        main_msg = f"{copy_mode}! ({total_tokens:,} tokens)"
+
+        # Style va hien thi
+        if self._status_timer is not None:
+            try:
+                self._status_timer.stop()
+                self._status_timer.deleteLater()
+            except RuntimeError:
+                pass
+            self._status_timer = None
+
+        bg_color = "#6EE7B7"
+        text_color = "#022C22"
+        border_color = "#059669"
+
+        self._status_label.setStyleSheet(
+            f"""
+            QLabel {{
+                font-size: 12px;
+                font-weight: 600;
+                color: {text_color};
+                background-color: {bg_color};
+                border-radius: 6px;
+                padding: 10px 14px;
+                border: 2px solid {border_color};
+            }}
+        """
+        )
+
+        # Hien thi 2 dong: dong 1 = tong, dong 2 = breakdown
+        if breakdown_text:
+            self._status_label.setText(f"\u2713 {main_msg}\n{breakdown_text}")
+        else:
+            self._status_label.setText(f"\u2713 {main_msg}")
+
+        # Tooltip chi tiet hon
+        tooltip_parts = [
+            f"Total: {total_tokens:,} tokens",
+            f"File content: {file_t:,} tokens",
+            f"Instructions: {instr_t:,} tokens",
+        ]
+        if opx_t > 0:
+            tooltip_parts.append(f"OPX instructions: {opx_t:,} tokens")
+        tooltip_parts.append(f"Overhead (tree + git + XML tags): {overhead:,} tokens")
+        self._status_label.setToolTip("\n".join(tooltip_parts))
+
+        self._status_label.show()
+
+        # Timer 12 giay cho breakdown (dai hon binh thuong de user doc)
+        self._status_timer = QTimer(self)
+        self._status_timer.setSingleShot(True)
+        self._status_timer.timeout.connect(self._status_label.hide)
+        self._status_timer.start(12000)
+
     def _show_status(self, message: str, is_error: bool = False) -> None:
         """Show status message as subtle notification."""
         # Cancel timer cũ để tránh race condition
@@ -1455,7 +1655,8 @@ class ContextViewQt(QWidget):
             border_color = "#059669"  # Solid green border
             icon = "✓"
 
-        self._status_label.setStyleSheet(f"""
+        self._status_label.setStyleSheet(
+            f"""
             QLabel {{
                 font-size: 13px;
                 font-weight: 700;
@@ -1465,7 +1666,8 @@ class ContextViewQt(QWidget):
                 padding: 10px 14px;
                 border: 2px solid {border_color};
             }}
-        """)
+        """
+        )
         self._status_label.setText(f"{icon} {message}")
         self._status_label.show()
 

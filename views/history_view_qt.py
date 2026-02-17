@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QLineEdit,
     QProgressBar,
+    QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Slot, QTimer, QSize, QRect
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QIcon, QPixmap
@@ -489,34 +490,27 @@ class HistoryViewQt(QWidget):
 
         # Entry list
         self._entry_list = QListWidget()
-        self._entry_list.setSpacing(2)
-        self._entry_list.setStyleSheet(
-            f"""
+        # Vo hieu hoa hoan toan selection/focus painting o level thap nhat
+        self._entry_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self._entry_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._entry_list.setSpacing(4) # Tang social gap cho thoang
+        self._entry_list.setStyleSheet(f"""
             QListWidget {{
                 background-color: transparent;
                 border: none;
                 outline: none;
             }}
-            QListWidget::item {{
-                border: none;
-                padding: 0;
-                margin: 0 0 2px 0;
-            }}
-            QListWidget::item:selected {{
-                background: transparent;
-                border: none;
-                outline: none;
-            }}
-            QListWidget::item:focus {{
-                background: transparent;
-                border: none;
-                outline: none;
-            }}
+            QListWidget::item, 
+            QListWidget::item:selected, 
+            QListWidget::item:focus, 
             QListWidget::item:hover {{
                 background: transparent;
+                border: none;
+                outline: none;
+                padding: 0;
+                margin: 0;
             }}
-        """
-        )
+        """)
         self._entry_list.itemClicked.connect(self._on_entry_clicked)
         layout.addWidget(self._entry_list)
 
@@ -914,9 +908,9 @@ class HistoryViewQt(QWidget):
             widget.setStyleSheet(
                 f"""
                 QFrame {{
-                    background-color: rgba(124, 111, 255, 0.08);
-                    border-left: 3px solid {ThemeColors.PRIMARY};
-                    border-radius: 0 6px 6px 0;
+                    background-color: rgba(124, 111, 255, 0.1);
+                    border-left: 4px solid {ThemeColors.PRIMARY};
+                    border-radius: 8px;
                 }}
             """
             )
@@ -925,8 +919,8 @@ class HistoryViewQt(QWidget):
                 f"""
                 QFrame {{
                     background-color: transparent;
-                    border-left: 3px solid transparent;
-                    border-radius: 0 6px 6px 0;
+                    border-left: 4px solid transparent;
+                    border-radius: 8px;
                 }}
                 QFrame:hover {{
                     background-color: rgba(45, 45, 68, 0.4);
@@ -1065,38 +1059,77 @@ class HistoryViewQt(QWidget):
         return card
 
     def _create_progress_bar(self, entry: HistoryEntry) -> QWidget:
-        """Tạo progress bar mỏng 6px với stats."""
+        """Tao dual-segment progress bar: xanh (success) + do (fail).
+
+        Thay vi QProgressBar don sac, dung 2 QFrame canh nhau:
+        - Xanh la: chiem ty le success_count / file_count
+        - Do: chiem ty le fail_count / file_count
+        Neu khong co fail, bar xanh chiem 100%.
+        """
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        # Progress bar - 6px height
-        progress = QProgressBar()
-        progress.setFixedHeight(6)
-        progress.setTextVisible(False)
-        progress.setMinimum(0)
-        progress.setMaximum(entry.file_count)
-        progress.setValue(entry.success_count)
-
-        # Style progress bar
-        progress.setStyleSheet(
-            f"""
-            QProgressBar {{
+        # --- Dual-segment bar ---
+        bar_container = QFrame()
+        bar_container.setFixedHeight(14)
+        bar_container.setStyleSheet(f"""
+            QFrame {{
                 background-color: {ThemeColors.BORDER};
-                border-radius: 3px;
-                border: none;
+                border-radius: 7px;
             }}
-            QProgressBar::chunk {{
-                background-color: {ThemeColors.SUCCESS};
-                border-radius: 3px;
-            }}
-        """
-        )
+        """)
 
-        layout.addWidget(progress)
+        bar_layout = QHBoxLayout(bar_container)
+        bar_layout.setContentsMargins(0, 0, 0, 0)
+        bar_layout.setSpacing(0)
 
-        # Stats text
+        total = max(entry.file_count, 1)  # Tranh chia cho 0
+
+        # Segment xanh (success)
+        if entry.success_count > 0:
+            success_seg = QFrame()
+            # Bo goc trai khi co fail, bo het goc khi khong co fail
+            if entry.fail_count > 0:
+                success_seg.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {ThemeColors.SUCCESS};
+                        border-radius: 7px 0 0 7px;
+                    }}
+                """)
+            else:
+                success_seg.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {ThemeColors.SUCCESS};
+                        border-radius: 7px;
+                    }}
+                """)
+            bar_layout.addWidget(success_seg, stretch=entry.success_count)
+
+        # Segment do (fail)
+        if entry.fail_count > 0:
+            fail_seg = QFrame()
+            # Bo goc phai khi co success, bo het goc khi khong co success
+            if entry.success_count > 0:
+                fail_seg.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {ThemeColors.ERROR};
+                        border-radius: 0 7px 7px 0;
+                    }}
+                """)
+            else:
+                fail_seg.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {ThemeColors.ERROR};
+                        border-radius: 7px;
+                    }}
+                """)
+            bar_layout.addWidget(fail_seg, stretch=entry.fail_count)
+
+        layout.addWidget(bar_container)
+
+        # --- Stats text ---
         if entry.fail_count == 0:
             stats_text = f"{entry.success_count}/{entry.file_count} all successful"
             stats_color = ThemeColors.SUCCESS
@@ -1104,7 +1137,7 @@ class HistoryViewQt(QWidget):
             stats_text = f"0/{entry.file_count} all failed"
             stats_color = ThemeColors.ERROR
         else:
-            stats_text = f"{entry.success_count}/{entry.file_count} successful"
+            stats_text = f"{entry.success_count} done / " f"{entry.fail_count} failed"
             stats_color = ThemeColors.TEXT_SECONDARY
 
         stats_label = QLabel(stats_text)
@@ -1301,7 +1334,7 @@ class HistoryViewQt(QWidget):
                 else:
                     btn.setText("Collapse")
 
-            more_btn.clicked.connect(_toggle_files)
+            more_btn.clicked.connect(lambda: _toggle_files())
             files_layout.addWidget(more_btn)
 
         layout.addWidget(files_container)
@@ -1424,7 +1457,7 @@ class HistoryViewQt(QWidget):
                 else:
                     btn.setText("Collapse errors")
 
-            more_btn.clicked.connect(_toggle_errors)
+            more_btn.clicked.connect(lambda: _toggle_errors())
             layout.addWidget(more_btn)
 
         return section

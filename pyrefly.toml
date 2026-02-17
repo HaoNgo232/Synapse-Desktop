@@ -4,3 +4,4 @@ project-includes = [
 ]
 
 stub-path = "stubs"
+venv-path = ".venv"

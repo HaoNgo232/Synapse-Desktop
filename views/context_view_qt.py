@@ -134,7 +134,7 @@ class ContextViewQt(QWidget):
         self._is_loading = False
         self._pending_refresh = False
         self._token_generation = 0
-        self._status_timer: Optional[QTimer] = None  # Fix race condition
+
         self._current_copy_worker: Optional[CopyTaskWorker] = None  # Track copy worker
 
         # Services
@@ -534,24 +534,6 @@ class ContextViewQt(QWidget):
         actions = self._build_action_buttons()
         layout.addWidget(actions)
 
-        # Status toast
-        self._status_label = QLabel("")
-        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status_label.setStyleSheet(
-            f"""
-            QLabel {{
-                font-size: 12px;
-                font-weight: 600;
-                color: white;
-                background-color: transparent;
-                border-radius: 6px;
-                padding: 8px 12px;
-            }}
-        """
-        )
-        self._status_label.hide()
-        layout.addWidget(self._status_label)
-
         layout.addStretch()
 
         return panel
@@ -799,15 +781,6 @@ class ContextViewQt(QWidget):
         if self._file_watcher:
             self._file_watcher.stop()
             self._file_watcher = None
-
-        # Cancel status timer
-        if self._status_timer is not None:
-            try:
-                self._status_timer.stop()
-                self._status_timer.deleteLater()
-            except RuntimeError:
-                pass
-            self._status_timer = None
 
         self.file_tree_widget.cleanup()
 
@@ -1533,26 +1506,20 @@ class ContextViewQt(QWidget):
     # ===== Helpers =====
 
     def _show_copy_breakdown(self, total_tokens: int, pre_snapshot: dict) -> None:
-        """Hien thi token breakdown than thien voi user sau khi copy.
-
-        Dung cac tu de hieu: "noi dung" (file content), "yeu cau" (instructions),
-        "cau truc prompt" (tree map + git + XML tags). Tuy theo copy mode
-        se hien thi cac thanh phan khac nhau.
+        """Hien thi token breakdown sau khi copy qua Global Toast System.
 
         Args:
             total_tokens: Tong so tokens cua prompt da copy (tu CopyTaskWorker)
-            pre_snapshot: Dict snapshot tu truoc khi copy:
-                - file_tokens: Token count tu UI cache
-                - instruction_tokens: Token count tu textarea
-                - include_opx: Co bao gom OPX instructions khong
-                - copy_mode: Ten copy mode ("Copy + OPX", "Copy Context", ...)
+            pre_snapshot: Dict snapshot tu truoc khi copy.
         """
+        from components.toast_qt import toast_success
+
         file_t = pre_snapshot.get("file_tokens", 0)
         instr_t = pre_snapshot.get("instruction_tokens", 0)
         include_opx = pre_snapshot.get("include_opx", False)
         copy_mode = pre_snapshot.get("copy_mode", "Copied")
 
-        # Uoc luong OPX tokens tu constant (chi tinh 1 lan)
+        # Uoc luong OPX tokens tu constant
         opx_t = 0
         if include_opx:
             try:
@@ -1562,22 +1529,18 @@ class ContextViewQt(QWidget):
             except ImportError:
                 opx_t = 0
 
-        # Calculate structure/overhead
-        # If model just changed, snapshot counts might be from old tokenizer
-        # In that case, we normalize the breakdown to always add up to total_tokens
+        # Tinh overhead (structure tokens)
         sum_parts = file_t + instr_t + opx_t
         if sum_parts > total_tokens:
-            # Tokenizer changed or race condition: reduce parts proportionally
             ratio = total_tokens / sum_parts if sum_parts > 0 else 1.0
             file_t = int(file_t * ratio)
             instr_t = int(instr_t * ratio)
             opx_t = int(opx_t * ratio)
             structure_t = 0
         else:
-            structure_t = total_tokens - file_t - instr_t - opx_t
-            structure_t = max(0, structure_t)
+            structure_t = max(0, total_tokens - file_t - instr_t - opx_t)
 
-        # Build breakdown with friendly labels
+        # Build breakdown message
         parts = []
         if file_t > 0:
             parts.append(f"{file_t:,} content")
@@ -1590,46 +1553,10 @@ class ContextViewQt(QWidget):
 
         breakdown_text = " + ".join(parts) if parts else ""
 
-        # Dong 1: tong tokens (don gian, noi bat)
-        # Dong 2: breakdown cho biet cai gi tieu hao
-        main_msg = f"Copied! {total_tokens:,} tokens"
-
-        # Cancel timer cu
-        if self._status_timer is not None:
-            try:
-                self._status_timer.stop()
-                self._status_timer.deleteLater()
-            except RuntimeError:
-                pass
-            self._status_timer = None
-
-        bg_color = "#6EE7B7"
-        text_color = "#022C22"
-        border_color = "#059669"
-
-        self._status_label.setStyleSheet(
-            f"""
-            QLabel {{
-                font-size: 12px;
-                font-weight: 600;
-                color: {text_color};
-                background-color: {bg_color};
-                border-radius: 6px;
-                padding: 10px 14px;
-                border: 2px solid {border_color};
-            }}
-        """
-        )
-
-        if breakdown_text:
-            self._status_label.setText(f"\u2713 {main_msg}\n{breakdown_text}")
-        else:
-            self._status_label.setText(f"\u2713 {main_msg}")
-
-        # Tooltip explaining each component detail
+        # Build tooltip chi tiet
         tooltip_lines = [
             f"Total: {total_tokens:,} tokens",
-            f"",
+            "",
             f"File content: {file_t:,} tokens",
             f"Instructions: {instr_t:,} tokens",
         ]
@@ -1638,63 +1565,28 @@ class ContextViewQt(QWidget):
         tooltip_lines.extend(
             [
                 f"Prompt structure: {structure_t:,} tokens",
-                f"  (includes: tree map, git diff/log, XML tags)",
+                "  (includes: tree map, git diff/log, XML tags)",
             ]
         )
-        self._status_label.setToolTip("\n".join(tooltip_lines))
 
-        self._status_label.show()
-
-        # Timer 12 giay (dai hon binh thuong de user doc breakdown)
-        self._status_timer = QTimer(self)
-        self._status_timer.setSingleShot(True)
-        self._status_timer.timeout.connect(self._status_label.hide)
-        self._status_timer.start(12000)
+        # Hien thi toast voi title + breakdown message + tooltip
+        toast_success(
+            message=breakdown_text or f"{total_tokens:,} tokens",
+            title=f"Copied! {total_tokens:,} tokens",
+            tooltip="\n".join(tooltip_lines),
+            duration=8000,  # Dai hon binh thuong de user doc breakdown
+        )
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
-        """Show status message as subtle notification."""
-        # Cancel timer cũ để tránh race condition
-        if self._status_timer is not None:
-            try:
-                self._status_timer.stop()
-                self._status_timer.deleteLater()
-            except RuntimeError:
-                pass  # Timer already deleted
-            self._status_timer = None
-
+        """Hien thi thong bao qua Global Toast System."""
         if not message:
-            self._status_label.hide()
             return
 
         if is_error:
-            bg_color = "#FCA5A5"  # Brighter red background
-            text_color = "#450A0A"  # Very dark red text — high contrast
-            border_color = "#DC2626"  # Solid red border
-            icon = "⚠"
+            from components.toast_qt import toast_error
+
+            toast_error(message)
         else:
-            bg_color = "#6EE7B7"  # Brighter green background
-            text_color = "#022C22"  # Very dark green text — high contrast
-            border_color = "#059669"  # Solid green border
-            icon = "✓"
+            from components.toast_qt import toast_success
 
-        self._status_label.setStyleSheet(
-            f"""
-            QLabel {{
-                font-size: 13px;
-                font-weight: 700;
-                color: {text_color};
-                background-color: {bg_color};
-                border-radius: 6px;
-                padding: 10px 14px;
-                border: 2px solid {border_color};
-            }}
-        """
-        )
-        self._status_label.setText(f"{icon} {message}")
-        self._status_label.show()
-
-        # Tạo timer mới — parented to self for automatic cleanup
-        self._status_timer = QTimer(self)
-        self._status_timer.setSingleShot(True)
-        self._status_timer.timeout.connect(self._status_label.hide)
-        self._status_timer.start(8000)  # 8 giây
+            toast_success(message)

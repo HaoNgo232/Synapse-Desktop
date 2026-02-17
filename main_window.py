@@ -92,6 +92,11 @@ class SynapseMainWindow(QMainWindow):
         # Build UI
         self._build_ui()
 
+        # Khoi tao Global Toast Notification System
+        from components.toast_qt import init_toast_manager
+
+        self._toast_manager = init_toast_manager(self)
+
         # Keep status footer metrics fresh without coupling to view internals.
         self._status_timer = QTimer(self)
         self._status_timer.setInterval(1200)
@@ -245,7 +250,8 @@ class SynapseMainWindow(QMainWindow):
         self._recent_btn.setToolTip("Recent folders (Ctrl+R)")
         self._recent_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._recent_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._recent_btn.setStyleSheet(f"""
+        self._recent_btn.setStyleSheet(
+            f"""
             QToolButton {{
                 background-color: transparent;
                 color: {ThemeColors.TEXT_SECONDARY};
@@ -261,7 +267,8 @@ class SynapseMainWindow(QMainWindow):
                 border-color: {ThemeColors.BORDER_LIGHT};
             }}
             QToolButton::menu-indicator {{ width: 0px; }}
-        """)
+        """
+        )
         self._recent_menu = QMenu(self._recent_btn)
         self._recent_btn.setMenu(self._recent_menu)
         self._refresh_recent_folders_menu()
@@ -272,7 +279,8 @@ class SynapseMainWindow(QMainWindow):
         open_btn.setToolTip("Open workspace folder (Ctrl+O)")
         open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         open_btn.setProperty("class", "primary")
-        open_btn.setStyleSheet(f"""
+        open_btn.setStyleSheet(
+            f"""
             QPushButton {{
                 background-color: {ThemeColors.PRIMARY};
                 color: #FFFFFF;
@@ -288,7 +296,8 @@ class SynapseMainWindow(QMainWindow):
             QPushButton:pressed {{
                 background-color: {ThemeColors.PRIMARY_PRESSED};
             }}
-        """)
+        """
+        )
         open_btn.clicked.connect(self._open_folder_dialog)
         layout.addWidget(open_btn)
 
@@ -529,9 +538,11 @@ class SynapseMainWindow(QMainWindow):
             )
 
             from core.logging_config import log_info
+
             log_info(f"Memory cleared. Current usage: {stats.rss_mb:.0f}MB")
         except Exception as e:
             from core.logging_config import log_error
+
             log_error(f"Error clearing memory: {e}")
 
     # ── Session management ────────────────────────────────────────
@@ -586,6 +597,12 @@ class SynapseMainWindow(QMainWindow):
         )
         save_session_state(state)
 
+    def resizeEvent(self, event) -> None:
+        """Cap nhat vi tri toast khi window resize."""
+        super().resizeEvent(event)
+        if hasattr(self, "_toast_manager") and self._toast_manager:
+            self._toast_manager.reposition_on_resize()
+
     def closeEvent(self, event) -> None:
         """Handle app close — cleanup resources and save session."""
         from core.utils.file_scanner import stop_scanning
@@ -594,6 +611,10 @@ class SynapseMainWindow(QMainWindow):
         stop_scanning()
         stop_token_counting()
         shutdown_all()
+
+        # Dong tat ca toast truoc khi thoat
+        if hasattr(self, "_toast_manager") and self._toast_manager:
+            self._toast_manager.dismiss_all()
 
         if hasattr(self, "_status_timer"):
             self._status_timer.stop()
@@ -604,6 +625,7 @@ class SynapseMainWindow(QMainWindow):
         self.context_view.cleanup()
 
         from core.logging_config import flush_logs, cleanup_old_logs
+
         flush_logs()
         cleanup_old_logs(max_age_days=7)
 
@@ -613,6 +635,7 @@ class SynapseMainWindow(QMainWindow):
 def main() -> None:
     """Entry point for Synapse Desktop."""
     from config.paths import ensure_app_directories
+
     ensure_app_directories()
 
     app = QApplication(sys.argv)

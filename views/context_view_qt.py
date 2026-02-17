@@ -1527,11 +1527,11 @@ class ContextViewQt(QWidget):
     # ===== Helpers =====
 
     def _show_copy_breakdown(self, total_tokens: int, pre_snapshot: dict) -> None:
-        """Hien thi token breakdown chi tiet sau khi copy.
+        """Hien thi token breakdown than thien voi user sau khi copy.
 
-        Tinh overhead = total - file_tokens - instruction_tokens.
-        OPX tokens duoc uoc luong tu XML_FORMATTING_INSTRUCTIONS constant.
-        Phan con lai la overhead tu tree map, git changes, XML structure.
+        Dung cac tu de hieu: "noi dung" (file content), "yeu cau" (instructions),
+        "cau truc prompt" (tree map + git + XML tags). Tuy theo copy mode
+        se hien thi cac thanh phan khac nhau.
 
         Args:
             total_tokens: Tong so tokens cua prompt da copy (tu CopyTaskWorker)
@@ -1556,28 +1556,29 @@ class ContextViewQt(QWidget):
             except ImportError:
                 opx_t = 0
 
-        # Overhead = tat ca nhung gi UI khong hien thi:
-        # tree map + git changes + XML tags + file_summary header
-        overhead = total_tokens - file_t - instr_t - opx_t
-        overhead = max(0, overhead)  # Tranh gia tri am do sai lech tokenizer
+        # Cau truc prompt = tat ca nhung gi bao quanh noi dung file:
+        # tree map, git diff/log, XML/JSON tags, file_summary header
+        structure_t = total_tokens - file_t - instr_t - opx_t
+        structure_t = max(0, structure_t)  # Tranh gia tri am do sai lech tokenizer
 
-        # Build breakdown parts
+        # Build breakdown voi label than thien, tuy theo copy mode
         parts = []
         if file_t > 0:
-            parts.append(f"{file_t:,} files")
+            parts.append(f"{file_t:,} noi dung")
         if instr_t > 0:
-            parts.append(f"{instr_t:,} instr")
+            parts.append(f"{instr_t:,} yeu cau")
         if opx_t > 0:
             parts.append(f"{opx_t:,} OPX")
-        if overhead > 0:
-            parts.append(f"{overhead:,} overhead")
+        if structure_t > 0:
+            parts.append(f"{structure_t:,} cau truc prompt")
 
         breakdown_text = " + ".join(parts) if parts else ""
 
-        # Hien thi status message voi breakdown
-        main_msg = f"{copy_mode}! ({total_tokens:,} tokens)"
+        # Dong 1: tong tokens (don gian, noi bat)
+        # Dong 2: breakdown cho biet cai gi tieu hao
+        main_msg = f"Copied! {total_tokens:,} tokens"
 
-        # Style va hien thi
+        # Cancel timer cu
         if self._status_timer is not None:
             try:
                 self._status_timer.stop()
@@ -1604,26 +1605,31 @@ class ContextViewQt(QWidget):
         """
         )
 
-        # Hien thi 2 dong: dong 1 = tong, dong 2 = breakdown
         if breakdown_text:
             self._status_label.setText(f"\u2713 {main_msg}\n{breakdown_text}")
         else:
             self._status_label.setText(f"\u2713 {main_msg}")
 
-        # Tooltip chi tiet hon
-        tooltip_parts = [
-            f"Total: {total_tokens:,} tokens",
-            f"File content: {file_t:,} tokens",
-            f"Instructions: {instr_t:,} tokens",
+        # Tooltip giai thich chi tiet tung thanh phan
+        tooltip_lines = [
+            f"Tong cong: {total_tokens:,} tokens",
+            f"",
+            f"Noi dung file: {file_t:,} tokens",
+            f"Yeu cau (instructions): {instr_t:,} tokens",
         ]
         if opx_t > 0:
-            tooltip_parts.append(f"OPX instructions: {opx_t:,} tokens")
-        tooltip_parts.append(f"Overhead (tree + git + XML tags): {overhead:,} tokens")
-        self._status_label.setToolTip("\n".join(tooltip_parts))
+            tooltip_lines.append(f"OPX instructions: {opx_t:,} tokens")
+        tooltip_lines.extend(
+            [
+                f"Cau truc prompt: {structure_t:,} tokens",
+                f"  (gom: tree map, git diff/log, XML tags)",
+            ]
+        )
+        self._status_label.setToolTip("\n".join(tooltip_lines))
 
         self._status_label.show()
 
-        # Timer 12 giay cho breakdown (dai hon binh thuong de user doc)
+        # Timer 12 giay (dai hon binh thuong de user doc breakdown)
         self._status_timer = QTimer(self)
         self._status_timer.setSingleShot(True)
         self._status_timer.timeout.connect(self._status_label.hide)

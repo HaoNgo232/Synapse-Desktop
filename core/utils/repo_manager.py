@@ -39,25 +39,25 @@ class RepoError(Exception):
 
 
 class GitNotInstalledError(RepoError):
-    """Git không được cài đặt."""
+    """Git is not installed."""
 
     pass
 
 
 class RepoNotFoundError(RepoError):
-    """Repository không tìm thấy hoặc private."""
+    """Repository not found or private."""
 
     pass
 
 
 class CloneTimeoutError(RepoError):
-    """Clone operation bị timeout."""
+    """Clone operation timed out."""
 
     pass
 
 
 class InvalidUrlError(RepoError):
-    """URL không hợp lệ."""
+    """Invalid URL."""
 
     pass
 
@@ -178,14 +178,12 @@ class RepoManager:
             RepoError: Lỗi khác
         """
         if not self._is_git_installed():
-            raise GitNotInstalledError(
-                "Git không được cài đặt hoặc không có trong PATH"
-            )
+            raise GitNotInstalledError("Git is not installed or not in PATH")
 
         # Parse URL
         repo_info = parse_github_url(url)
         if not repo_info:
-            raise InvalidUrlError(f"URL không hợp lệ: {url}")
+            raise InvalidUrlError(f"Invalid URL: {url}")
 
         # Determine cache path
         cache_name = get_repo_cache_name(repo_info)
@@ -227,7 +225,7 @@ class RepoManager:
 
         # Report progress
         if on_progress:
-            on_progress(CloneProgress(status="Đang clone repository...", percentage=0))
+            on_progress(CloneProgress(status="Cloning repository...", percentage=0))
 
         try:
             # Build clone command - su dung partial clone thay vi shallow
@@ -256,10 +254,10 @@ class RepoManager:
                     "not found" in error_msg.lower()
                     or "repository not found" in error_msg.lower()
                 ):
-                    raise RepoNotFoundError(f"Repository không tìm thấy: {clone_url}")
+                    raise RepoNotFoundError(f"Repository not found: {clone_url}")
                 if "could not read" in error_msg.lower():
                     raise RepoNotFoundError(
-                        f"Không thể truy cập repository (có thể là private): {clone_url}"
+                        f"Could not access repository (maybe private): {clone_url}"
                     )
 
                 raise RepoError(f"Clone failed: {error_msg}")
@@ -269,13 +267,13 @@ class RepoManager:
 
             # Report complete
             if on_progress:
-                on_progress(CloneProgress(status="Hoan thanh!", percentage=100))
+                on_progress(CloneProgress(status="Done!", percentage=100))
 
         except subprocess.TimeoutExpired:
             # Cleanup partial clone
             if target_path.exists():
                 shutil.rmtree(target_path)
-            raise CloneTimeoutError(f"Clone timeout sau {timeout} giây")
+            raise CloneTimeoutError(f"Clone timed out after {timeout} seconds")
         except RepoError:
             # Re-raise our errors (includes GitNotInstalledError, RepoNotFoundError, CloneTimeoutError)
             raise
@@ -392,7 +390,7 @@ class RepoManager:
             if on_progress:
                 on_progress(
                     CloneProgress(
-                        status="Repo cu khong co .git, can reclone de update",
+                        status="Old repo without .git, need to reclone to update",
                         percentage=100,
                     )
                 )
@@ -402,7 +400,7 @@ class RepoManager:
         timeout = timeout or self.DEFAULT_TIMEOUT
 
         if on_progress:
-            on_progress(CloneProgress(status="Đang update repository...", percentage=0))
+            on_progress(CloneProgress(status="Updating repository...", percentage=0))
 
         try:
             result = subprocess.run(
@@ -418,10 +416,10 @@ class RepoManager:
                 logger.info("Repository updated successfully")
 
             if on_progress:
-                on_progress(CloneProgress(status="Hoàn thành!", percentage=100))
+                on_progress(CloneProgress(status="Done!", percentage=100))
 
         except subprocess.TimeoutExpired:
-            raise CloneTimeoutError(f"Update timeout sau {timeout} giây")
+            raise CloneTimeoutError(f"Update timed out after {timeout} seconds")
 
     def get_cached_repos(self) -> List[CachedRepo]:
         """

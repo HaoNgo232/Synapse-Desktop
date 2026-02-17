@@ -77,23 +77,23 @@ def validate_git_url(url: str) -> None:
     dangerous_params = ["--upload-pack", "--config", "--exec", "-c ", "--receive-pack"]
     for param in dangerous_params:
         if param in url:
-            raise ValueError(f"URL chứa parameter không an toàn: {param}")
+            raise ValueError(f"URL contains unsafe parameter: {param}")
 
     # Kiểm tra protocol - chỉ cho phép https:// hoặc git@
     if not (url.startswith("https://") or url.startswith("git@")):
         # Có thể là shorthand, skip validation
         if is_valid_shorthand(url):
             return
-        raise ValueError("URL phải bắt đầu bằng 'https://' hoặc 'git@'")
+        raise ValueError("URL must start with 'https://' or 'git@'")
 
     # Validate URL format cho https://
     if url.startswith("https://"):
         try:
             parsed = urlparse(url)
             if not parsed.netloc:
-                raise ValueError("URL không có hostname")
+                raise ValueError("URL has no hostname")
         except Exception as e:
-            raise ValueError(f"URL format không hợp lệ: {e}")
+            raise ValueError(f"Invalid URL format: {e}")
 
 
 def parse_github_url(url: str) -> Optional[RemoteRepoInfo]:

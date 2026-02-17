@@ -1626,19 +1626,19 @@ class ContextViewQt(QWidget):
         else:
             self._status_label.setText(f"\u2713 {main_msg}")
 
-        # Tooltip giai thich chi tiet tung thanh phan
+        # Tooltip explaining each component detail
         tooltip_lines = [
-            f"Tong cong: {total_tokens:,} tokens",
+            f"Total: {total_tokens:,} tokens",
             f"",
-            f"Noi dung file: {file_t:,} tokens",
-            f"Yeu cau (instructions): {instr_t:,} tokens",
+            f"File content: {file_t:,} tokens",
+            f"Instructions: {instr_t:,} tokens",
         ]
         if opx_t > 0:
             tooltip_lines.append(f"OPX instructions: {opx_t:,} tokens")
         tooltip_lines.extend(
             [
-                f"Cau truc prompt: {structure_t:,} tokens",
-                f"  (gom: tree map, git diff/log, XML tags)",
+                f"Prompt structure: {structure_t:,} tokens",
+                f"  (includes: tree map, git diff/log, XML tags)",
             ]
         )
         self._status_label.setToolTip("\n".join(tooltip_lines))

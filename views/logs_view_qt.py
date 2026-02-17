@@ -133,7 +133,7 @@ class LogsViewQt(QWidget):
         toolbar.addWidget(self._auto_scroll)
 
         self._debug_mode = QCheckBox("Debug Mode")
-        self._debug_mode.setToolTip("Ghi log muc DEBUG ra file")
+        self._debug_mode.setToolTip("Log DEBUG level to file")
         self._debug_mode.setStyleSheet(checkbox_style)
         self._debug_mode.stateChanged.connect(self._toggle_debug)
         toolbar.addWidget(self._debug_mode)
@@ -184,7 +184,9 @@ class LogsViewQt(QWidget):
         self._log_view = QPlainTextEdit()
         self._log_view.setReadOnly(True)
         # Use a better mono font stack
-        self._log_view.setFont(QFont("JetBrains Mono, Fira Code, Source Code Pro, monospace", 10))
+        self._log_view.setFont(
+            QFont("JetBrains Mono, Fira Code, Source Code Pro, monospace", 10)
+        )
         self._log_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self._log_view.setStyleSheet(
             f"QPlainTextEdit {{ "
@@ -337,9 +339,11 @@ class LogsViewQt(QWidget):
         lines = [f"{l.timestamp} [{l.level}] {l.message}" for l in error_logs]
         success, _ = copy_to_clipboard("\n".join(lines))
         self._show_status(
-            f"Copied {len(error_logs)} error/warning logs"
-            if success
-            else "Copy failed",
+            (
+                f"Copied {len(error_logs)} error/warning logs"
+                if success
+                else "Copy failed"
+            ),
             not success,
         )
 

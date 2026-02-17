@@ -453,12 +453,12 @@ class ContextViewQt(QWidget):
         # Textarea - chiem toan bo khong gian con lai
         self._instructions_field = QTextEdit()
         self._instructions_field.setPlaceholderText(
-            "Mo ta yeu cau cua ban...\n\n"
-            "Vi du:\n"
-            "- Refactor module X thanh Y\n"
-            "- Fix bug: [mo ta loi]\n"
-            "- Them feature: [mo ta chuc nang]\n\n"
-            "Kem theo: output format, constraints, edge cases..."
+            "Describe your request here...\n\n"
+            "Examples:\n"
+            "- Refactor module X to Y\n"
+            "- Fix bug: [error description]\n"
+            "- Add feature: [functionality description]\n\n"
+            "Optional: include output format, constraints, or edge cases."
         )
         self._instructions_field.setStyleSheet(
             f"""
@@ -866,12 +866,12 @@ class ContextViewQt(QWidget):
         # Tooltip canh bao overhead khi copy
         self._token_count_label.setToolTip(
             f"{total_file_tokens:,} file tokens + {instruction_tokens:,} instruction tokens\n\n"
-            "Luu y: Khi copy, prompt thuc te se lon hon do co them:\n"
-            "- Tree map (cau truc thu muc)\n"
+            "Note: Actual prompt size will be larger due to:\n"
+            "- Tree map (project structure)\n"
             "- Git changes (diff + log)\n"
-            "- OPX instructions (neu dung Copy + OPX)\n"
+            "- OPX instructions (if using Copy + OPX)\n"
             "- XML/JSON tags wrapping\n\n"
-            "Hover len status message sau khi copy de xem breakdown chi tiet."
+            "Hover over the status message after copying to see detailed breakdown."
         )
 
         # Update stats panel
@@ -885,15 +885,20 @@ class ContextViewQt(QWidget):
     @Slot(str)
     def _on_model_changed(self, model_id: str) -> None:
         """
-        Handler khi user đổi model.
+        Handler when user changes model.
 
-        Clear cache và trigger recount với tokenizer mới.
+        Resets encoder and clears cache to trigger recount with the new tokenizer.
         """
-        # Clear token cache (vì tokenizer đã thay đổi)
+        # Ensure the global encoder is reset immediately for next counts
+        from core.token_counter import reset_encoder
+
+        reset_encoder()
+
+        # Clear token cache (since tokenizer has changed)
         model = self.file_tree_widget.get_model()
         model._token_cache.clear()
 
-        # Trigger recount cho selected files
+        # Trigger recount for selected files
         self.file_tree_widget._start_token_counting()
 
         self._show_status(f"Recounting tokens with {model_id}...")
@@ -980,7 +985,7 @@ class ContextViewQt(QWidget):
                 Dung de tinh overhead = total - file_tokens - instruction_tokens.
         """
         self._set_copy_buttons_enabled(False)
-        self._show_status("Dang chuan bi...")
+        self._show_status("Preparing context...")
 
         worker = CopyTaskWorker(task_fn)
         self._current_copy_worker = worker
@@ -1556,21 +1561,31 @@ class ContextViewQt(QWidget):
             except ImportError:
                 opx_t = 0
 
-        # Cau truc prompt = tat ca nhung gi bao quanh noi dung file:
-        # tree map, git diff/log, XML/JSON tags, file_summary header
-        structure_t = total_tokens - file_t - instr_t - opx_t
-        structure_t = max(0, structure_t)  # Tranh gia tri am do sai lech tokenizer
+        # Calculate structure/overhead
+        # If model just changed, snapshot counts might be from old tokenizer
+        # In that case, we normalize the breakdown to always add up to total_tokens
+        sum_parts = file_t + instr_t + opx_t
+        if sum_parts > total_tokens:
+            # Tokenizer changed or race condition: reduce parts proportionally
+            ratio = total_tokens / sum_parts if sum_parts > 0 else 1.0
+            file_t = int(file_t * ratio)
+            instr_t = int(instr_t * ratio)
+            opx_t = int(opx_t * ratio)
+            structure_t = 0
+        else:
+            structure_t = total_tokens - file_t - instr_t - opx_t
+            structure_t = max(0, structure_t)
 
-        # Build breakdown voi label than thien, tuy theo copy mode
+        # Build breakdown with friendly labels
         parts = []
         if file_t > 0:
-            parts.append(f"{file_t:,} noi dung")
+            parts.append(f"{file_t:,} content")
         if instr_t > 0:
-            parts.append(f"{instr_t:,} yeu cau")
+            parts.append(f"{instr_t:,} instructions")
         if opx_t > 0:
             parts.append(f"{opx_t:,} OPX")
         if structure_t > 0:
-            parts.append(f"{structure_t:,} cau truc prompt")
+            parts.append(f"{structure_t:,} system prompt")
 
         breakdown_text = " + ".join(parts) if parts else ""
 

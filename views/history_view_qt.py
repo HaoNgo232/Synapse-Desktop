@@ -94,9 +94,9 @@ def format_date_group(dt: datetime) -> str:
     entry_date = dt.date()
 
     if entry_date == today:
-        return f"Hôm nay · {dt.strftime('%m/%d')}"
+        return f"Today · {dt.strftime('%m/%d')}"
     elif entry_date == yesterday:
-        return f"Hôm qua · {dt.strftime('%m/%d')}"
+        return f"Yesterday · {dt.strftime('%m/%d')}"
     else:
         return dt.strftime("%m/%d")
 
@@ -493,8 +493,9 @@ class HistoryViewQt(QWidget):
         # Vo hieu hoa hoan toan selection/focus painting o level thap nhat
         self._entry_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._entry_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._entry_list.setSpacing(4) # Tang social gap cho thoang
-        self._entry_list.setStyleSheet(f"""
+        self._entry_list.setSpacing(4)  # Tang social gap cho thoang
+        self._entry_list.setStyleSheet(
+            f"""
             QListWidget {{
                 background-color: transparent;
                 border: none;
@@ -510,7 +511,8 @@ class HistoryViewQt(QWidget):
                 padding: 0;
                 margin: 0;
             }}
-        """)
+        """
+        )
         self._entry_list.itemClicked.connect(self._on_entry_clicked)
         layout.addWidget(self._entry_list)
 
@@ -699,7 +701,7 @@ class HistoryViewQt(QWidget):
         if not self._filtered_entries:
             # Empty state
             empty_item = QListWidgetItem()
-            empty_widget = QLabel("Chưa có operation nào")
+            empty_widget = QLabel("No operations yet")
             empty_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_widget.setStyleSheet(
                 f"""
@@ -952,7 +954,7 @@ class HistoryViewQt(QWidget):
         """Hiển thị empty state cho detail panel."""
         self._clear_detail()
 
-        empty = QLabel("Chọn một operation bên trái để xem chi tiết")
+        empty = QLabel("Select an operation from the list to view details")
         empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty.setStyleSheet(
             f"""
@@ -1074,12 +1076,14 @@ class HistoryViewQt(QWidget):
         # --- Dual-segment bar ---
         bar_container = QFrame()
         bar_container.setFixedHeight(14)
-        bar_container.setStyleSheet(f"""
+        bar_container.setStyleSheet(
+            f"""
             QFrame {{
                 background-color: {ThemeColors.BORDER};
                 border-radius: 7px;
             }}
-        """)
+        """
+        )
 
         bar_layout = QHBoxLayout(bar_container)
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -1092,19 +1096,23 @@ class HistoryViewQt(QWidget):
             success_seg = QFrame()
             # Bo goc trai khi co fail, bo het goc khi khong co fail
             if entry.fail_count > 0:
-                success_seg.setStyleSheet(f"""
+                success_seg.setStyleSheet(
+                    f"""
                     QFrame {{
                         background-color: {ThemeColors.SUCCESS};
                         border-radius: 7px 0 0 7px;
                     }}
-                """)
+                """
+                )
             else:
-                success_seg.setStyleSheet(f"""
+                success_seg.setStyleSheet(
+                    f"""
                     QFrame {{
                         background-color: {ThemeColors.SUCCESS};
                         border-radius: 7px;
                     }}
-                """)
+                """
+                )
             bar_layout.addWidget(success_seg, stretch=entry.success_count)
 
         # Segment do (fail)
@@ -1112,19 +1120,23 @@ class HistoryViewQt(QWidget):
             fail_seg = QFrame()
             # Bo goc phai khi co success, bo het goc khi khong co success
             if entry.success_count > 0:
-                fail_seg.setStyleSheet(f"""
+                fail_seg.setStyleSheet(
+                    f"""
                     QFrame {{
                         background-color: {ThemeColors.ERROR};
                         border-radius: 0 7px 7px 0;
                     }}
-                """)
+                """
+                )
             else:
-                fail_seg.setStyleSheet(f"""
+                fail_seg.setStyleSheet(
+                    f"""
                     QFrame {{
                         background-color: {ThemeColors.ERROR};
                         border-radius: 7px;
                     }}
-                """)
+                """
+                )
             bar_layout.addWidget(fail_seg, stretch=entry.fail_count)
 
         layout.addWidget(bar_container)
@@ -1486,7 +1498,7 @@ class HistoryViewQt(QWidget):
         reply = QMessageBox.question(
             self,
             "Delete Entry?",
-            "Xóa entry này? Không thể undo.",
+            "Delete this entry? This action cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -1506,7 +1518,7 @@ class HistoryViewQt(QWidget):
         reply = QMessageBox.question(
             self,
             "Clear All History?",
-            "Xóa toàn bộ history? Không thể undo.",
+            "Clear all history? This action cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

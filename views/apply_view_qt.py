@@ -99,7 +99,8 @@ class ApplyViewQt(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
         splitter.setHandleWidth(3)
-        splitter.setStyleSheet(f"""
+        splitter.setStyleSheet(
+            f"""
             QSplitter::handle {{
                 background-color: {ThemeColors.BORDER};
                 margin: 4px 0;
@@ -107,7 +108,8 @@ class ApplyViewQt(QWidget):
             QSplitter::handle:hover {{
                 background-color: {ThemeColors.PRIMARY};
             }}
-        """)
+        """
+        )
 
         # Left: OPX Input (~40%)
         left = self._build_left_panel()
@@ -154,10 +156,11 @@ class ApplyViewQt(QWidget):
         # OPX input textarea
         self._opx_input = QPlainTextEdit()
         self._opx_input.setPlaceholderText(
-            "Paste OPX XML response tu AI chat...\n\n"
-            'Vi du:\n<edit file="path/to/file" op="patch">\n  ...\n</edit>'
+            "Paste OPX XML response from AI chat...\n\n"
+            'Example:\n<edit file="path/to/file" op="patch">\n  ...\n</edit>'
         )
-        self._opx_input.setStyleSheet(f"""
+        self._opx_input.setStyleSheet(
+            f"""
             QPlainTextEdit {{
                 font-family: 'JetBrains Mono', 'Fira Code', monospace;
                 font-size: 12px;
@@ -170,7 +173,8 @@ class ApplyViewQt(QWidget):
             QPlainTextEdit:focus {{
                 border-color: {ThemeColors.PRIMARY};
             }}
-        """)
+        """
+        )
         layout.addWidget(self._opx_input, stretch=1)
 
         # Button row voi styled buttons
@@ -233,7 +237,8 @@ class ApplyViewQt(QWidget):
 
         # Primary CTA: Apply Changes
         apply_btn = QPushButton("Apply Changes")
-        apply_btn.setStyleSheet(f"""
+        apply_btn.setStyleSheet(
+            f"""
             QPushButton {{
                 background-color: {ThemeColors.PRIMARY};
                 color: white;
@@ -249,7 +254,8 @@ class ApplyViewQt(QWidget):
             QPushButton:pressed {{
                 background-color: {ThemeColors.PRIMARY_PRESSED};
             }}
-        """)
+        """
+        )
         apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         apply_btn.clicked.connect(self._apply_changes)
         btn_row.addWidget(apply_btn)
@@ -258,9 +264,7 @@ class ApplyViewQt(QWidget):
 
         # Status label
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet(
-            f"font-size: 11px; font-weight: 500;"
-        )
+        self._status_label.setStyleSheet(f"font-size: 11px; font-weight: 500;")
         layout.addWidget(self._status_label)
 
         return panel
@@ -317,7 +321,7 @@ class ApplyViewQt(QWidget):
         self._results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Empty state
-        empty_label = QLabel("Paste OPX va nhan Preview de xem truoc cac thay doi")
+        empty_label = QLabel("Paste OPX and click Preview to verify changes")
         empty_label.setStyleSheet(
             f"color: {ThemeColors.TEXT_MUTED}; font-style: italic; "
             f"font-size: 12px; padding: 32px;"
@@ -700,7 +704,11 @@ class ApplyViewQt(QWidget):
 
         # Status icon
         icon_text = "OK" if result.success else "FAIL"
-        icon_color = ApplyViewColors.SUCCESS_TEXT if result.success else ApplyViewColors.ERROR_TEXT
+        icon_color = (
+            ApplyViewColors.SUCCESS_TEXT
+            if result.success
+            else ApplyViewColors.ERROR_TEXT
+        )
         icon_label = QLabel(icon_text)
         icon_label.setStyleSheet(
             f"color: {icon_color}; font-size: 10px; font-weight: 700; border: none;"
@@ -777,10 +785,7 @@ def _convert_to_row_results(
     modified_files: set = set()
 
     for i, result in enumerate(results):
-        is_cascade = (
-            not result.success
-            and result.path in modified_files
-        )
+        is_cascade = not result.success and result.path in modified_files
         row_results.append(
             ApplyRowResult(
                 row_index=i,

@@ -130,9 +130,7 @@ class _AccentDotLabel(QWidget):
         # Dot
         dot = QWidget()
         dot.setFixedSize(8, 8)
-        dot.setStyleSheet(
-            f"background: {ThemeColors.PRIMARY}; border-radius: 4px;"
-        )
+        dot.setStyleSheet(f"background: {ThemeColors.PRIMARY}; border-radius: 4px;")
         layout.addWidget(dot, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         # Title
@@ -178,9 +176,7 @@ class _ToggleRow(QWidget):
         left.addWidget(lbl)
 
         desc = QLabel(description)
-        desc.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
-        )
+        desc.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
         desc.setWordWrap(True)
         left.addWidget(desc)
 
@@ -214,13 +210,15 @@ class _ToggleRow(QWidget):
 def _make_card() -> QFrame:
     """Create a styled settings card frame."""
     card = QFrame()
-    card.setStyleSheet(f"""
+    card.setStyleSheet(
+        f"""
         QFrame {{
             background-color: {ThemeColors.BG_SURFACE};
             border: none;
             border-radius: 10px;
         }}
-    """)
+    """
+    )
     return card
 
 
@@ -228,7 +226,9 @@ def _make_separator() -> QFrame:
     """Create a dashed separator line inside a card."""
     sep = QFrame()
     sep.setFixedHeight(1)
-    sep.setStyleSheet(f"background: transparent; border-top: 1px dashed {ThemeColors.BORDER};")
+    sep.setStyleSheet(
+        f"background: transparent; border-top: 1px dashed {ThemeColors.BORDER};"
+    )
     return sep
 
 
@@ -237,7 +237,8 @@ def _make_ghost_btn(text: str) -> QPushButton:
     btn = QPushButton(text)
     btn.setFixedHeight(36)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    btn.setStyleSheet(f"""
+    btn.setStyleSheet(
+        f"""
         QPushButton {{
             background: transparent;
             color: {ThemeColors.TEXT_PRIMARY};
@@ -254,7 +255,8 @@ def _make_ghost_btn(text: str) -> QPushButton:
         QPushButton:pressed {{
             background: {ThemeColors.BG_HOVER};
         }}
-    """)
+    """
+    )
     return btn
 
 
@@ -263,7 +265,8 @@ def _make_danger_btn(text: str) -> QPushButton:
     btn = QPushButton(text)
     btn.setFixedHeight(36)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    btn.setStyleSheet(f"""
+    btn.setStyleSheet(
+        f"""
         QPushButton {{
             background: transparent;
             color: {ThemeColors.ERROR};
@@ -280,7 +283,8 @@ def _make_danger_btn(text: str) -> QPushButton:
         QPushButton:pressed {{
             background: {ThemeColors.ERROR}25;
         }}
-    """)
+    """
+    )
     return btn
 
 
@@ -300,6 +304,13 @@ class SettingsViewQt(QWidget):
         super().__init__(parent)
         self.on_settings_changed = on_settings_changed
         self._has_unsaved = False
+
+        # Debounced auto-save timer (800ms)
+        self._auto_save_timer = QTimer(self)
+        self._auto_save_timer.setSingleShot(True)
+        self._auto_save_timer.setInterval(800)
+        self._auto_save_timer.timeout.connect(self._save_settings)
+
         self._build_ui()
         _excluded_notifier.excluded_changed.connect(self._reload_excluded_from_settings)
 
@@ -314,12 +325,14 @@ class SettingsViewQt(QWidget):
         # ── Header bar ──
         header = QFrame()
         header.setFixedHeight(52)
-        header.setStyleSheet(f"""
+        header.setStyleSheet(
+            f"""
             QFrame {{
                 background: {ThemeColors.BG_PAGE};
                 border: none;
             }}
-        """)
+        """
+        )
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(24, 0, 24, 0)
 
@@ -330,32 +343,16 @@ class SettingsViewQt(QWidget):
         header_layout.addWidget(title)
         header_layout.addStretch()
 
-        self._save_btn = QPushButton("Save Settings")
-        self._save_btn.setFixedHeight(34)
-        self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {ThemeColors.PRIMARY};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0 20px;
-                font-size: 13px;
-                font-weight: 700;
-            }}
-            QPushButton:hover {{
-                background: {ThemeColors.PRIMARY_HOVER};
-            }}
-            QPushButton:pressed {{
-                background: {ThemeColors.PRIMARY_PRESSED};
-            }}
-            QPushButton:disabled {{
-                background: {ThemeColors.BG_ELEVATED};
-                color: {ThemeColors.TEXT_MUTED};
-            }}
-        """)
-        self._save_btn.clicked.connect(self._save_settings)
-        header_layout.addWidget(self._save_btn)
+        # Auto-save indicator
+        self._auto_save_indicator = QLabel("")
+        self._auto_save_indicator.setFixedWidth(150)
+        self._auto_save_indicator.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._auto_save_indicator.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {ThemeColors.TEXT_MUTED};"
+        )
+        header_layout.addWidget(self._auto_save_indicator)
 
         root_layout.addWidget(header)
 
@@ -364,7 +361,8 @@ class SettingsViewQt(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"""
+        scroll.setStyleSheet(
+            f"""
             QScrollArea {{
                 background: {ThemeColors.BG_PAGE};
                 border: none;
@@ -386,7 +384,8 @@ class SettingsViewQt(QWidget):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0;
             }}
-        """)
+        """
+        )
 
         # Inner content — 3-column grid layout
         scroll_content = QWidget()
@@ -453,9 +452,7 @@ class SettingsViewQt(QWidget):
         card2_layout.addSpacing(8)
 
         exc_desc = QLabel("Files and folders excluded from tree and AI context")
-        exc_desc.setStyleSheet(
-            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
-        )
+        exc_desc.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
         card2_layout.addWidget(exc_desc)
         card2_layout.addSpacing(14)
 
@@ -485,7 +482,8 @@ class SettingsViewQt(QWidget):
         self._preset_combo.addItem("Select profile...")
         for name in PRESET_PROFILES:
             self._preset_combo.addItem(name)
-        self._preset_combo.setStyleSheet(f"""
+        self._preset_combo.setStyleSheet(
+            f"""
             QComboBox {{
                 background: {ThemeColors.BG_PAGE};
                 color: {ThemeColors.TEXT_PRIMARY};
@@ -513,7 +511,8 @@ class SettingsViewQt(QWidget):
             QComboBox QAbstractItemView::item {{
                 padding: 6px 12px;
             }}
-        """)
+        """
+        )
         self._preset_combo.currentTextChanged.connect(self._load_preset)
         preset_row.addWidget(self._preset_combo)
         preset_row.addStretch()
@@ -671,10 +670,17 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _mark_changed(self) -> None:
+        """Trigger debounced auto-save."""
         self._has_unsaved = True
+        self._auto_save_indicator.setText("Auto-saving...")
+        self._auto_save_indicator.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {ThemeColors.WARNING};"
+        )
+        self._auto_save_timer.start()
 
     @Slot()
     def _save_settings(self) -> None:
+        """Internal save logic called by debounced timer or manual triggers."""
         # Collect patterns from tag chips
         patterns = self._tag_chips.get_patterns()
         excluded_text = "\n".join(patterns)
@@ -686,52 +692,45 @@ class SettingsViewQt(QWidget):
             "include_git_changes": self._git_toggle.isChecked(),
             "use_relative_paths": self._relative_toggle.isChecked(),
         }
+
+        # Immediate visual feedback
+        self._auto_save_indicator.setText("Saving...")
+
         if save_settings(settings_data):
             self._has_unsaved = False
 
-            # Button feedback
-            self._save_btn.setText("Saved")
-            self._save_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: {ThemeColors.SUCCESS_BG};
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 0 20px;
-                    font-size: 13px;
-                    font-weight: 700;
-                }}
-            """)
-            QTimer.singleShot(2000, self._reset_save_btn)
+            # Success feedback
+            self._auto_save_indicator.setText("✓ Changes saved")
+            self._auto_save_indicator.setStyleSheet(
+                f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"
+            )
+
+            # Hide indicator after 3s
+            QTimer.singleShot(
+                3000,
+                lambda: (
+                    self._auto_save_indicator.setText("")
+                    if not self._has_unsaved
+                    else None
+                ),
+            )
 
             if self.on_settings_changed:
                 self.on_settings_changed()
         else:
+            self._auto_save_indicator.setText("⚠ Save failed")
+            self._auto_save_indicator.setStyleSheet(
+                f"font-size: 11px; font-weight: 600; color: {ThemeColors.ERROR};"
+            )
             self._show_status("Error saving settings", is_error=True)
 
+    def _trigger_auto_save(self) -> None:
+        """Helper to trigger the timer."""
+        self._mark_changed()
+
     def _reset_save_btn(self) -> None:
-        self._save_btn.setText("Save Settings")
-        self._save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {ThemeColors.PRIMARY};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0 20px;
-                font-size: 13px;
-                font-weight: 700;
-            }}
-            QPushButton:hover {{
-                background: {ThemeColors.PRIMARY_HOVER};
-            }}
-            QPushButton:pressed {{
-                background: {ThemeColors.PRIMARY_PRESSED};
-            }}
-            QPushButton:disabled {{
-                background: {ThemeColors.BG_ELEVATED};
-                color: {ThemeColors.TEXT_MUTED};
-            }}
-        """)
+        """Deprecated with auto-save but kept for internal compatibility if needed."""
+        pass
 
     @Slot()
     def _reset_settings(self) -> None:
@@ -746,9 +745,10 @@ class SettingsViewQt(QWidget):
             return
 
         # Apply defaults
+        excluded_raw = DEFAULT_SETTINGS.get("excluded_folders", "")
         default_patterns = [
             p.strip()
-            for p in DEFAULT_SETTINGS.get("excluded_folders", "").splitlines()
+            for p in str(excluded_raw).splitlines()
             if p.strip() and not p.strip().startswith("#")
         ]
         self._tag_chips.set_patterns(default_patterns)
@@ -756,8 +756,10 @@ class SettingsViewQt(QWidget):
         self._security_toggle.setChecked(True)
         self._git_toggle.setChecked(True)
         self._relative_toggle.setChecked(True)
-        self._mark_changed()
-        self._show_status("Reset to defaults. Click Save to apply.")
+
+        # Save immediately for destructive actions
+        self._save_settings()
+        self._show_status("Reset to defaults applied.")
 
     @Slot(str)
     def _load_preset(self, name: str) -> None:
@@ -765,11 +767,7 @@ class SettingsViewQt(QWidget):
             return
 
         preset_text = PRESET_PROFILES[name]
-        preset_patterns = [
-            p.strip()
-            for p in preset_text.splitlines()
-            if p.strip()
-        ]
+        preset_patterns = [p.strip() for p in preset_text.splitlines() if p.strip()]
 
         # Merge into existing patterns (avoid duplicates)
         current = self._tag_chips.get_patterns()
@@ -778,14 +776,16 @@ class SettingsViewQt(QWidget):
                 current.append(p)
 
         self._tag_chips.set_patterns(current)
-        self._mark_changed()
+
+        # Save immediately for preset loads
+        self._save_settings()
 
         # Reset combo to placeholder
         self._preset_combo.blockSignals(True)
         self._preset_combo.setCurrentIndex(0)
         self._preset_combo.blockSignals(False)
 
-        self._show_status(f"Merged {name} preset patterns. Click Save to apply.")
+        self._show_status(f"Merged {name} preset patterns.")
 
     @Slot()
     def _clear_session(self) -> None:
@@ -851,7 +851,7 @@ class SettingsViewQt(QWidget):
         exc_text = imported.get("excluded_folders", "")
         patterns = [
             p.strip()
-            for p in exc_text.splitlines()
+            for p in str(exc_text).splitlines()
             if p.strip() and not p.strip().startswith("#")
         ]
         self._tag_chips.set_patterns(patterns)
@@ -859,8 +859,10 @@ class SettingsViewQt(QWidget):
         self._git_toggle.setChecked(imported.get("include_git_changes", True))
         self._relative_toggle.setChecked(imported.get("use_relative_paths", True))
         self._security_toggle.setChecked(imported.get("enable_security_check", True))
-        self._mark_changed()
-        self._show_status("Imported. Click Save to apply.")
+
+        # Save immediately for imports
+        self._save_settings()
+        self._show_status("Settings imported from clipboard.")
 
     # ===== Public API =====
 
@@ -883,7 +885,8 @@ class SettingsViewQt(QWidget):
             text_color = "#022C22"
             border = ThemeColors.SUCCESS
 
-        self._status.setStyleSheet(f"""
+        self._status.setStyleSheet(
+            f"""
             QLabel {{
                 font-size: 12px;
                 font-weight: 600;
@@ -893,7 +896,8 @@ class SettingsViewQt(QWidget):
                 padding: 8px 14px;
                 border: 1px solid {border};
             }}
-        """)
+        """
+        )
         self._status.setText(message)
         self._status.show()
 

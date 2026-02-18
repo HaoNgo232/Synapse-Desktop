@@ -119,6 +119,10 @@ class TreeManagementMixin:
 
         clear_file_from_cache(path)
         invalidate_security_cache(path)
+        # Invalidate prompt cache — file content changed so fingerprint
+        # (which includes mtime) will no longer match anyway, but clearing
+        # eagerly avoids stale cache if mtime granularity is coarse.
+        self._prompt_cache.invalidate_all()
 
     def _on_file_created(self: "ContextViewQt", path: str) -> None:
         """Handle file created — no cache invalidation needed for new files."""

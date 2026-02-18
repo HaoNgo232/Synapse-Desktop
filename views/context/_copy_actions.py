@@ -21,8 +21,9 @@ WHY NOT CANCEL:
 => Giai phap don gian nhat, an toan nhat: DE WORKER CU CHAY XONG, IGNORE KET QUA.
 """
 
+import hashlib
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, List, Set, Callable
+from typing import TYPE_CHECKING, Optional, List, Set, Callable, Dict, Tuple
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 
 from core.token_counter import count_tokens
@@ -64,6 +65,92 @@ if TYPE_CHECKING:
 # By defining Signals at module level and passing them separately,
 # we control their lifetime explicitly.
 # ============================================================
+
+
+# ============================================================
+# Prompt-level cache — avoids re-scanning, re-reading, re-generating
+# when user clicks the same copy button without changing anything.
+#
+# Fingerprint = hash of:
+#   - sorted selected file paths + their mtimes
+#   - instructions text
+#   - output style
+#   - copy mode (context/smart/treemap/opx)
+#   - relevant settings (git, security, relative paths)
+#
+# Cache stores ONE entry per copy mode. If fingerprint matches,
+# return cached (prompt, token_count) immediately.
+# ============================================================
+
+
+class PromptCache:
+    """Single-entry-per-mode cache for generated prompts.
+
+    Thread-safe for reads from main thread (all cache access is on main thread
+    since it happens before/instead of dispatching to background).
+    """
+
+    def __init__(self) -> None:
+        # mode_key -> (fingerprint, prompt, token_count)
+        self._entries: Dict[str, Tuple[str, str, int]] = {}
+
+    def get(self, mode: str, fingerprint: str) -> Optional[Tuple[str, int]]:
+        """Return (prompt, token_count) if fingerprint matches, else None."""
+        entry = self._entries.get(mode)
+        if entry is not None and entry[0] == fingerprint:
+            return (entry[1], entry[2])
+        return None
+
+    def put(self, mode: str, fingerprint: str, prompt: str, token_count: int) -> None:
+        """Store result for a copy mode."""
+        self._entries[mode] = (fingerprint, prompt, token_count)
+
+    def invalidate(self, mode: Optional[str] = None) -> None:
+        """Invalidate one mode or all modes."""
+        if mode is None:
+            self._entries.clear()
+        else:
+            self._entries.pop(mode, None)
+
+    def invalidate_all(self) -> None:
+        """Clear entire cache."""
+        self._entries.clear()
+
+
+def _build_fingerprint(
+    selected_paths: Set[str],
+    instructions: str,
+    output_style_id: str,
+    copy_mode: str,
+    include_git: bool,
+    use_relative_paths: bool,
+    include_xml: bool = False,
+) -> str:
+    """Build a fingerprint string from all inputs that affect prompt output.
+
+    Includes file mtimes so cache auto-invalidates when files change.
+    """
+    h = hashlib.sha256()
+
+    # Copy mode + settings
+    h.update(f"mode={copy_mode}\n".encode())
+    h.update(f"style={output_style_id}\n".encode())
+    h.update(f"git={include_git}\n".encode())
+    h.update(f"rel={use_relative_paths}\n".encode())
+    h.update(f"xml={include_xml}\n".encode())
+
+    # Instructions
+    h.update(f"instr={instructions}\n".encode())
+
+    # Sorted file paths + mtimes
+    for p in sorted(selected_paths):
+        try:
+            mtime = Path(p).stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        h.update(f"{p}:{mtime}\n".encode())
+
+    return h.hexdigest()
 
 
 class CopyTaskSignals(QObject):
@@ -176,6 +263,65 @@ class CopyActionsMixin:
     # until their callback fires and we can safely deleteLater().
     _stale_workers: list
 
+    # Prompt-level cache — one entry per copy mode
+    _prompt_cache: PromptCache
+
+    def _try_cache_hit(
+        self: "ContextViewQt",
+        copy_mode: str,
+        selected_paths: Set[str],
+        instructions: str,
+        include_xml: bool = False,
+    ) -> Optional[Tuple[str, int]]:
+        """Check prompt cache for a hit. Returns (prompt, token_count) or None.
+
+        This is called on the main thread BEFORE starting any background work.
+        If cache hits, we skip all heavy work entirely.
+        """
+        output_style_id = self._selected_output_style.value
+        include_git = get_setting("include_git_changes", True)
+        use_rel = get_use_relative_paths()
+
+        fingerprint = _build_fingerprint(
+            selected_paths=selected_paths,
+            instructions=instructions,
+            output_style_id=output_style_id,
+            copy_mode=copy_mode,
+            include_git=include_git,
+            use_relative_paths=use_rel,
+            include_xml=include_xml,
+        )
+
+        cached = self._prompt_cache.get(copy_mode, fingerprint)
+        if cached is not None:
+            return cached
+        return None
+
+    def _store_in_cache(
+        self: "ContextViewQt",
+        copy_mode: str,
+        selected_paths: Set[str],
+        instructions: str,
+        prompt: str,
+        token_count: int,
+        include_xml: bool = False,
+    ) -> None:
+        """Store generated prompt in cache for future hits."""
+        output_style_id = self._selected_output_style.value
+        include_git = get_setting("include_git_changes", True)
+        use_rel = get_use_relative_paths()
+
+        fingerprint = _build_fingerprint(
+            selected_paths=selected_paths,
+            instructions=instructions,
+            output_style_id=output_style_id,
+            copy_mode=copy_mode,
+            include_git=include_git,
+            use_relative_paths=use_rel,
+            include_xml=include_xml,
+        )
+        self._prompt_cache.put(copy_mode, fingerprint, prompt, token_count)
+
     def _begin_copy_operation(self: "ContextViewQt") -> int:
         """Prepare for a new copy operation.
 
@@ -284,6 +430,25 @@ class CopyActionsMixin:
 
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         instructions = self._instructions_field.toPlainText()
+        copy_mode = "copy_opx" if include_xml else "copy_context"
+        selected_path_strs = {str(p) for p in file_paths}
+
+        # === Cache fast path ===
+        cached = self._try_cache_hit(copy_mode, selected_path_strs, instructions, include_xml)
+        if cached is not None:
+            prompt, token_count = cached
+            success, msg = copy_to_clipboard(prompt)
+            if success:
+                pre_snapshot = {
+                    "file_tokens": self.file_tree_widget.get_total_tokens(),
+                    "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                    "include_opx": include_xml,
+                    "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
+                }
+                self._show_copy_breakdown(token_count, pre_snapshot)
+            else:
+                self._show_status(f"Copy failed: {msg}", is_error=True)
+            return
 
         gen = self._begin_copy_operation()
 
@@ -395,6 +560,7 @@ class CopyActionsMixin:
         task_fn: Callable[[], str],
         success_template: str = "Copied! ({token_count:,} tokens)",
         pre_snapshot: Optional[dict] = None,
+        cache_key: Optional[tuple] = None,
     ) -> None:
         """
         Chay mot copy task tren background thread.
@@ -405,13 +571,16 @@ class CopyActionsMixin:
         3. Khi worker emit finished/error:
            a. Check generation — ignore neu mismatch.
            b. Copy to clipboard + show toast neu match.
-           c. Re-enable buttons neu day la generation hien tai.
+           c. Store in prompt cache neu cache_key provided.
+           d. Re-enable buttons neu day la generation hien tai.
 
         Args:
             gen: Generation number cho operation nay.
             task_fn: Callable tra ve prompt string (chay tren background thread).
             success_template: Template cho status message, co {token_count}.
             pre_snapshot: Dict snapshot cac gia tri token truoc khi copy.
+            cache_key: Optional (mode, selected_paths, instructions, include_xml)
+                       for storing result in prompt cache.
         """
         # Early exit if generation already stale
         if not self._is_current_generation(gen):
@@ -442,6 +611,14 @@ class CopyActionsMixin:
             # Clear refs — this worker is done
             self._current_copy_worker = None
             self._current_copy_signals = None
+
+            # Store in prompt cache for future fast-path hits
+            if cache_key is not None:
+                try:
+                    mode, paths, instr, incl_xml = cache_key
+                    self._store_in_cache(mode, paths, instr, prompt, token_count, incl_xml)
+                except Exception:
+                    pass  # Cache storage failure is non-critical
 
             success, msg = copy_to_clipboard(prompt)
 
@@ -493,6 +670,13 @@ class CopyActionsMixin:
             use_rel = get_use_relative_paths()
             output_style = self._selected_output_style
             include_git = get_setting("include_git_changes", True)
+
+            copy_mode = "copy_opx" if include_xml else "copy_context"
+            # Capture for cache storage in on_finished callback
+            _cache_selected = set(selected_path_strs)
+            _cache_instructions = instructions
+            _cache_include_xml = include_xml
+            _cache_mode = copy_mode
 
             def task() -> str:
                 """Heavy work - chay tren background thread."""
@@ -555,6 +739,7 @@ class CopyActionsMixin:
                 task,
                 "Copied! ({token_count:,} tokens)",
                 pre_snapshot=pre_snapshot,
+                cache_key=(_cache_mode, _cache_selected, _cache_instructions, _cache_include_xml),
             )
         except Exception as e:
             self._show_status(f"Error preparing copy: {e}", is_error=True)
@@ -573,11 +758,28 @@ class CopyActionsMixin:
             self._show_status("No files selected", is_error=True)
             return
 
-        gen = self._begin_copy_operation()
-
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         selected_path_strs = {str(p) for p in file_paths}
         instructions = self._instructions_field.toPlainText()
+
+        # === Cache fast path ===
+        cached = self._try_cache_hit("copy_smart", selected_path_strs, instructions)
+        if cached is not None:
+            prompt, token_count = cached
+            success, msg = copy_to_clipboard(prompt)
+            if success:
+                pre_snapshot = {
+                    "file_tokens": self.file_tree_widget.get_total_tokens(),
+                    "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                    "include_opx": False,
+                    "copy_mode": "Copy Smart",
+                }
+                self._show_copy_breakdown(token_count, pre_snapshot)
+            else:
+                self._show_status(f"Copy failed: {msg}", is_error=True)
+            return
+
+        gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
         include_git = get_setting("include_git_changes", True)
 
@@ -626,6 +828,7 @@ class CopyActionsMixin:
             task,
             "Smart context copied! ({token_count:,} tokens)",
             pre_snapshot=pre_snapshot,
+            cache_key=("copy_smart", selected_path_strs, instructions, False),
         )
 
     def _copy_tree_map_only(self: "ContextViewQt") -> None:
@@ -635,8 +838,6 @@ class CopyActionsMixin:
             self._show_status("No workspace selected", is_error=True)
             return
 
-        gen = self._begin_copy_operation()
-
         selected_files = self.file_tree_widget.get_selected_paths()
         selected_strs = set(selected_files) if selected_files else set()
         instructions = (
@@ -644,6 +845,25 @@ class CopyActionsMixin:
             if hasattr(self, "_instructions_field")
             else ""
         )
+
+        # === Cache fast path ===
+        cached = self._try_cache_hit("copy_treemap", selected_strs, instructions)
+        if cached is not None:
+            prompt, token_count = cached
+            success, msg = copy_to_clipboard(prompt)
+            if success:
+                pre_snapshot = {
+                    "file_tokens": 0,
+                    "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                    "include_opx": False,
+                    "copy_mode": "Copy Tree Map",
+                }
+                self._show_copy_breakdown(token_count, pre_snapshot)
+            else:
+                self._show_status(f"Copy failed: {msg}", is_error=True)
+            return
+
+        gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
 
         def task() -> str:
@@ -676,6 +896,7 @@ class CopyActionsMixin:
             task,
             "Tree map copied! ({token_count:,} tokens)",
             pre_snapshot=pre_snapshot,
+            cache_key=("copy_treemap", selected_strs, instructions, False),
         )
 
     def _collect_all_tree_paths(self: "ContextViewQt", root: TreeItem) -> Set[str]:

@@ -72,6 +72,9 @@ class ContextViewQt(
         self._copy_buttons_disabled: bool = False
         # Stale worker/signal refs — kept alive until their callback fires
         self._stale_workers: list = []
+        # Prompt-level cache — skips heavy work when nothing changed
+        from views.context._copy_actions import PromptCache
+        self._prompt_cache: PromptCache = PromptCache()
         # TreeManagementMixin
         self._repo_manager: Optional[RepoManager] = None  # Lazy init as RepoManager
 
@@ -104,10 +107,11 @@ class ContextViewQt(
             self._last_added_related_files.clear()
             self._related_menu_btn.setText("Related: Off")
 
-        # 3. Clear security scan cache for old workspace
+        # 3. Clear security scan cache and prompt cache for old workspace
         from core.security_check import clear_security_cache
 
         clear_security_cache()
+        self._prompt_cache.invalidate_all()
 
         # 4. Load new tree (this increments generation counter, cancels old workers)
         self.file_tree_widget.load_tree(workspace_path)
@@ -196,6 +200,7 @@ class ContextViewQt(
     def _on_selection_changed(self, selected_paths: set) -> None:
         """Handle selection change — update display + trigger related resolution if active."""
         self._token_generation += 1
+        self._prompt_cache.invalidate_all()
         self._update_token_display()
 
         # Auto-resolve related files when mode is active
@@ -218,6 +223,7 @@ class ContextViewQt(
             try:
                 self._selected_output_style = get_style_by_id(format_id)
                 set_setting("output_format", format_id)
+                self._prompt_cache.invalidate_all()
             except ValueError:
                 pass
 
@@ -275,6 +281,9 @@ class ContextViewQt(
 
         reset_encoder()
         initialize_encoder()  # Re-inject new config into core layer
+
+        # Invalidate prompt cache (token counts will differ with new tokenizer)
+        self._prompt_cache.invalidate_all()
 
         # Clear token cache (since tokenizer has changed)
         model = self.file_tree_widget.get_model()

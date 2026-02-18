@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from core.utils.repo_manager import RepoManager
 
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Slot, QTimer
+from PySide6.QtCore import Slot, QTimer, QObject
 
 from core.token_counter import count_tokens
 from core.utils.file_utils import TreeItem
@@ -67,6 +67,11 @@ class ContextViewQt(
         self._current_copy_signals = None
         self._current_security_worker = None
         self._current_security_signals = None
+        # Generation counter — incremented each copy request to discard stale results
+        self._copy_generation: int = 0
+        self._copy_buttons_disabled: bool = False
+        # Stale worker/signal refs — kept alive until their callback fires
+        self._stale_workers: list = []
         # TreeManagementMixin
         self._repo_manager: Optional[RepoManager] = None  # Lazy init as RepoManager
 
@@ -83,6 +88,11 @@ class ContextViewQt(
         from core.logging_config import log_info
 
         log_info(f"[ContextView] Workspace changing to: {workspace_path}")
+
+        # 0. Invalidate any pending copy operations by incrementing generation.
+        # Old workers will still run but their results will be ignored.
+        self._begin_copy_operation()
+        self._set_copy_buttons_enabled(True)
 
         # 1. Stop file watcher for old workspace
         if self._file_watcher:
@@ -149,6 +159,31 @@ class ContextViewQt(
 
     def cleanup(self) -> None:
         """Cleanup resources."""
+        # Invalidate all pending workers — their callbacks will be ignored
+        self._copy_generation += 1
+
+        # Force cleanup all stale refs
+        for obj in self._stale_workers:
+            if isinstance(obj, QObject):
+                try:
+                    obj.deleteLater()
+                except RuntimeError:
+                    pass
+        self._stale_workers.clear()
+        self._current_copy_worker = None
+        self._current_copy_signals = None
+        self._current_security_worker = None
+        self._current_security_signals = None
+
+        # Dismiss all toasts
+        try:
+            from components.toast_qt import ToastManager
+            manager = ToastManager.instance()
+            if manager is not None:
+                manager.dismiss_all(force=True)
+        except Exception:
+            pass
+
         if self._file_watcher:
             self._file_watcher.stop()
             self._file_watcher = None

@@ -378,10 +378,16 @@ class ToastManager:
         Returns:
             ToastNotification widget da tao.
         """
-        # Gioi han so luong toast hien thi
+        # Gioi han so luong toast hien thi.
+        # Force-remove excess toasts synchronously to prevent accumulation
+        # when show() is called rapidly (e.g., user clicking copy buttons fast).
         while len(self._active_toasts) >= _MAX_VISIBLE:
             oldest = self._active_toasts[0]
-            oldest._start_close_animation()
+            oldest._dismiss_timer.stop()
+            oldest._is_closing = True
+            oldest.hide()
+            self._active_toasts.remove(oldest)
+            oldest.deleteLater()
 
         # Tao toast moi
         toast = ToastNotification(
@@ -462,10 +468,26 @@ class ToastManager:
         """Goi khi parent widget resize de cap nhat vi tri toast."""
         self._reposition_toasts()
 
-    def dismiss_all(self) -> None:
-        """Dong tat ca toast dang hien thi."""
-        for toast in list(self._active_toasts):
-            toast._start_close_animation()
+    def dismiss_all(self, force: bool = False) -> None:
+        """Dong tat ca toast dang hien thi.
+
+        Args:
+            force: If True, skip animation and remove immediately.
+                   Use when new toasts will be created right after
+                   to prevent animation conflicts and accumulation.
+        """
+        if force:
+            # Force-remove all toasts synchronously — no animation.
+            # This prevents animation conflicts when user clicks rapidly.
+            for toast in list(self._active_toasts):
+                toast._dismiss_timer.stop()
+                toast._is_closing = True
+                toast.hide()
+                toast.deleteLater()
+            self._active_toasts.clear()
+        else:
+            for toast in list(self._active_toasts):
+                toast._start_close_animation()
 
 
 # ── Module-Level Convenience API ─────────────────────────────────

@@ -1,0 +1,8 @@
+exclude = [
+    ".agent",
+    ".kiro",
+    "tests",
+    "stubs",
+    ".venv",
+    "__pycache__",
+]

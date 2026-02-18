@@ -598,9 +598,7 @@ class FileTreeModel(QAbstractItemModel):
                     seen.add(p)
                 elif path_obj.is_dir():
                     # Delegate cho workspace_index scan disk (giong _collect_files_deep)
-                    disk_files = collect_files_from_disk(
-                        path_obj, self._workspace_path
-                    )
+                    disk_files = collect_files_from_disk(path_obj, self._workspace_path)
                     for f in disk_files:
                         if f not in seen:
                             result.append(f)

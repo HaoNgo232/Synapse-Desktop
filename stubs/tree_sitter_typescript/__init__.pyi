@@ -1,6 +1,0 @@
-"""Type stubs for tree_sitter_typescript package"""
-
-from typing import Any
-
-def language_typescript() -> Any: ...
-def language_tsx() -> Any: ...

@@ -804,7 +804,7 @@ class FilePreviewDialogQt(BaseDialogQt):
         # Code editor (read only) with syntax highlighting
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
-        self._text_edit.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 12))
+        self._text_edit.setFont(QFont("Cascadia Code, Fira Code, Consolas", 12))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ "
             f"  background-color: #282a36; color: #f8f8f2; "
@@ -909,7 +909,7 @@ class FilePreviewDialogQt(BaseDialogQt):
                 lineanchors="line",
                 prestyles=(
                     "background-color: #282a36; color: #f8f8f2; "
-                    "font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; "
+                    "font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; "
                     "font-size: 12px; padding: 12px; border-radius: 4px; "
                     "line-height: 1.5;"
                 ),

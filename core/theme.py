@@ -12,13 +12,13 @@ from pathlib import Path
 
 
 class ThemeFonts:
-    """Typography System — Segoe UI / SF Pro + JetBrains Mono"""
+    """Typography System — Segoe UI / SF Pro + Cascadia Code"""
 
     _fonts_loaded = False
 
     # Font family stacks
     FAMILY_BODY = '"Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif'
-    FAMILY_MONO = '"JetBrains Mono", "Fira Code", "Consolas", monospace'
+    FAMILY_MONO = '"Cascadia Code", "Fira Code", "Consolas", monospace'
 
     @staticmethod
     def load_fonts():
@@ -29,8 +29,6 @@ class ThemeFonts:
         font_dir = Path(__file__).parent.parent / "assets" / "fonts"
 
         for name in (
-            "JetBrainsMono-Regular.ttf",
-            "JetBrainsMono-Bold.ttf",
             "IBMPlexSans-Regular.ttf",
             "IBMPlexSans-SemiBold.ttf",
         ):
@@ -56,8 +54,8 @@ class ThemeFonts:
     BODY_MEDIUM = QFont("Segoe UI", 13, QFont.Weight.Normal)
     BODY_SMALL = QFont("Segoe UI", 11, QFont.Weight.Normal)
 
-    CODE = QFont("JetBrains Mono", 13, QFont.Weight.Normal)
-    CODE_SMALL = QFont("JetBrains Mono", 11, QFont.Weight.Normal)
+    CODE = QFont("Cascadia Code", 13, QFont.Weight.Normal)
+    CODE_SMALL = QFont("Cascadia Code", 11, QFont.Weight.Normal)
 
 
 class ThemeColors:

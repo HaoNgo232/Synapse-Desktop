@@ -188,7 +188,7 @@ class OperationBadge(QLabel):
                 border-radius: 4px;
                 font-size: 11px;
                 font-weight: 700;
-                font-family: 'JetBrains Mono', monospace;
+                font-family: 'Cascadia Code', 'Fira Code', monospace;
             }}
         """
         )
@@ -228,7 +228,7 @@ class FileChangeRow(QWidget):
             f"""
             color: {ThemeColors.TEXT_PRIMARY};
             font-size: 13px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
         """
         )
         layout.addWidget(name_label, stretch=1)
@@ -285,7 +285,7 @@ class ErrorCard(QFrame):
             color: {ThemeColors.ERROR};
             font-size: 13px;
             font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
         """
         )
         layout.addWidget(name_label)
@@ -297,7 +297,7 @@ class ErrorCard(QFrame):
             f"""
             color: {ThemeColors.TEXT_SECONDARY};
             font-size: 12px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
             white-space: pre-wrap;
         """
         )
@@ -427,7 +427,7 @@ class HistoryViewQt(QWidget):
             f"""
             color: {ThemeColors.TEXT_SECONDARY};
             font-size: 12px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
         """
         )
         layout.addWidget(self._stats_label)

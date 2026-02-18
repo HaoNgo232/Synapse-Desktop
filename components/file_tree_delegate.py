@@ -87,7 +87,7 @@ def _get_font_bold() -> QFont:
 def _get_font_mono() -> QFont:
     global _font_mono
     if _font_mono is None:
-        _font_mono = QFont("JetBrains Mono, Fira Code, Consolas, monospace")
+        _font_mono = QFont("Cascadia Code, Fira Code, Consolas, monospace")
         _font_mono.setPointSize(10)
     return _font_mono
 

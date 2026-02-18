@@ -186,7 +186,7 @@ class LogsViewQt(QWidget):
         self._log_view.setReadOnly(True)
         # Use a better mono font stack
         self._log_view.setFont(
-            QFont("JetBrains Mono, Fira Code, Source Code Pro, monospace", 10)
+            QFont("Cascadia Code, Fira Code, Source Code Pro, monospace", 10)
         )
         self._log_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self._log_view.setStyleSheet(

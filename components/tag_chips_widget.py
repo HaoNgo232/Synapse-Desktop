@@ -161,7 +161,7 @@ class ChipWidget(QWidget):
         layout.setSpacing(6)
 
         label = QLabel(text)
-        label.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 11))
+        label.setFont(QFont("Cascadia Code, Fira Code, Consolas", 11))
         label.setStyleSheet(f"color: {ThemeColors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(label)
 
@@ -244,7 +244,7 @@ class TagChipsWidget(QWidget):
         self._input = QLineEdit()
         self._input.setPlaceholderText("Add pattern...")
         self._input.setFixedHeight(36)
-        self._input.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 11))
+        self._input.setFont(QFont("Cascadia Code, Fira Code, Consolas", 11))
         self._input.setStyleSheet(f"""
             QLineEdit {{
                 background: {ThemeColors.BG_PAGE};

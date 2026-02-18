@@ -38,7 +38,7 @@ class DiffViewerWidget(QWidget):
 
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
-        self._text_edit.setFont(QFont("JetBrains Mono, Fira Code, Consolas", 11))
+        self._text_edit.setFont(QFont("Cascadia Code, Fira Code, Consolas", 11))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ "
             f"background-color: {DiffColors.CONTEXT_BG}; "

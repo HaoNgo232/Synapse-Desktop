@@ -163,7 +163,7 @@ class ApplyViewQt(QWidget):
         self._opx_input.setStyleSheet(
             f"""
             QPlainTextEdit {{
-                font-family: 'JetBrains Mono', 'Fira Code', monospace;
+                font-family: 'Cascadia Code', 'Fira Code', monospace;
                 font-size: 12px;
                 background-color: {ThemeColors.BG_ELEVATED};
                 color: {ThemeColors.TEXT_PRIMARY};
@@ -565,7 +565,7 @@ class ApplyViewQt(QWidget):
         file_label = QLabel(row.path)
         file_label.setStyleSheet(
             f"color: {ThemeColors.TEXT_PRIMARY}; font-size: 12px; "
-            f"font-family: 'JetBrains Mono', 'Fira Code', monospace; "
+            f"font-family: 'Cascadia Code', 'Fira Code', monospace; "
             f"border: none;"
         )
         header.addWidget(file_label)
@@ -727,7 +727,7 @@ class ApplyViewQt(QWidget):
         path_label = QLabel(result.path)
         path_label.setStyleSheet(
             f"color: {icon_color}; font-size: 12px; "
-            f"font-family: 'JetBrains Mono', 'Fira Code', monospace; "
+            f"font-family: 'Cascadia Code', 'Fira Code', monospace; "
             f"font-weight: 600; border: none;"
         )
         header.addWidget(path_label)

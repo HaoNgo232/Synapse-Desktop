@@ -19,7 +19,7 @@ from typing import Optional
 from core.utils.file_utils import TreeItem, is_binary_file
 
 # Single source of truth cho path display
-from core.prompting.path_utils import path_for_display as _path_for_display
+from core.prompting.path_utils import path_for_display
 
 from core.utils.language_utils import get_language_from_path
 from core.utils.git_utils import GitDiffResult, GitLogResult
@@ -100,7 +100,7 @@ def generate_file_map(
 
     # Neu root duoc chon hoac co descendants duoc chon
     if _has_selected_descendant(tree, selected_paths):
-        root_display = _path_for_display(
+        root_display = path_for_display(
             Path(tree.path), workspace_root, use_relative_paths
         )
         lines.append(root_display)
@@ -381,7 +381,7 @@ def generate_smart_context(
     contents_append = contents.append
 
     for path, smart_content, error in file_data:
-        path_display = _path_for_display(path, workspace_root, use_relative_paths)
+        path_display = path_for_display(path, workspace_root, use_relative_paths)
         if error:
             contents_append(f"File: {path_display}\n*** Skipped: {error} ***\n")
         elif smart_content is not None:

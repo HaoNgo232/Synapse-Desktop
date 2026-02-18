@@ -5,6 +5,7 @@ Module nay bridge giua service layer (settings) va core layer (encoders).
 Core layer khong biet ve settings -- module nay inject config vao.
 
 Functions:
+- initialize_encoder(): Set default encoder config cho core layer (goi khi app start)
 - get_encoder(): Lay encoder singleton voi config tu settings
 - get_tokenizer_repo(): Resolve tokenizer repo tu current model settings
 - get_current_model(): Lay model ID tu settings
@@ -17,6 +18,19 @@ Dependency flow:
 from typing import Optional, Any
 
 from core.encoders import _get_encoder
+
+
+def initialize_encoder() -> None:
+    """
+    Initialize default encoder config cho core layer.
+
+    Goi function nay khi app start hoac khi user doi model.
+    Set tokenizer_repo vao core.tokenization.counter module.
+    """
+    repo = get_tokenizer_repo()
+    import core.tokenization.counter as counter
+
+    counter.set_default_encoder_config(tokenizer_repo=repo)
 
 
 def get_current_model() -> str:

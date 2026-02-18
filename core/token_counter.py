@@ -18,6 +18,7 @@ from core.tokenization.counter import (  # noqa: F401
     count_tokens_for_file,
     _count_tokens_for_file_no_cache,
     _read_file_mmap,
+    set_default_encoder_config,
     MAX_BYTES,
 )
 

@@ -314,6 +314,7 @@ class TokenDisplayService:
         # AN TOÀN: count_tokens_batch_parallel() đã xử lý race condition
         if immediate_files and is_counting_tokens():
             from core.logging_config import log_info
+            from services.encoder_registry import get_tokenizer_repo
 
             # PERFORMANCE TRACKING: Bắt đầu đếm
             start_time = time.perf_counter()
@@ -325,7 +326,11 @@ class TokenDisplayService:
             immediate_paths = [Path(p) for p in immediate_files]
 
             # Parallel counting - nhanh hơn 3-4x
-            results = count_tokens_batch_parallel(immediate_paths, max_workers=4)
+            # Inject tokenizer_repo from settings
+            tokenizer_repo = get_tokenizer_repo()
+            results = count_tokens_batch_parallel(
+                immediate_paths, max_workers=4, tokenizer_repo=tokenizer_repo
+            )
 
             # PERFORMANCE TRACKING: Kết thúc đếm
             elapsed = time.perf_counter() - start_time

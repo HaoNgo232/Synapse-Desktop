@@ -634,8 +634,12 @@ class SynapseMainWindow(QMainWindow):
 def main() -> None:
     """Entry point for Synapse Desktop."""
     from config.paths import ensure_app_directories
+    from services.encoder_registry import initialize_encoder
 
     ensure_app_directories()
+
+    # Initialize encoder config (inject settings into core layer)
+    initialize_encoder()
 
     app = QApplication(sys.argv)
     app.setApplicationName("Synapse Desktop")

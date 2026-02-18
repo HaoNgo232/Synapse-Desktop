@@ -54,6 +54,7 @@ def is_binary_file(file_path: Path) -> bool:
     Returns True if file is binary (image, video, audio, executable, etc.)
 
     OPTIMIZED: Check extension first (no I/O), then magic bytes if needed.
+    Delegates to core.binary_detection for low-level checks.
     """
     # 1. Check extension first (FAST - no I/O)
     if file_path.suffix.lower() in BINARY_EXTENSIONS:
@@ -74,16 +75,10 @@ def is_binary_file(file_path: Path) -> bool:
         with open(file_path, "rb") as f:
             chunk = f.read(chunk_size)
 
-        # 4. Check for null bytes first (FAST)
-        if b"\x00" in chunk:
-            return True
+        # 4. Use low-level binary detection (optimized)
+        from core.binary_detection import _looks_binary_fast
 
-        # 5. Check magic bytes with filetype library (SLOWER)
-        import filetype
-
-        kind = filetype.guess(file_path)
-        if kind is not None:
-            return True
+        return _looks_binary_fast(chunk)
 
     except Exception:
         pass

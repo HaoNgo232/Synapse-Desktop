@@ -8,14 +8,16 @@ Functions:
 - count_tokens_batch_hf(): HF Rust encode_batch (cuc nhanh)
 
 Port tu Repomix (src/shared/processConcurrency.ts).
+
+DIP: Module nay KHONG import tu services layer.
+Tokenizer repo duoc inject qua parameters.
 """
 
 import os
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from core.encoders import HAS_TOKENIZERS
-from core.tokenization.encoder_registry import get_tokenizer_repo
 from core.tokenization.cancellation import is_counting_tokens
 from core.tokenization.cache import token_cache
 from core.tokenization.counter import (
@@ -91,6 +93,7 @@ def count_tokens_batch_parallel(
     file_paths: List[Path],
     max_workers: int = 2,
     update_cache: bool = True,
+    tokenizer_repo: Optional[str] = None,
 ) -> Dict[str, int]:
     """
     Dem token song song voi ThreadPoolExecutor + mmap.
@@ -109,6 +112,7 @@ def count_tokens_batch_parallel(
         file_paths: Danh sach files can dem
         max_workers: So workers toi da (default 2)
         update_cache: Co update global cache khong
+        tokenizer_repo: HF repo ID (inject tu caller)
 
     Returns:
         Dict mapping path -> token count
@@ -123,9 +127,8 @@ def count_tokens_batch_parallel(
         return {}
 
     # Auto-detect: Neu model co tokenizer_repo, dung batch encoding (nhanh hon)
-    tokenizer_repo = get_tokenizer_repo()
     if tokenizer_repo and HAS_TOKENIZERS:
-        return count_tokens_batch_hf(file_paths)
+        return count_tokens_batch_hf(file_paths, tokenizer_repo)
 
     # Standard parallel processing cho non-Claude models
     results: Dict[str, int] = {}
@@ -201,7 +204,9 @@ def count_tokens_batch_parallel(
     return results
 
 
-def count_tokens_batch_hf(file_paths: List[Path]) -> Dict[str, int]:
+def count_tokens_batch_hf(
+    file_paths: List[Path], tokenizer_repo: Optional[str] = None
+) -> Dict[str, int]:
     """
     Dem token cho models co tokenizer_repo su dung encode_batch() (Rust multi-thread).
 
@@ -210,6 +215,7 @@ def count_tokens_batch_hf(file_paths: List[Path]) -> Dict[str, int]:
 
     Args:
         file_paths: Danh sach files can dem
+        tokenizer_repo: HF repo ID (inject tu caller)
 
     Returns:
         Dict mapping path -> token count
@@ -223,11 +229,10 @@ def count_tokens_batch_hf(file_paths: List[Path]) -> Dict[str, int]:
     # Lay HF tokenizer
     from core.encoders import _get_hf_tokenizer
 
-    tokenizer_repo = get_tokenizer_repo()
     tokenizer = _get_hf_tokenizer(tokenizer_repo)
     if tokenizer is None:
         # Fallback to standard batch processing
-        return count_tokens_batch_parallel(file_paths)
+        return count_tokens_batch_parallel(file_paths, tokenizer_repo=tokenizer_repo)
 
     results: Dict[str, int] = {}
     all_texts: List[str] = []

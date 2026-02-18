@@ -9,21 +9,45 @@ Functions:
 
 Encoder management nam o core.encoders (SRP).
 Cache management nam o core.tokenization.cache (SRP).
+
+DIP: Module nay KHONG import tu services layer.
+Encoder duoc inject tu caller hoac dung module-level default.
 """
 
 import mmap
+import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
-from core.encoders import _estimate_tokens
-from core.tokenization.encoder_registry import get_encoder
+from core.encoders import _estimate_tokens, _get_encoder
 from core.tokenization.cache import token_cache
 
 # Guardrail: skip files > 5MB
 MAX_BYTES = 5 * 1024 * 1024
 
+# Module-level default encoder (set boi services layer khi app start)
+_default_encoder: Optional[Any] = None
+_default_tokenizer_repo: Optional[str] = None
+_default_encoder_lock = threading.Lock()
 
-def count_tokens(text: str) -> int:
+
+def set_default_encoder_config(tokenizer_repo: Optional[str] = None) -> None:
+    """
+    Set default encoder config cho module.
+
+    Goi boi services layer khi app start hoac khi user doi model.
+    Core layer khong tu doc settings.
+
+    Args:
+        tokenizer_repo: HF repo ID hoac None
+    """
+    global _default_encoder, _default_tokenizer_repo
+    with _default_encoder_lock:
+        _default_tokenizer_repo = tokenizer_repo
+        _default_encoder = None  # Reset, se lazy load
+
+
+def count_tokens(text: str, encoder: Optional[Any] = None) -> int:
     """
     Dem so token trong mot doan text.
 
@@ -33,11 +57,24 @@ def count_tokens(text: str) -> int:
 
     Args:
         text: Text can dem token
+        encoder: Optional encoder instance. Neu None, dung default.
 
     Returns:
         So luong tokens
     """
-    encoder = get_encoder()
+    if encoder is None:
+        global _default_encoder
+        # Fast path: encoder da khoi tao
+        if _default_encoder is not None:
+            encoder = _default_encoder
+        else:
+            # Thread-safe lazy initialization
+            with _default_encoder_lock:
+                if _default_encoder is None:
+                    _default_encoder = _get_encoder(
+                        tokenizer_repo=_default_tokenizer_repo
+                    )
+                encoder = _default_encoder
 
     # Neu encoder khong kha dung, dung uoc luong
     if encoder is None:

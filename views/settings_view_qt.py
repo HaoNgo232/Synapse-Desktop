@@ -251,7 +251,7 @@ class SettingsViewQt(QWidget):
         self._auto_save_timer.timeout.connect(self._save_settings)
 
         self._build_ui()
-        _excluded_notifier.excluded_changed.connect(self._reload_excluded_from_settings)
+        _excluded_notifier.connect(self._reload_excluded_from_settings)
 
     def _build_ui(self) -> None:
         settings = load_settings()

@@ -232,8 +232,10 @@ class ContextViewQt(
         """
         # Ensure the global encoder is reset immediately for next counts
         from core.token_counter import reset_encoder
+        from services.encoder_registry import initialize_encoder
 
         reset_encoder()
+        initialize_encoder()  # Re-inject new config into core layer
 
         # Clear token cache (since tokenizer has changed)
         model = self.file_tree_widget.get_model()

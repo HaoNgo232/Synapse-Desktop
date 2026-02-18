@@ -13,7 +13,7 @@ Functions:
 - remove_excluded_patterns(): Xoa excluded patterns
 """
 
-from PySide6.QtCore import QObject, Signal
+from typing import Callable
 
 from services.settings_manager import load_settings, save_settings
 
@@ -62,14 +62,33 @@ def get_use_relative_paths() -> bool:
 # ============================================================
 
 
-class _ExcludedChangedNotifier(QObject):
+class ExcludedChangedNotifier:
     """Notifier phat signal khi excluded patterns thay doi (vd: tu Ignore button)."""
 
-    excluded_changed = Signal()
+    def __init__(self) -> None:
+        self._callbacks: list[Callable[[], None]] = []
+
+    def connect(self, callback: Callable[[], None]) -> None:
+        """Subscribe to excluded patterns changes."""
+        if callback not in self._callbacks:
+            self._callbacks.append(callback)
+
+    def disconnect(self, callback: Callable[[], None]) -> None:
+        """Unsubscribe from excluded patterns changes."""
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
+
+    def emit(self) -> None:
+        """Notify all subscribers that excluded patterns changed."""
+        for cb in self._callbacks:
+            try:
+                cb()
+            except Exception:
+                pass  # Ignore callback errors
 
 
 # Singleton notifier instance — subscribe tu bat ky module nao
-_excluded_notifier = _ExcludedChangedNotifier()
+_excluded_notifier: ExcludedChangedNotifier = ExcludedChangedNotifier()
 
 
 def add_excluded_patterns(patterns: list[str]) -> bool:
@@ -91,7 +110,7 @@ def add_excluded_patterns(patterns: list[str]) -> bool:
             merged.append(normalized)
     settings["excluded_folders"] = "\n".join(merged)
     if save_settings(settings):
-        _excluded_notifier.excluded_changed.emit()
+        _excluded_notifier.emit()
         return True
     return False
 
@@ -112,6 +131,6 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
     filtered = [p for p in existing if p not in to_remove]
     settings["excluded_folders"] = "\n".join(filtered)
     if save_settings(settings):
-        _excluded_notifier.excluded_changed.emit()
+        _excluded_notifier.emit()
         return True
     return False

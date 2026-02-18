@@ -12,7 +12,7 @@ import logging
 # Single source of truth cho path display - thay the ban sao inline cu
 # Truoc day inline de tranh circular import, gio an toan vi path_utils
 # khong import git_utils hay prompt_generator
-from core.prompting.path_utils import path_for_display as _path_for_display
+from core.prompting.path_utils import path_for_display
 
 
 # Diff Only - file_summary mo ta context la git changes
@@ -562,7 +562,7 @@ def build_diff_only_prompt(
                         from core.utils.language_utils import get_language_from_path
 
                         lang = get_language_from_path(str(full_path))
-                        path_display = _path_for_display(
+                        path_display = path_for_display(
                             full_path, workspace_root, use_relative_paths
                         )
                         parts.extend(

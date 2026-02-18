@@ -45,9 +45,6 @@ except ImportError:
     rs_bpe_openai = _RsBpeStub()
     HAS_RS_BPE = False
 
-# Fallback sang tiktoken
-import tiktoken
-
 # Thu import tokenizers cho models co custom tokenizer (vd: Claude)
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
@@ -141,58 +138,63 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
         if _encoder is not None:
             return _encoder
 
-    # Kiem tra model co custom tokenizer repo khong
-    if tokenizer_repo:
-        if _encoder_type == "hf" and _encoder is not None:
+        # Kiem tra model co custom tokenizer repo khong
+        if tokenizer_repo:
+            if _encoder_type == "hf" and _encoder is not None:
+                return _encoder
+
+            _encoder = _get_hf_tokenizer(tokenizer_repo)
+            if _encoder is not None:
+                _encoder_type = "hf"
+                return _encoder
+            # Fallback sang OpenAI tokenizer neu HF tokenizer that bai
+
+        # Cho models khong co custom tokenizer hoac fallback
+        if _encoder is not None and _encoder_type != "hf":
             return _encoder
 
-        _encoder = _get_hf_tokenizer(tokenizer_repo)
-        if _encoder is not None:
-            _encoder_type = "hf"
-            return _encoder
-        # Fallback sang OpenAI tokenizer neu HF tokenizer that bai
+        # Thu rs-bpe truoc (nhanh hon ~5x)
+        if HAS_RS_BPE:
+            try:
+                _encoder = rs_bpe_openai.o200k_base()
+                _encoder_type = "rs_bpe"
+                from core.logging_config import log_info
 
-    # Cho models khong co custom tokenizer hoac fallback
-    if _encoder is not None and _encoder_type != "hf":
-        return _encoder
+                log_info("[Encoders] Using rs-bpe (Rust) - 5x faster than tiktoken")
+                return _encoder
+            except Exception:
+                pass
 
-    # Thu rs-bpe truoc (nhanh hon ~5x)
-    if HAS_RS_BPE:
+            try:
+                _encoder = rs_bpe_openai.cl100k_base()
+                _encoder_type = "rs_bpe"
+                from core.logging_config import log_info
+
+                log_info("[Encoders] Using rs-bpe cl100k_base (Rust)")
+                return _encoder
+            except Exception:
+                pass
+
+        # Fallback ve tiktoken (lazy import)
         try:
-            _encoder = rs_bpe_openai.o200k_base()
-            _encoder_type = "rs_bpe"
-            from core.logging_config import log_info
+            import tiktoken
+        except ImportError:
+            return None
 
-            log_info("[Encoders] Using rs-bpe (Rust) - 5x faster than tiktoken")
-            return _encoder
-        except Exception:
-            pass
+        encodings_to_try = ["o200k_base", "cl100k_base", "p50k_base", "gpt2"]
 
-        try:
-            _encoder = rs_bpe_openai.cl100k_base()
-            _encoder_type = "rs_bpe"
-            from core.logging_config import log_info
+        for encoding_name in encodings_to_try:
+            try:
+                _encoder = tiktoken.get_encoding(encoding_name)
+                _encoder_type = "tiktoken"
+                from core.logging_config import log_info
 
-            log_info("[Encoders] Using rs-bpe cl100k_base (Rust)")
-            return _encoder
-        except Exception:
-            pass
+                log_info(f"[Encoders] Using tiktoken {encoding_name}")
+                return _encoder
+            except Exception:
+                continue
 
-    # Fallback ve tiktoken
-    encodings_to_try = ["o200k_base", "cl100k_base", "p50k_base", "gpt2"]
-
-    for encoding_name in encodings_to_try:
-        try:
-            _encoder = tiktoken.get_encoding(encoding_name)
-            _encoder_type = "tiktoken"
-            from core.logging_config import log_info
-
-            log_info(f"[Encoders] Using tiktoken {encoding_name}")
-            return _encoder
-        except Exception:
-            continue
-
-    return None
+        return None
 
 
 def _estimate_tokens(text: str) -> int:

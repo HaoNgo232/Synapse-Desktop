@@ -351,18 +351,20 @@ class TestCountTokens:
 
     def test_fallback_when_encoder_none(self):
         """Fallback uoc luong khi encoder = None."""
-        with patch("core.tokenization.counter.get_encoder", return_value=None):
-            text = "Hello world test"
-            result = count_tokens(text)
-            # Estimation: ~len/4
-            assert result > 0
+        # Mock module-level _default_encoder to None
+        with patch("core.tokenization.counter._default_encoder", None):
+            with patch("core.encoders._get_encoder", return_value=None):
+                text = "Hello world test"
+                result = count_tokens(text)
+                # Estimation: ~len/4
+                assert result > 0
 
     def test_fallback_when_encode_raises(self):
         """Fallback khi encode() raise exception."""
         mock_encoder = MagicMock()
         mock_encoder.encode.side_effect = RuntimeError("encoding failed")
 
-        with patch("core.tokenization.counter.get_encoder", return_value=mock_encoder):
+        with patch("core.tokenization.counter._default_encoder", mock_encoder):
             with patch("core.encoders._encoder_type", "tiktoken"):
                 result = count_tokens("Hello world")
                 # Fallback to estimation
@@ -673,14 +675,12 @@ class TestCountTokensBatchParallel:
 
         start_token_counting()
 
-        with patch(
-            "core.tokenization.batch.get_tokenizer_repo", return_value="test/repo"
-        ):
-            with patch("core.tokenization.batch.HAS_TOKENIZERS", True):
-                with patch("core.tokenization.batch.count_tokens_batch_hf") as mock_hf:
-                    mock_hf.return_value = {str(f): 1}
-                    count_tokens_batch_parallel([f])
-                    mock_hf.assert_called_once()
+        with patch("core.tokenization.batch.HAS_TOKENIZERS", True):
+            with patch("core.tokenization.batch.count_tokens_batch_hf") as mock_hf:
+                mock_hf.return_value = {str(f): 1}
+                # Pass tokenizer_repo as parameter
+                count_tokens_batch_parallel([f], tokenizer_repo="test/repo")
+                mock_hf.assert_called_once()
 
 
 class TestConstants:

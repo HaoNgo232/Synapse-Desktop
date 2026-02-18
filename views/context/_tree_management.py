@@ -44,7 +44,7 @@ class TreeManagementMixin:
         if not workspace:
             return
 
-        from views.settings_view_qt import add_excluded_patterns
+        from services.workspace_config import add_excluded_patterns
 
         patterns = []
         for p in selected:
@@ -67,7 +67,7 @@ class TreeManagementMixin:
             self._show_status("Nothing to undo", is_error=True)
             return
 
-        from views.settings_view_qt import remove_excluded_patterns
+        from services.workspace_config import remove_excluded_patterns
 
         if remove_excluded_patterns(self._last_ignored_patterns):
             self._show_status(f"Removed {len(self._last_ignored_patterns)} pattern(s)")

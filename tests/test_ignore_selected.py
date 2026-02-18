@@ -12,13 +12,12 @@ import shutil
 from pathlib import Path
 
 from core.utils.file_utils import scan_directory_shallow
-from views.settings_view_qt import (
+from services.workspace_config import (
     add_excluded_patterns,
     remove_excluded_patterns,
     get_excluded_patterns,
-    save_settings,
-    load_settings,
 )
+from services.settings_manager import save_settings, load_settings
 
 
 class TestIgnoreSelectedPatternFormat:

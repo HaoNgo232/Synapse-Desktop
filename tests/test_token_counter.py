@@ -21,12 +21,11 @@ from core.token_counter import (
     count_tokens_batch,
     get_worker_count,
     clear_token_cache,
-    _looks_binary,
-    _check_magic_numbers,
-    _estimate_tokens,
     TASKS_PER_WORKER,
     MIN_FILES_FOR_PARALLEL,
 )
+from core.encoders import _estimate_tokens
+from core.binary_detection import _looks_binary, _check_magic_numbers
 
 
 class TestCountTokens:

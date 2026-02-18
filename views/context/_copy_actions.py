@@ -24,7 +24,7 @@ from core.utils.file_utils import scan_directory, TreeItem
 from core.security_check import scan_secrets_in_files_cached
 from services.clipboard_utils import copy_to_clipboard
 from services.settings_manager import get_setting
-from views.settings_view_qt import (
+from services.workspace_config import (
     get_excluded_patterns,
     get_use_gitignore,
     get_use_relative_paths,

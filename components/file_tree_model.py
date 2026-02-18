@@ -343,8 +343,9 @@ class FileTreeModel(QAbstractItemModel):
 
         if role == Qt.ItemDataRole.CheckStateRole:
             import logging
+
             logger = logging.getLogger(__name__)
-            
+
             node: TreeNode = index.internalPointer()
             before_count = len(self._selected_paths)
 
@@ -354,7 +355,9 @@ class FileTreeModel(QAbstractItemModel):
                 self._deselect_node(node)
 
             after_count = len(self._selected_paths)
-            logger.info(f"setData checkbox: {node.label} ({node.path}) -> {before_count} to {after_count} paths")
+            logger.info(
+                f"setData checkbox: {node.label} ({node.path}) -> {before_count} to {after_count} paths"
+            )
 
             # FIX: Invalidate _last_resolved_files ngay khi selection thay đổi
             # Tránh get_total_tokens() đọc stale data trong debounce window
@@ -429,7 +432,10 @@ class FileTreeModel(QAbstractItemModel):
                 load_folder_children,
                 TreeItem as _TreeItem,
             )
-            from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+            from services.workspace_config import (
+                get_excluded_patterns,
+                get_use_gitignore,
+            )
 
             # Build a temporary TreeItem to use with load_folder_children
             temp_item = _TreeItem(
@@ -522,7 +528,7 @@ class FileTreeModel(QAbstractItemModel):
 
         try:
             # Get excluded patterns from settings
-            from views.settings_view_qt import get_excluded_patterns
+            from services.workspace_config import get_excluded_patterns
 
             excluded = get_excluded_patterns()
 
@@ -648,7 +654,7 @@ class FileTreeModel(QAbstractItemModel):
             _read_gitignore,
         )
         from core.constants import EXTENDED_IGNORE_PATTERNS
-        from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+        from services.workspace_config import get_excluded_patterns, get_use_gitignore
 
         # Build ignore spec giống load_folder_children
         ignore_patterns: List[str] = [".git", ".hg", ".svn"]
@@ -771,18 +777,19 @@ class FileTreeModel(QAbstractItemModel):
     def select_all(self) -> None:
         """Select tất cả files."""
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
         before_count = len(self._selected_paths)
-        
+
         # Select all children of invisible root, not the root itself
         for child in self._invisible_root.children:
             self._select_all_recursive(child)
-        
+
         after_count = len(self._selected_paths)
-        
+
         logger.info(f"select_all: {before_count} -> {after_count} paths selected")
-        
+
         # Invalidate resolved files khi select all
         self._last_resolved_files.clear()
         self._resolved_for_generation = -1
@@ -887,7 +894,7 @@ class FileTreeModel(QAbstractItemModel):
         )
         if resolved_is_fresh:
             return len(self._last_resolved_files)
-        
+
         # Nếu stale, phải resolve lại để đếm chính xác
         # get_selected_paths() sẽ scan disk cho unloaded folders
         resolved = self.get_selected_paths()
@@ -916,7 +923,10 @@ class FileTreeModel(QAbstractItemModel):
                 get_cached_pathspec,
                 _read_gitignore,
             )
-            from views.settings_view_qt import get_excluded_patterns, get_use_gitignore
+            from services.workspace_config import (
+                get_excluded_patterns,
+                get_use_gitignore,
+            )
 
             # Build pathspec giống _collect_files_from_disk
             ignore_patterns: List[str] = [".git", ".hg", ".svn"]
@@ -1063,11 +1073,11 @@ class FileTreeModel(QAbstractItemModel):
     def _select_node(self, node: TreeNode) -> None:
         """Select node và tất cả children (recursive), skip binary files."""
         from core.utils.file_utils import is_binary_file
-        
+
         # Skip binary files
         if not node.is_dir and is_binary_file(Path(node.path)):
             return
-            
+
         self._selected_paths.add(node.path)
         if node.is_dir:
             for child in node.children:
@@ -1107,11 +1117,11 @@ class FileTreeModel(QAbstractItemModel):
     def _select_all_recursive(self, node: TreeNode) -> None:
         """Recursively select tất cả nodes, skip binary files."""
         from core.utils.file_utils import is_binary_file
-        
+
         # Skip binary files
         if not node.is_dir and is_binary_file(Path(node.path)):
             return
-            
+
         self._selected_paths.add(node.path)
         for child in node.children:
             self._select_all_recursive(child)

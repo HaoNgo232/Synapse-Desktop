@@ -37,80 +37,19 @@ from components.toast_qt import toast_success, toast_error
 
 
 # ============================================================
-# Preset profiles for excluded patterns
+# Re-exports tu services.workspace_config (backward compatibility)
+# Cac functions nay da duoc extract sang services/workspace_config.py
+# de tuan thu Dependency Inversion Principle.
 # ============================================================
-
-PRESET_PROFILES = {
-    "Node.js": "node_modules\ndist\nbuild\n.next\ncoverage\npackage-lock.json\npnpm-lock.yaml\nyarn.lock",
-    "Python": "__pycache__\n.pytest_cache\n.venv\nvenv\nbuild\ndist\n*.pyc\n.mypy_cache",
-    "Java": "target\nout\n.gradle\n.classpath\n.project\n.settings",
-    "Go": "vendor\nbin\ndist\ncoverage.out",
-}
-
-
-# ============================================================
-# Public helpers (used by context_view_qt and other modules)
-# ============================================================
-
-
-def get_excluded_patterns() -> list[str]:
-    """Return normalized exclude patterns from settings."""
-    raw = load_settings().get("excluded_folders", "")
-    patterns: list[str] = []
-    for line in raw.splitlines():
-        value = line.strip()
-        if not value or value.startswith("#"):
-            continue
-        patterns.append(value)
-    return patterns
-
-
-def get_use_gitignore() -> bool:
-    """Return whether .gitignore should be respected."""
-    return bool(load_settings().get("use_gitignore", True))
-
-
-def get_use_relative_paths() -> bool:
-    """Return whether to use workspace-relative paths in prompts."""
-    return bool(load_settings().get("use_relative_paths", True))
-
-
-class _ExcludedChangedNotifier(QObject):
-    """Notifier emitted when excluded patterns change externally (e.g. Ignore button)."""
-
-    excluded_changed = Signal()
-
-
-_excluded_notifier = _ExcludedChangedNotifier()
-
-
-def add_excluded_patterns(patterns: list[str]) -> bool:
-    """Append new exclude patterns, avoiding duplicates."""
-    settings = load_settings()
-    existing = get_excluded_patterns()
-    merged = existing[:]
-    for pattern in patterns:
-        normalized = pattern.strip()
-        if normalized and normalized not in merged:
-            merged.append(normalized)
-    settings["excluded_folders"] = "\n".join(merged)
-    if save_settings(settings):
-        _excluded_notifier.excluded_changed.emit()
-        return True
-    return False
-
-
-def remove_excluded_patterns(patterns: list[str]) -> bool:
-    """Remove exclude patterns from settings."""
-    to_remove = {p.strip() for p in patterns if p.strip()}
-    settings = load_settings()
-    existing = get_excluded_patterns()
-    filtered = [p for p in existing if p not in to_remove]
-    settings["excluded_folders"] = "\n".join(filtered)
-    if save_settings(settings):
-        _excluded_notifier.excluded_changed.emit()
-        return True
-    return False
+from services.workspace_config import (  # noqa: F401
+    PRESET_PROFILES,
+    get_excluded_patterns,
+    get_use_gitignore,
+    get_use_relative_paths,
+    add_excluded_patterns,
+    remove_excluded_patterns,
+    _excluded_notifier,
+)
 
 
 # ============================================================

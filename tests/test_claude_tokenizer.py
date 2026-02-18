@@ -12,6 +12,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from core.token_counter import (
     count_tokens,
+)
+from core.encoders import (
     reset_encoder,
     _get_current_model,
     _get_encoder,
@@ -78,7 +80,8 @@ class TestClaudeTokenizer:
             reset_encoder()
 
             # Encoder should be None after reset
-            from core.token_counter import _encoder
+            from core.encoders import _encoder
+
             # Note: Can't directly access _encoder due to scope,
             # but we can verify by checking if next call reinitializes
 
@@ -114,9 +117,9 @@ class TestClaudeTokenizer:
 
             for text, min_tok, max_tok in test_cases:
                 tokens = count_tokens(text)
-                assert min_tok <= tokens <= max_tok, (
-                    f"Text '{text}' got {tokens} tokens, expected {min_tok}-{max_tok}"
-                )
+                assert (
+                    min_tok <= tokens <= max_tok
+                ), f"Text '{text}' got {tokens} tokens, expected {min_tok}-{max_tok}"
 
     def test_model_switch_reloads_encoder(self):
         """Test switching between Claude and GPT reloads encoder"""

@@ -342,12 +342,19 @@ class FileTreeModel(QAbstractItemModel):
             return False
 
         if role == Qt.ItemDataRole.CheckStateRole:
+            import logging
+            logger = logging.getLogger(__name__)
+            
             node: TreeNode = index.internalPointer()
+            before_count = len(self._selected_paths)
 
             if value == Qt.CheckState.Checked:
                 self._select_node(node)
             else:
                 self._deselect_node(node)
+
+            after_count = len(self._selected_paths)
+            logger.info(f"setData checkbox: {node.label} ({node.path}) -> {before_count} to {after_count} paths")
 
             # FIX: Invalidate _last_resolved_files ngay khi selection thay đổi
             # Tránh get_total_tokens() đọc stale data trong debounce window
@@ -763,7 +770,19 @@ class FileTreeModel(QAbstractItemModel):
 
     def select_all(self) -> None:
         """Select tất cả files."""
-        self._select_all_recursive(self._get_root_parent())
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        before_count = len(self._selected_paths)
+        
+        # Select all children of invisible root, not the root itself
+        for child in self._invisible_root.children:
+            self._select_all_recursive(child)
+        
+        after_count = len(self._selected_paths)
+        
+        logger.info(f"select_all: {before_count} -> {after_count} paths selected")
+        
         # Invalidate resolved files khi select all
         self._last_resolved_files.clear()
         self._resolved_for_generation = -1
@@ -859,8 +878,7 @@ class FileTreeModel(QAbstractItemModel):
         """Get số files đã selected (bao gồm deep unloaded files).
 
         FIX: Chỉ dùng _last_resolved_files khi nó fresh (cùng selection_generation).
-        Nếu stale, trả về quick estimate từ _selected_paths để KHÔNG block UI.
-        Accurate count sẽ update sau khi token counting hoàn thành.
+        Nếu stale, gọi get_selected_paths() để đếm chính xác (scan disk nếu cần).
         """
         # Chỉ dùng resolved files nếu fresh
         resolved_is_fresh = (
@@ -869,17 +887,11 @@ class FileTreeModel(QAbstractItemModel):
         )
         if resolved_is_fresh:
             return len(self._last_resolved_files)
-        # Quick estimate: count non-folder paths, treat unloaded folders as 1 each
-        # Tránh gọi get_selected_paths() synchronously vì nó scan disk
-        count = 0
-        for p in self._selected_paths:
-            node = self._path_to_node.get(p)
-            if node is None or not node.is_dir:
-                count += 1
-            else:
-                # Folder — estimate có files bên trong
-                count += max(1, node.child_count())
-        return count
+        
+        # Nếu stale, phải resolve lại để đếm chính xác
+        # get_selected_paths() sẽ scan disk cho unloaded folders
+        resolved = self.get_selected_paths()
+        return len(resolved)
 
     @property
     def generation(self) -> int:
@@ -1049,7 +1061,13 @@ class FileTreeModel(QAbstractItemModel):
         return self.createIndex(node.row, 0, node)
 
     def _select_node(self, node: TreeNode) -> None:
-        """Select node và tất cả children (recursive)."""
+        """Select node và tất cả children (recursive), skip binary files."""
+        from core.utils.file_utils import is_binary_file
+        
+        # Skip binary files
+        if not node.is_dir and is_binary_file(Path(node.path)):
+            return
+            
         self._selected_paths.add(node.path)
         if node.is_dir:
             for child in node.children:
@@ -1087,7 +1105,13 @@ class FileTreeModel(QAbstractItemModel):
             current = current.parent
 
     def _select_all_recursive(self, node: TreeNode) -> None:
-        """Recursively select tất cả nodes."""
+        """Recursively select tất cả nodes, skip binary files."""
+        from core.utils.file_utils import is_binary_file
+        
+        # Skip binary files
+        if not node.is_dir and is_binary_file(Path(node.path)):
+            return
+            
         self._selected_paths.add(node.path)
         for child in node.children:
             self._select_all_recursive(child)

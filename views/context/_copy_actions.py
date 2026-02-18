@@ -6,7 +6,7 @@ Chua CopyTaskWorker va tat ca cac copy-related methods.
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List, Set, Callable
-from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool
+from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 
 from core.token_counter import count_tokens
 from core.prompt_generator import (
@@ -35,37 +35,59 @@ if TYPE_CHECKING:
     from views.context_view_qt import ContextViewQt
 
 
+# ============================================================
+# Signal classes at MODULE LEVEL — not nested inside QRunnable.
+#
+# WHY: QRunnable with setAutoDelete(True) is destroyed by Qt's
+# C++ thread pool right after run() returns. If the Signals
+# QObject is a member of that QRunnable, it gets destroyed too.
+# But the main-thread event loop may still be delivering the
+# queued signal → reads freed memory → SEGFAULT.
+#
+# By defining Signals at module level and passing them separately,
+# we control their lifetime explicitly via deleteLater().
+# ============================================================
+
+
+class CopyTaskSignals(QObject):
+    """Signals for CopyTaskWorker — must outlive the QRunnable."""
+
+    finished = Signal(str, int)  # (prompt_text, token_count)
+    error = Signal(str)
+    progress = Signal(str, int)  # (step_description, percentage)
+
+
+class SecurityCheckSignals(QObject):
+    """Signals for SecurityCheckWorker — must outlive the QRunnable."""
+
+    finished = Signal(list)  # List[SecretMatch]
+    error = Signal(str)
+
+
 class CopyTaskWorker(QRunnable):
     """
-    Background worker cho cac copy operations nang (scan tree, doc files, count tokens).
+    Background worker cho cac copy operations nang.
 
-    Chay heavy work tren background thread, emit ket qua ve main thread
-    qua signals de copy clipboard va cap nhat UI.
+    SAFETY: setAutoDelete(False) to prevent Qt C++ from destroying
+    this object while signals are still queued. Caller must call
+    safe_cleanup() after handling signals.
     """
 
-    class Signals(QObject):
-        """Signals de giao tiep voi main thread."""
-
-        # Emit (prompt_text, token_count) khi task hoan thanh
-        finished = Signal(str, int)
-        # Emit error message khi co loi
-        error = Signal(str)
-
-    def __init__(self, task_fn: Callable[[], str]):
-        """
-        Khoi tao worker voi mot task function.
-
-        Args:
-            task_fn: Callable tra ve prompt string. Chay tren background thread.
-        """
+    def __init__(self, task_fn: Callable[[], str], signals: CopyTaskSignals):
         super().__init__()
         self.task_fn = task_fn
-        self.signals = self.Signals()
-        self.setAutoDelete(True)
+        self.signals = signals
+        # CRITICAL: Do NOT auto-delete. Qt C++ deletes on the pool thread,
+        # but our signals may still be queued for the main thread.
+        self.setAutoDelete(False)
 
     @Slot()
     def run(self) -> None:
-        """Chay task function va emit ket qua hoac error."""
+        """Chay task function va emit ket qua hoac error.
+
+        IMPORTANT: Must ALWAYS emit either finished or error signal.
+        If neither is emitted, copy buttons stay disabled forever.
+        """
         try:
             prompt = self.task_fn()
             from core.token_counter import count_tokens as _count
@@ -76,6 +98,29 @@ class CopyTaskWorker(QRunnable):
             self.signals.error.emit(str(e))
 
 
+class SecurityCheckWorker(QRunnable):
+    """Background worker for security scanning.
+
+    SAFETY: Same pattern as CopyTaskWorker — no auto-delete.
+    """
+
+    def __init__(self, paths: set[str], signals: SecurityCheckSignals):
+        super().__init__()
+        self.paths = paths
+        self.signals = signals
+        self.setAutoDelete(False)
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            from core.security_check import scan_secrets_in_files_cached
+
+            matches = scan_secrets_in_files_cached(self.paths)
+            self.signals.finished.emit(matches)
+        except Exception as e:
+            self.signals.error.emit(f"Security scan error: {e}")
+
+
 class CopyActionsMixin:
     """Mixin chua tat ca copy-related methods cho ContextViewQt.
 
@@ -84,6 +129,9 @@ class CopyActionsMixin:
     """
 
     _current_copy_worker: Optional["CopyTaskWorker"]
+    _current_copy_signals: Optional["CopyTaskSignals"]
+    _current_security_worker: Optional["SecurityCheckWorker"]
+    _current_security_signals: Optional["SecurityCheckSignals"]
 
     def _copy_context(self: "ContextViewQt", include_xml: bool = False) -> None:
         """Copy context with selected format."""
@@ -100,29 +148,101 @@ class CopyActionsMixin:
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         instructions = self._instructions_field.toPlainText()
 
-        try:
-            # Security check
-            security_enabled = get_setting("enable_security_check", True)
-            if security_enabled:
-                file_path_strs = {str(p) for p in file_paths}
-                matches = scan_secrets_in_files_cached(file_path_strs)
-                if matches:
-                    from components.dialogs_qt import SecurityDialogQt
+        # Run security check in background to avoid UI freeze
+        security_enabled = get_setting("enable_security_check", True)
+        if security_enabled:
+            # Disable buttons and show status BEFORE starting worker
+            self._set_copy_buttons_enabled(False)
+            self._show_status("Checking security...")
+            self._run_security_check_then_copy(
+                workspace, file_paths, instructions, include_xml
+            )
+        else:
+            # No security check - proceed directly
+            try:
+                self._do_copy_context(workspace, file_paths, instructions, include_xml)
+            except Exception as e:
+                self._show_status(f"Error: {e}", is_error=True)
+                self._set_copy_buttons_enabled(True)
 
-                    dialog = SecurityDialogQt(
-                        parent=self,
-                        matches=matches,
-                        prompt="",
-                        on_copy_anyway=lambda _prompt: self._do_copy_context(
+    def _run_security_check_then_copy(
+        self: "ContextViewQt",
+        workspace: Path,
+        file_paths: List[Path],
+        instructions: str,
+        include_xml: bool,
+    ) -> None:
+        """Run security check in background, then proceed with copy if safe.
+
+        IMPORTANT: Must re-enable copy buttons in ALL code paths.
+        """
+        file_path_strs = {str(p) for p in file_paths}
+
+        # Create signals first — we control their lifetime
+        signals = SecurityCheckSignals()
+        worker = SecurityCheckWorker(file_path_strs, signals)
+
+        # Keep strong references to prevent GC
+        self._current_security_signals = signals
+        self._current_security_worker = worker
+
+        def on_security_finished(matches: list) -> None:
+            """Handle security scan results on main thread."""
+            # Clean up worker refs
+            self._current_security_worker = None
+            self._current_security_signals = None
+
+            if matches:
+                # Found secrets - show dialog
+                from components.dialogs_qt import SecurityDialogQt
+
+                def _on_copy_anyway(_prompt: str) -> None:
+                    """User chose to copy despite secrets."""
+                    try:
+                        self._do_copy_context(
                             workspace, file_paths, instructions, include_xml
-                        ),
-                    )
-                    dialog.exec()
-                    return
+                        )
+                    except Exception as e:
+                        self._show_status(f"Error: {e}", is_error=True)
+                        self._set_copy_buttons_enabled(True)
 
-            self._do_copy_context(workspace, file_paths, instructions, include_xml)
-        except Exception as e:
-            self._show_status(f"Error: {e}", is_error=True)
+                dialog = SecurityDialogQt(
+                    parent=self,
+                    matches=matches,
+                    prompt="",
+                    on_copy_anyway=_on_copy_anyway,
+                )
+                # Re-enable buttons when user cancels/closes dialog
+                dialog.rejected.connect(
+                    lambda: self._set_copy_buttons_enabled(True)
+                )
+                dialog.exec()
+            else:
+                # No secrets found - proceed with copy
+                try:
+                    self._do_copy_context(
+                        workspace, file_paths, instructions, include_xml
+                    )
+                except Exception as e:
+                    self._show_status(f"Error: {e}", is_error=True)
+                    self._set_copy_buttons_enabled(True)
+
+        def on_security_error(error_msg: str) -> None:
+            """Handle security scan error."""
+            self._current_security_worker = None
+            self._current_security_signals = None
+            self._show_status(f"Security check failed: {error_msg}", is_error=True)
+            self._set_copy_buttons_enabled(True)
+
+        # Use QueuedConnection explicitly — signal emitted on worker thread,
+        # slot executed on main thread via event loop
+        signals.finished.connect(
+            on_security_finished, Qt.ConnectionType.QueuedConnection
+        )
+        signals.error.connect(
+            on_security_error, Qt.ConnectionType.QueuedConnection
+        )
+        QThreadPool.globalInstance().start(worker)
 
     def _set_copy_buttons_enabled(self: "ContextViewQt", enabled: bool) -> None:
         """
@@ -155,26 +275,42 @@ class CopyActionsMixin:
         3. Start CopyTaskWorker tren QThreadPool
         4. Khi xong: copy to clipboard, show breakdown (neu co snapshot), enable buttons
 
+        IMPORTANT: Buttons MUST be re-enabled in ALL exit paths (finished + error).
+
         Args:
             task_fn: Callable tra ve prompt string (chay tren background thread)
             success_template: Template cho status message, co {token_count}
             pre_snapshot: Dict snapshot cac gia tri token truoc khi copy.
-                Keys: file_tokens, instruction_tokens, include_opx, copy_mode.
-                Dung de tinh overhead = total - file_tokens - instruction_tokens.
         """
         self._set_copy_buttons_enabled(False)
         self._show_status("Preparing context...")
 
-        worker = CopyTaskWorker(task_fn)
+        # Create signals object — we own its lifetime
+        signals = CopyTaskSignals()
+        worker = CopyTaskWorker(task_fn, signals)
+
+        # Keep strong references to prevent GC
         self._current_copy_worker = worker
+        self._current_copy_signals = signals
+
+        def on_progress(step: str, progress: int) -> None:
+            """Callback khi worker report progress."""
+            self._show_status(f"{step} ({progress}%)")
 
         def on_finished(prompt: str, token_count: int) -> None:
-            """Callback khi worker hoan thanh (chay tren main thread qua signal)."""
+            """Callback khi worker hoan thanh."""
+            # Clean up worker refs
             self._current_copy_worker = None
-            copy_to_clipboard(prompt)
+            self._current_copy_signals = None
+
+            success, msg = copy_to_clipboard(prompt)
+
+            if not success:
+                self._show_status(f"Copy failed: {msg}", is_error=True)
+                self._set_copy_buttons_enabled(True)
+                return
 
             if pre_snapshot:
-                # Tinh breakdown tu snapshot va total tokens
                 self._show_copy_breakdown(token_count, pre_snapshot)
             else:
                 self._show_status(success_template.format(token_count=token_count))
@@ -184,11 +320,14 @@ class CopyActionsMixin:
         def on_error(error_msg: str) -> None:
             """Callback khi worker gap loi."""
             self._current_copy_worker = None
+            self._current_copy_signals = None
             self._show_status(f"Error: {error_msg}", is_error=True)
             self._set_copy_buttons_enabled(True)
 
-        worker.signals.finished.connect(on_finished)
-        worker.signals.error.connect(on_error)
+        # Use QueuedConnection explicitly for cross-thread safety
+        signals.progress.connect(on_progress, Qt.ConnectionType.QueuedConnection)
+        signals.finished.connect(on_finished, Qt.ConnectionType.QueuedConnection)
+        signals.error.connect(on_error, Qt.ConnectionType.QueuedConnection)
         QThreadPool.globalInstance().start(worker)
 
     def _do_copy_context(
@@ -204,87 +343,85 @@ class CopyActionsMixin:
         Heavy work (scan tree, doc files, generate prompt, count tokens)
         chay background de UI khong bi freeze.
         """
-        # Snapshot tat ca inputs truoc khi chuyen sang background thread
-        selected_path_strs = {str(p) for p in file_paths}
-        use_rel = get_use_relative_paths()
-        output_style = self._selected_output_style
-        include_git = get_setting("include_git_changes", True)
+        try:
+            # Snapshot tat ca inputs truoc khi chuyen sang background thread
+            selected_path_strs = {str(p) for p in file_paths}
+            use_rel = get_use_relative_paths()
+            output_style = self._selected_output_style
+            include_git = get_setting("include_git_changes", True)
 
-        def task() -> str:
-            """Heavy work - chay tren background thread."""
-            # Scan full tree tu disk (I/O bound)
-            tree_item = self._scan_full_tree(workspace)
-            file_map = (
-                generate_file_map(
-                    tree_item,
-                    selected_path_strs,
-                    workspace_root=workspace,
-                    use_relative_paths=use_rel,
+            def task() -> str:
+                """Heavy work - chay tren background thread."""
+                # Step 1: Scan tree
+                tree_item = self._scan_full_tree(workspace)
+                file_map = (
+                    generate_file_map(
+                        tree_item,
+                        selected_path_strs,
+                        workspace_root=workspace,
+                        use_relative_paths=use_rel,
+                    )
+                    if tree_item
+                    else ""
                 )
-                if tree_item
-                else ""
+
+                # Step 2: Read files
+                if output_style == OutputStyle.XML:
+                    file_contents = generate_file_contents_xml(
+                        selected_path_strs,
+                        workspace_root=workspace,
+                        use_relative_paths=use_rel,
+                    )
+                elif output_style == OutputStyle.JSON:
+                    file_contents = generate_file_contents_json(
+                        selected_path_strs,
+                        workspace_root=workspace,
+                        use_relative_paths=use_rel,
+                    )
+                else:
+                    file_contents = generate_file_contents_plain(
+                        selected_path_strs,
+                        workspace_root=workspace,
+                        use_relative_paths=use_rel,
+                    )
+
+                # Step 3: Git operations
+                git_diffs = None
+                git_logs = None
+                if include_git:
+                    git_diffs = get_git_diffs(workspace)
+                    git_logs = get_git_logs(workspace, max_commits=5)
+
+                # Step 4: Generate prompt
+                return generate_prompt(
+                    file_map=file_map,
+                    file_contents=file_contents,
+                    user_instructions=instructions,
+                    output_style=output_style,
+                    include_xml_formatting=include_xml,
+                    git_diffs=git_diffs,
+                    git_logs=git_logs,
+                )
+
+            # Snapshot token values truoc khi background task chay
+            pre_snapshot = {
+                "file_tokens": self.file_tree_widget.get_total_tokens(),
+                "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                "include_opx": include_xml,
+                "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
+            }
+
+            self._run_copy_in_background(
+                task,
+                "Copied! ({token_count:,} tokens)",
+                pre_snapshot=pre_snapshot,
             )
-
-            # Doc noi dung files (I/O bound)
-            if output_style == OutputStyle.XML:
-                file_contents = generate_file_contents_xml(
-                    selected_path_strs,
-                    workspace_root=workspace,
-                    use_relative_paths=use_rel,
-                )
-            elif output_style == OutputStyle.JSON:
-                file_contents = generate_file_contents_json(
-                    selected_path_strs,
-                    workspace_root=workspace,
-                    use_relative_paths=use_rel,
-                )
-            else:
-                file_contents = generate_file_contents_plain(
-                    selected_path_strs,
-                    workspace_root=workspace,
-                    use_relative_paths=use_rel,
-                )
-
-            # Git diff/log (subprocess)
-            git_diffs = None
-            git_logs = None
-            if include_git:
-                git_diffs = get_git_diffs(workspace)
-                git_logs = get_git_logs(workspace, max_commits=5)
-
-            # Generate prompt (CPU bound)
-            return generate_prompt(
-                file_map=file_map,
-                file_contents=file_contents,
-                user_instructions=instructions,
-                output_style=output_style,
-                include_xml_formatting=include_xml,
-                git_diffs=git_diffs,
-                git_logs=git_logs,
-            )
-
-        # Snapshot token values truoc khi background task chay
-        # de tinh overhead sau khi copy hoan thanh
-        pre_snapshot = {
-            "file_tokens": self.file_tree_widget.get_total_tokens(),
-            "instruction_tokens": count_tokens(instructions) if instructions else 0,
-            "include_opx": include_xml,
-            "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
-        }
-
-        self._run_copy_in_background(
-            task,
-            "Copied! ({token_count:,} tokens)",
-            pre_snapshot=pre_snapshot,
-        )
+        except Exception as e:
+            self._show_status(f"Error preparing copy: {e}", is_error=True)
+            self._set_copy_buttons_enabled(True)
 
     def _copy_smart_context(self: "ContextViewQt") -> None:
-        """
-        Copy smart context (code structure only) tren background thread.
-
-        Smart context chi generate code structure (symbols, relationships)
-        thay vi noi dung file day du.
-        """
+        """Copy smart context (code structure only) tren background thread."""
         workspace = self.get_workspace()
         if not workspace:
             self._show_status("No workspace selected", is_error=True)
@@ -304,7 +441,7 @@ class CopyActionsMixin:
 
         def task() -> str:
             """Heavy work - chay tren background thread."""
-            assert workspace is not None  # Type narrowing
+            assert workspace is not None
             tree_item = self._scan_full_tree(workspace)
             file_map = (
                 generate_file_map(
@@ -335,7 +472,6 @@ class CopyActionsMixin:
                 git_logs=git_logs,
             )
 
-        # Snapshot token values truoc khi chay background task
         pre_snapshot = {
             "file_tokens": self.file_tree_widget.get_total_tokens(),
             "instruction_tokens": count_tokens(instructions) if instructions else 0,
@@ -350,11 +486,7 @@ class CopyActionsMixin:
         )
 
     def _copy_tree_map_only(self: "ContextViewQt") -> None:
-        """
-        Copy tree map only tren background thread.
-
-        Generate cau truc cay thu muc va copy clipboard.
-        """
+        """Copy tree map only tren background thread."""
         workspace = self.get_workspace()
         if not workspace:
             self._show_status("No workspace selected", is_error=True)
@@ -372,15 +504,12 @@ class CopyActionsMixin:
 
         def task() -> str:
             """Heavy work - chay tren background thread."""
-            assert workspace is not None  # Type narrowing
+            assert workspace is not None
             tree_item = self._scan_full_tree(workspace)
             if not tree_item:
                 raise ValueError("No file tree loaded")
 
-            # Collect valid paths from scanned tree (respect gitignore/excluded)
             valid_paths = self._collect_all_tree_paths(tree_item)
-
-            # Filter selected paths to only include valid ones
             paths = selected_strs & valid_paths if selected_strs else valid_paths
 
             return generate_tree_map_only(
@@ -391,7 +520,6 @@ class CopyActionsMixin:
                 use_relative_paths=use_rel,
             )
 
-        # Snapshot (tree map chi co instruction tokens, khong co file content)
         pre_snapshot = {
             "file_tokens": 0,
             "instruction_tokens": count_tokens(instructions) if instructions else 0,
@@ -462,12 +590,7 @@ class CopyActionsMixin:
     def _show_copy_breakdown(
         self: "ContextViewQt", total_tokens: int, pre_snapshot: dict
     ) -> None:
-        """Hien thi token breakdown sau khi copy qua Global Toast System.
-
-        Args:
-            total_tokens: Tong so tokens cua prompt da copy (tu CopyTaskWorker)
-            pre_snapshot: Dict snapshot tu truoc khi copy.
-        """
+        """Hien thi token breakdown sau khi copy qua Global Toast System."""
         from components.toast_qt import toast_success
 
         # Extract snapshot values
@@ -525,10 +648,9 @@ class CopyActionsMixin:
             ]
         )
 
-        # Hien thi toast voi title + breakdown message + tooltip
         toast_success(
             message=breakdown_text or f"{total_tokens:,} tokens",
             title=f"Copied! {total_tokens:,} tokens",
             tooltip="\n".join(tooltip_lines),
-            duration=8000,  # Dai hon binh thuong de user doc breakdown
+            duration=8000,
         )

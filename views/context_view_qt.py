@@ -26,7 +26,7 @@ from config.output_format import (
 
 # Import mixins
 from views.context._ui_builder import UIBuilderMixin
-from views.context._copy_actions import CopyActionsMixin, CopyTaskWorker
+from views.context._copy_actions import CopyActionsMixin
 from views.context._related_files import RelatedFilesMixin
 from views.context._tree_management import TreeManagementMixin
 
@@ -61,9 +61,13 @@ class ContextViewQt(
         self._pending_refresh = False
         self._token_generation = 0
         # Note: These attributes are used by mixins but owned by ContextViewQt
-        # _current_copy_worker: used in CopyActionsMixin
-        # _repo_manager: used in TreeManagementMixin
-        self._current_copy_worker: Optional[CopyTaskWorker] = None
+        # CopyActionsMixin worker/signal references — must be kept alive
+        # to prevent GC while background work is in progress
+        self._current_copy_worker = None
+        self._current_copy_signals = None
+        self._current_security_worker = None
+        self._current_security_signals = None
+        # TreeManagementMixin
         self._repo_manager: Optional[RepoManager] = None  # Lazy init as RepoManager
 
         # Services

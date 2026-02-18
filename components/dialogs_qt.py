@@ -73,7 +73,9 @@ class BaseDialogQt(QDialog):
 
     def _make_status_label(self) -> QLabel:
         label = QLabel("")
-        label.setStyleSheet(f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};")
+        label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
         return label
 
 
@@ -246,9 +248,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
             self._make_label("Copy only git changes instead of full source code.")
         )
         layout.addWidget(
-            self._make_label(
-                "Ideal for: code review, bug fixing, feature validation."
-            )
+            self._make_label("Ideal for: code review, bug fixing, feature validation.")
         )
 
         # Options
@@ -574,7 +574,9 @@ class CacheManagementDialogQt(BaseDialogQt):
             repo.last_modified.strftime("%Y-%m-%d %H:%M") if repo.last_modified else ""
         )
         meta = QLabel(f"📁 {size_str}  🕐 {time_str}")
-        meta.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};")
+        meta.setStyleSheet(
+            f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
         info_layout.addWidget(meta)
         card_layout.addLayout(info_layout, stretch=1)
 

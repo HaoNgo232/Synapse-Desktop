@@ -192,7 +192,7 @@ def _build_focused_error_context(
             for j, block in enumerate(row.change_blocks):
                 search = block.get("search")
                 if search:
-                    sections.append(f"**Search block that FAILED to match:**")
+                    sections.append("**Search block that FAILED to match:**")
                     sections.append("```")
                     # Chỉ hiện 10 dòng đầu nếu quá dài
                     search_lines = search.split("\n")
@@ -248,16 +248,12 @@ def _build_focused_error_context(
     )
     sections.append("")
     sections.append("**For each failed operation:**")
-    sections.append(
-        "1. Open the file listed above"
-    )
+    sections.append("1. Open the file listed above")
     sections.append(
         "2. Find the section that needs to be changed "
         "(use the CURRENT FILE CONTENT and the failed search block as reference)"
     )
-    sections.append(
-        "3. Apply the intended replacement shown above"
-    )
+    sections.append("3. Apply the intended replacement shown above")
     sections.append(
         "4. If a cascade failure occurred, the file was already modified by "
         "a previous operation - find the NEW text in the file and apply the change there"
@@ -524,9 +520,7 @@ def build_general_error_context(
                     content_lines = content.split("\n")
                     if len(content_lines) > 300:
                         sections.append("\n".join(content_lines[:300]))
-                        sections.append(
-                            f"... ({len(content_lines) - 300} more lines)"
-                        )
+                        sections.append(f"... ({len(content_lines) - 300} more lines)")
                     else:
                         sections.append(content)
                     sections.append("```")
@@ -576,6 +570,7 @@ def _extract_file_paths_from_opx(opx_text: str) -> List[str]:
     Tim cac attribute file="..." trong <edit> tags.
     """
     import re
+
     pattern = re.compile(r'<\s*edit\b[^>]*\bfile\s*=\s*"([^"]*)"', re.IGNORECASE)
     paths = []
     seen: set = set()

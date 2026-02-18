@@ -147,7 +147,7 @@ def main():
     with_coverage = "--coverage" in sys.argv
 
     print(f"\n{'=' * 60}")
-    print(f"[TEST RUNNER] Unified Test Execution")
+    print("[TEST RUNNER] Unified Test Execution")
     print(f"{'=' * 60}")
     print(f"Project: {project_path}")
     print(f"Coverage: {'enabled' if with_coverage else 'disabled'}")

@@ -8,12 +8,9 @@ Files binary không có extension (ELF, Mach-O) bypass extension check
 → bị read_text() đọc toàn bộ → OOM.
 """
 
-import os
 import struct
-import tempfile
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 
 class TestIsBinaryFile:
@@ -203,11 +200,11 @@ class TestGetSelectedPathsSkipsBinary:
 
 
 class TestCollectFilesFromDiskSkipsBinary:
-    """Test _collect_files_from_disk skip binary files"""
+    """Test collect_files_from_disk skip binary files"""
 
     def test_skip_binary_in_disk_scan(self, tmp_path):
-        """_collect_files_from_disk phải skip binary KHÔNG có extension"""
-        from components.file_tree_model import FileTreeModel
+        """collect_files_from_disk phai skip binary KHONG co extension"""
+        from services.workspace_index import collect_files_from_disk
 
         # Create .git dir to anchor root path resolution
         (tmp_path / ".git").mkdir()
@@ -222,12 +219,7 @@ class TestCollectFilesFromDiskSkipsBinary:
         text_file = folder / "config.json"
         text_file.write_text('{"key": "value"}')
 
-        model = FileTreeModel()
-        model._workspace_path = tmp_path
-
-        result = []
-        seen = set()
-        model._collect_files_from_disk(folder, result, seen)
+        result = collect_files_from_disk(folder, workspace_path=tmp_path)
 
         # Binary file should NOT be in results
         assert str(binary_file) not in result

@@ -1,0 +1,14 @@
+<files>
+<file path="config.json">
+{
+  &quot;version&quot;: &quot;1.0&quot;,
+  &quot;debug&quot;: false
+}
+
+</file>
+<file path="hello.py">
+def greet(name):
+    return f&quot;Hello, {name}!&quot;
+
+</file>
+</files>

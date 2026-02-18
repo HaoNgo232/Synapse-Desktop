@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
 )
 from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
-from PySide6.QtCore import Qt, Slot, QTimer
+from PySide6.QtCore import Qt, Slot
 
 from core.theme import ThemeColors
 from core.logging_config import LOG_DIR
@@ -265,7 +265,9 @@ class LogsViewQt(QWidget):
 
         filtered = self.all_logs
         if self.current_filter and self.current_filter != "All Levels":
-            filtered = [l for l in self.all_logs if l.level == self.current_filter]
+            filtered = [
+                entry for entry in self.all_logs if entry.level == self.current_filter
+            ]
 
         display = filtered[-self.MAX_DISPLAY_LOGS :]
 
@@ -321,7 +323,10 @@ class LogsViewQt(QWidget):
         if not self.all_logs:
             self._show_status("No logs to copy", is_error=True)
             return
-        lines = [f"{l.timestamp} [{l.level}] {l.message}" for l in self.all_logs]
+        lines = [
+            f"{entry.timestamp} [{entry.level}] {entry.message}"
+            for entry in self.all_logs
+        ]
         success, _ = copy_to_clipboard("\n".join(lines))
         self._show_status(
             f"Copied {len(self.all_logs)} logs" if success else "Copy failed",
@@ -330,11 +335,15 @@ class LogsViewQt(QWidget):
 
     @Slot()
     def _copy_errors(self) -> None:
-        error_logs = [l for l in self.all_logs if l.level in ("ERROR", "WARNING")]
+        error_logs = [
+            entry for entry in self.all_logs if entry.level in ("ERROR", "WARNING")
+        ]
         if not error_logs:
             self._show_status("No error/warning logs", is_error=True)
             return
-        lines = [f"{l.timestamp} [{l.level}] {l.message}" for l in error_logs]
+        lines = [
+            f"{entry.timestamp} [{entry.level}] {entry.message}" for entry in error_logs
+        ]
         success, _ = copy_to_clipboard("\n".join(lines))
         self._show_status(
             (

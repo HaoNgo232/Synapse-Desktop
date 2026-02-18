@@ -7,11 +7,8 @@ Verify rằng khi mở app:
 - Selected files và expanded folders bị clear (fresh start)
 """
 
-import json
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 from services.session_state import SessionState, save_session_state
 from services.recent_folders import add_recent_folder

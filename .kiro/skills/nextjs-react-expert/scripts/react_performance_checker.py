@@ -233,7 +233,7 @@ class PerformanceChecker:
             print(f"  ... and {len(self.warnings) - 10} more warnings")
 
         print("\n" + "=" * 60)
-        print(f"SUMMARY:")
+        print("SUMMARY:")
         print(
             f"  Critical Issues: {len([i for i in self.issues if i['type'] == 'CRITICAL'])}"
         )

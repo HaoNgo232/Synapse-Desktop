@@ -9,16 +9,15 @@ Verify:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from core.token_counter import (
     count_tokens,
 )
 from core.encoders import (
     reset_encoder,
-    _get_current_model,
-    _get_encoder,
     HAS_TOKENIZERS,
 )
+from core.tokenization.encoder_registry import get_current_model
 
 
 class TestClaudeTokenizer:
@@ -32,14 +31,14 @@ class TestClaudeTokenizer:
         """Test model detection from settings"""
         with patch("services.settings_manager.load_settings") as mock_load:
             mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
-            model = _get_current_model()
+            model = get_current_model()
             assert "claude" in model
 
     def test_detect_gpt_model(self):
         """Test GPT model detection"""
         with patch("services.settings_manager.load_settings") as mock_load:
             mock_load.return_value = {"model_id": "gpt-4o"}
-            model = _get_current_model()
+            model = get_current_model()
             assert "claude" not in model
 
     @pytest.mark.skipif(not HAS_TOKENIZERS, reason="tokenizers not installed")
@@ -80,7 +79,6 @@ class TestClaudeTokenizer:
             reset_encoder()
 
             # Encoder should be None after reset
-            from core.encoders import _encoder
 
             # Note: Can't directly access _encoder due to scope,
             # but we can verify by checking if next call reinitializes
@@ -92,7 +90,7 @@ class TestClaudeTokenizer:
 
     def test_fallback_to_estimate_if_no_encoder(self):
         """Test fallback to estimation if encoder fails"""
-        with patch("core.token_counter._get_encoder", return_value=None):
+        with patch("core.tokenization.counter.get_encoder", return_value=None):
             text = "Hello, world!"
             tokens = count_tokens(text)
 
@@ -117,9 +115,9 @@ class TestClaudeTokenizer:
 
             for text, min_tok, max_tok in test_cases:
                 tokens = count_tokens(text)
-                assert (
-                    min_tok <= tokens <= max_tok
-                ), f"Text '{text}' got {tokens} tokens, expected {min_tok}-{max_tok}"
+                assert min_tok <= tokens <= max_tok, (
+                    f"Text '{text}' got {tokens} tokens, expected {min_tok}-{max_tok}"
+                )
 
     def test_model_switch_reloads_encoder(self):
         """Test switching between Claude and GPT reloads encoder"""

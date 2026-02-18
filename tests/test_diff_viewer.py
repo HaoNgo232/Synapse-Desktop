@@ -13,7 +13,6 @@ from components.diff_viewer import (
     generate_diff_lines,
     generate_create_diff_lines,
     generate_delete_diff_lines,
-    DiffLine,
     DiffLineType,
 )
 
@@ -29,15 +28,15 @@ class TestGenerateDiffLines:
         result = generate_diff_lines(old_content, new_content)
 
         # Kiem tra co it nhat 1 ADDED va 1 REMOVED
-        added_lines = [l for l in result if l.line_type == DiffLineType.ADDED]
-        removed_lines = [l for l in result if l.line_type == DiffLineType.REMOVED]
+        added_lines = [ln for ln in result if ln.line_type == DiffLineType.ADDED]
+        removed_lines = [ln for ln in result if ln.line_type == DiffLineType.REMOVED]
 
         assert len(added_lines) >= 1
         assert len(removed_lines) >= 1
 
         # Kiem tra content
-        assert any("new_line" in l.content for l in added_lines)
-        assert any("old_line" in l.content for l in removed_lines)
+        assert any("new_line" in ln.content for ln in added_lines)
+        assert any("old_line" in ln.content for ln in removed_lines)
 
     def test_addition_only(self):
         """Test diff khi chi them dong moi"""
@@ -46,7 +45,7 @@ class TestGenerateDiffLines:
 
         result = generate_diff_lines(old_content, new_content)
 
-        added_lines = [l for l in result if l.line_type == DiffLineType.ADDED]
+        added_lines = [ln for ln in result if ln.line_type == DiffLineType.ADDED]
 
         # Phai co it nhat 1 dong duoc them
         assert len(added_lines) >= 1
@@ -58,7 +57,7 @@ class TestGenerateDiffLines:
 
         result = generate_diff_lines(old_content, new_content)
 
-        removed_lines = [l for l in result if l.line_type == DiffLineType.REMOVED]
+        removed_lines = [ln for ln in result if ln.line_type == DiffLineType.REMOVED]
 
         # Phai co it nhat 1 dong bi xoa
         assert len(removed_lines) >= 1
@@ -71,7 +70,7 @@ class TestGenerateDiffLines:
         result = generate_diff_lines(old_content, new_content)
 
         # Tat ca lines moi phai la ADDED
-        added_lines = [l for l in result if l.line_type == DiffLineType.ADDED]
+        added_lines = [ln for ln in result if ln.line_type == DiffLineType.ADDED]
         assert len(added_lines) >= 2
 
     def test_empty_new_content(self):
@@ -82,7 +81,7 @@ class TestGenerateDiffLines:
         result = generate_diff_lines(old_content, new_content)
 
         # Tat ca lines cu phai la REMOVED
-        removed_lines = [l for l in result if l.line_type == DiffLineType.REMOVED]
+        removed_lines = [ln for ln in result if ln.line_type == DiffLineType.REMOVED]
         assert len(removed_lines) >= 2
 
     def test_no_changes(self):
@@ -92,8 +91,8 @@ class TestGenerateDiffLines:
         result = generate_diff_lines(content, content)
 
         # Khong co ADDED hoac REMOVED
-        added_lines = [l for l in result if l.line_type == DiffLineType.ADDED]
-        removed_lines = [l for l in result if l.line_type == DiffLineType.REMOVED]
+        added_lines = [ln for ln in result if ln.line_type == DiffLineType.ADDED]
+        removed_lines = [ln for ln in result if ln.line_type == DiffLineType.REMOVED]
 
         assert len(added_lines) == 0
         assert len(removed_lines) == 0
@@ -109,11 +108,11 @@ class TestGenerateCreateDiffLines:
         result = generate_create_diff_lines(content, "test.py")
 
         # Tat ca lines phai la ADDED
-        added_lines = [l for l in result if l.line_type == DiffLineType.ADDED]
+        added_lines = [ln for ln in result if ln.line_type == DiffLineType.ADDED]
         assert len(added_lines) >= 2
 
         # Kiem tra content
-        assert any("def hello" in l.content for l in added_lines)
+        assert any("def hello" in ln.content for ln in added_lines)
 
     def test_create_empty_file(self):
         """Test diff cho file rong"""
@@ -133,7 +132,7 @@ class TestGenerateDeleteDiffLines:
         result = generate_delete_diff_lines(content, "old.py")
 
         # Tat ca lines phai la REMOVED
-        removed_lines = [l for l in result if l.line_type == DiffLineType.REMOVED]
+        removed_lines = [ln for ln in result if ln.line_type == DiffLineType.REMOVED]
         assert len(removed_lines) >= 2
 
     def test_delete_empty_file(self):
@@ -165,7 +164,7 @@ class TestDiffLineNumbers:
 
         result = generate_diff_lines(old_content, new_content)
 
-        added_lines = [l for l in result if l.line_type == DiffLineType.ADDED]
+        added_lines = [ln for ln in result if ln.line_type == DiffLineType.ADDED]
         for line in added_lines:
             assert line.new_line_no is not None
             assert line.old_line_no is None
@@ -177,7 +176,7 @@ class TestDiffLineNumbers:
 
         result = generate_diff_lines(old_content, new_content)
 
-        removed_lines = [l for l in result if l.line_type == DiffLineType.REMOVED]
+        removed_lines = [ln for ln in result if ln.line_type == DiffLineType.REMOVED]
         for line in removed_lines:
             assert line.old_line_no is not None
             assert line.new_line_no is None

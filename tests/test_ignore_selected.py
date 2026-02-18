@@ -8,7 +8,6 @@ Tests:
 """
 
 import tempfile
-import shutil
 from pathlib import Path
 
 from core.utils.file_utils import scan_directory_shallow

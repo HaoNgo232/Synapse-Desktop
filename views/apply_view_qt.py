@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QMessageBox,
 )
-from PySide6.QtCore import Qt, Slot, QTimer
+from PySide6.QtCore import Qt, Slot
 
 from core.theme import ThemeColors
 from core.opx_parser import parse_opx_response

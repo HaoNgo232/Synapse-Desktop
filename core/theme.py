@@ -72,20 +72,20 @@ class ThemeColors:
     ACCENT = PRIMARY  # alias
 
     # ── Backgrounds ──
-    BG_PAGE = "#1E1E2E"        # base — main window background
-    BG_SURFACE = "#262637"     # surface — panels, sidebars, cards
-    BG_ELEVATED = "#2D2D44"    # elevated surface — hover, dropdowns
-    BG_HOVER = "#363652"       # interactive hover on elevated
+    BG_PAGE = "#1E1E2E"  # base — main window background
+    BG_SURFACE = "#262637"  # surface — panels, sidebars, cards
+    BG_ELEVATED = "#2D2D44"  # elevated surface — hover, dropdowns
+    BG_HOVER = "#363652"  # interactive hover on elevated
 
     # ── Text ──
     TEXT_PRIMARY = "#E0E0F0"
     TEXT_SECONDARY = "#8888AA"
-    TEXT_MUTED = "#666688"      # very muted (disabled, hints)
+    TEXT_MUTED = "#666688"  # very muted (disabled, hints)
 
     # ── Borders ──
-    BORDER = "#3E3E5E"         # subtle
-    BORDER_FOCUS = "#5E5EFF"   # accent — focus rings
-    BORDER_LIGHT = "#4E4E6E"   # slightly lighter
+    BORDER = "#3E3E5E"  # subtle
+    BORDER_FOCUS = "#5E5EFF"  # accent — focus rings
+    BORDER_LIGHT = "#4E4E6E"  # slightly lighter
 
     # ── Status colors (text / icons) ──
     SUCCESS = "#4ADE80"
@@ -131,9 +131,9 @@ class ThemeRadius:
     """Border radius tokens."""
 
     SM = 4
-    MD = 6       # small buttons
-    LG = 8       # cards
-    XL = 12      # large panels
+    MD = 6  # small buttons
+    LG = 8  # cards
+    XL = 12  # large panels
 
 
 def generate_stylesheet() -> str:

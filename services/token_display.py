@@ -1,12 +1,12 @@
 """
-Token Display Service - Quản lý và cache token counts cho files
+Token Display Service - Quan ly va cache token counts cho files
 
-Phiên bản Sync - Đơn giản nhất, giống PasteMax.
-Không dùng threading hay async để tránh race conditions.
+Phien ban Sync - Don gian nhat, giong PasteMax.
+Khong dung threading hay async de tranh race conditions.
 
 Features:
-- Cache token counts để tránh tính toán lại
-- Global cancellation flag để cancel ngay lập tức
+- Cache token counts de tranh tinh toan lai
+- Global cancellation flag (tu core.tokenization.cancellation)
 - Aggregate tokens cho folders
 """
 
@@ -19,48 +19,13 @@ from core.utils.file_utils import TreeItem
 from core.token_counter import count_tokens_for_file, count_tokens_batch_parallel
 from core.utils.safe_timer import SafeTimer  # RACE CONDITION FIX
 
-
-# ============================================
-# GLOBAL CANCELLATION FLAG
-# Giống isLoadingDirectory trong PasteMax
-# RACE CONDITION FIX: Sử dụng threading.Lock để đảm bảo thread-safe
-# ============================================
-import threading as _token_threading
-
-_token_counting_lock = _token_threading.Lock()
-_is_counting_tokens = False
-
-
-def is_counting_tokens() -> bool:
-    """
-    Check xem có đang counting tokens không.
-
-    Thread-safe: Sử dụng lock để đọc giá trị.
-    """
-    with _token_counting_lock:
-        return _is_counting_tokens
-
-
-def stop_token_counting():
-    """
-    Dừng token counting ngay lập tức.
-
-    Thread-safe: Sử dụng lock để set giá trị.
-    """
-    global _is_counting_tokens
-    with _token_counting_lock:
-        _is_counting_tokens = False
-
-
-def start_token_counting():
-    """
-    Bắt đầu token counting.
-
-    Thread-safe: Sử dụng lock để set giá trị.
-    """
-    global _is_counting_tokens
-    with _token_counting_lock:
-        _is_counting_tokens = True
+# Cancellation flag - import tu core layer (fix circular dependency)
+# Re-export de backward compat (main_window.py, tests import tu day)
+from core.tokenization.cancellation import (  # noqa: F401
+    is_counting_tokens,
+    start_token_counting,
+    stop_token_counting,
+)
 
 
 class TokenDisplayService:

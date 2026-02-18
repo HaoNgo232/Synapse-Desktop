@@ -6,9 +6,12 @@ Module nay quan ly viec chon va khoi tao encoder phu hop:
 - tiktoken (Python, fallback)
 - Hugging Face tokenizers (cho models co custom tokenizer_repo)
 
+DIP: Module nay KHONG import tu services layer.
+Config (tokenizer_repo) duoc inject tu encoder_registry.
+
 Functions:
-- _get_encoder(): Lay encoder singleton (thread-safe)
-- _get_hf_tokenizer(): Lay HF tokenizer singleton
+- _get_encoder(tokenizer_repo): Lay encoder singleton (thread-safe)
+- _get_hf_tokenizer(tokenizer_repo): Lay HF tokenizer singleton
 - reset_encoder(): Reset khi user doi model
 - _estimate_tokens(): Uoc luong tokens khi encoder khong kha dung
 """
@@ -71,50 +74,16 @@ _claude_tokenizer: Optional[Any] = None
 _encoder_lock = threading.Lock()
 
 
-def _get_current_model() -> str:
-    """
-    Lay model hien tai tu settings.
-
-    Returns:
-        Model ID (vd: "claude-sonnet-4.5", "gpt-4o")
-    """
-    try:
-        from services.settings_manager import load_settings
-
-        settings = load_settings()
-        return settings.get("model_id", "").lower() if settings else ""
-    except Exception:
-        return ""
-
-
-def _get_tokenizer_repo() -> Optional[str]:
-    """
-    Lay Hugging Face tokenizer repo cho model hien tai.
-
-    Returns:
-        Tokenizer repo (vd: "Xenova/claude-tokenizer") hoac None (dung tiktoken)
-    """
-    try:
-        from services.settings_manager import load_settings
-        from config.model_config import get_model_by_id
-
-        settings = load_settings()
-        model_id = settings.get("model_id", "")
-
-        model_config = get_model_by_id(model_id)
-        if model_config:
-            return model_config.tokenizer_repo
-
-        return None
-    except Exception:
-        return None
-
-
-def _get_hf_tokenizer() -> Optional[Any]:
+def _get_hf_tokenizer(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
     """
     Lay Hugging Face tokenizer singleton.
 
-    Dung tokenizer_repo tu model config (ho tro tat ca models co custom tokenizer).
+    DIP: Nhan tokenizer_repo tu caller (inject tu encoder_registry),
+    khong tu doc settings.
+
+    Args:
+        tokenizer_repo: HF repo ID (vd: "Xenova/claude-tokenizer").
+                        None = khong dung HF tokenizer.
 
     Returns:
         HF Tokenizer instance hoac None
@@ -127,7 +96,6 @@ def _get_hf_tokenizer() -> Optional[Any]:
     if not HAS_TOKENIZERS:
         return None
 
-    tokenizer_repo = _get_tokenizer_repo()
     if not tokenizer_repo:
         return None
 
@@ -144,13 +112,20 @@ def _get_hf_tokenizer() -> Optional[Any]:
         return None
 
 
-def _get_encoder() -> Optional[Any]:
+def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
     """
     Lay encoder singleton (thread-safe).
 
-    Auto-detect model de chon encoder phu hop:
-    - Model co tokenizer_repo -> Dung Hugging Face tokenizers
-    - Model khac -> Dung rs-bpe (Rust, 5x nhanh hon) > tiktoken
+    DIP: Nhan tokenizer_repo tu caller (inject tu encoder_registry),
+    khong tu doc settings.
+
+    Selection order:
+    1. Model co tokenizer_repo -> Dung Hugging Face tokenizers
+    2. rs-bpe (Rust, 5x nhanh hon tiktoken)
+    3. tiktoken (Python fallback)
+
+    Args:
+        tokenizer_repo: HF repo ID hoac None (dung tiktoken/rs-bpe).
 
     Returns:
         Encoder instance hoac None
@@ -167,12 +142,11 @@ def _get_encoder() -> Optional[Any]:
             return _encoder
 
     # Kiem tra model co custom tokenizer repo khong
-    tokenizer_repo = _get_tokenizer_repo()
     if tokenizer_repo:
         if _encoder_type == "hf" and _encoder is not None:
             return _encoder
 
-        _encoder = _get_hf_tokenizer()
+        _encoder = _get_hf_tokenizer(tokenizer_repo)
         if _encoder is not None:
             _encoder_type = "hf"
             return _encoder

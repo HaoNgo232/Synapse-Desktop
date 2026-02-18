@@ -1,0 +1,15 @@
+File: config.json
+```json
+{
+  "version": "1.0",
+  "debug": false
+}
+
+```
+
+File: hello.py
+```python
+def greet(name):
+    return f"Hello, {name}!"
+
+```

@@ -20,12 +20,11 @@ from dataclasses import dataclass
 
 import pathspec
 
-from core.constants import EXTENDED_IGNORE_PATTERNS
+from core.ignore_engine import build_ignore_patterns
 from core.utils.file_utils import (
     TreeItem,
     is_system_path,
     is_binary_file,
-    _read_gitignore,
 )
 
 # Try import scandir_rs (Rust-based, much faster)
@@ -46,7 +45,7 @@ except ImportError:
 # Giống isLoadingDirectory trong PasteMax
 # RACE CONDITION FIX: Sử dụng threading.Lock để đảm bảo thread-safe
 # ============================================
-import threading
+import threading  # noqa: E402
 
 _scanning_lock = threading.Lock()
 _is_scanning = False
@@ -319,26 +318,13 @@ class FileScanner:
         return root_item
 
     def _build_ignore_patterns(self, root_path: Path, config: ScanConfig) -> List[str]:
-        """Build list các ignore patterns từ config."""
-        patterns: List[str] = []
-
-        # Always exclude VCS directories
-        patterns.extend([".git", ".hg", ".svn"])
-
-        # Default ignore patterns
-        if config.use_default_ignores:
-            patterns.extend(EXTENDED_IGNORE_PATTERNS)
-
-        # User patterns
-        if config.excluded_patterns:
-            patterns.extend(config.excluded_patterns)
-
-        # Gitignore patterns
-        if config.use_gitignore:
-            gitignore_patterns = _read_gitignore(root_path)
-            patterns.extend(gitignore_patterns)
-
-        return patterns
+        """Build list cac ignore patterns tu config. Delegate cho ignore_engine."""
+        return build_ignore_patterns(
+            root_path,
+            use_default_ignores=config.use_default_ignores,
+            excluded_patterns=config.excluded_patterns,
+            use_gitignore=config.use_gitignore,
+        )
 
     def _scan_directory(
         self,

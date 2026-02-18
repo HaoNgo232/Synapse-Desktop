@@ -9,27 +9,10 @@ from dataclasses import dataclass, field
 from typing import Optional, List
 import logging
 
-
-def _path_for_display(
-    path: Path,
-    workspace_root: Optional[Path],
-    use_relative_paths: bool,
-) -> str:
-    """
-    Tra ve path de hien thi (relative neu use_relative_paths, tranh PII).
-    Logic giong prompt_generator._path_for_display, inline de tranh circular import.
-    """
-    if not use_relative_paths or not workspace_root:
-        return str(path)
-    try:
-        resolved = path.resolve()
-        root_resolved = Path(workspace_root).resolve()
-        rel = str(resolved.relative_to(root_resolved))
-        if rel == ".":
-            return root_resolved.name.lower()
-        return rel
-    except ValueError:
-        return str(path)
+# Single source of truth cho path display - thay the ban sao inline cu
+# Truoc day inline de tranh circular import, gio an toan vi path_utils
+# khong import git_utils hay prompt_generator
+from core.prompting.path_utils import path_for_display as _path_for_display
 
 
 # Diff Only - file_summary mo ta context la git changes
@@ -548,11 +531,13 @@ def build_diff_only_prompt(
         Formatted prompt string
     """
     parts = [_generate_diff_summary_xml(), ""]
-    parts.extend([
-        "<diff_context>",
-        f"Files changed: {diff_result.files_changed}",
-        f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
-    ])
+    parts.extend(
+        [
+            "<diff_context>",
+            f"Files changed: {diff_result.files_changed}",
+            f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
+        ]
+    )
     if diff_result.commits_included > 0:
         parts.append(f"Commits included: {diff_result.commits_included}")
     parts.extend(["</diff_context>", ""])

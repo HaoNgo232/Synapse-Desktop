@@ -13,7 +13,6 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import subprocess
-import tempfile
 import os
 
 from core.utils.git_utils import (
@@ -231,7 +230,6 @@ class TestGitLogResult:
 
     def test_creation(self):
         """GitLogResult can be created."""
-        from core.utils.git_utils import GitCommit
 
         commits = [
             GitCommit(

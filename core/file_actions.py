@@ -291,7 +291,7 @@ def _resolve_path(
 
         if not is_safe:
             log_error(f"Security Alert: Blocked access to {resolved_absolute}")
-            raise ValueError(f"Access denied: Path is outside workspace roots")
+            raise ValueError("Access denied: Path is outside workspace roots")
 
     except Exception as e:
         if "Access denied" in str(e):
@@ -311,7 +311,7 @@ def _resolve_path(
                     except ValueError:
                         continue
                 if not is_safe:
-                    raise ValueError(f"Access denied: Path is outside workspace roots")
+                    raise ValueError("Access denied: Path is outside workspace roots")
             except Exception:
                 pass  # Fallback to allow if explicit parent check fails but path seemed valid structurally
 

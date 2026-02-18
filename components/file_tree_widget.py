@@ -464,7 +464,6 @@ class FileTreeWidget(QWidget):
         if not source_index.isValid():
             return False
 
-        is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
         zone = self._delegate.get_hit_zone(item_rect, pos.x(), source_index)
 
         if zone == "checkbox":

@@ -12,7 +12,7 @@ Test cac case:
 """
 
 import pytest
-from core.opx_parser import parse_opx_response, FileAction
+from core.opx_parser import parse_opx_response
 
 
 class TestParseNewOperation:

@@ -11,8 +11,7 @@ Test các case:
 
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import tempfile
+from unittest.mock import patch
 import os
 
 from core.token_counter import (
@@ -21,8 +20,6 @@ from core.token_counter import (
     count_tokens_batch,
     get_worker_count,
     clear_token_cache,
-    TASKS_PER_WORKER,
-    MIN_FILES_FOR_PARALLEL,
 )
 from core.encoders import _estimate_tokens
 from core.binary_detection import _looks_binary, _check_magic_numbers
@@ -211,7 +208,7 @@ class TestCountTokensBatch:
         clear_token_cache()
 
         # Mock is_counting_tokens to return True
-        with patch("services.token_display.is_counting_tokens", return_value=True):
+        with patch("core.tokenization.batch.is_counting_tokens", return_value=True):
             result = count_tokens_batch(files)
 
         assert len(result) == 5
@@ -230,7 +227,7 @@ class TestCountTokensBatch:
         clear_token_cache()
 
         # Mock is_counting_tokens to return True
-        with patch("services.token_display.is_counting_tokens", return_value=True):
+        with patch("core.tokenization.batch.is_counting_tokens", return_value=True):
             result = count_tokens_batch(files)
 
         assert len(result) == 15
@@ -256,7 +253,7 @@ class TestCountTokensBatch:
         clear_token_cache()
 
         # Mock is_counting_tokens to return True
-        with patch("services.token_display.is_counting_tokens", return_value=True):
+        with patch("core.tokenization.batch.is_counting_tokens", return_value=True):
             result = count_tokens_batch(files)
 
         assert len(result) == 3

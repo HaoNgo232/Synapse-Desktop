@@ -10,7 +10,6 @@ KEY OPTIMIZATIONS:
 """
 
 import logging
-import os
 import threading
 from pathlib import Path
 from typing import Optional, Set, Dict, List, Any
@@ -564,14 +563,15 @@ class FileTreeModel(QAbstractItemModel):
 
     def get_selected_paths(self) -> List[str]:
         """
-        Get danh sách selected file paths (chỉ files, không folders).
+        Get danh sach selected file paths (chi files, khong folders).
 
-        Nếu có folder được selected mà children chưa loaded (lazy loading),
-        sẽ scan filesystem trực tiếp để tìm tất cả files bên trong.
-        Đảm bảo token counting luôn đầy đủ dù tree chưa expand.
+        Neu co folder duoc selected ma children chua loaded (lazy loading),
+        se scan filesystem truc tiep de tim tat ca files ben trong.
+        Dam bao token counting luon day du du tree chua expand.
         Skip binary/image files.
         """
         from core.utils.file_utils import is_binary_file
+        from services.workspace_index import collect_files_from_disk
 
         result: List[str] = []
         seen: Set[str] = set()
@@ -587,7 +587,7 @@ class FileTreeModel(QAbstractItemModel):
                     # Folder selected — collect all files recursively
                     self._collect_files_deep(node, result, seen)
             else:
-                # Path in selected but not in model (e.g. deep unloaded file)
+                # Path trong selected nhung khong co trong model (e.g. deep unloaded file)
                 path_obj = Path(p)
                 if (
                     path_obj.is_file()
@@ -597,7 +597,14 @@ class FileTreeModel(QAbstractItemModel):
                     result.append(p)
                     seen.add(p)
                 elif path_obj.is_dir():
-                    self._collect_files_from_disk(path_obj, result, seen)
+                    # Delegate cho workspace_index scan disk (giong _collect_files_deep)
+                    disk_files = collect_files_from_disk(
+                        path_obj, self._workspace_path
+                    )
+                    for f in disk_files:
+                        if f not in seen:
+                            result.append(f)
+                            seen.add(f)
 
         return result
 
@@ -606,7 +613,7 @@ class FileTreeModel(QAbstractItemModel):
     ) -> None:
         """
         Collect TAT CA files tu node (recursive). Neu subfolder chua loaded,
-        scan filesystem truc tiep thay vi bo qua.
+        delegate cho workspace_index.collect_files_from_disk().
         Skip binary/image files.
 
         CANH BAO: Method nay KHONG kiem tra _selected_paths cho children.
@@ -620,6 +627,7 @@ class FileTreeModel(QAbstractItemModel):
         tai sao ancestor folders bi xoa khoi _selected_paths.
         """
         from core.utils.file_utils import is_binary_file
+        from services.workspace_index import collect_files_from_disk
 
         for child in node.children:
             if child.path in seen:
@@ -632,93 +640,22 @@ class FileTreeModel(QAbstractItemModel):
                 if child.is_loaded:
                     self._collect_files_deep(child, result, seen)
                 else:
-                    # Chưa loaded — scan disk trực tiếp
-                    self._collect_files_from_disk(Path(child.path), result, seen)
+                    # Chua loaded — delegate cho workspace_index scan disk
+                    disk_files = collect_files_from_disk(
+                        Path(child.path), self._workspace_path
+                    )
+                    for f in disk_files:
+                        if f not in seen:
+                            result.append(f)
+                            seen.add(f)
 
-        # Nếu folder chưa loaded và ko có children
+        # Neu folder chua loaded va ko co children
         if node.is_dir and not node.is_loaded and not node.children:
-            self._collect_files_from_disk(Path(node.path), result, seen)
-
-    def _collect_files_from_disk(
-        self, folder: Path, result: List[str], seen: Set[str]
-    ) -> None:
-        """
-        Scan filesystem trực tiếp để tìm tất cả files trong folder.
-        Dùng cho folders chưa lazy-loaded trong tree model.
-        Respect excluded patterns, gitignore, và binary extensions.
-        """
-        from core.utils.file_utils import (
-            is_binary_file,
-            is_system_path,
-            get_cached_pathspec,
-            _read_gitignore,
-        )
-        from core.constants import EXTENDED_IGNORE_PATTERNS
-        from services.workspace_config import get_excluded_patterns, get_use_gitignore
-
-        # Build ignore spec giống load_folder_children
-        ignore_patterns: List[str] = [".git", ".hg", ".svn"]
-        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
-
-        excluded = get_excluded_patterns()
-        if excluded:
-            ignore_patterns.extend(excluded)
-
-        # Tìm git root
-        root_path = folder
-        while root_path.parent != root_path:
-            if (root_path / ".git").exists():
-                break
-            root_path = root_path.parent
-
-        # Fallback to workspace root nếu có
-        if self._workspace_path and self._workspace_path != root_path:
-            ws = self._workspace_path
-            while ws.parent != ws:
-                if (ws / ".git").exists():
-                    root_path = ws
-                    break
-                ws = ws.parent
-
-        if get_use_gitignore():
-            gitignore_patterns = _read_gitignore(root_path)
-            ignore_patterns.extend(gitignore_patterns)
-
-        spec = get_cached_pathspec(root_path, list(ignore_patterns))
-
-        from core.constants import DIRECTORY_QUICK_SKIP
-
-        root_path_str = str(root_path)
-
-        try:
-            for dirpath, dirnames, filenames in os.walk(str(folder)):
-                # Prune ignored directories IN-PLACE — os.walk sẽ KHÔNG enter vào
-                # Đây là key fix: tránh traverse node_modules (100K+ files)
-                dirnames[:] = sorted(
-                    d for d in dirnames if d not in DIRECTORY_QUICK_SKIP
-                )
-
-                for filename in filenames:
-                    full_path = os.path.join(dirpath, filename)
-                    entry = Path(full_path)
-
-                    if is_system_path(entry) or is_binary_file(entry):
-                        continue
-
-                    # Check pathspec
-                    try:
-                        rel_path_str = os.path.relpath(full_path, root_path_str)
-                    except ValueError:
-                        rel_path_str = filename
-
-                    if spec.match_file(rel_path_str):
-                        continue
-
-                    if full_path not in seen:
-                        result.append(full_path)
-                        seen.add(full_path)
-        except (PermissionError, OSError) as e:
-            logger.debug(f"Error scanning {folder}: {e}")
+            disk_files = collect_files_from_disk(Path(node.path), self._workspace_path)
+            for f in disk_files:
+                if f not in seen:
+                    result.append(f)
+                    seen.add(f)
 
     def get_root_tree_item(self) -> Optional[TreeItem]:
         """Get root TreeItem (for tree map generation)."""
@@ -907,82 +844,23 @@ class FileTreeModel(QAbstractItemModel):
             return self._generation
 
     def _build_search_index_async(self, workspace_path: Path) -> None:
-        """Build flat search index trong background thread via os.walk.
+        """Build flat search index trong background thread.
 
-        Dùng cùng logic ignore với load_folder_children: pathspec (EXTENDED_IGNORE,
-        excluded patterns, gitignore), is_binary_file, is_system_path.
-        Đảm bảo search results khớp với items hiển thị trong tree.
+        Delegate cho workspace_index.build_search_index() (pure data, no Qt).
+        Giu lai generation check de tranh race condition khi doi workspace.
         """
         generation = self.generation  # Snapshot
 
         def _build():
-            from core.constants import DIRECTORY_QUICK_SKIP, EXTENDED_IGNORE_PATTERNS
-            from core.utils.file_utils import (
-                is_binary_file,
-                is_system_path,
-                get_cached_pathspec,
-                _read_gitignore,
-            )
-            from services.workspace_config import (
-                get_excluded_patterns,
-                get_use_gitignore,
-            )
+            from services.workspace_index import build_search_index
 
-            # Build pathspec giống _collect_files_from_disk
-            ignore_patterns: List[str] = [".git", ".hg", ".svn"]
-            ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
-            excluded = get_excluded_patterns()
-            if excluded:
-                ignore_patterns.extend(excluded)
+            # Generation check callback -- tra ve False neu da stale
+            def _is_fresh() -> bool:
+                return self.generation == generation
 
-            # Tìm git root từ workspace
-            root_path = workspace_path
-            while root_path.parent != root_path:
-                if (root_path / ".git").exists():
-                    break
-                root_path = root_path.parent
+            index = build_search_index(workspace_path, generation_check=_is_fresh)
 
-            if get_use_gitignore():
-                gitignore_patterns = _read_gitignore(root_path)
-                ignore_patterns.extend(gitignore_patterns)
-
-            spec = get_cached_pathspec(root_path, list(ignore_patterns))
-            root_path_str = str(root_path)
-
-            index: Dict[str, List[str]] = {}
-            try:
-                for dirpath, dirnames, filenames in os.walk(str(workspace_path)):
-                    if self.generation != generation:
-                        return
-
-                    dirnames[:] = sorted(
-                        d for d in dirnames if d not in DIRECTORY_QUICK_SKIP
-                    )
-
-                    for filename in filenames:
-                        full_path = os.path.join(dirpath, filename)
-                        entry = Path(full_path)
-
-                        if is_system_path(entry) or is_binary_file(entry):
-                            continue
-
-                        try:
-                            rel_path_str = os.path.relpath(full_path, root_path_str)
-                        except ValueError:
-                            rel_path_str = filename
-
-                        if spec.match_file(rel_path_str):
-                            continue
-
-                        key = filename.lower()
-                        if key not in index:
-                            index[key] = []
-                        index[key].append(full_path)
-            except Exception:
-                pass
-
-            # Check và ghi phải atomic để tránh race: load_tree có thể đã chạy giữa
-            # check và write, khiến thread cũ ghi đè index mới bằng data stale.
+            # Atomic check + write de tranh race condition
             with self._generation_lock:
                 if self._generation == generation:
                     self._search_index = index
@@ -992,25 +870,12 @@ class FileTreeModel(QAbstractItemModel):
         thread.start()
 
     def search_files(self, query: str) -> List[str]:
-        """
-        Search files by query using flat index.
-
-        Returns list of full paths matching query (case-insensitive substring).
-        Independent of lazy loading — works even if folders are not expanded.
-        """
+        """Search files by query. Delegate cho workspace_index.search_in_index()."""
         if not self._search_index_ready:
             return []
-        query_lower = (query or "").lower().strip()
-        if not query_lower:
-            return []
-        results: List[str] = []
+        from services.workspace_index import search_in_index
 
-        for filename_lower, paths in self._search_index.items():
-            if query_lower in filename_lower:
-                results.extend(paths)
-
-        results.sort()
-        return results
+        return search_in_index(self._search_index, query)
 
     def clear_token_cache(self) -> None:
         """Clear token cache."""

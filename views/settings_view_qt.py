@@ -10,7 +10,7 @@ Features:
 """
 
 import json
-from typing import Optional, Callable, List
+from typing import Optional, Callable
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -24,8 +24,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QComboBox,
 )
-from PySide6.QtGui import QFont, QPainter, QColor, QPen, QBrush
-from PySide6.QtCore import Qt, Slot, QTimer, QObject, Signal
+from PySide6.QtCore import Qt, Slot, QTimer, Signal
 
 from core.theme import ThemeColors
 from components.toggle_switch import ToggleSwitch

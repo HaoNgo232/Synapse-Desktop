@@ -14,7 +14,6 @@ from services.session_state import (
     save_session_state,
     load_session_state,
     clear_session_state,
-    get_session_age_hours,
 )
 
 

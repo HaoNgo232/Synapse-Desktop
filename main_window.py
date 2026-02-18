@@ -344,8 +344,7 @@ class SynapseMainWindow(QMainWindow):
         # Version
         version_label = QLabel(f"v{self.APP_VERSION}")
         version_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; "
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
+            f"color: {ThemeColors.TEXT_MUTED}; font-size: {ThemeFonts.SIZE_CAPTION}px;"
         )
         version_label.setToolTip("Synapse Desktop version")
         status_bar.addPermanentWidget(version_label)

@@ -11,13 +11,12 @@ import pytest
 import sys
 import time
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE
-from core.prompt_generator import generate_smart_context
+from core.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE  # noqa: E402
+from core.prompt_generator import generate_smart_context  # noqa: E402
 
 
 # Project path
@@ -60,7 +59,7 @@ def test_paas_k3s_performance():
         try:
             content = f.read_text()
             smart_parse(str(f), content, include_relationships=False)
-        except:
+        except Exception:
             pass
     time_without = time.perf_counter() - start
     print(
@@ -77,7 +76,7 @@ def test_paas_k3s_performance():
         try:
             content = f.read_text()
             smart_parse(str(f), content, include_relationships=True)
-        except:
+        except Exception:
             pass
     time_with_nocache = time.perf_counter() - start
     print(
@@ -93,7 +92,7 @@ def test_paas_k3s_performance():
         try:
             content = f.read_text()
             smart_parse(str(f), content, include_relationships=True)
-        except:
+        except Exception:
             pass
     time_with_cache = time.perf_counter() - start
     print(

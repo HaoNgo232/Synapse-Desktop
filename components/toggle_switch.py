@@ -100,12 +100,21 @@ class ToggleSwitch(QWidget):
         radius = h / 2.0
 
         # Background track
-        progress = (self._knob_x - self.KNOB_MARGIN) / (self._knob_end() - self.KNOB_MARGIN)
+        progress = (self._knob_x - self.KNOB_MARGIN) / (
+            self._knob_end() - self.KNOB_MARGIN
+        )
         progress = max(0.0, min(1.0, progress))
 
-        r = int(self._BG_OFF.red() + (self._BG_ON.red() - self._BG_OFF.red()) * progress)
-        g = int(self._BG_OFF.green() + (self._BG_ON.green() - self._BG_OFF.green()) * progress)
-        b = int(self._BG_OFF.blue() + (self._BG_ON.blue() - self._BG_OFF.blue()) * progress)
+        r = int(
+            self._BG_OFF.red() + (self._BG_ON.red() - self._BG_OFF.red()) * progress
+        )
+        g = int(
+            self._BG_OFF.green()
+            + (self._BG_ON.green() - self._BG_OFF.green()) * progress
+        )
+        b = int(
+            self._BG_OFF.blue() + (self._BG_ON.blue() - self._BG_OFF.blue()) * progress
+        )
         bg_color = QColor(r, g, b)
 
         p.setPen(Qt.PenStyle.NoPen)

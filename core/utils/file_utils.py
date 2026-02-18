@@ -2,25 +2,33 @@
 File System Utilities - File tree scanning voi gitignore support
 
 Su dung pathspec thay vi ignore library.
+Ignore/gitignore logic duoc delegate cho core.ignore_engine (single source of truth).
 """
 
 import platform
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Tuple
+from typing import Optional
 import pathspec
 from core.constants import (
     BINARY_EXTENSIONS,
     DIRECTORY_QUICK_SKIP,
-    EXTENDED_IGNORE_PATTERNS,
 )
 
-# Cache for gitignore patterns: root_path -> (mtime, patterns)
-_gitignore_cache: Dict[str, Tuple[float, list]] = {}
+# Delegate tat ca ignore logic cho ignore_engine
+from core.ignore_engine import (
+    build_pathspec,
+    read_gitignore,
+    find_git_root,
+    clear_cache as _clear_ignore_cache,
+)
 
-# Cache for PathSpec objects: root_path -> (mtime, PathSpec)
-_pathspec_cache: Dict[str, Tuple[float, pathspec.PathSpec]] = {}
+# === Backward-compatible re-exports ===
+# Cac module khac (file_scanner, file_tree_model) import truc tiep tu file_utils.
+# Giu lai re-exports de khong break import paths.
+_read_gitignore = read_gitignore
+_find_git_root = find_git_root
 
 
 @dataclass
@@ -151,32 +159,13 @@ def scan_directory(
     """
     root_path = root_path.resolve()
 
-    # Build ignore spec
-    ignore_patterns: list[str] = []
-
-    # Always exclude version control directories
-    # Luon loai bo cac thu muc version control bat ke cau hinh
-    ignore_patterns.extend([".git", ".hg", ".svn"])
-
-    # Thu tu uu tien: VCS > Default > User > Gitignore
-    # User patterns co the override default patterns
-
-    # Extended default ignore patterns (port tu Repomix)
-    # Bao gom: node_modules, __pycache__, .venv, Cargo.lock, etc.
-    if use_default_ignores:
-        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
-
-    # Add user-defined patterns (co the override default)
-    if excluded_patterns:
-        ignore_patterns.extend(excluded_patterns)
-
-    # Read .gitignore if enabled
-    if use_gitignore:
-        gitignore_patterns = _read_gitignore(root_path)
-        ignore_patterns.extend(gitignore_patterns)
-
-    # Create pathspec matcher
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
+    # Delegate cho ignore_engine (single source of truth)
+    spec = build_pathspec(
+        root_path,
+        use_default_ignores=use_default_ignores,
+        excluded_patterns=excluded_patterns,
+        use_gitignore=use_gitignore,
+    )
 
     # Build tree recursively
     return _build_tree(root_path, root_path, spec)
@@ -190,42 +179,34 @@ def scan_directory_shallow(
     use_default_ignores: bool = True,
 ) -> TreeItem:
     """
-    Scan directory CHỈ đến depth cấp (cho lazy loading).
+    Scan directory CHI den depth cap (cho lazy loading).
 
-    depth=1: Chỉ scan immediate children, không đệ quy vào folders.
-             Folders sẽ có is_loaded=False.
+    depth=1: Chi scan immediate children, khong de quy vao folders.
+              Folders se co is_loaded=False.
     depth=2: Scan 2 levels, etc.
 
     Args:
-        root_path: Thư mục gốc cần scan
-        depth: Số cấp cần scan (1 = chỉ immediate children)
-        excluded_patterns: Patterns để exclude
-        use_gitignore: Có đọc .gitignore không
-        use_default_ignores: Có dùng EXTENDED_IGNORE_PATTERNS không
+        root_path: Thu muc goc can scan
+        depth: So cap can scan (1 = chi immediate children)
+        excluded_patterns: Patterns de exclude
+        use_gitignore: Co doc .gitignore khong
+        use_default_ignores: Co dung EXTENDED_IGNORE_PATTERNS khong
 
     Returns:
-        TreeItem root với children chỉ scan đến depth cấp
+        TreeItem root voi children chi scan den depth cap
     """
     root_path = root_path.resolve()
 
-    # Build ignore spec (giống scan_directory)
-    ignore_patterns: list[str] = []
-    ignore_patterns.extend([".git", ".hg", ".svn"])
+    # Delegate cho ignore_engine (single source of truth)
+    spec = build_pathspec(
+        root_path,
+        use_default_ignores=use_default_ignores,
+        excluded_patterns=excluded_patterns,
+        use_gitignore=use_gitignore,
+    )
 
-    if use_default_ignores:
-        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
-
-    if excluded_patterns:
-        ignore_patterns.extend(excluded_patterns)
-
-    if use_gitignore:
-        gitignore_patterns = _read_gitignore(root_path)
-        ignore_patterns.extend(gitignore_patterns)
-
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", tuple(ignore_patterns))  # type: ignore[arg-type]
-
-    # Build tree với depth limit
-    # current_depth=1 vì root là level 1, children là level 2
+    # Build tree voi depth limit
+    # current_depth=1 vi root la level 1, children la level 2
     return _build_tree_shallow(
         root_path, root_path, spec, current_depth=1, max_depth=depth
     )
@@ -359,118 +340,14 @@ def _build_tree(
     return item
 
 
-def _read_gitignore(root_path: Path) -> list[str]:
-    """
-    Doc .gitignore va .git/info/exclude.
-    Logic tuong tu TypeScript nhung don gian hoa.
-    Uses caching based on .gitignore mtime.
-    """
-    global _gitignore_cache
-
-    gitignore_path = root_path / ".gitignore"
-    cache_key = str(root_path)
-
-    # Check cache validity
-    if cache_key in _gitignore_cache:
-        cached_mtime, cached_patterns = _gitignore_cache[cache_key]
-        try:
-            current_mtime = (
-                gitignore_path.stat().st_mtime if gitignore_path.exists() else 0
-            )
-            if current_mtime == cached_mtime:
-                return cached_patterns.copy()
-        except OSError:
-            pass
-
-    patterns: list[str] = []
-    gitignore_mtime = 0.0
-
-    # 1) Project .gitignore
-    if gitignore_path.exists():
-        try:
-            gitignore_mtime = gitignore_path.stat().st_mtime
-            content = gitignore_path.read_text(encoding="utf-8", errors="replace")
-            patterns.extend(content.splitlines())
-        except (OSError, IOError):
-            pass
-
-    # 2) .git/info/exclude
-    exclude_path = root_path / ".git" / "info" / "exclude"
-    if exclude_path.exists():
-        try:
-            content = exclude_path.read_text(encoding="utf-8", errors="replace")
-            patterns.extend(content.splitlines())
-        except (OSError, IOError):
-            pass
-
-    # 3) Global gitignore (simplified - just check common locations)
-    home = Path.home()
-    global_ignore_candidates = [
-        home / ".config" / "git" / "ignore",
-        home / ".gitignore_global",
-        home / ".gitignore",
-    ]
-
-    for candidate in global_ignore_candidates:
-        if candidate.exists():
-            try:
-                content = candidate.read_text(encoding="utf-8", errors="replace")
-                patterns.extend(content.splitlines())
-                break  # Chi doc mot file
-            except (OSError, IOError):
-                pass
-
-    # Update cache
-    _gitignore_cache[cache_key] = (gitignore_mtime, patterns.copy())
-
-    return patterns
+# === Backward-compatible wrappers ===
+# Cac functions da chuyen sang core.ignore_engine.
+# Giu lai wrappers de khong break existing imports.
 
 
 def clear_gitignore_cache():
-    """Clear the gitignore pattern cache"""
-    global _gitignore_cache, _pathspec_cache
-    _gitignore_cache.clear()
-    _pathspec_cache.clear()
-
-
-def _get_gitignore_mtime(root_path: Path) -> float:
-    """Get modification time of .gitignore file"""
-    gitignore_file = root_path / ".gitignore"
-    if gitignore_file.exists():
-        return gitignore_file.stat().st_mtime
-    return 0.0
-
-
-def get_cached_pathspec(root_path: Path, patterns: list) -> pathspec.PathSpec:
-    """
-    Cache PathSpec object, invalidate khi .gitignore hoặc patterns thay đổi.
-
-    Cache key bao gồm cả root_path và patterns hash để đảm bảo:
-    - Khác patterns → khác PathSpec (tránh cache collision)
-    - Patterns giống nhau + gitignore unchanged → reuse cache
-
-    Args:
-        root_path: Root path của workspace
-        patterns: List patterns để build PathSpec
-
-    Returns:
-        Cached hoặc newly created PathSpec object
-    """
-    # Include patterns hash trong cache key để tránh collision
-    # khi patterns thay đổi nhưng gitignore mtime vẫn giữ nguyên
-    patterns_hash = hash(tuple(patterns))
-    cache_key = f"{root_path}:{patterns_hash}"
-    gitignore_mtime = _get_gitignore_mtime(root_path)
-
-    if cache_key in _pathspec_cache:
-        cached_mtime, cached_spec = _pathspec_cache[cache_key]
-        if cached_mtime == gitignore_mtime:
-            return cached_spec
-
-    # Create new PathSpec and cache it
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
-    _pathspec_cache[cache_key] = (gitignore_mtime, spec)
-    return spec
+    """Clear the gitignore pattern cache. Delegate cho ignore_engine."""
+    _clear_ignore_cache()
 
 
 def flatten_tree_files(tree: TreeItem) -> list[Path]:
@@ -520,22 +397,8 @@ def get_selected_file_paths(tree: TreeItem, selected_paths: set[str]) -> list[Pa
     return result
 
 
-def _find_git_root(start_path: Path) -> Path:
-    """
-    Tìm git root directory bằng cách traverse lên parent directories.
-
-    Args:
-        start_path: Thư mục bắt đầu tìm
-
-    Returns:
-        Path đến git root, hoặc start_path nếu không tìm thấy .git
-    """
-    root_path = start_path
-    while root_path.parent != root_path:
-        if (root_path / ".git").exists():
-            break
-        root_path = root_path.parent
-    return root_path
+# _find_git_root da chuyen sang core.ignore_engine.find_git_root
+# Re-export o dong dau file de backward compat
 
 
 def load_folder_children(
@@ -545,43 +408,35 @@ def load_folder_children(
     use_default_ignores: bool = True,
 ) -> None:
     """
-    Load children cho folder chưa được scan (is_loaded=False).
-    Hàm này MUTATE folder_item.children và set is_loaded=True.
+    Load children cho folder chua duoc scan (is_loaded=False).
+    Ham nay MUTATE folder_item.children va set is_loaded=True.
 
-    Dùng khi user click checkbox hoặc expand folder lần đầu.
+    Dung khi user click checkbox hoac expand folder lan dau.
 
     Args:
-        folder_item: TreeItem folder cần load children
-        excluded_patterns: Patterns để exclude
-        use_gitignore: Có đọc .gitignore không
-        use_default_ignores: Có dùng EXTENDED_IGNORE_PATTERNS không
+        folder_item: TreeItem folder can load children
+        excluded_patterns: Patterns de exclude
+        use_gitignore: Co doc .gitignore khong
+        use_default_ignores: Co dung EXTENDED_IGNORE_PATTERNS khong
     """
     if not folder_item.is_dir:
-        return  # Không phải folder
+        return  # Khong phai folder
 
     if folder_item.is_loaded:
-        return  # Đã loaded rồi
+        return  # Da loaded roi
 
     folder_path = Path(folder_item.path)
 
-    # Build ignore spec
-    ignore_patterns: list[str] = []
-    ignore_patterns.extend([".git", ".hg", ".svn"])
+    # Tim git root de match ignore patterns dung
+    root_path = find_git_root(folder_path)
 
-    if use_default_ignores:
-        ignore_patterns.extend(EXTENDED_IGNORE_PATTERNS)
-
-    if excluded_patterns:
-        ignore_patterns.extend(excluded_patterns)
-
-    root_path = _find_git_root(folder_path)
-
-    if use_gitignore:
-        gitignore_patterns = _read_gitignore(root_path)
-        ignore_patterns.extend(gitignore_patterns)
-
-    # Use cached PathSpec instead of creating new one each time
-    spec = get_cached_pathspec(root_path, list(ignore_patterns))
+    # Delegate cho ignore_engine (single source of truth)
+    spec = build_pathspec(
+        root_path,
+        use_default_ignores=use_default_ignores,
+        excluded_patterns=excluded_patterns,
+        use_gitignore=use_gitignore,
+    )
 
     # Scan children
     try:

@@ -19,13 +19,12 @@ from PySide6.QtWidgets import (
     QFrame,
     QMessageBox,
     QLineEdit,
-    QProgressBar,
     QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Slot, QTimer, QSize, QRect
+from PySide6.QtCore import Qt, Slot, QTimer, QSize
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QIcon, QPixmap
 
-from core.theme import ThemeColors, ThemeSpacing, ThemeRadius
+from core.theme import ThemeColors
 from services.history_service import (
     get_history_entries,
     get_entry_by_id,
@@ -256,14 +255,14 @@ class FileChangeRow(QWidget):
 
         # Hover effect - mềm mại, hài hòa với surface
         self.setStyleSheet(
-            f"""
-            FileChangeRow {{
+            """
+            FileChangeRow {
                 background-color: transparent;
                 border-bottom: 1px solid rgba(62, 62, 94, 0.4);
-            }}
-            FileChangeRow:hover {{
+            }
+            FileChangeRow:hover {
                 background-color: rgba(45, 45, 68, 0.6);
-            }}
+            }
         """
         )
 
@@ -495,22 +494,22 @@ class HistoryViewQt(QWidget):
         self._entry_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._entry_list.setSpacing(4)  # Tang social gap cho thoang
         self._entry_list.setStyleSheet(
-            f"""
-            QListWidget {{
+            """
+            QListWidget {
                 background-color: transparent;
                 border: none;
                 outline: none;
-            }}
+            }
             QListWidget::item, 
             QListWidget::item:selected, 
             QListWidget::item:focus, 
-            QListWidget::item:hover {{
+            QListWidget::item:hover {
                 background: transparent;
                 border: none;
                 outline: none;
                 padding: 0;
                 margin: 0;
-            }}
+            }
         """
         )
         self._entry_list.itemClicked.connect(self._on_entry_clicked)
@@ -538,11 +537,11 @@ class HistoryViewQt(QWidget):
         self._detail_scroll.setWidgetResizable(True)
         self._detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._detail_scroll.setStyleSheet(
-            f"""
-            QScrollArea {{
+            """
+            QScrollArea {
                 background-color: transparent;
                 border: none;
-            }}
+            }
         """
         )
 
@@ -918,15 +917,15 @@ class HistoryViewQt(QWidget):
             )
         else:
             widget.setStyleSheet(
-                f"""
-                QFrame {{
+                """
+                QFrame {
                     background-color: transparent;
                     border-left: 4px solid transparent;
                     border-radius: 8px;
-                }}
-                QFrame:hover {{
+                }
+                QFrame:hover {
                     background-color: rgba(45, 45, 68, 0.4);
-                }}
+                }
             """
             )
 
@@ -1089,8 +1088,6 @@ class HistoryViewQt(QWidget):
         bar_layout.setContentsMargins(0, 0, 0, 0)
         bar_layout.setSpacing(0)
 
-        total = max(entry.file_count, 1)  # Tranh chia cho 0
-
         # Segment xanh (success)
         if entry.success_count > 0:
             success_seg = QFrame()
@@ -1149,7 +1146,7 @@ class HistoryViewQt(QWidget):
             stats_text = f"0/{entry.file_count} all failed"
             stats_color = ThemeColors.ERROR
         else:
-            stats_text = f"{entry.success_count} done / " f"{entry.fail_count} failed"
+            stats_text = f"{entry.success_count} done / {entry.fail_count} failed"
             stats_color = ThemeColors.TEXT_SECONDARY
 
         stats_label = QLabel(stats_text)

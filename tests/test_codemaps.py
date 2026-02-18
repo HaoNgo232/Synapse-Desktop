@@ -5,7 +5,6 @@ Test symbol extraction, relationship extraction, và graph building.
 """
 
 import pytest
-from pathlib import Path
 
 from core.codemaps.symbol_extractor import extract_symbols
 from core.codemaps.relationship_extractor import extract_relationships

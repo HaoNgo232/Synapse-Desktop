@@ -140,7 +140,9 @@ class TestGenerateFileMap:
             path=str(ws),
             is_dir=True,
             children=[
-                TreeItem(label="main.py", path=str(file_path), is_dir=False, children=[])
+                TreeItem(
+                    label="main.py", path=str(file_path), is_dir=False, children=[]
+                )
             ],
         )
         result = generate_file_map(

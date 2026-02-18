@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from core.dependency_resolver import DependencyResolver, get_related_files_for_selection
-from core.utils.file_utils import scan_directory_shallow, TreeItem
+from core.utils.file_utils import scan_directory_shallow
 
 
 @pytest.fixture

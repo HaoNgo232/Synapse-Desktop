@@ -98,7 +98,6 @@ def test_direct_relationship_extraction():
     print("=" * 80)
 
     from core.codemaps.relationship_extractor import extract_relationships
-    from core.codemaps.types import RelationshipKind
 
     relationships = extract_relationships("test.py", TEST_PYTHON_CODE)
 

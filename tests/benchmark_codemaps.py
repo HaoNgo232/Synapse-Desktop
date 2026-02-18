@@ -12,14 +12,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.smart_context.parser import smart_parse
-from core.codemaps.relationship_extractor import (
-    extract_relationships,
+from core.smart_context.parser import smart_parse  # noqa: E402
+from core.codemaps.relationship_extractor import (  # noqa: E402
     _build_function_boundaries_map,
     _find_enclosing_function_fast,
 )
-from core.smart_context.loader import get_language
-from tree_sitter import Parser
+from core.smart_context.loader import get_language  # noqa: E402
+from tree_sitter import Parser  # noqa: E402
 
 
 def generate_large_python_code(num_functions: int = 50) -> str:
@@ -90,28 +89,28 @@ def benchmark_tree_reuse(content: str, iterations: int = 10) -> dict:
     """
     Benchmark tree reuse optimization.
     """
-    file_path = "benchmark.py"
+    _ = "benchmark.py"  # noqa: F841 - used for documentation only
     language = get_language("py")
 
     # Warm up
     parser = Parser(language)
-    tree = parser.parse(bytes(content, "utf-8"))
+    parser.parse(bytes(content, "utf-8"))
 
     # WITHOUT tree reuse (old way - parse twice)
     start = time.perf_counter()
     for _ in range(iterations):
         parser1 = Parser(language)
-        tree1 = parser1.parse(bytes(content, "utf-8"))
+        parser1.parse(bytes(content, "utf-8"))
         # Simulate second parse in extract_relationships
         parser2 = Parser(language)
-        tree2 = parser2.parse(bytes(content, "utf-8"))
+        parser2.parse(bytes(content, "utf-8"))
     old_way_time = (time.perf_counter() - start) / iterations
 
     # WITH tree reuse (new way - parse once)
     start = time.perf_counter()
     for _ in range(iterations):
         parser_new = Parser(language)
-        tree_new = parser_new.parse(bytes(content, "utf-8"))
+        parser_new.parse(bytes(content, "utf-8"))
         # Reuse tree - no second parse
     new_way_time = (time.perf_counter() - start) / iterations
 

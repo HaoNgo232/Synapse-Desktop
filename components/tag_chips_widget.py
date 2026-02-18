@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QLayout,
-    QSizePolicy,
     QLayoutItem,
 )
 from PySide6.QtCore import Qt, Signal, QRect, QSize, QPoint, QTimer
@@ -39,30 +38,30 @@ def create_colored_icon(svg_path: str, color: str) -> QIcon:
     """Create a colored icon from SVG by replacing fill/stroke colors."""
     from PySide6.QtSvg import QSvgRenderer
     from PySide6.QtGui import QPixmap, QPainter
-    
+
     # Read SVG content
-    with open(svg_path, 'r') as f:
+    with open(svg_path, "r") as f:
         svg_content = f.read()
-    
+
     # Replace colors (simple approach - replace common attributes)
     svg_content = svg_content.replace('fill="black"', f'fill="{color}"')
     svg_content = svg_content.replace('stroke="black"', f'stroke="{color}"')
     svg_content = svg_content.replace('fill="#000000"', f'fill="{color}"')
     svg_content = svg_content.replace('stroke="#000000"', f'stroke="{color}"')
-    
+
     # If no explicit color, add fill to path elements
-    if 'fill=' not in svg_content and '<path' in svg_content:
-        svg_content = svg_content.replace('<path', f'<path fill="{color}"')
-    
+    if "fill=" not in svg_content and "<path" in svg_content:
+        svg_content = svg_content.replace("<path", f'<path fill="{color}"')
+
     # Render to pixmap
     renderer = QSvgRenderer(svg_content.encode())
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.GlobalColor.transparent)
-    
+
     painter = QPainter(pixmap)
     renderer.render(painter)
     painter.end()
-    
+
     return QIcon(pixmap)
 
 
@@ -162,7 +161,9 @@ class ChipWidget(QWidget):
 
         label = QLabel(text)
         label.setFont(QFont("Cascadia Code, Fira Code, Consolas", 11))
-        label.setStyleSheet(f"color: {ThemeColors.TEXT_PRIMARY}; background: transparent;")
+        label.setStyleSheet(
+            f"color: {ThemeColors.TEXT_PRIMARY}; background: transparent;"
+        )
         layout.addWidget(label)
 
         close_btn = QPushButton()
@@ -170,16 +171,16 @@ class ChipWidget(QWidget):
         close_btn.setIconSize(QSize(12, 12))
         close_btn.setFixedSize(22, 22)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
+        close_btn.setStyleSheet("""
+            QPushButton {
                 background: rgba(255, 107, 107, 0.2);
                 border: none;
                 border-radius: 11px;
                 padding: 0;
-            }}
-            QPushButton:hover {{
+            }
+            QPushButton:hover {
                 background: #FF4757;
-            }}
+            }
         """)
         close_btn.clicked.connect(lambda: self.removed.emit(self._text))
         layout.addWidget(close_btn)

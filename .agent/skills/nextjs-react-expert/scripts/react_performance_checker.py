@@ -7,9 +7,7 @@ Based on Vercel Engineering best practices
 
 import os
 import re
-import json
 from pathlib import Path
-from typing import List, Dict, Tuple
 
 
 class PerformanceChecker:
@@ -45,7 +43,7 @@ class PerformanceChecker:
                             "section": "1-async-eliminating-waterfalls.md",
                         }
                     )
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_barrel_imports(self):
@@ -77,7 +75,7 @@ class PerformanceChecker:
                             "section": "2-bundle-bundle-size-optimization.md",
                         }
                     )
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_dynamic_imports(self):
@@ -119,7 +117,7 @@ class PerformanceChecker:
                                     }
                                 )
                                 break
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_useEffect_fetching(self):
@@ -145,7 +143,7 @@ class PerformanceChecker:
                                 "section": "4-client-client-side-data-fetching.md",
                             }
                         )
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_missing_memoization(self):
@@ -180,7 +178,7 @@ class PerformanceChecker:
                                 "section": "5-rerender-re-render-optimization.md",
                             }
                         )
-            except Exception as e:
+            except Exception:
                 continue
 
     def check_image_optimization(self):
@@ -205,7 +203,7 @@ class PerformanceChecker:
                             "section": "6-rendering-rendering-performance.md",
                         }
                     )
-            except Exception as e:
+            except Exception:
                 continue
 
     def generate_report(self):
@@ -235,7 +233,7 @@ class PerformanceChecker:
             print(f"  ... and {len(self.warnings) - 10} more warnings")
 
         print("\n" + "=" * 60)
-        print(f"SUMMARY:")
+        print("SUMMARY:")
         print(
             f"  Critical Issues: {len([i for i in self.issues if i['type'] == 'CRITICAL'])}"
         )

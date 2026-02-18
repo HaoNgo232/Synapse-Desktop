@@ -3,9 +3,8 @@ Unit tests cho Recent Folders Service
 """
 
 import pytest
-import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import tempfile
 import shutil
 
@@ -15,8 +14,6 @@ from services.recent_folders import (
     remove_recent_folder,
     clear_recent_folders,
     get_folder_display_name,
-    RECENT_FOLDERS_FILE,
-    MAX_RECENT_FOLDERS,
 )
 
 

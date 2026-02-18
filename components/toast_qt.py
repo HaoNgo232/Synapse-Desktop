@@ -34,12 +34,9 @@ from PySide6.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
-    QRect,
     Slot,
     Signal,
-    Property,
 )
-from PySide6.QtGui import QColor
 
 from core.theme import ThemeColors, ThemeRadius
 
@@ -164,7 +161,7 @@ class ToastNotification(QFrame):
             QFrame {{
                 background-color: {ThemeColors.BG_ELEVATED};
                 border: 1px solid {ThemeColors.BORDER_LIGHT};
-                border-left: 4px solid {self._config['accent']};
+                border-left: 4px solid {self._config["accent"]};
                 border-radius: {ThemeRadius.LG}px;
             }}
         """
@@ -181,7 +178,7 @@ class ToastNotification(QFrame):
             f"""
             QLabel {{
                 font-size: 16px;
-                color: {self._config['accent']};
+                color: {self._config["accent"]};
                 background: transparent;
                 border: none;
             }}
@@ -216,7 +213,7 @@ class ToastNotification(QFrame):
             f"""
             QLabel {{
                 font-size: 12px;
-                font-weight: {'500' if title else '600'};
+                font-weight: {"500" if title else "600"};
                 color: {ThemeColors.TEXT_SECONDARY if title else ThemeColors.TEXT_PRIMARY};
                 background: transparent;
                 border: none;

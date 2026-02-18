@@ -10,7 +10,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE
+from core.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE  # noqa: E402
 
 
 def test_cache_speedup():

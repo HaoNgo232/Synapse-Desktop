@@ -28,7 +28,12 @@ class ThemeFonts:
 
         font_dir = Path(__file__).parent.parent / "assets" / "fonts"
 
+        # Load custom fonts tu assets/fonts (dam bao nhat quan giua cac may)
+        # Cascadia Code: monospace font cho code display (MIT license, Microsoft)
+        # IBM Plex Sans: body text font
         for name in (
+            "CascadiaCode-Regular.ttf",
+            "CascadiaCode-Bold.ttf",
             "IBMPlexSans-Regular.ttf",
             "IBMPlexSans-SemiBold.ttf",
         ):

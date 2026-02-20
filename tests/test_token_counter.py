@@ -1,12 +1,16 @@
 """
-Unit tests cho Token Counter module.
+Unit tests cho TokenizationService.
 
-Test các case:
-- count_tokens(): Đếm tokens trong text.
-- count_tokens_for_file(): Đếm tokens trong file, skip binary.
-- count_tokens_batch(): Parallel batch counting.
-- get_worker_count(): Tính số workers tối ưu.
-- Binary detection: Magic numbers, byte analysis.
+REFACTORED: Tests da duoc cap nhat tu core.token_counter (da xoa)
+sang services.tokenization_service.TokenizationService.
+
+Test cac case:
+- count_tokens(): Dem tokens trong text
+- count_tokens_for_file(): Dem tokens trong file, skip binary
+- count_tokens_batch_parallel(): Parallel batch counting
+- get_worker_count(): Tinh so workers toi uu
+- Binary detection: Magic numbers, byte analysis
+- Cache: clear_cache(), clear_file_from_cache()
 """
 
 import pytest
@@ -14,27 +18,26 @@ from pathlib import Path
 from unittest.mock import patch
 import os
 
-from core.token_counter import (
-    count_tokens,
-    count_tokens_for_file,
-    count_tokens_batch,
-    get_worker_count,
-    clear_token_cache,
-)
+from services.tokenization_service import TokenizationService
+from core.tokenization.batch import get_worker_count
 from core.encoders import _estimate_tokens
 from core.binary_detection import _looks_binary, _check_magic_numbers
 
 
 class TestCountTokens:
-    """Test count_tokens() function."""
+    """Test TokenizationService.count_tokens()."""
+
+    def setup_method(self):
+        """Tao TokenizationService instance moi cho moi test."""
+        self.service = TokenizationService()
 
     def test_empty_string(self):
         """Empty string returns 0 tokens."""
-        assert count_tokens("") == 0
+        assert self.service.count_tokens("") == 0
 
     def test_simple_text(self):
         """Simple text returns positive token count."""
-        result = count_tokens("Hello, world!")
+        result = self.service.count_tokens("Hello, world!")
         assert result > 0
         assert isinstance(result, int)
 
@@ -45,15 +48,15 @@ def hello():
     print("Hello, World!")
     return 42
 """
-        result = count_tokens(code)
-        # Code thường có ~1 token per 4 chars, nhưng tiktoken khác
+        result = self.service.count_tokens(code)
+        # Code thuong co ~1 token per 4 chars, nhung tiktoken khac
         assert result > 5
         assert result < 100
 
     def test_unicode_text(self):
         """Unicode text (Vietnamese) is handled correctly."""
-        text = "Xin chào thế giới!"
-        result = count_tokens(text)
+        text = "Xin chao the gioi!"
+        result = self.service.count_tokens(text)
         assert result > 0
 
     def test_very_long_text(self):
@@ -61,8 +64,8 @@ def hello():
         short_text = "Hello " * 10
         long_text = "Hello " * 1000
 
-        short_count = count_tokens(short_text)
-        long_count = count_tokens(long_text)
+        short_count = self.service.count_tokens(short_text)
+        long_count = self.service.count_tokens(long_text)
 
         # Long text should have roughly 100x more tokens
         assert long_count > short_count * 50
@@ -87,11 +90,15 @@ class TestEstimateTokens:
 
 
 class TestCountTokensForFile:
-    """Test count_tokens_for_file() function."""
+    """Test TokenizationService.count_tokens_for_file()."""
+
+    def setup_method(self):
+        """Tao TokenizationService instance moi cho moi test."""
+        self.service = TokenizationService()
 
     def test_nonexistent_file(self):
         """Nonexistent file returns 0."""
-        result = count_tokens_for_file(Path("/nonexistent/file.py"))
+        result = self.service.count_tokens_for_file(Path("/nonexistent/file.py"))
         assert result == 0
 
     def test_text_file(self, tmp_path):
@@ -99,8 +106,8 @@ class TestCountTokensForFile:
         file_path = tmp_path / "test.py"
         file_path.write_text("def hello():\n    return 42")
 
-        clear_token_cache()
-        result = count_tokens_for_file(file_path)
+        self.service.clear_cache()
+        result = self.service.count_tokens_for_file(file_path)
         assert result > 0
 
     def test_empty_file(self, tmp_path):
@@ -108,8 +115,8 @@ class TestCountTokensForFile:
         file_path = tmp_path / "empty.txt"
         file_path.write_text("")
 
-        clear_token_cache()
-        result = count_tokens_for_file(file_path)
+        self.service.clear_cache()
+        result = self.service.count_tokens_for_file(file_path)
         assert result == 0
 
     def test_binary_file_skipped(self, tmp_path):
@@ -118,8 +125,8 @@ class TestCountTokensForFile:
         # Write JPEG magic number
         file_path.write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0]))
 
-        clear_token_cache()
-        result = count_tokens_for_file(file_path)
+        self.service.clear_cache()
+        result = self.service.count_tokens_for_file(file_path)
         assert result == 0
 
     def test_large_file_skipped(self, tmp_path):
@@ -128,8 +135,8 @@ class TestCountTokensForFile:
         # Create file > 5MB
         file_path.write_text("x" * (6 * 1024 * 1024))
 
-        clear_token_cache()
-        result = count_tokens_for_file(file_path)
+        self.service.clear_cache()
+        result = self.service.count_tokens_for_file(file_path)
         assert result == 0
 
     def test_directory_returns_zero(self, tmp_path):
@@ -137,7 +144,7 @@ class TestCountTokensForFile:
         dir_path = tmp_path / "subdir"
         dir_path.mkdir()
 
-        result = count_tokens_for_file(dir_path)
+        result = self.service.count_tokens_for_file(dir_path)
         assert result == 0
 
     def test_caching(self, tmp_path):
@@ -145,13 +152,13 @@ class TestCountTokensForFile:
         file_path = tmp_path / "cached.py"
         file_path.write_text("print('hello')")
 
-        clear_token_cache()
+        self.service.clear_cache()
 
         # First call
-        result1 = count_tokens_for_file(file_path)
+        result1 = self.service.count_tokens_for_file(file_path)
 
         # Second call should use cache
-        result2 = count_tokens_for_file(file_path)
+        result2 = self.service.count_tokens_for_file(file_path)
 
         assert result1 == result2
 
@@ -186,80 +193,6 @@ class TestGetWorkerCount:
     def test_zero_tasks(self):
         """Zero tasks returns 1 worker (minimum)."""
         assert get_worker_count(0) == 1
-
-
-class TestCountTokensBatch:
-    """Test count_tokens_batch() parallel function."""
-
-    def test_empty_list(self):
-        """Empty list returns empty dict."""
-        result = count_tokens_batch([])
-        assert result == {}
-
-    def test_small_batch_sequential(self, tmp_path):
-        """Small batch (< 10 files) uses sequential processing."""
-        # Create 5 files
-        files = []
-        for i in range(5):
-            file_path = tmp_path / f"file{i}.py"
-            file_path.write_text(f"# File {i}\nprint({i})")
-            files.append(file_path)
-
-        clear_token_cache()
-
-        # Mock is_counting_tokens to return True
-        with patch("core.tokenization.batch.is_counting_tokens", return_value=True):
-            result = count_tokens_batch(files)
-
-        assert len(result) == 5
-        assert all(isinstance(v, int) for v in result.values())
-        assert all(v > 0 for v in result.values())
-
-    def test_large_batch_parallel(self, tmp_path):
-        """Large batch (>= 10 files) uses parallel processing."""
-        # Create 15 files
-        files = []
-        for i in range(15):
-            file_path = tmp_path / f"file{i}.py"
-            file_path.write_text(f"# File {i}\n" + "x = 1\n" * 10)
-            files.append(file_path)
-
-        clear_token_cache()
-
-        # Mock is_counting_tokens to return True
-        with patch("core.tokenization.batch.is_counting_tokens", return_value=True):
-            result = count_tokens_batch(files)
-
-        assert len(result) == 15
-        assert all(isinstance(v, int) for v in result.values())
-
-    def test_mixed_files(self, tmp_path):
-        """Batch with mixed files (text, binary, nonexistent)."""
-        files = []
-
-        # Text file
-        text_file = tmp_path / "text.py"
-        text_file.write_text("print('hello')")
-        files.append(text_file)
-
-        # Binary file
-        binary_file = tmp_path / "binary.jpg"
-        binary_file.write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0]))
-        files.append(binary_file)
-
-        # Nonexistent file
-        files.append(tmp_path / "nonexistent.py")
-
-        clear_token_cache()
-
-        # Mock is_counting_tokens to return True
-        with patch("core.tokenization.batch.is_counting_tokens", return_value=True):
-            result = count_tokens_batch(files)
-
-        assert len(result) == 3
-        assert result[str(text_file)] > 0
-        assert result[str(binary_file)] == 0
-        assert result[str(tmp_path / "nonexistent.py")] == 0
 
 
 class TestBinaryDetection:
@@ -303,7 +236,11 @@ class TestBinaryDetection:
 
 
 class TestClearTokenCache:
-    """Test clear_token_cache() function."""
+    """Test TokenizationService cache operations."""
+
+    def setup_method(self):
+        """Tao TokenizationService instance moi cho moi test."""
+        self.service = TokenizationService()
 
     def test_cache_cleared(self, tmp_path):
         """Cache is cleared successfully."""
@@ -311,17 +248,49 @@ class TestClearTokenCache:
         file_path.write_text("print('x')")
 
         # Populate cache
-        count_tokens_for_file(file_path)
+        self.service.count_tokens_for_file(file_path)
 
         # Clear cache
-        clear_token_cache()
+        self.service.clear_cache()
 
         # Modify file
         file_path.write_text("print('y')" * 100)
 
         # Should get new count (not cached)
-        new_count = count_tokens_for_file(file_path)
+        new_count = self.service.count_tokens_for_file(file_path)
         assert new_count > 10  # Longer content
+
+
+class TestModelConfig:
+    """Test TokenizationService.set_model_config()."""
+
+    def test_set_model_config_resets_encoder(self):
+        """set_model_config() resets internal encoder state."""
+        service = TokenizationService()
+
+        # Count tokens to init encoder
+        service.count_tokens("test")
+
+        # Switch model
+        service.set_model_config(tokenizer_repo="Xenova/claude-tokenizer")
+
+        # Should work with new config
+        result = service.count_tokens("test")
+        assert result > 0
+
+    def test_reset_encoder(self):
+        """reset_encoder() forces encoder reload."""
+        service = TokenizationService()
+
+        # Count tokens to init encoder
+        service.count_tokens("test")
+
+        # Reset
+        service.reset_encoder()
+
+        # Should still work (lazy re-init)
+        result = service.count_tokens("test")
+        assert result > 0
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer, QObject
 
-from core.token_counter import count_tokens
+from services.encoder_registry import get_tokenization_service
 from core.utils.file_utils import TreeItem
 from services.file_watcher import FileWatcher, WatcherCallbacks
 from services.settings_manager import set_setting
@@ -241,7 +241,7 @@ class ContextViewQt(
 
         # Count instruction tokens
         instructions = self._instructions_field.toPlainText()
-        instruction_tokens = count_tokens(instructions) if instructions else 0
+        instruction_tokens = get_tokenization_service().count_tokens(instructions) if instructions else 0
 
         # Get cached tokens
         total_file_tokens = self.file_tree_widget.get_total_tokens()
@@ -275,12 +275,10 @@ class ContextViewQt(
 
         Resets encoder and clears cache to trigger recount with the new tokenizer.
         """
-        # Ensure the global encoder is reset immediately for next counts
-        from core.token_counter import reset_encoder
+        # Reset encoder va reinitialize voi model moi qua TokenizationService
         from services.encoder_registry import initialize_encoder
 
-        reset_encoder()
-        initialize_encoder()  # Re-inject new config into core layer
+        initialize_encoder()  # Re-inject new config vao TokenizationService
 
         # Invalidate prompt cache (token counts will differ with new tokenizer)
         self._prompt_cache.invalidate_all()

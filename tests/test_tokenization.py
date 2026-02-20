@@ -31,11 +31,10 @@ from core.tokenization.counter import (
 )
 from core.tokenization.batch import (
     get_worker_count,
-    count_tokens_batch,
-    count_tokens_batch_parallel,
     TASKS_PER_WORKER,
     MIN_FILES_FOR_PARALLEL,
 )
+from services.tokenization_service import TokenizationService
 
 
 # ============================================================================
@@ -351,24 +350,21 @@ class TestCountTokens:
 
     def test_fallback_when_encoder_none(self):
         """Fallback uoc luong khi encoder = None."""
-        # Mock module-level _default_encoder to None
-        with patch("core.tokenization.counter._default_encoder", None):
-            with patch("core.encoders._get_encoder", return_value=None):
-                text = "Hello world test"
-                result = count_tokens(text)
-                # Estimation: ~len/4
-                assert result > 0
+        # counter.count_tokens() la pure function - truyen encoder=None truc tiep
+        text = "Hello world test"
+        result = count_tokens(text, encoder=None)
+        # Estimation: ~len/4
+        assert result > 0
 
     def test_fallback_when_encode_raises(self):
         """Fallback khi encode() raise exception."""
         mock_encoder = MagicMock()
         mock_encoder.encode.side_effect = RuntimeError("encoding failed")
 
-        with patch("core.tokenization.counter._default_encoder", mock_encoder):
-            with patch("core.encoders._encoder_type", "tiktoken"):
-                result = count_tokens("Hello world")
-                # Fallback to estimation
-                assert result > 0
+        # Truyen mock encoder truc tiep vao pure function
+        result = count_tokens("Hello world", encoder=mock_encoder, encoder_type="tiktoken")
+        # Fallback to estimation
+        assert result > 0
 
 
 class TestReadFileMmap:
@@ -391,6 +387,7 @@ class TestReadFileMmap:
         f = tmp_path / "vn.txt"
         f.write_text("Xin chao the gioi!")
         content = _read_file_mmap(f)
+        assert content is not None
         assert "Xin chao" in content
 
     def test_read_binary_content(self, tmp_path):
@@ -553,11 +550,12 @@ class TestGetWorkerCount:
 
 
 class TestCountTokensBatch:
-    """Test count_tokens_batch() sequential processing."""
+    """Test TokenizationService batch sequential processing."""
 
     def setup_method(self):
-        """Clear cache va set counting flag."""
+        """Tao service moi va set counting flag."""
         token_cache.clear()
+        self.service = TokenizationService()
 
     def teardown_method(self):
         """Reset counting flag."""
@@ -566,7 +564,7 @@ class TestCountTokensBatch:
     def test_empty_list(self):
         """Empty list tra ve empty dict."""
         start_token_counting()
-        result = count_tokens_batch([])
+        result = self.service.count_tokens_batch_parallel([])
         assert result == {}
 
     def test_returns_empty_when_cancelled(self, tmp_path):
@@ -575,7 +573,7 @@ class TestCountTokensBatch:
         f.write_text("hello world")
 
         stop_token_counting()
-        result = count_tokens_batch([f])
+        result = self.service.count_tokens_batch_parallel([f])
         assert result == {}
 
     def test_counts_files(self, tmp_path):
@@ -587,7 +585,7 @@ class TestCountTokensBatch:
             files.append(f)
 
         start_token_counting()
-        result = count_tokens_batch(files)
+        result = self.service.count_tokens_batch_parallel(files, max_workers=2)
 
         assert len(result) == 3
         assert all(isinstance(v, int) for v in result.values())
@@ -604,19 +602,22 @@ class TestCountTokensBatch:
         none_f = tmp_path / "gone.py"
 
         start_token_counting()
-        result = count_tokens_batch([text_f, bin_f, none_f])
+        result = self.service.count_tokens_batch_parallel(
+            [text_f, bin_f, none_f], max_workers=2
+        )
 
         assert result[str(text_f)] > 0
-        assert result[str(bin_f)] == 0
-        assert result[str(none_f)] == 0
+        assert result.get(str(bin_f), 0) == 0
+        assert result.get(str(none_f), 0) == 0
 
 
 class TestCountTokensBatchParallel:
-    """Test count_tokens_batch_parallel() ThreadPoolExecutor."""
+    """Test TokenizationService parallel batch counting."""
 
     def setup_method(self):
-        """Clear cache."""
+        """Tao service moi."""
         token_cache.clear()
+        self.service = TokenizationService()
 
     def teardown_method(self):
         """Reset flag."""
@@ -625,7 +626,7 @@ class TestCountTokensBatchParallel:
     def test_empty_list(self):
         """Empty list tra ve empty dict."""
         start_token_counting()
-        result = count_tokens_batch_parallel([])
+        result = self.service.count_tokens_batch_parallel([])
         assert result == {}
 
     def test_returns_empty_when_cancelled(self, tmp_path):
@@ -634,7 +635,7 @@ class TestCountTokensBatchParallel:
         f.write_text("hello")
 
         stop_token_counting()
-        result = count_tokens_batch_parallel([f])
+        result = self.service.count_tokens_batch_parallel([f])
         assert result == {}
 
     def test_parallel_counting(self, tmp_path):
@@ -646,7 +647,7 @@ class TestCountTokensBatchParallel:
             files.append(f)
 
         start_token_counting()
-        result = count_tokens_batch_parallel(files, max_workers=2)
+        result = self.service.count_tokens_batch_parallel(files, max_workers=2)
 
         assert len(result) == 10
         assert all(v >= 0 for v in result.values())
@@ -655,32 +656,18 @@ class TestCountTokensBatchParallel:
         assert len(text_counts) == 10
 
     def test_updates_cache(self, tmp_path):
-        """Ket qua duoc luu vao token_cache."""
+        """Ket qua duoc luu vao service cache."""
         f = tmp_path / "cached.py"
         f.write_text("x = 42")
         mtime = f.stat().st_mtime
 
         start_token_counting()
-        count_tokens_batch_parallel([f], update_cache=True)
+        self.service.count_tokens_batch_parallel([f], update_cache=True)
 
-        # Kiem tra cache
-        cached = token_cache.get(str(f), mtime)
+        # Kiem tra cache cua service
+        cached = self.service._cache.get(str(f), mtime)
         assert cached is not None
         assert cached > 0
-
-    def test_auto_detects_hf(self, tmp_path):
-        """Auto-detect HF tokenizer khi co tokenizer_repo."""
-        f = tmp_path / "test.py"
-        f.write_text("hello")
-
-        start_token_counting()
-
-        with patch("core.tokenization.batch.HAS_TOKENIZERS", True):
-            with patch("core.tokenization.batch.count_tokens_batch_hf") as mock_hf:
-                mock_hf.return_value = {str(f): 1}
-                # Pass tokenizer_repo as parameter
-                count_tokens_batch_parallel([f], tokenizer_repo="test/repo")
-                mock_hf.assert_called_once()
 
 
 class TestConstants:

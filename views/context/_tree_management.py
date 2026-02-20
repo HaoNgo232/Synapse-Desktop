@@ -114,10 +114,10 @@ class TreeManagementMixin:
 
     def _on_file_modified(self: "ContextViewQt", path: str) -> None:
         """Handle file modified — invalidate caches for the changed file."""
-        from core.token_counter import clear_file_from_cache
+        from services.encoder_registry import get_tokenization_service
         from core.security_check import invalidate_security_cache
 
-        clear_file_from_cache(path)
+        get_tokenization_service().clear_file_from_cache(path)
         invalidate_security_cache(path)
         # Invalidate prompt cache — file content changed so fingerprint
         # (which includes mtime) will no longer match anyway, but clearing

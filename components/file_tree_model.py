@@ -1119,7 +1119,7 @@ class TokenCountWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         """Đếm tokens cho tất cả files. Skip binary/image files."""
-        from core.token_counter import count_tokens
+        from services.encoder_registry import get_tokenization_service
         from core.utils.file_utils import is_binary_file
 
         # Max file size for token counting (5MB) - prevents OOM on large binaries
@@ -1150,7 +1150,7 @@ class TokenCountWorker(QRunnable):
                         continue
 
                     content = path.read_text(encoding="utf-8", errors="replace")
-                    tokens = count_tokens(content)
+                    tokens = get_tokenization_service().count_tokens(content)
                     batch[file_path] = tokens
 
                     if len(batch) >= self._batch_size:

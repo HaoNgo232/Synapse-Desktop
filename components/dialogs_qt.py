@@ -326,7 +326,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
     @Slot()
     def _do_copy(self) -> None:
         from core.utils.git_utils import get_diff_only
-        from core.token_counter import count_tokens
+        from services.encoder_registry import get_tokenization_service
 
         commits = self._get_num_commits()
 
@@ -360,7 +360,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         success, message = copy_to_clipboard(prompt)
         if success:
             self.accept()
-            token_count = count_tokens(prompt)
+            token_count = get_tokenization_service().count_tokens(prompt)
             if self.on_success:
                 self.on_success(
                     f"Diff copied! ({token_count:,} tokens, "

@@ -250,10 +250,10 @@ class TokenStatsPanelQt(QWidget):
                 self._selected_model = model
                 set_setting("model_id", model_id)
 
-                # Reset tokenizer để reload với model mới
-                from core.token_counter import reset_encoder
+                # Reset tokenizer de reload voi model moi qua TokenizationService
+                from services.encoder_registry import get_tokenization_service
 
-                reset_encoder()
+                get_tokenization_service().reset_encoder()
 
                 # Re-render
                 self.update_stats(

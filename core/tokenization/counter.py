@@ -1,97 +1,58 @@
 """
-Core token counting logic.
+Core token counting logic - Pure functions.
 
-Functions:
-- count_tokens(): Dem tokens trong text (auto-detect encoder)
+REFACTORED: Toan bo global state (_default_encoder, _default_tokenizer_repo)
+da duoc chuyen sang services.tokenization_service.TokenizationService.
+
+Module nay chi chua cac ham thuan tuy (pure functions):
+- count_tokens(): Dem tokens trong text voi encoder da cho
 - count_tokens_for_file(): Dem tokens trong file (co cache + mtime)
 - _count_tokens_for_file_no_cache(): Dem KHONG update cache (parallel-safe)
 - _read_file_mmap(): Doc file bang mmap (nhanh hon read() 15-50%)
 
-Encoder management nam o core.encoders (SRP).
-Cache management nam o core.tokenization.cache (SRP).
-
 DIP: Module nay KHONG import tu services layer.
-Encoder duoc inject tu caller hoac dung module-level default.
+Encoder duoc truyen tu caller (TokenizationService).
 """
 
 import mmap
-import threading
 from pathlib import Path
 from typing import Optional, Any
 
-from core.encoders import _estimate_tokens, _get_encoder
+from core.encoders import _estimate_tokens
 from core.tokenization.cache import token_cache
 
 # Guardrail: skip files > 5MB
 MAX_BYTES = 5 * 1024 * 1024
 
-# Module-level default encoder (set boi services layer khi app start)
-_default_encoder: Optional[Any] = None
-_default_tokenizer_repo: Optional[str] = None
-_default_encoder_lock = threading.Lock()
 
-
-def set_default_encoder_config(tokenizer_repo: Optional[str] = None) -> None:
+def count_tokens(
+    text: str,
+    encoder: Optional[Any] = None,
+    encoder_type: str = "",
+) -> int:
     """
-    Set default encoder config cho module.
+    Dem so token trong text voi encoder da cho.
 
-    Goi boi services layer khi app start hoac khi user doi model.
-    Core layer khong tu doc settings.
-
-    Args:
-        tokenizer_repo: HF repo ID hoac None
-    """
-    global _default_encoder, _default_tokenizer_repo
-    with _default_encoder_lock:
-        _default_tokenizer_repo = tokenizer_repo
-        _default_encoder = None  # Reset, se lazy load
-
-
-def count_tokens(text: str, encoder: Optional[Any] = None) -> int:
-    """
-    Dem so token trong mot doan text.
-
-    Auto-detect model:
-    - Model co tokenizer_repo -> Dung Hugging Face tokenizers
-    - Model khac -> Dung rs-bpe/tiktoken
+    Ham thuan tuy (pure function) - khong su dung global state.
+    Caller chiu trach nhiem truyen encoder phu hop.
 
     Args:
         text: Text can dem token
-        encoder: Optional encoder instance. Neu None, dung default.
+        encoder: Encoder instance (bat buoc cho ket qua chinh xac)
+        encoder_type: Loai encoder ("hf", "rs_bpe", "tiktoken")
 
     Returns:
         So luong tokens
     """
     if encoder is None:
-        global _default_encoder
-        # Fast path: encoder da khoi tao
-        if _default_encoder is not None:
-            encoder = _default_encoder
-        else:
-            # Thread-safe lazy initialization
-            with _default_encoder_lock:
-                if _default_encoder is None:
-                    _default_encoder = _get_encoder(
-                        tokenizer_repo=_default_tokenizer_repo
-                    )
-                encoder = _default_encoder
-
-    # Neu encoder khong kha dung, dung uoc luong
-    if encoder is None:
         return _estimate_tokens(text)
 
     try:
-        # Import _encoder_type tu module state
-        import core.encoders as _enc
-
-        # Hugging Face tokenizer dung .encode().ids
-        if _enc._encoder_type == "hf":
+        if encoder_type == "hf":
             return len(encoder.encode(text).ids)
-        # rs-bpe va tiktoken dung .encode()
         else:
             return len(encoder.encode(text))
     except Exception:
-        # Fallback neu encode that bai
         return _estimate_tokens(text)
 
 
@@ -110,24 +71,24 @@ def _read_file_mmap(file_path: Path) -> Optional[str]:
     """
     try:
         with open(file_path, "rb") as f:
-            # Check empty file
             if f.seek(0, 2) == 0:
                 return ""
             f.seek(0)
-
-            # mmap file vao memory
             with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 content_bytes = mm.read()
                 return content_bytes.decode("utf-8", errors="replace")
     except Exception:
-        # Fallback ve read() thong thuong neu mmap fail
         try:
             return file_path.read_text(encoding="utf-8", errors="replace")
         except Exception:
             return None
 
 
-def _count_tokens_for_file_no_cache(file_path: Path) -> int:
+def _count_tokens_for_file_no_cache(
+    file_path: Path,
+    encoder: Optional[Any] = None,
+    encoder_type: str = "",
+) -> int:
     """
     Dem token cho file KHONG update cache.
 
@@ -136,6 +97,8 @@ def _count_tokens_for_file_no_cache(file_path: Path) -> int:
 
     Args:
         file_path: Duong dan file
+        encoder: Encoder instance
+        encoder_type: Loai encoder
 
     Returns:
         So token hoac 0 neu khong dem duoc
@@ -155,53 +118,48 @@ def _count_tokens_for_file_no_cache(file_path: Path) -> int:
         if cached is not None:
             return cached
 
-        # Check binary su dung comprehensive detection
         from core.utils.file_utils import is_binary_file
 
         if is_binary_file(file_path):
             return 0
 
-        # Doc voi mmap (nhanh hon)
         content = _read_file_mmap(file_path)
         if content is None:
             return 0
 
-        return count_tokens(content)
+        return count_tokens(content, encoder=encoder, encoder_type=encoder_type)
 
     except Exception:
         return 0
 
 
-def count_tokens_for_file(file_path: Path) -> int:
+def count_tokens_for_file(
+    file_path: Path,
+    encoder: Optional[Any] = None,
+    encoder_type: str = "",
+) -> int:
     """
-    Dem so token trong mot file.
+    Dem so token trong mot file voi cache.
 
     - Skip files qua lon (> 5MB)
     - Skip binary files
     - Return 0 neu khong doc duoc
-    - Uses LRU mtime-based caching cho performance
+    - Uses LRU mtime-based caching
 
     Args:
         file_path: Duong dan den file
+        encoder: Encoder instance
+        encoder_type: Loai encoder
 
     Returns:
         So luong tokens, hoac 0 neu skip/error
     """
     try:
-        # Check file exists
-        if not file_path.exists():
+        if not file_path.exists() or not file_path.is_file():
             return 0
 
-        if not file_path.is_file():
-            return 0
-
-        # Check file size truoc (cheap operation)
         stat = file_path.stat()
-        if stat.st_size > MAX_BYTES:
-            return 0
-
-        # Empty files
-        if stat.st_size == 0:
+        if stat.st_size > MAX_BYTES or stat.st_size == 0:
             return 0
 
         path_str = str(file_path)
@@ -211,19 +169,17 @@ def count_tokens_for_file(file_path: Path) -> int:
         if cached is not None:
             return cached
 
-        # Check binary su dung comprehensive detection
         from core.utils.file_utils import is_binary_file
 
         if is_binary_file(file_path):
             return 0
 
-        # Doc va dem
         content = file_path.read_text(encoding="utf-8", errors="replace")
-        token_count = count_tokens(content)
+        token_count = count_tokens(
+            content, encoder=encoder, encoder_type=encoder_type
+        )
 
-        # Update cache (LRU eviction tu dong trong TokenCache.put())
         token_cache.put(path_str, stat.st_mtime, token_count)
-
         return token_count
 
     except (OSError, IOError):

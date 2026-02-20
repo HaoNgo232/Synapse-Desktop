@@ -16,7 +16,7 @@ import threading
 import time
 
 from core.utils.file_utils import TreeItem
-from core.token_counter import count_tokens_for_file, count_tokens_batch_parallel
+from services.encoder_registry import get_tokenization_service
 from core.utils.safe_timer import SafeTimer  # RACE CONDITION FIX
 
 # Cancellation flag - import tu core layer (fix circular dependency)
@@ -221,7 +221,7 @@ class TokenDisplayService:
             return
 
         try:
-            tokens = count_tokens_for_file(Path(path))
+            tokens = get_tokenization_service().count_tokens_for_file(Path(path))
             with self._lock:
                 self._cache[path] = tokens
             with self._update_lock:
@@ -314,7 +314,6 @@ class TokenDisplayService:
         # AN TOÀN: count_tokens_batch_parallel() đã xử lý race condition
         if immediate_files and is_counting_tokens():
             from core.logging_config import log_info
-            from services.encoder_registry import get_tokenizer_repo
 
             # PERFORMANCE TRACKING: Bắt đầu đếm
             start_time = time.perf_counter()
@@ -325,11 +324,11 @@ class TokenDisplayService:
             # Convert to Path list
             immediate_paths = [Path(p) for p in immediate_files]
 
-            # Parallel counting - nhanh hơn 3-4x
-            # Inject tokenizer_repo from settings
-            tokenizer_repo = get_tokenizer_repo()
-            results = count_tokens_batch_parallel(
-                immediate_paths, max_workers=4, tokenizer_repo=tokenizer_repo
+            # Parallel counting - nhanh hon 3-4x
+            # TokenizationService da quan ly tokenizer_repo noi bo
+            service = get_tokenization_service()
+            results = service.count_tokens_batch_parallel(
+                immediate_paths, max_workers=4
             )
 
             # PERFORMANCE TRACKING: Kết thúc đếm
@@ -401,7 +400,7 @@ class TokenDisplayService:
                         continue
 
                 try:
-                    tokens = count_tokens_for_file(Path(path))
+                    tokens = get_tokenization_service().count_tokens_for_file(Path(path))
                     with self._lock:
                         self._cache[path] = tokens
                 except Exception:

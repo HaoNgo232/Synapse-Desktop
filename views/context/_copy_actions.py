@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List, Set, Callable, Dict, Tuple
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 
-from core.token_counter import count_tokens
+from services.encoder_registry import get_tokenization_service
 from core.prompt_generator import (
     generate_file_map,
     generate_file_contents_xml,
@@ -193,8 +193,8 @@ class CopyTaskWorker(QRunnable):
         """
         try:
             prompt = self.task_fn()
-            from core.token_counter import count_tokens as _count
-            token_count = _count(prompt)
+            from services.encoder_registry import get_tokenization_service as _get_svc
+            token_count = _get_svc().count_tokens(prompt)
             try:
                 self.signals.finished.emit(prompt, token_count)
             except RuntimeError:
@@ -441,7 +441,7 @@ class CopyActionsMixin:
             if success:
                 pre_snapshot = {
                     "file_tokens": self.file_tree_widget.get_total_tokens(),
-                    "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                    "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
                     "include_opx": include_xml,
                     "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
                 }
@@ -729,7 +729,7 @@ class CopyActionsMixin:
 
             pre_snapshot = {
                 "file_tokens": self.file_tree_widget.get_total_tokens(),
-                "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
                 "include_opx": include_xml,
                 "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
             }
@@ -770,7 +770,7 @@ class CopyActionsMixin:
             if success:
                 pre_snapshot = {
                     "file_tokens": self.file_tree_widget.get_total_tokens(),
-                    "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                    "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
                     "include_opx": False,
                     "copy_mode": "Copy Smart",
                 }
@@ -818,7 +818,7 @@ class CopyActionsMixin:
 
         pre_snapshot = {
             "file_tokens": self.file_tree_widget.get_total_tokens(),
-            "instruction_tokens": count_tokens(instructions) if instructions else 0,
+            "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
             "include_opx": False,
             "copy_mode": "Copy Smart",
         }
@@ -854,7 +854,7 @@ class CopyActionsMixin:
             if success:
                 pre_snapshot = {
                     "file_tokens": 0,
-                    "instruction_tokens": count_tokens(instructions) if instructions else 0,
+                    "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
                     "include_opx": False,
                     "copy_mode": "Copy Tree Map",
                 }
@@ -886,7 +886,7 @@ class CopyActionsMixin:
 
         pre_snapshot = {
             "file_tokens": 0,
-            "instruction_tokens": count_tokens(instructions) if instructions else 0,
+            "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
             "include_opx": False,
             "copy_mode": "Copy Tree Map",
         }
@@ -973,7 +973,7 @@ class CopyActionsMixin:
         if include_opx:
             try:
                 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-                opx_t = count_tokens(XML_FORMATTING_INSTRUCTIONS)
+                opx_t = get_tokenization_service().count_tokens(XML_FORMATTING_INSTRUCTIONS)
             except ImportError:
                 opx_t = 0
 

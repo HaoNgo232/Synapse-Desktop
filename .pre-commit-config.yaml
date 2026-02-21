@@ -17,10 +17,10 @@ repos:
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)
 
-      # Run all tests
-      - id: pytest-all
-        name: pytest (all tests)
-        entry: bash -c 'source .venv/bin/activate && pytest tests/ -v'
+      # Run tests (fast - only related to changed files)
+      - id: pytest-fast
+        name: pytest (fast)
+        entry: bash -c 'source .venv/bin/activate && pytest tests/ -x --tb=line -q'
         language: system
         pass_filenames: false
         stages: [pre-commit]

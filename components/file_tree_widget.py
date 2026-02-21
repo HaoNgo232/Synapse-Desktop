@@ -485,7 +485,16 @@ class FileTreeWidget(QWidget):
             return True  # Da xu ly, khong truyen tiep
 
         # Zone "other" (label, badges, khoang trong)
-        # Khong lam gi — de Qt xu ly default (hover highlight, etc.)
+        # Neu la folder -> toggle expand/collapse
+        if zone == "other":
+            is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
+            if is_dir:
+                if self._tree_view.isExpanded(proxy_index):
+                    self._tree_view.collapse(proxy_index)
+                else:
+                    self._tree_view.expand(proxy_index)
+                return True
+
         return False
 
     @Slot()

@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      # Auto-fix formatting
+      - id: ruff-format
+        name: ruff format (auto-fix)
+        entry: ruff format
+        language: system
+        types: [python]
+        exclude: ^(tests/|stubs/|.agent/)
+
+      # Auto-fix linting issues
+      - id: ruff-lint
+        name: ruff lint (auto-fix)
+        entry: ruff check --fix
+        language: system
+        types: [python]
+        exclude: ^(tests/|stubs/|.agent/)
+
+      # Run tests (fast check only)
+      - id: pytest-quick
+        name: pytest (quick)
+        entry: bash -c 'source .venv/bin/activate && pytest tests/ -x --tb=short'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

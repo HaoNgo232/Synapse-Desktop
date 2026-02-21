@@ -40,6 +40,7 @@ pyinstaller \
     --noconfirm \
     --clean \
     --add-data "$SCRIPT_DIR/assets:assets" \
+    --add-data "$SCRIPT_DIR/core/prompting/templates:core/prompting/templates" \
     --hidden-import tiktoken_ext \
     --hidden-import tiktoken_ext.openai_public \
     --collect-all tiktoken_ext \

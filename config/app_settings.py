@@ -56,7 +56,7 @@ class AppSettings:
     enable_security_check: bool = True
 
     # --- History Settings ---
-    # Luu tru lich su cac instruction da su dung (toi da 20)
+    # Luu tru lich su cac instruction da su dung (toi da 30)
     instruction_history: list[str] = field(default_factory=list)
 
     # --- Rule Settings ---

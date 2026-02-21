@@ -485,10 +485,19 @@ class FileTreeWidget(QWidget):
             return True  # Da xu ly, khong truyen tiep
 
         # Zone "other" (label, badges, khoang trong)
-        # Neu la folder -> toggle expand/collapse
         if zone == "other":
+            # Kiem tra modifier keys truoc khi override behavior
+            # Neu user giu Ctrl hoac Shift, de Qt xu ly multi-selection
+            modifiers = QApplication.keyboardModifiers()
+            if modifiers & (
+                Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+            ):
+                return False  # De Qt xu ly multi-selection
+
             is_dir = self._model.data(source_index, FileTreeRoles.IS_DIR_ROLE)
             if is_dir:
+                # Thuc hien ca selection va expand/collapse
+                self._tree_view.setCurrentIndex(proxy_index)
                 if self._tree_view.isExpanded(proxy_index):
                     self._tree_view.collapse(proxy_index)
                 else:

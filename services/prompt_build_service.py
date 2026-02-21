@@ -114,23 +114,9 @@ class PromptBuildService:
             app_settings = load_app_settings()
             rule_filenames = app_settings.get_rule_filenames_set()
 
-            project_rules_contents = []
-            normal_paths = set()
-            path_strs = {str(p) for p in file_paths}
-
-            for path_str in path_strs:
-                p = Path(path_str)
-                if p.name.lower() in rule_filenames:
-                    try:
-                        content = p.read_text(encoding="utf-8", errors="replace")
-                        project_rules_contents.append(
-                            f"--- Rule File: {p.name} ---\n{content}\n"
-                        )
-                    except Exception as e:
-                        logger.warning("Failed to read rule file %s: %s", p.name, e)
-                else:
-                    normal_paths.add(path_str)
-
+            project_rules_contents, normal_paths = self._extract_rule_files(
+                {str(p) for p in file_paths}, rule_filenames
+            )
             project_rules = "\n".join(project_rules_contents)
 
             # 3. Generate file contents using only normal_paths
@@ -231,22 +217,9 @@ class PromptBuildService:
         app_settings = load_app_settings()
         rule_filenames = app_settings.get_rule_filenames_set()
 
-        project_rules_contents = []
-        normal_paths = set()
-
-        for path_str in path_strs:
-            p = Path(path_str)
-            if p.name.lower() in rule_filenames:
-                try:
-                    content = p.read_text(encoding="utf-8", errors="replace")
-                    project_rules_contents.append(
-                        f"--- Rule File: {p.name} ---\n{content}\n"
-                    )
-                except Exception as e:
-                    logger.warning("Failed to read rule file %s: %s", p.name, e)
-            else:
-                normal_paths.add(path_str)
-
+        project_rules_contents, normal_paths = self._extract_rule_files(
+            path_strs, rule_filenames
+        )
         project_rules = "\n".join(project_rules_contents)
 
         smart_contents = generate_smart_context(
@@ -281,6 +254,42 @@ class PromptBuildService:
             git_logs=git_logs,
             project_rules=project_rules,
         )
+
+    def _extract_rule_files(
+        self, path_strs: Set[str], rule_filenames: Set[str]
+    ) -> Tuple[List[str], Set[str]]:
+        """Extract rule files from paths, return (rule_contents, normal_paths).
+
+        Optimized to reduce TOCTOU (Time-of-check to time-of-use) window by
+        checking stat first, then reading, and catching FileNotFoundError.
+        """
+        project_rules_contents = []
+        normal_paths = set()
+
+        for path_str in path_strs:
+            p = Path(path_str)
+            if p.name.lower() in rule_filenames:
+                try:
+                    # Combine stat + read de giam TOCTOU window
+                    stat_result = p.stat()
+                    if stat_result.st_size > 10 * 1024 * 1024:  # 10MB limit
+                        logger.warning("Rule file too large, skipping: %s", p.name)
+                        continue
+
+                    content = p.read_text(encoding="utf-8", errors="replace")
+                    project_rules_contents.append(
+                        f"--- Rule File: {p.name} ---\n{content}\n"
+                    )
+                except FileNotFoundError:
+                    logger.warning("Rule file disappeared: %s", p.name)
+                except PermissionError as e:
+                    logger.warning("Cannot read rule file %s: %s", p.name, e)
+                except Exception as e:
+                    logger.error("Unexpected error reading rule file %s: %s", p.name, e)
+            else:
+                normal_paths.add(path_str)
+
+        return project_rules_contents, normal_paths
 
 
 logger = logging.getLogger(__name__)

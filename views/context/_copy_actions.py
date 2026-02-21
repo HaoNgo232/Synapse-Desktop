@@ -117,6 +117,7 @@ def _build_fingerprint(
     """Build a fingerprint string from all inputs that affect prompt output.
 
     Includes file mtimes so cache auto-invalidates when files change.
+    Bao gom ca rule file configuration de cache invalidate khi user thay doi rules.
     """
     h = hashlib.sha256()
 
@@ -129,6 +130,11 @@ def _build_fingerprint(
 
     # Instructions
     h.update(f"instr={instructions}\n".encode())
+
+    # Rule file configuration — cache bust khi user thay doi rule file names
+    app_settings = load_app_settings()
+    rule_names = sorted(app_settings.get_rule_filenames_set())
+    h.update(f"rules={','.join(rule_names)}\n".encode())
 
     # Sorted file paths + mtimes
     for p in sorted(selected_paths):
@@ -372,26 +378,36 @@ class CopyActionsMixin:
         return gen
 
     def _cleanup_stale_refs(self: "ContextViewQt", gen: int) -> None:
-        """Clean up stale worker/signal objects after their callback fires.
+        """Thread-safe cleanup of stale worker/signal objects.
 
         Called from EVERY callback (finished/error) for EVERY generation.
         Always cleans up immediately — no threshold waiting.
 
-        Safe to call multiple times — idempotent.
+        Su dung snapshot pattern trong lock de hoan toan thread-safe:
+        - Double deleteLater() tren cung QObject khi nhieu callbacks chay dong thoi
+        - List modification during iteration
         """
-        if not self._stale_workers:
-            return
+        if not hasattr(self, "_cleanup_lock"):
+            import threading
 
-        # Always cleanup all stale refs immediately.
-        # Waiting for a threshold of 10 was causing memory buildup
-        # and crash when user clicks rapidly.
-        for obj in self._stale_workers:
+            self._cleanup_lock = threading.Lock()
+
+        with self._cleanup_lock:
+            if not self._stale_workers:
+                return
+
+            # Tao snapshot de tranh modification during iteration
+            # va double deleteLater() khi nhieu callbacks goi dong thoi
+            to_cleanup = self._stale_workers[:]
+            self._stale_workers.clear()
+
+        # Execute deleteLater outside of the lock
+        for obj in to_cleanup:
             if isinstance(obj, QObject):
                 try:
                     obj.deleteLater()
                 except RuntimeError:
-                    pass
-        self._stale_workers.clear()
+                    pass  # Object da bi delete roi
 
     def _is_current_generation(self: "ContextViewQt", gen: int) -> bool:
         """Check if gen matches current _copy_generation."""
@@ -410,23 +426,15 @@ class CopyActionsMixin:
             btn.setEnabled(enabled)
 
     def _save_instruction_to_history(self: "ContextViewQt", text: str) -> None:
-        """Luu instruction vao history (deduplicate, max 20)."""
-        text = text.strip()
-        if not text:
-            return
+        """Luu instruction vao history (thread-safe, atomic, deduplicate, max 30).
 
-        from services.settings_manager import load_app_settings, update_app_setting
+        Su dung add_instruction_history() de dam bao toan bo
+        read-modify-write duoc bao ve boi lock, tranh mat du lieu
+        khi user click copy nhanh lien tiep.
+        """
+        from services.settings_manager import add_instruction_history
 
-        settings = load_app_settings()
-        history = list(settings.instruction_history)
-
-        if text in history:
-            history.remove(text)
-
-        history.insert(0, text)
-        history = history[:30]
-
-        update_app_setting(instruction_history=history)
+        add_instruction_history(text)
 
     def _copy_context(self: "ContextViewQt", include_xml: bool = False) -> None:
         """Copy context with selected format."""
@@ -837,6 +845,7 @@ class CopyActionsMixin:
             if hasattr(self, "_instructions_field")
             else ""
         )
+        self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
         cached = self._try_cache_hit("copy_treemap", selected_strs, instructions)
@@ -938,6 +947,9 @@ class CopyActionsMixin:
             from components.dialogs_qt import DiffOnlyDialogQt
             from core.utils.git_utils import build_diff_only_prompt
 
+            instructions = self._instructions_field.toPlainText()
+            self._save_instruction_to_history(instructions)
+
             def _build_diff_prompt(
                 diff_result, instructions, include_content, include_tree
             ):
@@ -954,7 +966,7 @@ class CopyActionsMixin:
                 parent=self,
                 workspace=workspace,
                 build_prompt_callback=_build_diff_prompt,
-                instructions=self._instructions_field.toPlainText(),
+                instructions=instructions,
                 on_success=lambda msg: self._show_status(msg),
             )
             dialog.exec()

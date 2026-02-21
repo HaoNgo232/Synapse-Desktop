@@ -95,14 +95,16 @@ def load_app_settings() -> AppSettings:
     """
     Load settings tu file va tra ve AppSettings typed instance.
 
-    Read-only operation, khong can lock vi chi doc file.
+    Read-only operation, khong can lock vi chi doc file,
+    tuy nhien them lock theo code review de consistency.
     Merge saved settings voi defaults cua AppSettings.
     Neu file khong ton tai hoac loi, tra ve defaults.
 
     Returns:
         AppSettings instance voi values tu file + defaults
     """
-    return _load_app_settings_unlocked()
+    with _settings_lock:
+        return _load_app_settings_unlocked()
 
 
 def save_app_settings(settings: AppSettings) -> bool:
@@ -149,6 +151,42 @@ def update_app_setting(**kwargs: Any) -> bool:
         settings = _load_app_settings_unlocked()
         for key, value in kwargs.items():
             setattr(settings, key, value)
+        return _save_app_settings_unlocked(settings)
+
+
+def add_instruction_history(text: str, max_items: int = 30) -> bool:
+    """Them mot instruction vao history (thread-safe, atomic).
+
+    Toan bo read-modify-write duoc bao ve boi _settings_lock
+    de tranh race condition khi user click copy nhanh lien tiep.
+    Neu text da ton tai trong history, no se duoc di chuyen len dau.
+
+    Args:
+        text: Noi dung instruction can them vao history
+        max_items: So luong toi da entries trong history (default 30)
+
+    Returns:
+        True neu save thanh cong
+    """
+    text = text.strip()
+    if not text:
+        return True
+
+    with _settings_lock:
+        settings = _load_app_settings_unlocked()
+        history = list(settings.instruction_history)
+
+        # Deduplicate: xoa entry cu neu da ton tai
+        if text in history:
+            history.remove(text)
+
+        # Chen vao dau danh sach
+        history.insert(0, text)
+
+        # Gioi han so luong
+        history = history[:max_items]
+
+        settings.instruction_history = history
         return _save_app_settings_unlocked(settings)
 
 

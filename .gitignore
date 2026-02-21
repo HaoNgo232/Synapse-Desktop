@@ -7,3 +7,5 @@ dist/
 *.egg-info
 stubs/
 .ruff_cache
+.coverage
+=

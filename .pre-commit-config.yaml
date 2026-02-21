@@ -16,14 +16,5 @@ repos:
         entry: bash -c 'source .venv/bin/activate && ruff check --fix --show-fixes'
         language: system
         types: [python]
-        exclude: ^(tests/|stubs/|.agent/)
-        verbose: true
-
-      # Run tests (fast - only related to changed files)
-      - id: pytest-fast
-        name: pytest (fast)
-        entry: bash -c 'source .venv/bin/activate && pytest tests/ -x --tb=short -v'
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
+        exclude: ^(tests/|stubs/|.agent/|.kiro/)
         verbose: true

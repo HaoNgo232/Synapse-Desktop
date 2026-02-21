@@ -243,6 +243,29 @@ class ContextViewQt(
             except ValueError:
                 pass
 
+    @Slot(object)
+    def _on_template_selected(self, action) -> None:
+        """Handle template selection from dropdown."""
+        from core.prompting.template_manager import load_template
+
+        template_id = action.data()
+        if template_id:
+            try:
+                content = load_template(template_id)
+                current_text = self._instructions_field.toPlainText()
+
+                # If there's already text, append with a separator, otherwise set directly
+                if current_text.strip():
+                    self._instructions_field.setPlainText(
+                        f"{current_text}\\n\\n{content}"
+                    )
+                else:
+                    self._instructions_field.setPlainText(content)
+
+                self._show_status("Template inserted")
+            except Exception as e:
+                self._show_status(f"Failed to load template: {e}", is_error=True)
+
     # ===== Token Counting =====
 
     def _update_token_display(self) -> None:

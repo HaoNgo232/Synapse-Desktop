@@ -331,13 +331,73 @@ class UIBuilderMixin:
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(6)
 
-        # Header row: title + word count
+        # Header row: title + template selector + word count
         header = QHBoxLayout()
         instr_label = QLabel("Instructions")
         instr_label.setStyleSheet(
             f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
         )
         header.addWidget(instr_label)
+
+        # Add Templates button
+        from core.prompting.template_manager import list_templates
+
+        self._template_btn = QToolButton()
+        self._template_btn.setText("Templates")
+        self._template_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._template_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: transparent;
+                color: {ThemeColors.PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.BG_HOVER};
+            }}
+            QToolButton::menu-indicator {{
+                width: 0px;
+            }}
+            """
+        )
+        self._template_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._template_btn.setToolTip("Insert a task-specific prompt template")
+
+        template_menu = QMenu(self._template_btn)
+        template_menu.setStyleSheet(
+            f"""
+            QMenu {{
+                background: {ThemeColors.BG_ELEVATED};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 8px 16px;
+                border-radius: 4px;
+                color: {ThemeColors.TEXT_PRIMARY};
+            }}
+            QMenu::item:selected {{
+                background: {ThemeColors.BG_HOVER};
+            }}
+            """
+        )
+
+        for tmpl in list_templates():
+            action = template_menu.addAction(tmpl.display_name)
+            action.setToolTip(tmpl.description)
+            # Store template ID in action's data for retrieval later
+            action.setData(tmpl.template_id)
+
+        # Connect the menu's triggered signal to a handler in ContextViewQt
+        template_menu.triggered.connect(self._on_template_selected)
+
+        self._template_btn.setMenu(template_menu)
+        header.addWidget(self._template_btn)
+
         header.addStretch()
 
         # Word/char counter

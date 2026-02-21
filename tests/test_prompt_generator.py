@@ -623,7 +623,9 @@ class TestJsonFormat:
         data = json.loads(result)
         assert data["git_diffs"]["work_tree"] == "wdiff"
         assert data["git_diffs"]["staged"] == "sdiff"
-        assert data["git_logs"] == "logs"
+        assert data["git_diffs"]["instruction"]  # Co instruction text
+        assert data["git_logs"]["content"] == "logs"
+        assert data["git_logs"]["instruction"]  # Co instruction text
 
 
 class TestPlainFormat:

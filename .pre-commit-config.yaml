@@ -4,7 +4,7 @@ repos:
       # Auto-fix formatting
       - id: ruff-format
         name: ruff format (auto-fix)
-        entry: ruff format
+        entry: bash -c 'source .venv/bin/activate && ruff format'
         language: system
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)
@@ -12,7 +12,7 @@ repos:
       # Auto-fix linting issues
       - id: ruff-lint
         name: ruff lint (auto-fix)
-        entry: ruff check --fix
+        entry: bash -c 'source .venv/bin/activate && ruff check --fix'
         language: system
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)

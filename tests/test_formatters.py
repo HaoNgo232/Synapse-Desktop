@@ -402,17 +402,20 @@ class TestAssemblePromptPlain:
         assert "File Contents:" in result
 
     def test_plain_with_instructions_first(self):
-        """Plain prompt co instructions o dau."""
+        """Plain prompt co instructions o cuoi (recency bias)."""
         result = assemble_prompt(
             file_map="map",
             file_contents="contents",
             user_instructions="Do this",
             output_style=OutputStyle.PLAIN,
         )
-        # Instructions xuat hien truoc Directory Structure
+        # Instructions xuat hien SAU Directory Structure va File Contents (recency bias)
         inst_pos = result.index("Instructions:")
         dir_pos = result.index("Directory Structure:")
-        assert inst_pos < dir_pos
+        contents_pos = result.index("File Contents:")
+        assert dir_pos < contents_pos < inst_pos, (
+            "Instructions should be at the end for recency bias"
+        )
 
 
 class TestAssembleSmartPrompt:

@@ -4,23 +4,26 @@ repos:
       # Auto-fix formatting
       - id: ruff-format
         name: ruff format (auto-fix)
-        entry: bash -c 'source .venv/bin/activate && ruff format'
+        entry: bash -c 'source .venv/bin/activate && ruff format --diff'
         language: system
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)
+        verbose: true
 
       # Auto-fix linting issues
       - id: ruff-lint
         name: ruff lint (auto-fix)
-        entry: bash -c 'source .venv/bin/activate && ruff check --fix'
+        entry: bash -c 'source .venv/bin/activate && ruff check --fix --show-fixes'
         language: system
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)
+        verbose: true
 
       # Run tests (fast - only related to changed files)
       - id: pytest-fast
         name: pytest (fast)
-        entry: bash -c 'source .venv/bin/activate && pytest tests/ -x --tb=line -q'
+        entry: bash -c 'source .venv/bin/activate && pytest tests/ -x --tb=short -v'
         language: system
         pass_filenames: false
         stages: [pre-commit]
+        verbose: true

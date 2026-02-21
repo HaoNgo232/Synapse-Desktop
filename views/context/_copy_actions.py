@@ -409,6 +409,25 @@ class CopyActionsMixin:
         ):
             btn.setEnabled(enabled)
 
+    def _save_instruction_to_history(self: "ContextViewQt", text: str) -> None:
+        """Luu instruction vao history (deduplicate, max 20)."""
+        text = text.strip()
+        if not text:
+            return
+
+        from services.settings_manager import load_app_settings, update_app_setting
+
+        settings = load_app_settings()
+        history = list(settings.instruction_history)
+
+        if text in history:
+            history.remove(text)
+
+        history.insert(0, text)
+        history = history[:30]
+
+        update_app_setting(instruction_history=history)
+
     def _copy_context(self: "ContextViewQt", include_xml: bool = False) -> None:
         """Copy context with selected format."""
         workspace = self.get_workspace()
@@ -423,6 +442,7 @@ class CopyActionsMixin:
 
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         instructions = self._instructions_field.toPlainText()
+        self._save_instruction_to_history(instructions)
         copy_mode = "copy_opx" if include_xml else "copy_context"
         selected_path_strs = {str(p) for p in file_paths}
 
@@ -744,6 +764,7 @@ class CopyActionsMixin:
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         selected_path_strs = {str(p) for p in file_paths}
         instructions = self._instructions_field.toPlainText()
+        self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
         cached = self._try_cache_hit("copy_smart", selected_path_strs, instructions)

@@ -398,6 +398,60 @@ class UIBuilderMixin:
         self._template_btn.setMenu(template_menu)
         header.addWidget(self._template_btn)
 
+        # Add History button
+        self._history_btn = QToolButton()
+        self._history_btn.setText("History 🕒")
+        self._history_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._history_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: transparent;
+                color: {ThemeColors.TEXT_SECONDARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.BG_HOVER};
+                color: {ThemeColors.TEXT_PRIMARY};
+            }}
+            QToolButton::menu-indicator {{
+                width: 0px;
+            }}
+            """
+        )
+        self._history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._history_btn.setToolTip("View recent instructions")
+
+        self._history_menu = QMenu(self._history_btn)
+        self._history_menu.setStyleSheet(
+            f"""
+            QMenu {{
+                background: {ThemeColors.BG_ELEVATED};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 8px 16px;
+                border-radius: 4px;
+                color: {ThemeColors.TEXT_PRIMARY};
+            }}
+            QMenu::item:selected {{
+                background: {ThemeColors.BG_HOVER};
+            }}
+            QMenu::item:disabled {{
+                color: {ThemeColors.TEXT_MUTED};
+            }}
+            """
+        )
+
+        self._history_menu.aboutToShow.connect(self._populate_history_menu)
+        self._history_menu.triggered.connect(self._on_history_selected)
+        self._history_btn.setMenu(self._history_menu)
+        header.addWidget(self._history_btn)
+
         header.addStretch()
 
         # Word/char counter

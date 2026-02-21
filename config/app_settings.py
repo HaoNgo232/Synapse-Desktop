@@ -55,6 +55,10 @@ class AppSettings:
     # Co enable security scan truoc khi copy hay khong
     enable_security_check: bool = True
 
+    # --- History Settings ---
+    # Luu tru lich su cac instruction da su dung (toi da 20)
+    instruction_history: list[str] = field(default_factory=list)
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
         """
@@ -91,8 +95,13 @@ class AppSettings:
             if expected_type is int and isinstance(value, bool):
                 continue  # Use default instead
 
+            import typing
+
+            origin = typing.get_origin(expected_type)
+            check_type = origin if origin is not None else expected_type
+
             # Validate type cua value
-            if isinstance(value, expected_type):
+            if isinstance(value, check_type):
                 filtered[key] = value
             # Khong raise loi, chi bo qua value sai type -> dung default
 
@@ -113,6 +122,7 @@ class AppSettings:
             "include_git_changes": self.include_git_changes,
             "use_relative_paths": self.use_relative_paths,
             "enable_security_check": self.enable_security_check,
+            "instruction_history": self.instruction_history,
         }
 
     def get_excluded_patterns_list(self) -> list[str]:

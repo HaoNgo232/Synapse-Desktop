@@ -104,6 +104,7 @@ class TestAppSettings:
             "include_git_changes",
             "use_relative_paths",
             "enable_security_check",
+            "instruction_history",
         }
         assert set(d.keys()) == expected_keys
 

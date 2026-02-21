@@ -266,6 +266,38 @@ class ContextViewQt(
             except Exception as e:
                 self._show_status(f"Failed to load template: {e}", is_error=True)
 
+    @Slot()
+    def _populate_history_menu(self) -> None:
+        """Đổ dữ liệu recent instructions vào history menu khi được click."""
+        from services.settings_manager import load_app_settings
+
+        menu = self._history_menu
+        menu.clear()
+
+        settings = load_app_settings()
+        history = settings.instruction_history
+
+        if not history:
+            action = menu.addAction("No history yet")
+            action.setEnabled(False)
+            return
+
+        for text in history:
+            label = text[:50] + "..." if len(text) > 50 else text
+            label = label.replace("\n", " ").strip()
+
+            action = menu.addAction(label)
+            action.setToolTip(text[:200] + ("..." if len(text) > 200 else ""))
+            action.setData(text)
+
+    @Slot(object)
+    def _on_history_selected(self, action) -> None:
+        """Handle history selection from dropdown."""
+        text = action.data()
+        if text:
+            self._instructions_field.setPlainText(text)
+            self._show_status("History loaded")
+
     # ===== Token Counting =====
 
     def _update_token_display(self) -> None:

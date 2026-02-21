@@ -405,6 +405,39 @@ class SettingsViewQt(QWidget):
         card2_layout.addWidget(_make_separator())
         card2_layout.addSpacing(16)
 
+        # ─────────────────────────────
+        # CARD 2a: Repository Rules
+        # ─────────────────────────────
+        card2a = _make_card()
+        card2a_layout = QVBoxLayout(card2a)
+        card2a_layout.setContentsMargins(22, 22, 22, 22)
+        card2a_layout.setSpacing(0)
+
+        card2a_layout.addWidget(_AccentDotLabel("Repository Rules"))
+        card2a_layout.addSpacing(8)
+
+        rules_desc = QLabel(
+            "File names treated as instructions (e.g. .cursorrules, prompt.md). Will be grouped separately from source code."
+        )
+        rules_desc.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+        )
+        rules_desc.setWordWrap(True)
+        card2a_layout.addWidget(rules_desc)
+        card2a_layout.addSpacing(14)
+
+        # Tag chips for rule files
+        initial_rules = settings.get("rule_file_names", [])
+        if isinstance(initial_rules, list):
+            valid_rules = [str(r).strip() for r in initial_rules if str(r).strip()]
+        else:
+            valid_rules = []
+        self._rule_chips = TagChipsWidget(patterns=valid_rules)
+        self._rule_chips.patterns_changed.connect(self._on_patterns_changed)
+        card2a_layout.addWidget(self._rule_chips)
+
+        col1_layout.addWidget(card2a)
+
         # Quick preset dropdown (styled)
         preset_row = QHBoxLayout()
         preset_row.setSpacing(10)
@@ -615,6 +648,7 @@ class SettingsViewQt(QWidget):
 
         settings_data = {
             "excluded_folders": excluded_text,
+            "rule_file_names": self._rule_chips.get_patterns(),
             "use_gitignore": self._gitignore_toggle.isChecked(),
             "enable_security_check": self._security_toggle.isChecked(),
             "include_git_changes": self._git_toggle.isChecked(),
@@ -680,6 +714,14 @@ class SettingsViewQt(QWidget):
             if p.strip() and not p.strip().startswith("#")
         ]
         self._tag_chips.set_patterns(default_patterns)
+        default_rules_raw = DEFAULT_SETTINGS.get("rule_file_names", [])
+        if isinstance(default_rules_raw, list):
+            default_rules = [
+                str(r).strip() for r in default_rules_raw if str(r).strip()
+            ]
+        else:
+            default_rules = []
+        self._rule_chips.set_patterns(default_rules)
         self._gitignore_toggle.setChecked(True)
         self._security_toggle.setChecked(True)
         self._git_toggle.setChecked(True)
@@ -737,6 +779,7 @@ class SettingsViewQt(QWidget):
         patterns = self._tag_chips.get_patterns()
         data = {
             "excluded_folders": "\n".join(patterns),
+            "rule_file_names": self._rule_chips.get_patterns(),
             "use_gitignore": self._gitignore_toggle.isChecked(),
             "include_git_changes": self._git_toggle.isChecked(),
             "use_relative_paths": self._relative_toggle.isChecked(),
@@ -783,6 +826,14 @@ class SettingsViewQt(QWidget):
             if p.strip() and not p.strip().startswith("#")
         ]
         self._tag_chips.set_patterns(patterns)
+
+        imported_rules = imported.get("rule_file_names", [])
+        if isinstance(imported_rules, list):
+            rule_patterns = [str(r).strip() for r in imported_rules if str(r).strip()]
+        else:
+            rule_patterns = []
+        self._rule_chips.set_patterns(rule_patterns)
+
         self._gitignore_toggle.setChecked(imported.get("use_gitignore", True))
         self._git_toggle.setChecked(imported.get("include_git_changes", True))
         self._relative_toggle.setChecked(imported.get("use_relative_paths", True))

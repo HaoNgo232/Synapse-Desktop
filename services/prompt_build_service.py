@@ -98,7 +98,7 @@ class PromptBuildService:
                 git_diffs = get_git_diffs(workspace)
                 git_logs = get_git_logs(workspace, max_commits=5)
 
-            # 1. Generate file map
+            # 1. Generate file map (with all paths including rules)
             file_map = ""
             if tree_item and selected_paths:
                 file_map = generate_file_map(
@@ -108,13 +108,37 @@ class PromptBuildService:
                     use_relative_paths=use_relative_paths,
                 )
 
-            # 2. Generate file contents
+            # 2. Extract Project Rules
+            from services.settings_manager import load_app_settings
+
+            app_settings = load_app_settings()
+            rule_filenames = app_settings.get_rule_filenames_set()
+
+            project_rules_contents = []
+            normal_paths = set()
             path_strs = {str(p) for p in file_paths}
+
+            for path_str in path_strs:
+                p = Path(path_str)
+                if p.name.lower() in rule_filenames:
+                    try:
+                        content = p.read_text(encoding="utf-8", errors="replace")
+                        project_rules_contents.append(
+                            f"--- Rule File: {p.name} ---\n{content}\n"
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to read rule file %s: %s", p.name, e)
+                else:
+                    normal_paths.add(path_str)
+
+            project_rules = "\n".join(project_rules_contents)
+
+            # 3. Generate file contents using only normal_paths
             content_gen = _FORMAT_TO_GENERATOR.get(
                 output_format, generate_file_contents_xml
             )
             file_contents = content_gen(
-                selected_paths=path_strs,
+                selected_paths=normal_paths,
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
             )
@@ -129,6 +153,7 @@ class PromptBuildService:
                 include_xml_formatting=include_xml_formatting,
                 git_diffs=git_diffs,
                 git_logs=git_logs,
+                project_rules=project_rules,
             )
 
         tokenizer = get_tokenization_service()
@@ -200,8 +225,32 @@ class PromptBuildService:
         # Convert paths to string set cho generate_smart_context
         path_strs = {str(p) for p in file_paths}
 
+        # Extract Project Rules
+        from services.settings_manager import load_app_settings
+
+        app_settings = load_app_settings()
+        rule_filenames = app_settings.get_rule_filenames_set()
+
+        project_rules_contents = []
+        normal_paths = set()
+
+        for path_str in path_strs:
+            p = Path(path_str)
+            if p.name.lower() in rule_filenames:
+                try:
+                    content = p.read_text(encoding="utf-8", errors="replace")
+                    project_rules_contents.append(
+                        f"--- Rule File: {p.name} ---\n{content}\n"
+                    )
+                except Exception as e:
+                    logger.warning("Failed to read rule file %s: %s", p.name, e)
+            else:
+                normal_paths.add(path_str)
+
+        project_rules = "\n".join(project_rules_contents)
+
         smart_contents = generate_smart_context(
-            selected_paths=path_strs,
+            selected_paths=normal_paths,
             include_relationships=True,  # Giu nguyen behavior truoc refactor
             workspace_root=workspace,
             use_relative_paths=use_relative_paths,
@@ -230,6 +279,7 @@ class PromptBuildService:
             user_instructions=instructions,
             git_diffs=git_diffs,
             git_logs=git_logs,
+            project_rules=project_rules,
         )
 
 

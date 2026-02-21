@@ -59,6 +59,20 @@ class AppSettings:
     # Luu tru lich su cac instruction da su dung (toi da 20)
     instruction_history: list[str] = field(default_factory=list)
 
+    # --- Rule Settings ---
+    # Danh sach cac ten file project rules de tu dong boc tach (VD: .cursorrules)
+    rule_file_names: list[str] = field(
+        default_factory=lambda: [
+            ".cursorrules",
+            "synapse-instructions.md",
+            ".windsurfrules",
+            ".synapse-rules",
+            "prompt.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+        ]
+    )
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
         """
@@ -123,6 +137,7 @@ class AppSettings:
             "use_relative_paths": self.use_relative_paths,
             "enable_security_check": self.enable_security_check,
             "instruction_history": self.instruction_history,
+            "rule_file_names": self.rule_file_names,
         }
 
     def get_excluded_patterns_list(self) -> list[str]:
@@ -139,3 +154,10 @@ class AppSettings:
             for line in self.excluded_folders.splitlines()
             if line.strip() and not line.strip().startswith("#")
         ]
+
+    def get_rule_filenames_set(self) -> set[str]:
+        """
+        Tra ve tap hop cac ten file duoc coi la project rules (case-insensitive).
+        Dung de filter luong file khi build_prompt.
+        """
+        return {name.strip().lower() for name in self.rule_file_names if name.strip()}

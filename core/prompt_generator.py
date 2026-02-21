@@ -404,6 +404,7 @@ def build_smart_prompt(
     user_instructions: str = "",
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
+    project_rules: str = "",
 ) -> str:
     """
     Tao prompt day du cho Copy Smart.
@@ -421,7 +422,7 @@ def build_smart_prompt(
         Prompt string day du
     """
     return assemble_smart_prompt(
-        smart_contents, file_map, user_instructions, git_diffs, git_logs
+        smart_contents, file_map, user_instructions, git_diffs, git_logs, project_rules
     )
 
 
@@ -433,6 +434,7 @@ def generate_prompt(
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
     output_style: OutputStyle = OutputStyle.XML,
+    project_rules: str = "",
 ) -> str:
     """
     Tao prompt hoan chinh de gui cho LLM.
@@ -459,4 +461,5 @@ def generate_prompt(
         git_diffs,
         git_logs,
         output_style,
+        project_rules,
     )

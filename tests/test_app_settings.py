@@ -105,6 +105,7 @@ class TestAppSettings:
             "use_relative_paths",
             "enable_security_check",
             "instruction_history",
+            "rule_file_names",
         }
         assert set(d.keys()) == expected_keys
 
@@ -125,6 +126,20 @@ class TestAppSettings:
         """Test excluded patterns chi co comments."""
         settings = AppSettings(excluded_folders="# comment1\n# comment2")
         assert settings.get_excluded_patterns_list() == []
+
+    def test_get_rule_filenames_set(self):
+        """Test parse rule_file_names thanh set case-insensitive."""
+        settings = AppSettings(
+            rule_file_names=[".cursorrules", " SYNAPSE-RULES.md ", ""]
+        )
+        patterns = settings.get_rule_filenames_set()
+        assert patterns == {".cursorrules", "synapse-rules.md"}
+
+    def test_get_rule_filenames_set_default(self):
+        """Test default rule file names."""
+        settings = AppSettings()
+        # Default co san array
+        assert ".cursorrules" in settings.get_rule_filenames_set()
 
 
 # ============================================================

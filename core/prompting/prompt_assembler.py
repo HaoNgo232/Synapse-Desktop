@@ -46,6 +46,7 @@ def assemble_prompt(
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
     output_style: OutputStyle = OutputStyle.XML,
+    project_rules: str = "",
 ) -> str:
     """
     Lap rap prompt hoan chinh tu cac sections.
@@ -76,6 +77,7 @@ def assemble_prompt(
             include_xml_formatting,
             git_diffs,
             git_logs,
+            project_rules,
         )
     elif output_style == OutputStyle.JSON:
         return _assemble_json(
@@ -85,6 +87,7 @@ def assemble_prompt(
             include_xml_formatting,
             git_diffs,
             git_logs,
+            project_rules,
         )
     elif output_style == OutputStyle.PLAIN:
         return _assemble_plain(
@@ -93,6 +96,7 @@ def assemble_prompt(
             user_instructions,
             git_diffs,
             git_logs,
+            project_rules,
         )
     else:
         return _assemble_markdown(
@@ -102,6 +106,7 @@ def assemble_prompt(
             include_xml_formatting,
             git_diffs,
             git_logs,
+            project_rules,
         )
 
 
@@ -111,6 +116,7 @@ def assemble_smart_prompt(
     user_instructions: str = "",
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
+    project_rules: str = "",
 ) -> str:
     """
     Lap rap prompt cho Copy Smart - gom file_summary (voi agent_role),
@@ -138,6 +144,9 @@ def assemble_smart_prompt(
 </smart_context>
 """
     prompt = _append_git_changes_xml(prompt, git_diffs, git_logs)
+
+    if project_rules and project_rules.strip():
+        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
@@ -218,6 +227,7 @@ def _assemble_xml(
     include_xml_formatting: bool,
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
+    project_rules: str = "",
 ) -> str:
     """Lap rap prompt theo XML format voi AI-Friendly header va Agent Role."""
     # generate_file_summary_xml() da bao gom agent_role ben trong
@@ -234,6 +244,9 @@ def _assemble_xml(
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
 
+    if project_rules and project_rules.strip():
+        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
 
@@ -247,6 +260,7 @@ def _assemble_json(
     include_xml_formatting: bool,
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
+    project_rules: str = "",
 ) -> str:
     """Lap rap prompt theo JSON format voi system_instruction va file_summary."""
     try:
@@ -267,6 +281,9 @@ def _assemble_json(
         "directory_structure": file_map,
         "files": files_data,
     }
+
+    if project_rules:
+        prompt_data["project_rules"] = project_rules
 
     if user_instructions:
         prompt_data["instructions"] = user_instructions
@@ -297,6 +314,7 @@ def _assemble_plain(
     user_instructions: str,
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
+    project_rules: str = "",
 ) -> str:
     """Lap rap prompt theo Plain Text format voi Summary header va Git instructions."""
     prompt_parts = []
@@ -339,6 +357,9 @@ def _assemble_plain(
             f"{'-' * 32}\n{GIT_LOG_INSTRUCTION}\n\nGit Logs:\n{git_logs.log_content}"
         )
 
+    if project_rules:
+        prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules}")
+
     # User instructions o cuoi cung (recency bias giup LLM xu ly tot hon)
     if user_instructions:
         prompt_parts.append(f"{'-' * 32}\nInstructions:\n{user_instructions}")
@@ -353,6 +374,7 @@ def _assemble_markdown(
     include_xml_formatting: bool,
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
+    project_rules: str = "",
 ) -> str:
     """Lap rap prompt theo Markdown format voi File Summary va Agent Role."""
     # Header voi Agent Role va File Summary
@@ -386,6 +408,9 @@ Notes:
 
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
+
+    if project_rules and project_rules.strip():
+        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"

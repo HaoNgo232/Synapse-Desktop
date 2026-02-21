@@ -43,14 +43,19 @@ class TestPromptBuildService:
         mock_svc.count_tokens.return_value = 42
         mock_tokenizer.return_value = mock_svc
 
-        prompt, count = self.service.build_prompt(
-            file_paths=[Path("/a.py")],
-            workspace=Path("/project"),
-            instructions="fix bugs",
-            output_format="xml",
-            include_git_changes=False,
-            use_relative_paths=True,
-        )
+        with patch("services.settings_manager.load_app_settings") as mock_settings:
+            mock_settings_inst = MagicMock()
+            mock_settings_inst.get_rule_filenames_set.return_value = set()
+            mock_settings.return_value = mock_settings_inst
+
+            prompt, count = self.service.build_prompt(
+                file_paths=[Path("/a.py")],
+                workspace=Path("/project"),
+                instructions="fix bugs",
+                output_format="xml",
+                include_git_changes=False,
+                use_relative_paths=True,
+            )
 
         assert prompt == "<prompt>test</prompt>"
         assert count == 42
@@ -67,14 +72,19 @@ class TestPromptBuildService:
         mock_svc.count_tokens.return_value = 100
         mock_tokenizer.return_value = mock_svc
 
-        prompt, count = self.service.build_prompt(
-            file_paths=[Path("/a.py")],
-            workspace=Path("/project"),
-            instructions="refactor",
-            output_format="smart",
-            include_git_changes=True,
-            use_relative_paths=True,
-        )
+        with patch("services.settings_manager.load_app_settings") as mock_settings:
+            mock_settings_inst = MagicMock()
+            mock_settings_inst.get_rule_filenames_set.return_value = set()
+            mock_settings.return_value = mock_settings_inst
+
+            prompt, count = self.service.build_prompt(
+                file_paths=[Path("/a.py")],
+                workspace=Path("/project"),
+                instructions="refactor",
+                output_format="smart",
+                include_git_changes=True,
+                use_relative_paths=True,
+            )
 
         assert prompt == "smart prompt"
         assert count == 100
@@ -100,3 +110,48 @@ class TestPromptBuildService:
 
         assert result == "tree output"
         mock_map.assert_called_once()
+
+    @patch("services.prompt_build_service.generate_prompt")
+    @patch("services.prompt_build_service.generate_file_contents_xml")
+    @patch("services.prompt_build_service.get_tokenization_service")
+    def test_build_prompt_extracts_rules(
+        self, mock_tokenizer, mock_gen_xml, mock_gen_prompt, tmp_path
+    ):
+        """Test build_prompt removes rule files and passes project_rules args."""
+        rule_file = tmp_path / ".cursorrules"
+        rule_file.write_text("Rule 1")
+        normal_file = tmp_path / "a.py"
+
+        mock_gen_xml.return_value = "<file contents>"
+        mock_gen_prompt.return_value = "<prompt>test</prompt>"
+        mock_svc = MagicMock()
+        mock_svc.count_tokens.return_value = 42
+        mock_tokenizer.return_value = mock_svc
+
+        with patch("services.settings_manager.load_app_settings") as mock_settings:
+            mock_settings_inst = MagicMock()
+            mock_settings_inst.get_rule_filenames_set.return_value = {".cursorrules"}
+            mock_settings.return_value = mock_settings_inst
+
+            prompt, count = self.service.build_prompt(
+                file_paths=[rule_file, normal_file],
+                workspace=tmp_path,
+                instructions="fix",
+                output_format="xml",
+                include_git_changes=False,
+                use_relative_paths=True,
+            )
+
+            # Test generator call arguments explicitly if possible.
+            # But since it's resolved via _FORMAT_TO_GENERATOR, mock_gen_xml is NOT the one called.
+            # We simply check the generate_prompt arguments instead.
+
+            # Kiem tra generate_prompt duoc goi dung params project_rules
+            called_kwargs = mock_gen_prompt.call_args[1]
+            assert "--- Rule File: .cursorrules ---" in called_kwargs["project_rules"]
+            assert "Rule 1" in called_kwargs["project_rules"]
+
+            # Kiem tra generate_prompt duoc goi dung params project_rules
+            called_kwargs = mock_gen_prompt.call_args[1]
+            assert "--- Rule File: .cursorrules ---" in called_kwargs["project_rules"]
+            assert "Rule 1" in called_kwargs["project_rules"]

@@ -11,10 +11,8 @@ Test cac tuong tac THUC giua cac component:
 - Fallback warning (Option 2b)
 """
 
-import os
 import time
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,10 +50,18 @@ class TestInterfaceCompliance:
         assert hasattr(service, "reset_encoder")
         assert hasattr(service, "clear_cache")
         assert hasattr(service, "clear_file_from_cache")
-        assert all(callable(getattr(service, m)) for m in [
-            "count_tokens", "count_tokens_for_file", "count_tokens_batch_parallel",
-            "set_model_config", "reset_encoder", "clear_cache", "clear_file_from_cache",
-        ])
+        assert all(
+            callable(getattr(service, m))
+            for m in [
+                "count_tokens",
+                "count_tokens_for_file",
+                "count_tokens_batch_parallel",
+                "set_model_config",
+                "reset_encoder",
+                "clear_cache",
+                "clear_file_from_cache",
+            ]
+        )
 
 
 # ================================================================
@@ -227,8 +233,8 @@ class TestCacheInvalidation:
         file_b.write_text("b = 2")
 
         # Populate cache
-        count_a = service.count_tokens_for_file(file_a)
-        count_b = service.count_tokens_for_file(file_b)
+        service.count_tokens_for_file(file_a)
+        service.count_tokens_for_file(file_b)
 
         # Clear chi file a
         service.clear_file_from_cache(str(file_a))
@@ -410,7 +416,9 @@ class TestBatchProcessing:
     def test_empty_list(self):
         """Empty list -> empty dict."""
         service = TokenizationService()
-        with patch("services.tokenization_service.is_counting_tokens", return_value=True):
+        with patch(
+            "services.tokenization_service.is_counting_tokens", return_value=True
+        ):
             result = service.count_tokens_batch_parallel([])
             assert result == {}
 
@@ -429,7 +437,9 @@ class TestBatchProcessing:
         # Nonexistent file
         missing = tmp_path / "missing.py"
 
-        with patch("services.tokenization_service.is_counting_tokens", return_value=True):
+        with patch(
+            "services.tokenization_service.is_counting_tokens", return_value=True
+        ):
             results = service.count_tokens_batch_parallel(
                 [text_file, binary_file, missing], max_workers=2
             )
@@ -449,7 +459,9 @@ class TestBatchProcessing:
             f.write_text(f"x = {i}\n" * 10)
             files.append(f)
 
-        with patch("services.tokenization_service.is_counting_tokens", return_value=True):
+        with patch(
+            "services.tokenization_service.is_counting_tokens", return_value=True
+        ):
             results = service.count_tokens_batch_parallel(files, max_workers=2)
 
         # Verify cache duoc populate
@@ -469,7 +481,9 @@ class TestBatchProcessing:
             files.append(f)
 
         # Cancellation flag = False -> return empty
-        with patch("services.tokenization_service.is_counting_tokens", return_value=False):
+        with patch(
+            "services.tokenization_service.is_counting_tokens", return_value=False
+        ):
             result = service.count_tokens_batch_parallel(files)
             assert result == {}
 

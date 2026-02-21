@@ -556,14 +556,12 @@ class FileTreeWidget(QWidget):
             return
 
         if not selected_files:
-            self._model._last_resolved_files.clear()
-            self._model._resolved_for_generation = -1
+            self._model._selection_mgr.set_resolved_files(set(), -1)
             self.token_counting_done.emit()
             return
 
         # Track resolved files + danh dau generation cho freshness check
-        self._model._last_resolved_files = set(selected_files)
-        self._model._resolved_for_generation = sel_gen
+        self._model._selection_mgr.set_resolved_files(set(selected_files), sel_gen)
 
         # Filter files chua co trong cache
         uncached = [f for f in selected_files if f not in self._model._token_cache]

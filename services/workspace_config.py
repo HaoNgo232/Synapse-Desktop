@@ -15,7 +15,10 @@ Functions:
 
 from typing import Callable
 
-from services.settings_manager import load_settings, save_settings
+from services.settings_manager import (
+    load_app_settings,
+    update_app_setting,
+)
 
 
 # ============================================================
@@ -37,24 +40,18 @@ PRESET_PROFILES = {
 
 def get_excluded_patterns() -> list[str]:
     """Tra ve danh sach excluded patterns da normalize tu settings."""
-    raw = load_settings().get("excluded_folders", "")
-    patterns: list[str] = []
-    for line in raw.splitlines():
-        value = line.strip()
-        if not value or value.startswith("#"):
-            continue
-        patterns.append(value)
-    return patterns
+    settings = load_app_settings()
+    return settings.get_excluded_patterns_list()
 
 
 def get_use_gitignore() -> bool:
     """Tra ve co respect .gitignore khong (True/False)."""
-    return bool(load_settings().get("use_gitignore", True))
+    return load_app_settings().use_gitignore
 
 
 def get_use_relative_paths() -> bool:
     """Tra ve co dung workspace-relative paths trong prompts khong."""
-    return bool(load_settings().get("use_relative_paths", True))
+    return load_app_settings().use_relative_paths
 
 
 # ============================================================
@@ -95,21 +92,23 @@ def add_excluded_patterns(patterns: list[str]) -> bool:
     """
     Them excluded patterns moi, tranh duplicate.
 
+    Su dung typed API `update_app_setting` de dam bao thread-safe
+    va tuong thich voi AppSettings.
+
     Args:
         patterns: Danh sach patterns can them
 
     Returns:
         True neu luu thanh cong
     """
-    settings = load_settings()
     existing = get_excluded_patterns()
     merged = existing[:]
     for pattern in patterns:
         normalized = pattern.strip()
         if normalized and normalized not in merged:
             merged.append(normalized)
-    settings["excluded_folders"] = "\n".join(merged)
-    if save_settings(settings):
+    new_value = "\n".join(merged)
+    if update_app_setting(excluded_folders=new_value):
         _excluded_notifier.emit()
         return True
     return False
@@ -119,6 +118,9 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
     """
     Xoa excluded patterns khoi settings.
 
+    Su dung typed API `update_app_setting` de dam bao thread-safe
+    va tuong thich voi AppSettings.
+
     Args:
         patterns: Danh sach patterns can xoa
 
@@ -126,11 +128,10 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
         True neu luu thanh cong
     """
     to_remove = {p.strip() for p in patterns if p.strip()}
-    settings = load_settings()
     existing = get_excluded_patterns()
     filtered = [p for p in existing if p not in to_remove]
-    settings["excluded_folders"] = "\n".join(filtered)
-    if save_settings(settings):
+    new_value = "\n".join(filtered)
+    if update_app_setting(excluded_folders=new_value):
         _excluded_notifier.emit()
         return True
     return False

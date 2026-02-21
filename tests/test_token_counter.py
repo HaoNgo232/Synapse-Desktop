@@ -15,7 +15,6 @@ Test cac case:
 
 import pytest
 from pathlib import Path
-from unittest.mock import patch
 import os
 
 from services.tokenization_service import TokenizationService

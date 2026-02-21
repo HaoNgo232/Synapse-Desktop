@@ -14,7 +14,7 @@ import os
 import threading
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from core.tokenization.cancellation import (
     is_counting_tokens,
@@ -362,7 +362,9 @@ class TestCountTokens:
         mock_encoder.encode.side_effect = RuntimeError("encoding failed")
 
         # Truyen mock encoder truc tiep vao pure function
-        result = count_tokens("Hello world", encoder=mock_encoder, encoder_type="tiktoken")
+        result = count_tokens(
+            "Hello world", encoder=mock_encoder, encoder_type="tiktoken"
+        )
         # Fallback to estimation
         assert result > 0
 

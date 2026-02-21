@@ -26,6 +26,7 @@ from PySide6.QtCore import (
 )
 
 from core.utils.file_utils import TreeItem, scan_directory_shallow
+from services.selection_manager import SelectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -179,12 +180,11 @@ class FileTreeModel(QAbstractItemModel):
         self._root_node: Optional[TreeNode] = None
         self._invisible_root = TreeNode("", "", is_dir=True, is_loaded=True)
 
-        # === SELECTION STATE ===
-        # Chua paths cua tat ca nodes dang selected (ca files va folders).
-        # QUAN TRONG: Khi uncheck 1 node, tat ca ANCESTOR folders cung bi xoa
-        # khoi set nay (xem _deselect_node + _remove_ancestors_from_selected).
-        # Neu khong lam dieu nay, get_selected_paths() se collect lai files da uncheck.
-        self._selected_paths: Set[str] = set()
+        # === SELECTION STATE (delegated to SelectionManager) ===
+        self._selection_mgr = SelectionManager()
+        # KHONG tao alias truc tiep (vi reassignment se pha vo shared ref)
+        # Truy cap qua properties _selected_paths, _last_resolved_files,
+        # _selection_generation, _resolved_for_generation ben duoi
 
         # === TOKEN COUNTING CACHE & GENERATION ===
         # Token cache: path -> token count (persist qua cac selection changes)
@@ -198,25 +198,6 @@ class FileTreeModel(QAbstractItemModel):
 
         # Path -> TreeNode mapping cho O(1) lookup
         self._path_to_node: Dict[str, TreeNode] = {}
-
-        # === STALE DATA PROTECTION ===
-        # _last_resolved_files: set files duoc resolve boi background token counting.
-        # BAT BUOC phai clear khi selection thay doi, neu khong get_total_tokens()
-        # se doc stale data va hien thi token count SAI.
-        self._last_resolved_files: Set[str] = set()
-
-        # _selection_generation: tang moi khi selection thay doi (check/uncheck).
-        # Dung de:
-        # 1. Validate _last_resolved_files con fresh hay stale
-        # 2. Discard worker batch results tu selection cu
-        # MOI method thay doi selection PHAI tang counter nay.
-        self._selection_generation: int = 0
-
-        # _resolved_for_generation: generation snapshot luc _last_resolved_files duoc compute.
-        # get_total_tokens() CHI dung _last_resolved_files khi:
-        #   _resolved_for_generation == _selection_generation
-        # Neu khong khop → fallback sang _selected_paths (luon up-to-date).
-        self._resolved_for_generation: int = -1
 
         # Workspace root
         self._workspace_path: Optional[Path] = None
@@ -232,6 +213,62 @@ class FileTreeModel(QAbstractItemModel):
         # Built via os.walk in background, independent of lazy tree loading
         self._search_index: Dict[str, List[str]] = {}
         self._search_index_ready = False
+
+    # === Properties delegating to SelectionManager ===
+    # Dam bao luon doc/ghi qua SelectionManager, tranh shared-ref breakage
+
+    @property
+    def _selected_paths(self) -> Set[str]:
+        """Delegate to SelectionManager - tra ve copy de chan direct mutation."""
+        return self._selection_mgr.selected_paths  # Property tra ve copy
+
+    @_selected_paths.setter
+    def _selected_paths(self, value: Set[str]) -> None:
+        """Delegate assignment to SelectionManager.replace_all()."""
+        import warnings
+
+        warnings.warn(
+            "Direct assignment deprecated. Use add_many/remove_many instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self._selection_mgr.replace_all(value)
+
+    @property
+    def _last_resolved_files(self) -> Set[str]:
+        """Delegate to SelectionManager resolved files - tra ve copy."""
+        return self._selection_mgr.last_resolved_files  # Property tra ve copy
+
+    @_last_resolved_files.setter
+    def _last_resolved_files(self, value):
+        raise AttributeError(
+            "Cannot assign _last_resolved_files directly. "
+            "Use _selection_mgr.set_resolved_files() instead."
+        )
+
+    @property
+    def _selection_generation(self) -> int:
+        """Delegate to SelectionManager generation counter."""
+        return self._selection_mgr.selection_generation
+
+    @_selection_generation.setter
+    def _selection_generation(self, value):
+        raise AttributeError(
+            "Cannot assign _selection_generation directly. "
+            "Use _selection_mgr.bump_generation() instead."
+        )
+
+    @property
+    def _resolved_for_generation(self) -> int:
+        """Delegate to SelectionManager resolved generation."""
+        return self._selection_mgr.resolved_for_generation
+
+    @_resolved_for_generation.setter
+    def _resolved_for_generation(self, value):
+        raise AttributeError(
+            "Cannot assign _resolved_for_generation directly. "
+            "Managed internally by SelectionManager."
+        )
 
     # ===== QAbstractItemModel Interface =====
 
@@ -302,7 +339,7 @@ class FileTreeModel(QAbstractItemModel):
                 return self._get_folder_check_state(node)
             return (
                 Qt.CheckState.Checked
-                if node.path in self._selected_paths
+                if self._selection_mgr.is_selected(node.path)
                 else Qt.CheckState.Unchecked
             )
 
@@ -315,7 +352,7 @@ class FileTreeModel(QAbstractItemModel):
             return self._line_cache.get(node.path)
 
         elif role == FileTreeRoles.IS_SELECTED_ROLE:
-            return node.path in self._selected_paths
+            return self._selection_mgr.is_selected(node.path)
 
         elif role == FileTreeRoles.FILE_PATH_ROLE:
             return node.path
@@ -346,23 +383,21 @@ class FileTreeModel(QAbstractItemModel):
             logger = logging.getLogger(__name__)
 
             node: TreeNode = index.internalPointer()
-            before_count = len(self._selected_paths)
+            before_count = self._selection_mgr.count()
 
             if value == Qt.CheckState.Checked:
                 self._select_node(node)
             else:
                 self._deselect_node(node)
 
-            after_count = len(self._selected_paths)
+            after_count = self._selection_mgr.count()
             logger.info(
                 f"setData checkbox: {node.label} ({node.path}) -> {before_count} to {after_count} paths"
             )
 
-            # FIX: Invalidate _last_resolved_files ngay khi selection thay đổi
-            # Tránh get_total_tokens() đọc stale data trong debounce window
-            self._last_resolved_files.clear()
-            self._resolved_for_generation = -1
-            self._selection_generation += 1
+            # FIX: Invalidate resolved files va bump generation ngay khi selection thay doi
+            # De get_total_tokens() khong doc stale data trong debounce window
+            self._selection_mgr.bump_generation()
 
             self._clear_folder_state_cache()
 
@@ -373,7 +408,7 @@ class FileTreeModel(QAbstractItemModel):
                 self._emit_subtree_checkstate_changed(node)
             self._emit_parent_changes(node)
 
-            self.selection_changed.emit(set(self._selected_paths))
+            self.selection_changed.emit(self._selection_mgr.selected_paths)
             return True
 
         return False
@@ -475,9 +510,9 @@ class FileTreeModel(QAbstractItemModel):
             node.children.append(child_node)
             self._path_to_node[child_node.path] = child_node
 
-            # Nếu parent đang selected, auto-select children
-            if node.path in self._selected_paths:
-                self._selected_paths.add(child_node.path)
+            # Neu parent dang selected, auto-select children qua SelectionManager
+            if self._selection_mgr.is_selected(node.path):
+                self._selection_mgr.add(child_node.path)
                 added_selected = True
 
         node.is_loaded = True
@@ -486,7 +521,7 @@ class FileTreeModel(QAbstractItemModel):
         if added_selected:
             self._clear_folder_state_cache()
             self._emit_tree_checkstate_changed()
-            self.selection_changed.emit(set(self._selected_paths))
+            self.selection_changed.emit(self._selection_mgr.selected_paths)
 
     def hasChildren(
         self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
@@ -516,12 +551,12 @@ class FileTreeModel(QAbstractItemModel):
 
         self.beginResetModel()
 
-        self._selected_paths.clear()
+        # Reset selection state qua SelectionManager (clear paths, resolved files, generation)
+        self._selection_mgr.reset()
         self._token_cache.clear()
         self._line_cache.clear()
         self._path_to_node.clear()
         self._folder_state_cache.clear()
-        self._last_resolved_files.clear()
         self._search_index.clear()
         self._search_index_ready = False
 
@@ -576,7 +611,7 @@ class FileTreeModel(QAbstractItemModel):
         result: List[str] = []
         seen: Set[str] = set()
 
-        for p in self._selected_paths:
+        for p in self._selection_mgr.iterate_paths():
             node = self._path_to_node.get(p)
             if node is not None:
                 if not node.is_dir:
@@ -661,7 +696,7 @@ class FileTreeModel(QAbstractItemModel):
 
     def get_all_selected_paths(self) -> Set[str]:
         """Get tất cả selected paths (cả files và folders)."""
-        return set(self._selected_paths)
+        return self._selection_mgr.selected_paths
 
     def get_expanded_paths(self) -> List[str]:
         """Get danh sách expanded folder paths. Cần TreeView reference."""
@@ -670,43 +705,32 @@ class FileTreeModel(QAbstractItemModel):
 
     def set_selected_paths(self, paths: Set[str]) -> None:
         """Set selected paths (cho session restore)."""
-        self._selected_paths = set(paths)
-        # Invalidate resolved files khi selection thay đổi từ bên ngoài
-        self._last_resolved_files.clear()
-        self._resolved_for_generation = -1
-        self._selection_generation += 1
+        # replace_all() tu dong bump generation — khong can goi rieng
+        self._selection_mgr.replace_all(set(paths))
         self._clear_folder_state_cache()
         self._emit_tree_checkstate_changed()
-        self.selection_changed.emit(set(self._selected_paths))
+        self.selection_changed.emit(self._selection_mgr.selected_paths)
 
     def add_paths_to_selection(self, paths: Set[str]) -> int:
         """Add paths to selection without clearing existing. Returns count of newly added."""
-        before = len(self._selected_paths)
-        self._selected_paths.update(paths)
-        added = len(self._selected_paths) - before
+        added = self._selection_mgr.add_many(paths)
         if added > 0:
-            # Invalidate resolved files khi thêm paths mới
-            self._last_resolved_files.clear()
-            self._resolved_for_generation = -1
-            self._selection_generation += 1
+            # Invalidate resolved files va bump generation khi them paths moi
+            self._selection_mgr.bump_generation()
             self._clear_folder_state_cache()
             self._emit_tree_checkstate_changed()
-            self.selection_changed.emit(set(self._selected_paths))
+            self.selection_changed.emit(self._selection_mgr.selected_paths)
         return added
 
     def remove_paths_from_selection(self, paths: Set[str]) -> int:
         """Remove specific paths from selection. Returns count removed."""
-        before = len(self._selected_paths)
-        self._selected_paths -= paths
-        removed = before - len(self._selected_paths)
+        removed = self._selection_mgr.remove_many(paths)
         if removed > 0:
-            # Invalidate resolved files khi xóa paths
-            self._last_resolved_files.clear()
-            self._resolved_for_generation = -1
-            self._selection_generation += 1
+            # Invalidate resolved files va bump generation khi xoa paths
+            self._selection_mgr.bump_generation()
             self._clear_folder_state_cache()
             self._emit_tree_checkstate_changed()
-            self.selection_changed.emit(set(self._selected_paths))
+            self.selection_changed.emit(self._selection_mgr.selected_paths)
         return removed
 
     def select_all(self) -> None:
@@ -715,32 +739,30 @@ class FileTreeModel(QAbstractItemModel):
 
         logger = logging.getLogger(__name__)
 
-        before_count = len(self._selected_paths)
+        before_count = self._selection_mgr.count()
 
         # Select all children of invisible root, not the root itself
         for child in self._invisible_root.children:
             self._select_all_recursive(child)
 
-        after_count = len(self._selected_paths)
+        after_count = self._selection_mgr.count()
 
         logger.info(f"select_all: {before_count} -> {after_count} paths selected")
 
-        # Invalidate resolved files khi select all
-        self._last_resolved_files.clear()
-        self._resolved_for_generation = -1
-        self._selection_generation += 1
+        # Invalidate resolved files va bump generation khi select all
+        self._selection_mgr.bump_generation()
         self._clear_folder_state_cache()
         self._emit_tree_checkstate_changed()
-        self.selection_changed.emit(set(self._selected_paths))
+        self.selection_changed.emit(self._selection_mgr.selected_paths)
 
     def deselect_all(self) -> None:
-        """Deselect tất cả."""
-        self._selected_paths.clear()
-        self._last_resolved_files.clear()
+        """Deselect tat ca."""
+        self._selection_mgr.clear()
+        self._selection_mgr.bump_generation()
         self._token_cache.clear()
         self._clear_folder_state_cache()
         self._emit_tree_checkstate_changed()
-        self.selection_changed.emit(set(self._selected_paths))
+        self.selection_changed.emit(self._selection_mgr.selected_paths)
 
     def update_token_count(self, path: str, count: int) -> None:
         """
@@ -796,39 +818,41 @@ class FileTreeModel(QAbstractItemModel):
                 self.dataChanged.emit(idx, idx, [FileTreeRoles.LINE_COUNT_ROLE])
 
     def get_total_tokens(self) -> int:
-        """Tính tổng tokens cho tất cả selected files (bao gồm deep files).
+        """Tinh tong tokens cho tat ca selected files (bao gom deep files).
 
-        FIX: Chỉ dùng _last_resolved_files khi nó đồng bộ với selection hiện tại
-        (resolved_for_generation == selection_generation).
-        Nếu stale, fallback sang _selected_paths để tránh hiển thị sai.
+        FIX: Chi dung resolved files khi dong bo voi selection hien tai.
+        Su dung zero-copy iterators de tranh O(N) set copy moi lan goi.
         """
         total = 0
-        # Chỉ dùng _last_resolved_files nếu nó được compute cho selection hiện tại
+        # Chi dung resolved files neu fresh (cung generation)
         resolved_is_fresh = (
-            self._last_resolved_files
+            self._selection_mgr.resolved_count() > 0
             and self._resolved_for_generation == self._selection_generation
         )
-        paths_to_check = (
-            self._last_resolved_files if resolved_is_fresh else self._selected_paths
+        # Su dung zero-copy iterator thay vi property tao copy
+        path_iter = (
+            self._selection_mgr.iterate_resolved()
+            if resolved_is_fresh
+            else self._selection_mgr.iterate_paths()
         )
-        for path in paths_to_check:
+        for path in path_iter:
             if path in self._token_cache:
                 total += self._token_cache[path]
         return total
 
     def get_selected_file_count(self) -> int:
-        """Get số files đã selected (bao gồm deep unloaded files).
+        """Get so files da selected (bao gom deep unloaded files).
 
-        FIX: Chỉ dùng _last_resolved_files khi nó fresh (cùng selection_generation).
-        Nếu stale, gọi get_selected_paths() để đếm chính xác (scan disk nếu cần).
+        FIX: Chi dung resolved files khi fresh (cung selection_generation).
+        Su dung resolved_count() de tranh tao set copy.
         """
-        # Chỉ dùng resolved files nếu fresh
+        # Chi dung resolved files neu fresh
         resolved_is_fresh = (
-            self._last_resolved_files
+            self._selection_mgr.resolved_count() > 0
             and self._resolved_for_generation == self._selection_generation
         )
         if resolved_is_fresh:
-            return len(self._last_resolved_files)
+            return self._selection_mgr.resolved_count()
 
         # Nếu stale, phải resolve lại để đếm chính xác
         # get_selected_paths() sẽ scan disk cho unloaded folders
@@ -941,7 +965,7 @@ class FileTreeModel(QAbstractItemModel):
         if not node.is_dir and is_binary_file(Path(node.path)):
             return
 
-        self._selected_paths.add(node.path)
+        self._selection_mgr.add(node.path)
         if node.is_dir:
             for child in node.children:
                 self._select_node(child)
@@ -956,7 +980,7 @@ class FileTreeModel(QAbstractItemModel):
         Visual state khong bi anh huong vi _get_folder_check_state()
         tinh tri-state tu children, khong dung _selected_paths cua folder.
         """
-        self._selected_paths.discard(node.path)
+        self._selection_mgr.remove(node.path)
         if node.is_dir:
             for child in node.children:
                 self._deselect_node(child)
@@ -974,7 +998,7 @@ class FileTreeModel(QAbstractItemModel):
         """
         current = node.parent
         while current is not None and current is not self._invisible_root:
-            self._selected_paths.discard(current.path)
+            self._selection_mgr.remove(current.path)
             current = current.parent
 
     def _select_all_recursive(self, node: TreeNode) -> None:
@@ -985,7 +1009,7 @@ class FileTreeModel(QAbstractItemModel):
         if not node.is_dir and is_binary_file(Path(node.path)):
             return
 
-        self._selected_paths.add(node.path)
+        self._selection_mgr.add(node.path)
         for child in node.children:
             self._select_all_recursive(child)
 
@@ -1011,7 +1035,7 @@ class FileTreeModel(QAbstractItemModel):
         if not node.children:
             state = (
                 Qt.CheckState.Checked
-                if node.path in self._selected_paths
+                if self._selection_mgr.is_selected(node.path)
                 else Qt.CheckState.Unchecked
             )
             self._folder_state_cache[node.path] = state
@@ -1021,7 +1045,7 @@ class FileTreeModel(QAbstractItemModel):
         any_selected = False
 
         for child in node.children:
-            if child.path in self._selected_paths:
+            if self._selection_mgr.is_selected(child.path):
                 any_selected = True
             else:
                 all_selected = False
@@ -1065,10 +1089,9 @@ class FileTreeModel(QAbstractItemModel):
         for file_path, count in self._token_cache.items():
             if file_path.startswith(folder_prefix) and count > 0:
                 # Chỉ tính files đang selected
-                if (
-                    file_path in self._selected_paths
-                    or file_path in self._last_resolved_files
-                ):
+                if self._selection_mgr.is_selected(
+                    file_path
+                ) or self._selection_mgr.is_resolved(file_path):
                     total += count
                     has_any = True
 

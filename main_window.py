@@ -141,8 +141,17 @@ class SynapseMainWindow(QMainWindow):
         from views.logs_view_qt import LogsViewQt
         from views.settings_view_qt import SettingsViewQt
 
-        # Create views
-        self.context_view = ContextViewQt(self._get_workspace_path)
+        # Tao ServiceContainer tai composition root de quan ly lifecycle cua tat ca services
+        from services.service_container import ServiceContainer
+
+        self._services = ServiceContainer()
+
+        # Create views voi explicit DI tu container
+        self.context_view = ContextViewQt(
+            self._get_workspace_path,
+            prompt_builder=self._services.prompt_builder,
+            clipboard_service=self._services.clipboard,
+        )
         self.apply_view = ApplyViewQt(self._get_workspace_path)
         self.history_view = HistoryViewQt(self._on_reapply_from_history)
         self.logs_view = LogsViewQt()
@@ -640,6 +649,11 @@ def main() -> None:
 
     # Initialize encoder config (inject settings into core layer)
     initialize_encoder()
+
+    # Register all cache adapters into CacheRegistry
+    from services.cache_adapters import register_all_caches
+
+    register_all_caches()
 
     app = QApplication(sys.argv)
     app.setApplicationName("Synapse Desktop")

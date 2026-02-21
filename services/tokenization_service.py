@@ -373,9 +373,7 @@ class TokenizationService(ITokenizationService):
 
         try:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                futures = {
-                    executor.submit(count_single_file, p): p for p in file_paths
-                }
+                futures = {executor.submit(count_single_file, p): p for p in file_paths}
                 for future in as_completed(futures):
                     if not is_counting_tokens():
                         executor.shutdown(wait=False, cancel_futures=True)
@@ -408,9 +406,7 @@ class TokenizationService(ITokenizationService):
 
         return results
 
-    def _count_tokens_batch_sequential(
-        self, file_paths: List[Path]
-    ) -> Dict[str, int]:
+    def _count_tokens_batch_sequential(self, file_paths: List[Path]) -> Dict[str, int]:
         """
         Dem token tuan tu (fallback khi parallel that bai).
 
@@ -437,9 +433,7 @@ class TokenizationService(ITokenizationService):
 
         return results
 
-    def _count_tokens_batch_hf(
-        self, file_paths: List[Path]
-    ) -> Dict[str, int]:
+    def _count_tokens_batch_hf(self, file_paths: List[Path]) -> Dict[str, int]:
         """
         Dem token bang HF encode_batch() (Rust multi-thread, 5-10x nhanh).
 

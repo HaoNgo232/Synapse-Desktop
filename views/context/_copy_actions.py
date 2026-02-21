@@ -26,22 +26,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List, Set, Callable, Dict, Tuple
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 
-from services.encoder_registry import get_tokenization_service
-from core.prompt_generator import (
-    generate_file_map,
-    generate_file_contents_xml,
-    generate_file_contents_json,
-    generate_file_contents_plain,
-    generate_prompt,
-    generate_smart_context,
-    build_smart_prompt,
-)
+
 from core.tree_map_generator import generate_tree_map_only
-from core.utils.git_utils import get_git_diffs, get_git_logs
 from core.utils.file_utils import scan_directory, TreeItem
-from core.security_check import scan_secrets_in_files_cached
-from services.clipboard_utils import copy_to_clipboard
-from services.settings_manager import get_setting
+from services.settings_manager import load_app_settings
 from services.workspace_config import (
     get_excluded_patterns,
     get_use_gitignore,
@@ -177,7 +165,12 @@ class CopyTaskWorker(QRunnable):
     Caller dung generation counter de ignore stale results.
     """
 
-    def __init__(self, task_fn: Callable[[], str], signals: CopyTaskSignals, generation: int):
+    def __init__(
+        self,
+        task_fn: Callable[[], Tuple[str, int]],
+        signals: CopyTaskSignals,
+        generation: int,
+    ):
         super().__init__()
         self.task_fn = task_fn
         self.signals = signals
@@ -192,9 +185,7 @@ class CopyTaskWorker(QRunnable):
         Caller dua vao guarantee nay de cleanup va re-enable buttons.
         """
         try:
-            prompt = self.task_fn()
-            from services.encoder_registry import get_tokenization_service as _get_svc
-            token_count = _get_svc().count_tokens(prompt)
+            prompt, token_count = self.task_fn()
             try:
                 self.signals.finished.emit(prompt, token_count)
             except RuntimeError:
@@ -223,6 +214,7 @@ class SecurityCheckWorker(QRunnable):
     def run(self) -> None:
         try:
             from core.security_check import scan_secrets_in_files_cached
+
             matches = scan_secrets_in_files_cached(self.paths)
             try:
                 self.signals.finished.emit(matches)
@@ -279,7 +271,7 @@ class CopyActionsMixin:
         If cache hits, we skip all heavy work entirely.
         """
         output_style_id = self._selected_output_style.value
-        include_git = get_setting("include_git_changes", True)
+        include_git = load_app_settings().include_git_changes
         use_rel = get_use_relative_paths()
 
         fingerprint = _build_fingerprint(
@@ -308,7 +300,7 @@ class CopyActionsMixin:
     ) -> None:
         """Store generated prompt in cache for future hits."""
         output_style_id = self._selected_output_style.value
-        include_git = get_setting("include_git_changes", True)
+        include_git = load_app_settings().include_git_changes
         use_rel = get_use_relative_paths()
 
         fingerprint = _build_fingerprint(
@@ -343,6 +335,7 @@ class CopyActionsMixin:
         #    before new ones are created to avoid animation conflicts.
         try:
             from components.toast_qt import ToastManager
+
             manager = ToastManager.instance()
             if manager is not None:
                 manager.dismiss_all(force=True)
@@ -434,26 +427,32 @@ class CopyActionsMixin:
         selected_path_strs = {str(p) for p in file_paths}
 
         # === Cache fast path ===
-        cached = self._try_cache_hit(copy_mode, selected_path_strs, instructions, include_xml)
+        cached = self._try_cache_hit(
+            copy_mode, selected_path_strs, instructions, include_xml
+        )
         if cached is not None:
             prompt, token_count = cached
-            success, msg = copy_to_clipboard(prompt)
+            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
             if success:
                 pre_snapshot = {
                     "file_tokens": self.file_tree_widget.get_total_tokens(),
-                    "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
+                    "instruction_tokens": self._prompt_builder.count_tokens(
+                        instructions
+                    )
+                    if instructions
+                    else 0,
                     "include_opx": include_xml,
                     "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
                 }
                 self._show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(f"Copy failed: {msg}", is_error=True)
+                self._show_status(f"Copy failed: {err_msg}", is_error=True)
             return
 
         gen = self._begin_copy_operation()
 
         # Run security check in background to avoid UI freeze
-        security_enabled = get_setting("enable_security_check", True)
+        security_enabled = load_app_settings().enable_security_check
         if security_enabled:
             self._show_status("Checking security...")
             self._run_security_check_then_copy(
@@ -461,7 +460,9 @@ class CopyActionsMixin:
             )
         else:
             try:
-                self._do_copy_context(gen, workspace, file_paths, instructions, include_xml)
+                self._do_copy_context(
+                    gen, workspace, file_paths, instructions, include_xml
+                )
             except Exception as e:
                 self._show_status(f"Error: {e}", is_error=True)
                 if self._is_current_generation(gen):
@@ -508,7 +509,9 @@ class CopyActionsMixin:
                         self._set_copy_buttons_enabled(True)
                         return
                     try:
-                        self._do_copy_context(gen, workspace, file_paths, instructions, include_xml)
+                        self._do_copy_context(
+                            gen, workspace, file_paths, instructions, include_xml
+                        )
                     except Exception as e:
                         self._show_status(f"Error: {e}", is_error=True)
                         if self._is_current_generation(gen):
@@ -528,7 +531,9 @@ class CopyActionsMixin:
                 dialog.exec()
             else:
                 try:
-                    self._do_copy_context(gen, workspace, file_paths, instructions, include_xml)
+                    self._do_copy_context(
+                        gen, workspace, file_paths, instructions, include_xml
+                    )
                 except Exception as e:
                     self._show_status(f"Error: {e}", is_error=True)
                     if self._is_current_generation(gen):
@@ -549,15 +554,13 @@ class CopyActionsMixin:
         signals.finished.connect(
             on_security_finished, Qt.ConnectionType.QueuedConnection
         )
-        signals.error.connect(
-            on_security_error, Qt.ConnectionType.QueuedConnection
-        )
+        signals.error.connect(on_security_error, Qt.ConnectionType.QueuedConnection)
         QThreadPool.globalInstance().start(worker)
 
     def _run_copy_in_background(
         self: "ContextViewQt",
         gen: int,
-        task_fn: Callable[[], str],
+        task_fn: Callable[[], Tuple[str, int]],
         success_template: str = "Copied! ({token_count:,} tokens)",
         pre_snapshot: Optional[dict] = None,
         cache_key: Optional[tuple] = None,
@@ -616,14 +619,16 @@ class CopyActionsMixin:
             if cache_key is not None:
                 try:
                     mode, paths, instr, incl_xml = cache_key
-                    self._store_in_cache(mode, paths, instr, prompt, token_count, incl_xml)
+                    self._store_in_cache(
+                        mode, paths, instr, prompt, token_count, incl_xml
+                    )
                 except Exception:
                     pass  # Cache storage failure is non-critical
 
-            success, msg = copy_to_clipboard(prompt)
+            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
 
             if not success:
-                self._show_status(f"Copy failed: {msg}", is_error=True)
+                self._show_status(f"Copy failed: {err_msg}", is_error=True)
                 self._set_copy_buttons_enabled(True)
                 return
 
@@ -669,7 +674,7 @@ class CopyActionsMixin:
             selected_path_strs = {str(p) for p in file_paths}
             use_rel = get_use_relative_paths()
             output_style = self._selected_output_style
-            include_git = get_setting("include_git_changes", True)
+            include_git = load_app_settings().include_git_changes
 
             copy_mode = "copy_opx" if include_xml else "copy_context"
             # Capture for cache storage in on_finished callback
@@ -678,58 +683,31 @@ class CopyActionsMixin:
             _cache_include_xml = include_xml
             _cache_mode = copy_mode
 
-            def task() -> str:
+            def task() -> Tuple[str, int]:
                 """Heavy work - chay tren background thread."""
                 tree_item = self._scan_full_tree(workspace)
-                file_map = (
-                    generate_file_map(
-                        tree_item,
-                        selected_path_strs,
-                        workspace_root=workspace,
-                        use_relative_paths=use_rel,
-                    )
-                    if tree_item
-                    else ""
-                )
+                format_str = "xml"
+                if output_style == OutputStyle.JSON:
+                    format_str = "json"
+                elif output_style == OutputStyle.PLAIN:
+                    format_str = "plain"
 
-                if output_style == OutputStyle.XML:
-                    file_contents = generate_file_contents_xml(
-                        selected_path_strs,
-                        workspace_root=workspace,
-                        use_relative_paths=use_rel,
-                    )
-                elif output_style == OutputStyle.JSON:
-                    file_contents = generate_file_contents_json(
-                        selected_path_strs,
-                        workspace_root=workspace,
-                        use_relative_paths=use_rel,
-                    )
-                else:
-                    file_contents = generate_file_contents_plain(
-                        selected_path_strs,
-                        workspace_root=workspace,
-                        use_relative_paths=use_rel,
-                    )
-
-                git_diffs = None
-                git_logs = None
-                if include_git:
-                    git_diffs = get_git_diffs(workspace)
-                    git_logs = get_git_logs(workspace, max_commits=5)
-
-                return generate_prompt(
-                    file_map=file_map,
-                    file_contents=file_contents,
-                    user_instructions=instructions,
-                    output_style=output_style,
-                    include_xml_formatting=include_xml,
-                    git_diffs=git_diffs,
-                    git_logs=git_logs,
+                return self._prompt_builder.build_prompt(
+                    file_paths=[Path(p) for p in selected_path_strs],
+                    workspace=workspace,
+                    instructions=instructions,
+                    output_format=format_str,
+                    include_git_changes=include_git,
+                    use_relative_paths=use_rel,
+                    tree_item=tree_item,
+                    selected_paths=selected_path_strs,
                 )
 
             pre_snapshot = {
                 "file_tokens": self.file_tree_widget.get_total_tokens(),
-                "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
+                "instruction_tokens": self._prompt_builder.count_tokens(instructions)
+                if instructions
+                else 0,
                 "include_opx": include_xml,
                 "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
             }
@@ -739,7 +717,12 @@ class CopyActionsMixin:
                 task,
                 "Copied! ({token_count:,} tokens)",
                 pre_snapshot=pre_snapshot,
-                cache_key=(_cache_mode, _cache_selected, _cache_instructions, _cache_include_xml),
+                cache_key=(
+                    _cache_mode,
+                    _cache_selected,
+                    _cache_instructions,
+                    _cache_include_xml,
+                ),
             )
         except Exception as e:
             self._show_status(f"Error preparing copy: {e}", is_error=True)
@@ -766,59 +749,47 @@ class CopyActionsMixin:
         cached = self._try_cache_hit("copy_smart", selected_path_strs, instructions)
         if cached is not None:
             prompt, token_count = cached
-            success, msg = copy_to_clipboard(prompt)
+            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
             if success:
                 pre_snapshot = {
                     "file_tokens": self.file_tree_widget.get_total_tokens(),
-                    "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
+                    "instruction_tokens": self._prompt_builder.count_tokens(
+                        instructions
+                    )
+                    if instructions
+                    else 0,
                     "include_opx": False,
                     "copy_mode": "Copy Smart",
                 }
                 self._show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(f"Copy failed: {msg}", is_error=True)
+                self._show_status(f"Copy failed: {err_msg}", is_error=True)
             return
 
         gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
-        include_git = get_setting("include_git_changes", True)
+        include_git = load_app_settings().include_git_changes
 
-        def task() -> str:
+        def task() -> Tuple[str, int]:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._scan_full_tree(workspace)
-            file_map = (
-                generate_file_map(
-                    tree_item,
-                    selected_path_strs,
-                    workspace_root=workspace,
-                    use_relative_paths=use_rel,
-                )
-                if tree_item
-                else ""
-            )
-            smart_contents = generate_smart_context(
-                selected_paths=selected_path_strs,
-                include_relationships=True,
-                workspace_root=workspace,
+            return self._prompt_builder.build_prompt(
+                file_paths=[Path(p) for p in selected_path_strs],
+                workspace=workspace,
+                instructions=instructions,
+                output_format="smart",
+                include_git_changes=include_git,
                 use_relative_paths=use_rel,
-            )
-            git_diffs = None
-            git_logs = None
-            if include_git:
-                git_diffs = get_git_diffs(workspace)
-                git_logs = get_git_logs(workspace, max_commits=5)
-            return build_smart_prompt(
-                smart_contents=smart_contents,
-                file_map=file_map,
-                user_instructions=instructions,
-                git_diffs=git_diffs,
-                git_logs=git_logs,
+                tree_item=tree_item,
+                selected_paths=selected_path_strs,
             )
 
         pre_snapshot = {
             "file_tokens": self.file_tree_widget.get_total_tokens(),
-            "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
+            "instruction_tokens": self._prompt_builder.count_tokens(instructions)
+            if instructions
+            else 0,
             "include_opx": False,
             "copy_mode": "Copy Smart",
         }
@@ -850,23 +821,27 @@ class CopyActionsMixin:
         cached = self._try_cache_hit("copy_treemap", selected_strs, instructions)
         if cached is not None:
             prompt, token_count = cached
-            success, msg = copy_to_clipboard(prompt)
+            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
             if success:
                 pre_snapshot = {
                     "file_tokens": 0,
-                    "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
+                    "instruction_tokens": self._prompt_builder.count_tokens(
+                        instructions
+                    )
+                    if instructions
+                    else 0,
                     "include_opx": False,
                     "copy_mode": "Copy Tree Map",
                 }
                 self._show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(f"Copy failed: {msg}", is_error=True)
+                self._show_status(f"Copy failed: {err_msg}", is_error=True)
             return
 
         gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
 
-        def task() -> str:
+        def task() -> Tuple[str, int]:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._scan_full_tree(workspace)
@@ -876,17 +851,23 @@ class CopyActionsMixin:
             valid_paths = self._collect_all_tree_paths(tree_item)
             paths = selected_strs & valid_paths if selected_strs else valid_paths
 
-            return generate_tree_map_only(
+            prompt = generate_tree_map_only(
                 tree_item,
                 paths,
                 instructions,
                 workspace_root=workspace,
                 use_relative_paths=use_rel,
             )
+            # Thong nhat token counting path qua PromptBuildService
+            # de dam bao cung tokenizer instance nhu cac copy operations khac
+            count = self._prompt_builder.count_tokens(prompt)
+            return prompt, count
 
         pre_snapshot = {
             "file_tokens": 0,
-            "instruction_tokens": get_tokenization_service().count_tokens(instructions) if instructions else 0,
+            "instruction_tokens": self._prompt_builder.count_tokens(instructions)
+            if instructions
+            else 0,
             "include_opx": False,
             "copy_mode": "Copy Tree Map",
         }
@@ -973,7 +954,8 @@ class CopyActionsMixin:
         if include_opx:
             try:
                 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-                opx_t = get_tokenization_service().count_tokens(XML_FORMATTING_INSTRUCTIONS)
+
+                opx_t = self._prompt_builder.count_tokens(XML_FORMATTING_INSTRUCTIONS)
             except ImportError:
                 opx_t = 0
 

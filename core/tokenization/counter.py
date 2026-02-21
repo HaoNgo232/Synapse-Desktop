@@ -175,9 +175,7 @@ def count_tokens_for_file(
             return 0
 
         content = file_path.read_text(encoding="utf-8", errors="replace")
-        token_count = count_tokens(
-            content, encoder=encoder, encoder_type=encoder_type
-        )
+        token_count = count_tokens(content, encoder=encoder, encoder_type=encoder_type)
 
         token_cache.put(path_str, stat.st_mtime, token_count)
         return token_count

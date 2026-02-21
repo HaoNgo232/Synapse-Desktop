@@ -67,10 +67,10 @@ def get_current_model() -> str:
         Model ID (vd: "claude-sonnet-4.5", "gpt-4o")
     """
     try:
-        from services.settings_manager import load_settings
+        from services.settings_manager import load_app_settings
 
-        settings = load_settings()
-        return settings.get("model_id", "").lower() if settings else ""
+        settings = load_app_settings()
+        return settings.model_id.lower() if settings.model_id else ""
     except Exception:
         return ""
 
@@ -85,11 +85,11 @@ def get_tokenizer_repo() -> Optional[str]:
         Tokenizer repo (vd: "Xenova/claude-tokenizer") hoac None
     """
     try:
-        from services.settings_manager import load_settings
+        from services.settings_manager import load_app_settings
         from config.model_config import get_model_by_id
 
-        settings = load_settings()
-        model_id = settings.get("model_id", "")
+        settings = load_app_settings()
+        model_id = settings.model_id
 
         model_config = get_model_by_id(model_id)
         if model_config:

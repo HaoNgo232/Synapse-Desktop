@@ -9,7 +9,7 @@ Dinh nghia contracts cho:
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from dataclasses import dataclass
 

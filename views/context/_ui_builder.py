@@ -32,7 +32,7 @@ from config.output_format import (
     get_style_by_id,
     DEFAULT_OUTPUT_STYLE,
 )
-from services.settings_manager import get_setting
+from services.settings_manager import load_app_settings
 
 if TYPE_CHECKING:
     from views.context_view_qt import ContextViewQt
@@ -393,7 +393,9 @@ class UIBuilderMixin:
             self._format_combo.addItem(cfg.name, cfg.id)
 
         # Restore saved format
-        saved_format_id = get_setting("output_format", DEFAULT_OUTPUT_STYLE.value)
+        saved_format_id = (
+            load_app_settings().output_format or DEFAULT_OUTPUT_STYLE.value
+        )
         try:
             self._selected_output_style = get_style_by_id(saved_format_id)
             idx = self._format_combo.findData(saved_format_id)

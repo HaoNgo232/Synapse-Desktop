@@ -10,7 +10,6 @@ from pathlib import Path
 
 from services.file_watcher_pkg.service import FileWatcher
 from services.interfaces.file_watcher_service import (
-    FileChangeEvent,
     IIgnoreStrategy,
     WatcherCallbacks,
 )
@@ -42,7 +41,7 @@ class TestFileWatcherIntegration:
         # Tao file/folder
         normal_file = tmp_path / "normal.txt"
         ignored_file = tmp_path / "test.ignoreme"
-        
+
         secret_dir = tmp_path / "secret_folder"
         secret_dir.mkdir()
         secret_file = secret_dir / "hidden.txt"
@@ -54,7 +53,7 @@ class TestFileWatcherIntegration:
             received_events.append(("created", path))
 
         callbacks = WatcherCallbacks(on_file_created=on_file_created)
-        
+
         # Inject custom strategy
         custom_strategy = CustomIgnoreStrategy()
         watcher = FileWatcher(ignore_strategy=custom_strategy)
@@ -74,7 +73,7 @@ class TestFileWatcherIntegration:
             # Verification
             # Chi co normal.txt tao ra event, 2 file kia phai bi ignore boi strategy
             created_paths = [Path(path).name for _, path in received_events]
-            
+
             assert "normal.txt" in created_paths, "Normal file phai duoc trigger"
             assert "test.ignoreme" not in created_paths, "Ignore file phai bi bo qua"
             assert "hidden.txt" not in created_paths, "Secret file phai bi bo qua"

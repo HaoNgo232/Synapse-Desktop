@@ -13,6 +13,7 @@ Verify:
 
 import pytest
 from unittest.mock import patch
+from config.app_settings import AppSettings
 from services.tokenization_service import TokenizationService
 from core.encoders import (
     reset_encoder,
@@ -31,23 +32,23 @@ class TestClaudeTokenizer:
 
     def test_detect_claude_model(self):
         """Test model detection from settings."""
-        with patch("services.settings_manager.load_settings") as mock_load:
-            mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
+        with patch("services.settings_manager.load_app_settings") as mock_load:
+            mock_load.return_value = AppSettings(model_id="claude-sonnet-4.5")
             model = get_current_model()
             assert "claude" in model
 
     def test_detect_gpt_model(self):
         """Test GPT model detection."""
-        with patch("services.settings_manager.load_settings") as mock_load:
-            mock_load.return_value = {"model_id": "gpt-4o"}
+        with patch("services.settings_manager.load_app_settings") as mock_load:
+            mock_load.return_value = AppSettings(model_id="gpt-4o")
             model = get_current_model()
             assert "claude" not in model
 
     @pytest.mark.skipif(not HAS_TOKENIZERS, reason="tokenizers not installed")
     def test_use_tokenizers_for_claude(self):
         """Test that Claude models use tokenizers library."""
-        with patch("services.settings_manager.load_settings") as mock_load:
-            mock_load.return_value = {"model_id": "claude-sonnet-4.5"}
+        with patch("services.settings_manager.load_app_settings") as mock_load:
+            mock_load.return_value = AppSettings(model_id="claude-sonnet-4.5")
             # Tao service voi Claude tokenizer repo
             service = TokenizationService(tokenizer_repo="Xenova/claude-tokenizer")
 
@@ -60,8 +61,8 @@ class TestClaudeTokenizer:
 
     def test_use_tiktoken_for_gpt(self):
         """Test that GPT models use tiktoken/rs-bpe."""
-        with patch("services.settings_manager.load_settings") as mock_load:
-            mock_load.return_value = {"model_id": "gpt-4o"}
+        with patch("services.settings_manager.load_app_settings") as mock_load:
+            mock_load.return_value = AppSettings(model_id="gpt-4o")
             service = TokenizationService(tokenizer_repo=None)
 
             text = "Hello, world!"

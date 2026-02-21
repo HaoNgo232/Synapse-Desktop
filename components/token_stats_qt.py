@@ -22,7 +22,7 @@ from config.model_config import (
     get_model_by_id,
     ModelConfig,
 )
-from services.settings_manager import get_setting, set_setting
+from services.settings_manager import load_app_settings, update_app_setting
 
 
 class TokenStatsPanelQt(QWidget):
@@ -49,7 +49,7 @@ class TokenStatsPanelQt(QWidget):
         self._is_loading = False
 
         # Load saved model
-        saved_model_id = get_setting("model_id", DEFAULT_MODEL_ID)
+        saved_model_id = load_app_settings().model_id or DEFAULT_MODEL_ID
         model = get_model_by_id(saved_model_id)
         if not model:
             saved_model_id = DEFAULT_MODEL_ID
@@ -248,7 +248,7 @@ class TokenStatsPanelQt(QWidget):
             if model:
                 self._selected_model_id = model_id
                 self._selected_model = model
-                set_setting("model_id", model_id)
+                update_app_setting(model_id=model_id)
 
                 # Reset tokenizer de reload voi model moi qua TokenizationService
                 from services.encoder_registry import get_tokenization_service

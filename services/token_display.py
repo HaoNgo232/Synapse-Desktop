@@ -400,7 +400,9 @@ class TokenDisplayService:
                         continue
 
                 try:
-                    tokens = get_tokenization_service().count_tokens_for_file(Path(path))
+                    tokens = get_tokenization_service().count_tokens_for_file(
+                        Path(path)
+                    )
                     with self._lock:
                         self._cache[path] = tokens
                 except Exception:

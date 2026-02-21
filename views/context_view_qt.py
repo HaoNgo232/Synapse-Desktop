@@ -14,10 +14,10 @@ if TYPE_CHECKING:
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer, QObject
 
-from services.encoder_registry import get_tokenization_service
+
 from core.utils.file_utils import TreeItem
 from services.file_watcher import FileWatcher, WatcherCallbacks
-from services.settings_manager import set_setting
+from services.settings_manager import update_app_setting
 from config.output_format import (
     OutputStyle,
     get_style_by_id,
@@ -44,6 +44,8 @@ class ContextViewQt(
         self,
         get_workspace: Callable[[], Optional[Path]],
         parent: Optional[QWidget] = None,
+        prompt_builder=None,
+        clipboard_service=None,
     ):
         super().__init__(parent)
         self.get_workspace = get_workspace
@@ -74,12 +76,25 @@ class ContextViewQt(
         self._stale_workers: list = []
         # Prompt-level cache — skips heavy work when nothing changed
         from views.context._copy_actions import PromptCache
+
         self._prompt_cache: PromptCache = PromptCache()
         # TreeManagementMixin
         self._repo_manager: Optional[RepoManager] = None  # Lazy init as RepoManager
 
-        # Services
+        # Services (with dependency injection support)
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
+
+        if prompt_builder is None:
+            from services.prompt_build_service import PromptBuildService
+
+            prompt_builder = PromptBuildService()
+        self._prompt_builder = prompt_builder
+
+        if clipboard_service is None:
+            from services.prompt_build_service import QtClipboardService
+
+            clipboard_service = QtClipboardService()
+        self._clipboard_service = clipboard_service
 
         # Build UI (from UIBuilderMixin)
         self._build_ui()
@@ -107,10 +122,10 @@ class ContextViewQt(
             self._last_added_related_files.clear()
             self._related_menu_btn.setText("Related: Off")
 
-        # 3. Clear security scan cache and prompt cache for old workspace
-        from core.security_check import clear_security_cache
+        # 3. Clear all caches for old workspace via CacheRegistry
+        from services.cache_registry import cache_registry
 
-        clear_security_cache()
+        cache_registry.invalidate_for_workspace()
         self._prompt_cache.invalidate_all()
 
         # 4. Load new tree (this increments generation counter, cancels old workers)
@@ -182,6 +197,7 @@ class ContextViewQt(
         # Dismiss all toasts
         try:
             from components.toast_qt import ToastManager
+
             manager = ToastManager.instance()
             if manager is not None:
                 manager.dismiss_all(force=True)
@@ -222,7 +238,7 @@ class ContextViewQt(
         if format_id:
             try:
                 self._selected_output_style = get_style_by_id(format_id)
-                set_setting("output_format", format_id)
+                update_app_setting(output_format=format_id)
                 self._prompt_cache.invalidate_all()
             except ValueError:
                 pass
@@ -241,7 +257,9 @@ class ContextViewQt(
 
         # Count instruction tokens
         instructions = self._instructions_field.toPlainText()
-        instruction_tokens = get_tokenization_service().count_tokens(instructions) if instructions else 0
+        instruction_tokens = (
+            self._prompt_builder.count_tokens(instructions) if instructions else 0
+        )
 
         # Get cached tokens
         total_file_tokens = self.file_tree_widget.get_total_tokens()

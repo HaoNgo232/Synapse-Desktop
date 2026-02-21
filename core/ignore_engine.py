@@ -136,7 +136,7 @@ def get_cached_pathspec(root_path: Path, patterns: List[str]) -> pathspec.PathSp
             return cached_spec
 
     # Tao PathSpec moi va cache
-    spec = pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    spec = pathspec.PathSpec.from_lines("gitignore", patterns)
     _pathspec_cache[cache_key] = (gitignore_mtime, spec)
     return spec
 

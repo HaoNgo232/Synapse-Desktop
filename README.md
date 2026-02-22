@@ -23,11 +23,7 @@ A desktop application for AI-assisted code editing:
 ![Manage copy and apply history](assets/image-2.png)
 *Review the list of successful or failed apply/copy tasks.*
 
-**4. System Logs (Logs Tab)**  
-![Logs interface for troubleshooting](assets/image-4.png)
-*View system events and debug information in the detailed Logs panel.*
-
-**5. Settings (Settings Tab)**  
+**4. Settings (Settings Tab)**  
 ![Settings interface](assets/image-3.png)
 *Configure file rules, access permissions, and privacy options in the Settings tab.*
 

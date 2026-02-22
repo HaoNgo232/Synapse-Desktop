@@ -1,101 +1,79 @@
 # Synapse Desktop
 
-Synapse Desktop is a desktop application that helps you:
+A desktop tool for managing AI coding workflows. Select files from your project, package them into structured prompts, paste into any AI chat (ChatGPT, Claude, Gemini, DeepSeek), then apply the AI's response back to your codebase.
 
-1. **Select files/folders in a project** → **package them into structured prompts** to paste into ChatGPT/Claude/Gemini/DeepSeek (web).
-2. **Receive XML (OPX) responses** from AI → **preview diffs and apply changes** to your codebase (with backup/undo).
+## What It Does
 
-## Key Features
+**Context → AI → Apply**, in three steps:
 
-- **Controlled Context Selection**: Browse the directory tree, check the files/folders you want to send.
-- **Multiple Copy Modes**:
-  - **Context**: Send full content of selected files.
-  - **Smart**: Send signatures/functions/classes/docstrings (reduces tokens, ideal for review/planning).
-  - **Diff Only**: Send only git changes (staged + unstaged) for reviews or PRs.
-- **Apply AI Changes**:
-  - Paste **OPX XML** → view **visual diff** → Apply/Reject.
-  - **Auto-backup** before modification, allows for easy undo.
-  - **Fuzzy matching** to find the correct patch location even if AI formatting is slightly off.
+1. **Select files** in the Context tab — browse the directory tree, check files you want to include.
+2. **Copy a prompt** to clipboard — paste it into your AI chat of choice.
+3. **Apply changes** — paste the AI's OPX XML response in the Apply tab, preview diffs, and apply.
+
+## Copy Modes
+
+- **Copy + OPX** — Full file contents + OPX formatting instructions so the AI responds in a patchable format.
+- **Copy Context** — Full file contents in XML/JSON/Plain format, without OPX instructions.
+- **Copy Smart** — Code signatures, function/class definitions, and relationships only. Significantly fewer tokens.
+- **Copy Diff Only** — Git staged + unstaged changes only. Useful for code reviews or PR descriptions.
+- **Copy Tree Map** — Project directory structure only, no file contents.
+
+## Features
+
+- **Token counting** — Real-time token count per file and total, with model-specific tokenizers (Claude, GPT, etc.).
+- **Security scanning** — Detects API keys, passwords, and secrets before copying. Warns before you accidentally send credentials to an AI chat.
+- **Git integration** — Optionally includes recent git diff and log in the prompt.
+- **Related files** — Auto-selects imported/dependent files at configurable depth (1–5 levels).
+- **File watcher** — Watches for file system changes and refreshes the tree automatically.
+- **Prompt templates** — Built-in and custom prompt templates for common tasks.
+- **Instruction history** — Saves recent instructions for quick reuse.
+- **Apply with preview** — Visual diff viewer before applying changes. Auto-backup before modification.
+- **Fuzzy matching** — Finds patch locations even when AI formatting is slightly off.
+- **Error context** — When apply fails, copies detailed error context (including current file content and failed search patterns) for the AI to fix.
+- **Operation history** — Browse, re-apply, or copy OPX from past operations.
+- **Workspace config** — Excluded patterns (with presets for Node.js, Python, Java, Go), .gitignore support, relative path output.
 
 ## Requirements
 
-- **Python 3.10+**
-- (Recommended) **git** for Diff Only mode
-- OS: Windows / macOS / Linux
+- Python 3.10+
+- Git (optional, for Diff Only mode and git integration)
+- OS: Linux, macOS, Windows
 
----
-
-## Installation & Running (Quick Start)
-
-### 1) Clone repo
+## Installation
 
 ```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
+python -m venv .venv
+
+# Activate venv
+# Linux/macOS:
+source .venv/bin/activate
+# Windows PowerShell:
+# .\.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+python main_window.py
 ```
 
-### 2) Option A — Run with script (Linux/macOS)
+On Linux/macOS, you can also run:
 
 ```bash
 chmod +x start.sh
 ./start.sh
 ```
 
-### 2) Option B — Manual Setup (Windows/macOS/Linux)
+## OPX Format
 
-#### Create venv + install dependencies
+Synapse uses OPX (Overwrite Patch XML) to describe file changes. When you use "Copy + OPX", the AI is instructed to respond in this format so changes can be applied automatically.
 
-```bash
-python -m venv .venv
-```
+Operations:
 
-Activate venv:
-
-- **Linux/macOS**
-
-  ```bash
-  source .venv/bin/activate
-  ```
-
-- **Windows (PowerShell)**
-
-  ```powershell
-  .\.venv\Scripts\Activate.ps1
-  ```
-
-Install requirements and run the app:
-
-```bash
-pip install -r requirements.txt
-python main_window.py
-```
-
----
-
-## Quick Usage (3 Steps)
-
-### Step 1 — Select Context
-
-- Open the **Context** tab
-- Choose project folder
-- Check files/folders to send to AI
-
-### Step 2 — Copy to AI (web)
-
-- Select **Copy Context** or **Copy Smart** (fewer tokens)
-- Paste into ChatGPT/Claude/Gemini/DeepSeek and chat as usual
-
-### Step 3 — Apply AI Changes
-
-- Ask the AI to return **OPX XML**
-- Copy the XML → paste into the **Apply** tab
-- Preview diff → Apply (or Reject)
-
----
-
-## What is OPX (Overwrite Patch XML)?
-
-Synapse uses OPX to describe file changes in an automatically applicable format.
+- `new` — Create a new file
+- `patch` — Find and replace a code region
+- `replace` — Overwrite entire file contents
+- `remove` — Delete a file
+- `move` — Rename or move a file
 
 Example:
 
@@ -114,33 +92,19 @@ print("hello world")
 </edit>
 ```
 
-Common `op` types:
+## Data Storage
 
-- `new`: create a new file
-- `patch`: find & replace a code block
-- `replace`: overwrite entire file
-- `remove`: delete a file
-- `move`: rename/move a file
+All data is stored locally at `~/.synapse-desktop/`:
 
----
+- `settings.json` — User configuration
+- `session.json` — Last workspace and window state
+- `history.json` — Operation history
+- `recent_folders.json` — Recently opened workspaces
+- `backups/` — Automatic backups before each apply
 
-## Data Storage (local)
+## Privacy Note
 
-App data is stored locally at: `~/.synapse-desktop/`
-
-- `settings.json`: user configuration
-- `session.json`: last workspace & session state
-- `history.json`: operation history
-- `backups/`: automatic backups before each apply
-
----
-
-## Security & Privacy (read before sharing prompts)
-
-- Prompts/previews may contain **absolute paths** (e.g., `C:\Users\<name>\...`), which might reveal your **username/machine structure** when pasted onto web chats.
-- If you plan to share outputs or post to public issues, use **relative paths** (default: relative, can be toggled in the Settings tab) or manually redact sensitive information before sending.
-
----
+Prompts may contain absolute file paths (e.g., `/home/username/...` or `C:\Users\username\...`) which could reveal your username or directory structure. Use relative paths (enabled by default in Settings) or review the prompt before sharing publicly.
 
 ## Build AppImage (Linux)
 
@@ -149,25 +113,20 @@ pip install pyinstaller
 ./build-appimage.sh
 ```
 
----
+## Troubleshooting
 
-## Quick Troubleshooting
-
-- **Module not found**: Ensure you have run `pip install -r requirements.txt` within the correct venv.
-- **Diff Only has no data**: Check if the project is a git repo and has staged/unstaged changes.
-- **Apply fails / patch mismatch**: Try asking the AI for OPX with a longer `<find>` block (more context lines).
-
----
+- **Module not found** — Make sure you ran `pip install -r requirements.txt` in the activated venv.
+- **Diff Only shows nothing** — The project must be a git repo with staged or unstaged changes.
+- **Apply fails / patch mismatch** — Ask the AI to include more context lines in the `<find>` block. The error context (copied via "Copy Error Context" button) gives the AI enough information to fix its own patches.
+- **Token count shows 0** — Check Settings to ensure a model is selected. The tokenizer downloads on first use and requires internet.
 
 ## Acknowledgements
 
 Inspired by:
 
-- **[Repomix](https://github.com/yamadashy/repomix)** — XML context packing format
-- **[Overwrite](https://github.com/mnismt/overwrite)** — OPX patch protocol
-- **[PasteMax](https://github.com/kleneway/pastemax)** — file tree UI patterns
-
----
+- [Repomix](https://github.com/yamadashy/repomix) — XML context packing format
+- [Overwrite](https://github.com/mnismt/overwrite) — OPX patch protocol
+- [PasteMax](https://github.com/kleneway/pastemax) — File tree UI patterns
 
 ## License
 

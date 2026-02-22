@@ -194,10 +194,10 @@ class LocalCustomTemplateProvider(TemplateProvider):
             first_line = content.split("\n")[0]
             if first_line.startswith("<!--") and first_line.endswith("-->"):
                 inner_text = first_line[4:-3].strip()
-                # Thử parse name vả desc
+                # Thử parse name và desc
                 # Regex match format: `name: Foo, desc: Bar`
                 name_match = re.search(r"name:\s*([^,]+)", inner_text, re.IGNORECASE)
-                desc_match = re.search(r"desc:\s*(.+)", inner_text, re.IGNORECASE)
+                desc_match = re.search(r"desc:\s*([^,\-]+)", inner_text, re.IGNORECASE)
 
                 if name_match:
                     display_name = name_match.group(1).strip()
@@ -229,7 +229,15 @@ class LocalCustomTemplateProvider(TemplateProvider):
             raise FileNotFoundError(
                 f"Custom template '{template_path}' khong ton tai tren disk."
             )
-        return template_path.read_text(encoding="utf-8").strip()
+        content = template_path.read_text(encoding="utf-8").strip()
+
+        # Strip frontmatter if present
+        lines = content.split("\n")
+        if lines and lines[0].startswith("<!--") and lines[0].endswith("-->"):
+            # Remove first line (frontmatter)
+            content = "\n".join(lines[1:]).strip()
+
+        return content
 
     def get_template_info(self, template_id: str) -> TemplateInfo:
         self._ensure_dir()

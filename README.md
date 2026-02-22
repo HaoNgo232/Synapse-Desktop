@@ -1,81 +1,96 @@
 # Synapse Desktop
 
-A desktop tool for managing AI coding workflows. Select files from your project, package them into structured prompts, paste into any AI chat (ChatGPT, Claude, Gemini, DeepSeek), then apply the AI's response back to your codebase.
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-## What It Does
+A desktop application for AI-assisted code editing:
 
-**Context → AI → Apply**, in three steps:
+- **Send Context**: Select files in your project → copy structured prompt → paste into ChatGPT/Claude/Gemini
+- **Apply Changes**: Paste XML response from AI → view visual diff → apply to codebase with auto-backup
 
-1. **Select files** in the Context tab — browse the directory tree, check files you want to include.
-2. **Copy a prompt** to clipboard — paste it into your AI chat of choice.
-3. **Apply changes** — paste the AI's OPX XML response in the Apply tab, preview diffs, and apply.
+## Application Interface
 
-## Copy Modes
+**1. Context Management (Main Interface)**  
+![Select files and folders to send to AI](assets/image.png)
+*Select files and view the calculated token count before copying the prompt.*
 
-- **Copy + OPX** — Full file contents + OPX formatting instructions so the AI responds in a patchable format.
-- **Copy Context** — Full file contents in XML/JSON/Plain format, without OPX instructions.
-- **Copy Smart** — Code signatures, function/class definitions, and relationships only. Significantly fewer tokens.
-- **Copy Diff Only** — Git staged + unstaged changes only. Useful for code reviews or PR descriptions.
-- **Copy Tree Map** — Project directory structure only, no file contents.
+**2. Apply Changes (Apply Tab)**  
+![Apply OPX XML content and view code diff](assets/image-1.png)
+*Paste OPX XML from the AI and review visual diffs before confirming file overwrites.*
 
-## Features
+**3. Operation History (History Tab)**  
+![Manage copy and apply history](assets/image-2.png)
+*Review the list of successful or failed apply/copy tasks.*
 
-- **Token counting** — Real-time token count per file and total, with model-specific tokenizers (Claude, GPT, etc.).
-- **Security scanning** — Detects API keys, passwords, and secrets before copying. Warns before you accidentally send credentials to an AI chat.
-- **Git integration** — Optionally includes recent git diff and log in the prompt.
-- **Related files** — Auto-selects imported/dependent files at configurable depth (1–5 levels).
-- **File watcher** — Watches for file system changes and refreshes the tree automatically.
-- **Prompt templates** — Built-in and custom prompt templates for common tasks.
-- **Instruction history** — Saves recent instructions for quick reuse.
-- **Apply with preview** — Visual diff viewer before applying changes. Auto-backup before modification.
-- **Fuzzy matching** — Finds patch locations even when AI formatting is slightly off.
-- **Error context** — When apply fails, copies detailed error context (including current file content and failed search patterns) for the AI to fix.
-- **Operation history** — Browse, re-apply, or copy OPX from past operations.
-- **Workspace config** — Excluded patterns (with presets for Node.js, Python, Java, Go), .gitignore support, relative path output.
+**4. System Logs (Logs Tab)**  
+![Logs interface for troubleshooting](assets/image-4.png)
+*View system events and debug information in the detailed Logs panel.*
 
-## Requirements
+**5. Settings (Settings Tab)**  
+![Settings interface](assets/image-3.png)
+*Configure file rules, access permissions, and privacy options in the Settings tab.*
 
-- Python 3.10+
-- Git (optional, for Diff Only mode and git integration)
-- OS: Linux, macOS, Windows
+## Key Features
+
+### Context Management
+- **Tree selection**: Browse the directory tree and select files/folders to send.
+- **Copy modes**:
+  - `Context`: Full content of the files.
+  - `Smart`: Only signatures/structures (reduces tokens by 70-80%).
+  - `Diff Only`: Only git changes (for code review).
+
+### Apply AI Changes
+- **OPX format**: AI returns changes in structured XML format.
+- **Visual diff**: Preview changes before applying.
+- **Auto-backup**: Automatically backs up files before overwriting, allowing undo operations.
+
+## Usage Workflow
+
+1. **Select Context** (Context tab)
+   - Open your project folder.
+   - Check the required files.
+
+2. **Copy to AI**
+   - Click `Copy Context` or `Copy Smart`.
+   - Paste into the AI chat and request the OPX format in return.
+
+3. **Apply Changes** (Apply tab)
+   - Copy the XML response from the AI.
+   - Paste into the Apply tab → view diff → Apply.
 
 ## Installation
 
+**Requirements**: Python 3.10+, Git (optional)
+
+### Auto-script (Linux/macOS)
 ```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
-python -m venv .venv
-
-# Activate venv
-# Linux/macOS:
-source .venv/bin/activate
-# Windows PowerShell:
-# .\.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-python main_window.py
-```
-
-On Linux/macOS, you can also run:
-
-```bash
 chmod +x start.sh
 ./start.sh
 ```
 
+### Manual Installation
+```bash
+# 1. Clone the repository
+git clone https://github.com/HaoNgo232/Synapse-Desktop.git
+cd Synapse-Desktop
+
+# 2. Create a virtual environment
+python -m venv .venv
+
+# 3. Activate the venv
+source .venv/bin/activate          # Linux/macOS
+.\.venv\Scripts\Activate.ps1       # Windows
+
+# 4. Install dependencies and run
+pip install -r requirements.txt
+python main_window.py
+```
+
 ## OPX Format
-
-Synapse uses OPX (Overwrite Patch XML) to describe file changes. When you use "Copy + OPX", the AI is instructed to respond in this format so changes can be applied automatically.
-
-Operations:
-
-- `new` — Create a new file
-- `patch` — Find and replace a code region
-- `replace` — Overwrite entire file contents
-- `remove` — Delete a file
-- `move` — Rename or move a file
-
-Example:
+Synapse uses OPX (Overwrite Patch XML) to describe file changes:
 
 ```xml
 <edit file="src/app.py" op="patch">
@@ -91,43 +106,33 @@ print("hello world")
   </put>
 </edit>
 ```
+Operations: `new` (create file), `patch` (find & replace), `replace` (overwrite completely), `remove` (delete), `move` (rename).
 
-## Data Storage
-
-All data is stored locally at `~/.synapse-desktop/`:
-
-- `settings.json` — User configuration
-- `session.json` — Last workspace and window state
-- `history.json` — Operation history
-- `recent_folders.json` — Recently opened workspaces
-- `backups/` — Automatic backups before each apply
-
-## Privacy Note
-
-Prompts may contain absolute file paths (e.g., `/home/username/...` or `C:\Users\username\...`) which could reveal your username or directory structure. Use relative paths (enabled by default in Settings) or review the prompt before sharing publicly.
-
-## Build AppImage (Linux)
-
-```bash
-pip install pyinstaller
-./build-appimage.sh
-```
+## Security and Privacy
+- **Paths**: Prompts may contain absolute paths. Enable `Use Relative Paths` in Settings to protect your privacy.
+- **Storage**: All data is stored locally at `~/.synapse-desktop/`.
+- **Security scan**: Scans for API keys and passwords before copying (can be toggled on/off).
 
 ## Troubleshooting
-
-- **Module not found** — Make sure you ran `pip install -r requirements.txt` in the activated venv.
-- **Diff Only shows nothing** — The project must be a git repo with staged or unstaged changes.
-- **Apply fails / patch mismatch** — Ask the AI to include more context lines in the `<find>` block. The error context (copied via "Copy Error Context" button) gives the AI enough information to fix its own patches.
-- **Token count shows 0** — Check Settings to ensure a model is selected. The tokenizer downloads on first use and requires internet.
+- **"Module not found"**: Ensure your venv is activated and dependencies are installed.
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+- **No data in Diff Only**: Ensure the project is a git repository and has changes.
+```bash
+git status
+git diff
+```
+- **Apply failed "pattern not found"**: Ask the AI to provide a longer code block within the `<find>` tag.
 
 ## Acknowledgements
 
 Inspired by:
 
-- [Repomix](https://github.com/yamadashy/repomix) — XML context packing format
-- [Overwrite](https://github.com/mnismt/overwrite) — OPX patch protocol
-- [PasteMax](https://github.com/kleneway/pastemax) — File tree UI patterns
+- **[Repomix](https://github.com/yamadashy/repomix)** 
+- **[Overwrite](https://github.com/mnismt/overwrite)** 
+- **[PasteMax](https://github.com/kleneway/pastemax)** 
 
 ## License
-
 MIT © HaoNgo232

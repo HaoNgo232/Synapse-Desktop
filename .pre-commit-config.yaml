@@ -1,14 +1,15 @@
 repos:
   - repo: local
     hooks:
-      # Check formatting (no auto-fix)
+      # Auto-format on commit (then re-stage)
       - id: ruff-format
-        name: ruff format (check only)
-        entry: bash -c 'source .venv/bin/activate && ruff format --check'
+        name: ruff format (auto-fix)
+        entry: bash -c 'source .venv/bin/activate && ruff format && git add -u'
         language: system
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)
         verbose: true
+        pass_filenames: false
 
       # Auto-fix linting issues
       - id: ruff-lint

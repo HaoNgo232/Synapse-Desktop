@@ -340,7 +340,6 @@ class UIBuilderMixin:
         header.addWidget(instr_label)
 
         # Add Templates button
-        from core.prompting.template_manager import list_templates
 
         self._template_btn = QToolButton()
         self._template_btn.setText("Templates")
@@ -366,8 +365,8 @@ class UIBuilderMixin:
         self._template_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._template_btn.setToolTip("Insert a task-specific prompt template")
 
-        template_menu = QMenu(self._template_btn)
-        template_menu.setStyleSheet(
+        self._template_menu = QMenu(self._template_btn)
+        self._template_menu.setStyleSheet(
             f"""
             QMenu {{
                 background: {ThemeColors.BG_ELEVATED};
@@ -386,16 +385,10 @@ class UIBuilderMixin:
             """
         )
 
-        for tmpl in list_templates():
-            action = template_menu.addAction(tmpl.display_name)
-            action.setToolTip(tmpl.description)
-            # Store template ID in action's data for retrieval later
-            action.setData(tmpl.template_id)
+        self._template_menu.aboutToShow.connect(self._populate_template_menu)
+        self._template_menu.triggered.connect(self._on_template_selected)
 
-        # Connect the menu's triggered signal to a handler in ContextViewQt
-        template_menu.triggered.connect(self._on_template_selected)
-
-        self._template_btn.setMenu(template_menu)
+        self._template_btn.setMenu(self._template_menu)
         header.addWidget(self._template_btn)
 
         # Add History button
@@ -451,6 +444,32 @@ class UIBuilderMixin:
         self._history_menu.triggered.connect(self._on_history_selected)
         self._history_btn.setMenu(self._history_menu)
         header.addWidget(self._history_btn)
+
+        # Clear history button
+        self._clear_history_btn = QToolButton()
+        self._clear_history_btn.setText("Clear History")
+        self._clear_history_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: transparent;
+                color: {ThemeColors.ERROR};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.ERROR};
+                color: white;
+                border-color: {ThemeColors.ERROR};
+            }}
+            """
+        )
+        self._clear_history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._clear_history_btn.setToolTip("Xóa toàn bộ Prompt History")
+        self._clear_history_btn.clicked.connect(self._clear_prompt_history)
+        header.addWidget(self._clear_history_btn)
 
         header.addStretch()
 

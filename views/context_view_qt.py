@@ -245,26 +245,89 @@ class ContextViewQt(
 
     @Slot(object)
     def _on_template_selected(self, action) -> None:
-        """Handle template selection from dropdown."""
-        from core.prompting.template_manager import load_template
+        """Xu ly khi chon mot prompt template hoac action xoa template."""
+        from core.prompting.template_manager import load_template, delete_template
+        from PySide6.QtWidgets import QMessageBox
 
-        template_id = action.data()
-        if template_id:
-            try:
-                content = load_template(template_id)
-                current_text = self._instructions_field.toPlainText()
+        data = action.data()
+        if not data:
+            return
 
-                # If there's already text, append with a separator, otherwise set directly
-                if current_text.strip():
-                    self._instructions_field.setPlainText(
-                        f"{current_text}\\n\\n{content}"
-                    )
-                else:
-                    self._instructions_field.setPlainText(content)
+        if isinstance(data, dict):
+            action_type = data.get("action")
+            template_id = str(data.get("id", ""))
 
-                self._show_status("Template inserted")
-            except Exception as e:
-                self._show_status(f"Failed to load template: {e}", is_error=True)
+            if action_type == "delete" and template_id:
+                reply = QMessageBox.question(
+                    self,
+                    "Xóa Custom Template",
+                    "Bạn có chắc chắn muốn xóa template này không?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    if delete_template(template_id):
+                        self._show_status("Template deleted.")
+                    else:
+                        self._show_status("Failed to delete template.", is_error=True)
+                return
+            # neu la insert thi fallthrough xuong ben duoi
+        else:
+            template_id = str(data)
+
+        if not template_id:
+            return
+
+        if template_id == "__CREATE_CUSTOM__":
+            self._show_custom_template_dialog()
+            return
+
+        try:
+            content = load_template(template_id)
+            cursor = self._instructions_field.textCursor()
+            cursor.select(cursor.SelectionType.Document)
+            cursor.insertText(content)
+            self._show_status("Template inserted")
+        except Exception as e:
+            self._show_status(f"Failed to load template: {e}", is_error=True)
+
+    def _show_custom_template_dialog(self) -> None:
+        """Hien thi dialog cho phep tao Custom Template."""
+        from components.custom_template_dialog import CustomTemplateDialog
+
+        dialog = CustomTemplateDialog(self)
+        if dialog.exec():
+            self._show_status("Custom template saved! You can now use it.")
+
+    @Slot()
+    def _populate_template_menu(self) -> None:
+        """Đổ dữ liệu template vào menu (dynamic build)."""
+        from core.prompting.template_manager import list_templates
+
+        menu = self._template_menu
+        menu.clear()
+
+        for tmpl in list_templates():
+            if getattr(tmpl, "is_custom", False):
+                sub = menu.addMenu(tmpl.display_name)
+                if tmpl.description:
+                    sub.setToolTip(tmpl.description)
+
+                ins = sub.addAction("Insert")
+                ins.setData({"action": "insert", "id": tmpl.template_id})
+
+                sub.addSeparator()
+
+                dlt = sub.addAction("❌ Delete")
+                dlt.setData({"action": "delete", "id": tmpl.template_id})
+            else:
+                action = menu.addAction(tmpl.display_name)
+                if tmpl.description:
+                    action.setToolTip(tmpl.description)
+                action.setData(tmpl.template_id)
+
+        menu.addSeparator()
+        add_action = menu.addAction("➕ Manage/Add Custom Template...")
+        add_action.setData("__CREATE_CUSTOM__")
 
     @Slot()
     def _populate_history_menu(self) -> None:
@@ -286,17 +349,64 @@ class ContextViewQt(
             label = text[:50] + "..." if len(text) > 50 else text
             label = label.replace("\n", " ").strip()
 
-            action = menu.addAction(label)
-            action.setToolTip(text[:200] + ("..." if len(text) > 200 else ""))
-            action.setData(text)
+            sub = menu.addMenu(label)
+            sub.setToolTip(text[:200] + ("..." if len(text) > 200 else ""))
+
+            ins = sub.addAction("Apply")
+            ins.setData({"action": "insert", "text": text})
+
+            sub.addSeparator()
+
+            dlt = sub.addAction("❌ Delete")
+            dlt.setData({"action": "delete", "text": text})
 
     @Slot(object)
     def _on_history_selected(self, action) -> None:
         """Handle history selection from dropdown."""
-        text = action.data()
+        data = action.data()
+        if not data:
+            return
+
+        if isinstance(data, dict):
+            action_type = data.get("action")
+            text = str(data.get("text", ""))
+
+            if action_type == "delete" and text:
+                from services.settings_manager import (
+                    load_app_settings,
+                    update_app_setting,
+                )
+
+                settings = load_app_settings()
+                history_list = settings.instruction_history.copy()
+                if text in history_list:
+                    history_list.remove(text)
+                    update_app_setting(instruction_history=history_list)
+                    self._show_status("History item deleted.")
+                return
+            # neu la insert thi fallthrough
+        else:
+            text = str(data)
+
         if text:
             self._instructions_field.setPlainText(text)
             self._show_status("History loaded")
+
+    @Slot()
+    def _clear_prompt_history(self) -> None:
+        """Xoa toan bo lich su cua prompt input."""
+        from PySide6.QtWidgets import QMessageBox
+        from services.settings_manager import update_app_setting
+
+        reply = QMessageBox.question(
+            self,
+            "Clear History",
+            "Bạn có chắc chắn muốn xóa toàn bộ lịch sử Prompt không?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            update_app_setting(instruction_history=[])
+            self._show_status("All prompt history cleared.")
 
     # ===== Token Counting =====
 

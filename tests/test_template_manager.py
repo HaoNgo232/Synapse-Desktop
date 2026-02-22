@@ -4,6 +4,8 @@ Unit tests cho Template Manager module.
 Test cac function:
 - list_templates(): Liet ke templates kha dung
 - load_template(): Doc noi dung template theo ID
+from core.prompting.template_manager import LocalCustomTemplateProvider
+import core.prompting.template_manager as tm
 - get_template_info(): Lay metadata cua template
 """
 
@@ -14,7 +16,9 @@ from core.prompting.template_manager import (
     load_template,
     get_template_info,
     TemplateInfo,
+    LocalCustomTemplateProvider,
 )
+import core.prompting.template_manager as tm
 
 
 class TestListTemplates:
@@ -32,7 +36,7 @@ class TestListTemplates:
             assert isinstance(item, TemplateInfo)
 
     def test_has_expected_templates(self):
-        """Co du 5 templates da dang ky."""
+        """Co du 9 templates da dang ky (BuiltIn)."""
         result = list_templates()
         ids = {t.template_id for t in result}
         expected = {
@@ -41,8 +45,13 @@ class TestListTemplates:
             "refactoring_expert",
             "doc_generator",
             "performance_optimizer",
+            "ui_ux_reviewer",
+            "test_writer",
+            "api_reviewer",
+            "flow_checker",
         }
-        assert ids == expected
+        # Do file local có thể chứa custom template, assert is superset
+        assert expected.issubset(ids)
 
     def test_each_has_display_name(self):
         """Moi template co display_name khong rong."""
@@ -96,6 +105,8 @@ class TestLoadTemplate:
     def test_all_templates_not_empty(self):
         """Tat ca templates co noi dung khong rong."""
         for t in list_templates():
+            if getattr(t, "is_custom", False):
+                continue
             content = load_template(t.template_id)
             assert len(content) > 50, f"Template {t.template_id} qua ngan"
 
@@ -119,3 +130,50 @@ class TestGetTemplateInfo:
         info = get_template_info("bug_hunter")
         with pytest.raises(AttributeError):
             info.display_name = "Hacked"  # type: ignore[misc]
+
+
+class TestLocalCustomTemplateProvider:
+    """Test LocalCustomTemplateProvider logic."""
+
+    @pytest.fixture
+    def custom_provider(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tm, "CUSTOM_TEMPLATES_DIR", tmp_path)
+        return LocalCustomTemplateProvider()
+
+    def test_list_and_parse_metadata(self, custom_provider, tmp_path):
+        """Load metadata dung tu custom frontmatter HTML."""
+        test_md = tmp_path / "my_custom.md"
+        test_md.write_text(
+            "<!-- name: Custom Name, desc: Custom Desc -->\nNoi dung", encoding="utf-8"
+        )
+
+        templates = custom_provider.list_templates()
+        assert len(templates) == 1
+        assert templates[0].template_id == "my_custom"
+        assert templates[0].display_name == "Custom Name"
+        assert templates[0].description == "Custom Desc"
+
+    def test_fallback_metadata_if_no_header(self, custom_provider, tmp_path):
+        """Neu khong co header HTML, dung default metadata."""
+        test_md = tmp_path / "hello_world.md"
+        test_md.write_text("Hello World Content", encoding="utf-8")
+
+        templates = custom_provider.list_templates()
+        assert len(templates) == 1
+        assert templates[0].template_id == "hello_world"
+        assert templates[0].display_name == "Custom: Hello World"
+        assert templates[0].description == "User custom template"
+
+    def test_load_template(self, custom_provider, tmp_path):
+        """Doc duoc noi dung."""
+        test_md = tmp_path / "my_custom.md"
+        test_md.write_text("<!-- name: X -->\nContent", encoding="utf-8")
+        assert custom_provider.load_template("my_custom") == "<!-- name: X -->\nContent"
+
+    def test_get_template_info(self, custom_provider, tmp_path):
+        """Lay info cua isolated file."""
+        test_md = tmp_path / "my_custom.md"
+        test_md.write_text("<!-- name: X, desc: Y -->\nContent", encoding="utf-8")
+        info = custom_provider.get_template_info("my_custom")
+        assert info.display_name == "X"
+        assert info.description == "Y"

@@ -4,7 +4,6 @@ Su dung context_view fixture tu conftest.py.
 Covers: lines 43-382 cua context_view_qt.py
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
@@ -27,15 +26,20 @@ def test_context_view_default_services_injected(qtbot):
     mock_app_settings = MagicMock()
     mock_app_settings.output_format = None
 
-    with patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget), \
-         patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel), \
-         patch("views.context._ui_builder.load_app_settings", return_value=mock_app_settings), \
-         patch("core.prompting.template_manager.list_templates", return_value=[]), \
-         patch("views.context_view_qt.FileWatcher", return_value=MagicMock()), \
-         patch("services.prompt_build_service.PromptBuildService") as mock_pb, \
-         patch("services.prompt_build_service.QtClipboardService") as mock_cs:
-
+    with (
+        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
+        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
+        patch(
+            "views.context._ui_builder.load_app_settings",
+            return_value=mock_app_settings,
+        ),
+        patch("core.prompting.template_manager.list_templates", return_value=[]),
+        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+        patch("services.prompt_build_service.PromptBuildService") as mock_pb,
+        patch("services.prompt_build_service.QtClipboardService") as mock_cs,
+    ):
         from views.context_view_qt import ContextViewQt
+
         view = ContextViewQt(
             get_workspace=lambda: Path("/fake/workspace"),
         )
@@ -57,7 +61,7 @@ def test_context_view_set_get_instructions(context_view):
 def test_context_view_format_change(context_view):
     """Kiem tra thay doi output format dropdown."""
     view = context_view
-    assert hasattr(view, '_format_combo')
+    assert hasattr(view, "_format_combo")
     if view._format_combo.count() > 1:
         view._format_combo.setCurrentIndex(1)
         assert view._format_combo.currentIndex() == 1
@@ -87,11 +91,11 @@ def test_context_view_token_label_exists(context_view):
 def test_context_view_copy_buttons_exist(context_view):
     """Kiem tra tat ca copy buttons da duoc tao."""
     view = context_view
-    assert hasattr(view, '_opx_btn')
-    assert hasattr(view, '_copy_btn')
-    assert hasattr(view, '_smart_btn')
-    assert hasattr(view, '_diff_btn')
-    assert hasattr(view, '_tree_map_btn')
+    assert hasattr(view, "_opx_btn")
+    assert hasattr(view, "_copy_btn")
+    assert hasattr(view, "_smart_btn")
+    assert hasattr(view, "_diff_btn")
+    assert hasattr(view, "_tree_map_btn")
 
 
 def test_on_workspace_changed(context_view):
@@ -105,8 +109,10 @@ def test_on_workspace_changed(context_view):
     view._file_watcher = mock_watcher
 
     new_path = Path("/new/workspace")
-    with patch("services.cache_registry.cache_registry") as mock_registry, \
-         patch("core.logging_config.log_info"):
+    with (
+        patch("services.cache_registry.cache_registry") as mock_registry,
+        patch("core.logging_config.log_info"),
+    ):
         # workspace path doesn't exist in test
         view.on_workspace_changed(new_path)
 
@@ -124,8 +130,10 @@ def test_on_workspace_changed_starts_watcher(context_view, tmp_path):
     mock_watcher = MagicMock()
     view._file_watcher = mock_watcher
 
-    with patch("services.cache_registry.cache_registry"), \
-         patch("core.logging_config.log_info"):
+    with (
+        patch("services.cache_registry.cache_registry"),
+        patch("core.logging_config.log_info"),
+    ):
         view.on_workspace_changed(tmp_path)
 
     mock_watcher.start.assert_called_once()
@@ -209,7 +217,7 @@ def test_on_selection_changed_triggers_related(context_view):
     view = context_view
     view._related_mode_active = True
     view._resolving_related = False
-    with patch.object(view, '_resolve_related_files') as mock_resolve:
+    with patch.object(view, "_resolve_related_files") as mock_resolve:
         view._on_selection_changed({"file.py"})
         mock_resolve.assert_called_once()
 
@@ -217,8 +225,10 @@ def test_on_selection_changed_triggers_related(context_view):
 def test_on_format_changed(context_view):
     """Kiem tra _on_format_changed cap nhat style va settings (lines 234-244)."""
     view = context_view
-    with patch("views.context_view_qt.update_app_setting") as mock_update, \
-         patch("views.context_view_qt.get_style_by_id") as mock_get_style:
+    with (
+        patch("views.context_view_qt.update_app_setting"),
+        patch("views.context_view_qt.get_style_by_id") as mock_get_style,
+    ):
         mock_get_style.return_value = MagicMock()
         view._format_combo.setCurrentIndex(0)
         # Trigger manually
@@ -238,7 +248,9 @@ def test_on_template_selected(context_view):
     mock_action = MagicMock()
     mock_action.data.return_value = "test_template_id"
 
-    with patch("core.prompting.template_manager.load_template", return_value="Template content"):
+    with patch(
+        "core.prompting.template_manager.load_template", return_value="Template content"
+    ):
         view._on_template_selected(mock_action)
 
     assert "Template content" in view._instructions_field.toPlainText()
@@ -251,7 +263,9 @@ def test_on_template_selected_append_to_existing(context_view):
     mock_action = MagicMock()
     mock_action.data.return_value = "test_template_id"
 
-    with patch("core.prompting.template_manager.load_template", return_value="New template"):
+    with patch(
+        "core.prompting.template_manager.load_template", return_value="New template"
+    ):
         view._on_template_selected(mock_action)
 
     text = view._instructions_field.toPlainText()
@@ -265,7 +279,9 @@ def test_on_template_selected_error(context_view):
     mock_action = MagicMock()
     mock_action.data.return_value = "bad_id"
 
-    with patch("core.prompting.template_manager.load_template", side_effect=Exception("fail")):
+    with patch(
+        "core.prompting.template_manager.load_template", side_effect=Exception("fail")
+    ):
         view._on_template_selected(mock_action)  # Should not raise
 
 
@@ -274,7 +290,9 @@ def test_populate_history_menu_empty(context_view):
     view = context_view
     mock_settings = MagicMock()
     mock_settings.instruction_history = []
-    with patch("services.settings_manager.load_app_settings", return_value=mock_settings):
+    with patch(
+        "services.settings_manager.load_app_settings", return_value=mock_settings
+    ):
         view._populate_history_menu()
 
     # Menu should have "No history yet"
@@ -291,7 +309,9 @@ def test_populate_history_menu_with_entries(context_view):
         "Short instruction",
         "A" * 100,  # Long instruction -> truncated label
     ]
-    with patch("services.settings_manager.load_app_settings", return_value=mock_settings):
+    with patch(
+        "services.settings_manager.load_app_settings", return_value=mock_settings
+    ):
         view._populate_history_menu()
 
     actions = view._history_menu.actions()

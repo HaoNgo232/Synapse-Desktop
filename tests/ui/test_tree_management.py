@@ -4,8 +4,7 @@ Su dung context_view fixture tu conftest.py.
 Covers: lines 29-135 cua _tree_management.py
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 
@@ -24,13 +23,18 @@ def test_refresh_tree_no_workspace(qtbot):
     mock_app_settings = MagicMock()
     mock_app_settings.output_format = None
 
-    with patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget), \
-         patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel), \
-         patch("views.context._ui_builder.load_app_settings", return_value=mock_app_settings), \
-         patch("core.prompting.template_manager.list_templates", return_value=[]), \
-         patch("views.context_view_qt.FileWatcher", return_value=MagicMock()):
-
+    with (
+        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
+        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
+        patch(
+            "views.context._ui_builder.load_app_settings",
+            return_value=mock_app_settings,
+        ),
+        patch("core.prompting.template_manager.list_templates", return_value=[]),
+        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+    ):
         from views.context_view_qt import ContextViewQt
+
         view = ContextViewQt(
             get_workspace=lambda: None,
             prompt_builder=MagicMock(),
@@ -110,7 +114,9 @@ def test_preview_file(mock_dialog, context_view):
     """Kiem tra _preview_file goi FilePreviewDialogQt.show_preview (line 80-82)."""
     view = context_view
     view._preview_file("/fake/workspace/src/main.py")
-    mock_dialog.show_preview.assert_called_once_with(view, "/fake/workspace/src/main.py")
+    mock_dialog.show_preview.assert_called_once_with(
+        view, "/fake/workspace/src/main.py"
+    )
 
 
 @patch("components.dialogs_qt.RemoteRepoDialogQt")
@@ -164,7 +170,9 @@ def test_on_file_modified(mock_registry, context_view):
     """Kiem tra _on_file_modified invalidate caches."""
     view = context_view
     view._on_file_modified("/fake/workspace/src/main.py")
-    mock_registry.invalidate_for_path.assert_called_once_with("/fake/workspace/src/main.py")
+    mock_registry.invalidate_for_path.assert_called_once_with(
+        "/fake/workspace/src/main.py"
+    )
 
 
 def test_on_file_deleted_delegates(context_view):
@@ -197,13 +205,18 @@ def test_on_file_system_changed_no_workspace(mock_run, qtbot):
     mock_app_settings = MagicMock()
     mock_app_settings.output_format = None
 
-    with patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget), \
-         patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel), \
-         patch("views.context._ui_builder.load_app_settings", return_value=mock_app_settings), \
-         patch("core.prompting.template_manager.list_templates", return_value=[]), \
-         patch("views.context_view_qt.FileWatcher", return_value=MagicMock()):
-
+    with (
+        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
+        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
+        patch(
+            "views.context._ui_builder.load_app_settings",
+            return_value=mock_app_settings,
+        ),
+        patch("core.prompting.template_manager.list_templates", return_value=[]),
+        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+    ):
         from views.context_view_qt import ContextViewQt
+
         view = ContextViewQt(
             get_workspace=lambda: None,
             prompt_builder=MagicMock(),

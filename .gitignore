@@ -9,3 +9,4 @@ stubs/
 .ruff_cache
 .coverage
 =
+lint_output.json

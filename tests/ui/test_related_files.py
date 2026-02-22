@@ -4,15 +4,13 @@ Su dung context_view fixture tu conftest.py.
 Covers: lines 29-162 cua _related_files.py
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 
 def test_set_related_mode_activate(context_view):
     """Kiem tra _set_related_mode(True, depth) bat related mode."""
     view = context_view
-    with patch.object(view, '_resolve_related_files'):
+    with patch.object(view, "_resolve_related_files"):
         view._set_related_mode(True, 2)
         assert view._related_mode_active is True
         assert view._related_depth == 2
@@ -99,7 +97,9 @@ def test_apply_related_results_adds_and_removes(context_view):
 
     view._apply_related_results({"new.py"}, {"user.py"})
 
-    view.file_tree_widget.remove_paths_from_selection.assert_called_once_with({"old.py"})
+    view.file_tree_widget.remove_paths_from_selection.assert_called_once_with(
+        {"old.py"}
+    )
     view.file_tree_widget.add_paths_to_selection.assert_called_once_with({"new.py"})
     assert view._last_added_related_files == {"new.py"}
 
@@ -168,7 +168,9 @@ def test_resolve_related_files_no_source_files(mock_schedule, context_view):
 
 
 @patch("views.context._related_files.schedule_background")
-def test_resolve_related_files_dispatches_background(mock_schedule, context_view, tmp_path):
+def test_resolve_related_files_dispatches_background(
+    mock_schedule, context_view, tmp_path
+):
     """Kiem tra _resolve_related_files dispatch resolve() to background (line 100-130)."""
     view = context_view
     # Create a real .py file for filtering

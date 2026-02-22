@@ -729,6 +729,7 @@ class CopyActionsMixin:
                     use_relative_paths=use_rel,
                     tree_item=tree_item,
                     selected_paths=selected_path_strs,
+                    include_xml_formatting=include_xml,
                 )
 
             pre_snapshot = {

@@ -16,6 +16,7 @@ from views.context_view_qt import ContextViewQt
 
 class FakeFileTreeWidget(QWidget):
     """Fake FileTreeWidget thay the cho testing, chua cac signal can thiet."""
+
     selection_changed = Signal(set)
     file_preview_requested = Signal(str)
     token_counting_done = Signal()
@@ -53,6 +54,7 @@ class FakeFileTreeWidget(QWidget):
 
 class FakeTokenStatsPanel(QWidget):
     """Fake TokenStatsPanelQt cho testing."""
+
     model_changed = Signal(str)
 
     def update_stats(self, **kwargs):
@@ -83,12 +85,16 @@ def context_view(qtbot):
     mock_app_settings = MagicMock()
     mock_app_settings.output_format = None
 
-    with patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget), \
-         patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel), \
-         patch("views.context._ui_builder.load_app_settings", return_value=mock_app_settings), \
-         patch("core.prompting.template_manager.list_templates", return_value=[]), \
-         patch("views.context_view_qt.FileWatcher", return_value=MagicMock()):
-
+    with (
+        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
+        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
+        patch(
+            "views.context._ui_builder.load_app_settings",
+            return_value=mock_app_settings,
+        ),
+        patch("core.prompting.template_manager.list_templates", return_value=[]),
+        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+    ):
         view = ContextViewQt(
             get_workspace=lambda: Path("/fake/workspace"),
             prompt_builder=mock_prompt_builder,

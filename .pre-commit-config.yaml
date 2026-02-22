@@ -1,10 +1,10 @@
 repos:
   - repo: local
     hooks:
-      # Auto-fix formatting
+      # Check formatting (no auto-fix)
       - id: ruff-format
-        name: ruff format (auto-fix)
-        entry: bash -c 'source .venv/bin/activate && ruff format --diff'
+        name: ruff format (check only)
+        entry: bash -c 'source .venv/bin/activate && ruff format --check'
         language: system
         types: [python]
         exclude: ^(tests/|stubs/|.agent/)

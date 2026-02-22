@@ -23,6 +23,7 @@ from views.history_view_qt import (
 # Helper function tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_create_status_dot_icon():
     """Kiem tra create_status_dot_icon tao icon (line 44-57)."""
     icon = create_status_dot_icon("#FF0000")
@@ -83,6 +84,7 @@ def test_group_entries_invalid_timestamp():
 # Widget tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_file_change_row_success(qtbot):
     """Kiem tra FileChangeRow voi success (line 220-267)."""
     row = FileChangeRow("CREATE", "new_file.py", success=True)
@@ -108,6 +110,7 @@ def test_error_card(qtbot):
 # Main view tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def _make_entry():
     """Tao fake HistoryEntry."""
     entry = MagicMock()
@@ -127,10 +130,13 @@ def _make_entry():
 def history_view(qtbot):
     """Fixture tao HistoryViewQt, mock get_history_entries."""
     entry = _make_entry()
-    with patch("views.history_view_qt.get_history_entries", return_value=[entry]), \
-         patch("views.history_view_qt.get_history_stats", return_value=MagicMock(
-             total_entries=1, total_files=3, success_rate=66.7
-         )):
+    with (
+        patch("views.history_view_qt.get_history_entries", return_value=[entry]),
+        patch(
+            "views.history_view_qt.get_history_stats",
+            return_value=MagicMock(total_entries=1, total_files=3, success_rate=66.7),
+        ),
+    ):
         view = HistoryViewQt()
         qtbot.addWidget(view)
     return view
@@ -140,8 +146,8 @@ def test_history_view_initialization(history_view):
     """Kiem tra HistoryViewQt khoi tao thanh cong."""
     view = history_view
     assert view is not None
-    assert hasattr(view, '_search_input')
-    assert hasattr(view, '_footer_label')
+    assert hasattr(view, "_search_input")
+    assert hasattr(view, "_footer_label")
 
 
 def test_history_view_refresh(history_view):
@@ -156,10 +162,14 @@ def test_history_view_refresh(history_view):
 def test_history_view_clear_all(history_view):
     """Kiem tra clear all history (line 1513-1530)."""
     view = history_view
-    with patch("views.history_view_qt.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.Yes), \
-         patch("views.history_view_qt.clear_history", return_value=True), \
-         patch("views.history_view_qt.get_history_entries", return_value=[]):
+    with (
+        patch(
+            "views.history_view_qt.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
+        patch("views.history_view_qt.clear_history", return_value=True),
+        patch("views.history_view_qt.get_history_entries", return_value=[]),
+    ):
         view._confirm_clear_all()
         assert "cleared" in view._footer_label.text().lower()
 
@@ -167,9 +177,13 @@ def test_history_view_clear_all(history_view):
 def test_history_view_clear_all_cancelled(history_view):
     """Kiem tra clear all cancelled."""
     view = history_view
-    with patch("views.history_view_qt.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.No), \
-         patch("views.history_view_qt.clear_history") as mock_clear:
+    with (
+        patch(
+            "views.history_view_qt.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.No,
+        ),
+        patch("views.history_view_qt.clear_history") as mock_clear,
+    ):
         view._confirm_clear_all()
         mock_clear.assert_not_called()
 
@@ -177,9 +191,13 @@ def test_history_view_clear_all_cancelled(history_view):
 def test_history_view_clear_all_failed(history_view):
     """Kiem tra clear all failed (line 1529-1530)."""
     view = history_view
-    with patch("views.history_view_qt.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.Yes), \
-         patch("views.history_view_qt.clear_history", return_value=False):
+    with (
+        patch(
+            "views.history_view_qt.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
+        patch("views.history_view_qt.clear_history", return_value=False),
+    ):
         view._confirm_clear_all()
         assert "fail" in view._footer_label.text().lower()
 
@@ -187,10 +205,14 @@ def test_history_view_clear_all_failed(history_view):
 def test_history_view_delete_entry(history_view):
     """Kiem tra delete entry (line 1492-1510)."""
     view = history_view
-    with patch("views.history_view_qt.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.Yes), \
-         patch("views.history_view_qt.delete_entry", return_value=True), \
-         patch("views.history_view_qt.get_history_entries", return_value=[]):
+    with (
+        patch(
+            "views.history_view_qt.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
+        patch("views.history_view_qt.delete_entry", return_value=True),
+        patch("views.history_view_qt.get_history_entries", return_value=[]),
+    ):
         view._confirm_delete_entry("entry-1")
         assert "deleted" in view._footer_label.text().lower()
 
@@ -198,17 +220,23 @@ def test_history_view_delete_entry(history_view):
 def test_history_view_delete_entry_cancelled(history_view):
     """Kiem tra delete entry cancelled."""
     view = history_view
-    with patch("views.history_view_qt.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.No):
+    with patch(
+        "views.history_view_qt.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.No,
+    ):
         view._confirm_delete_entry("entry-1")
 
 
 def test_history_view_delete_entry_failed(history_view):
     """Kiem tra delete entry failed (line 1509-1510)."""
     view = history_view
-    with patch("views.history_view_qt.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.Yes), \
-         patch("views.history_view_qt.delete_entry", return_value=False):
+    with (
+        patch(
+            "views.history_view_qt.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
+        patch("views.history_view_qt.delete_entry", return_value=False),
+    ):
         view._confirm_delete_entry("entry-1")
         assert "fail" in view._footer_label.text().lower()
 

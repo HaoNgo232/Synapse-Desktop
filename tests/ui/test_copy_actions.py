@@ -4,14 +4,13 @@ Su dung context_view fixture tu conftest.py.
 Covers: lines 267-1038 cua _copy_actions.py
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 
 # ═══════════════════════════════════════════════════════════════
 # _try_cache_hit / _store_in_cache / _begin_copy_operation
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_try_cache_hit_miss(context_view):
     """Kiem tra _try_cache_hit khi khong co cache (line 267-296)."""
@@ -77,6 +76,7 @@ def test_begin_copy_operation_moves_refs_to_stale(context_view):
 def test_cleanup_stale_refs(context_view):
     """Kiem tra _cleanup_stale_refs (line 380-410)."""
     from PySide6.QtCore import QObject
+
     view = context_view
     mock_obj = MagicMock(spec=QObject)
     view._stale_workers = [mock_obj]
@@ -122,6 +122,7 @@ def test_save_instruction_to_history(context_view):
 # _copy_context
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_copy_context_no_workspace(context_view):
     """Kiem tra _copy_context no workspace (line 441-444)."""
     view = context_view
@@ -146,15 +147,15 @@ def test_copy_context_cache_hit(context_view, tmp_path):
     py_file = tmp_path / "main.py"
     py_file.write_text("x")
 
-    view.file_tree_widget.get_selected_paths = MagicMock(
-        return_value=[str(py_file)]
-    )
+    view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
-    with patch.object(view, '_try_cache_hit', return_value=("cached prompt", 500)):
+    with patch.object(view, "_try_cache_hit", return_value=("cached prompt", 500)):
         view._clipboard_service.copy_to_clipboard = MagicMock(return_value=(True, None))
-        with patch.object(view, '_show_copy_breakdown'):
+        with patch.object(view, "_show_copy_breakdown"):
             view._copy_context()
-            view._clipboard_service.copy_to_clipboard.assert_called_with("cached prompt")
+            view._clipboard_service.copy_to_clipboard.assert_called_with(
+                "cached prompt"
+            )
 
 
 def test_copy_context_cache_hit_copy_fail(context_view, tmp_path):
@@ -163,10 +164,8 @@ def test_copy_context_cache_hit_copy_fail(context_view, tmp_path):
     py_file = tmp_path / "main.py"
     py_file.write_text("x")
 
-    view.file_tree_widget.get_selected_paths = MagicMock(
-        return_value=[str(py_file)]
-    )
-    with patch.object(view, '_try_cache_hit', return_value=("cached prompt", 500)):
+    view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
+    with patch.object(view, "_try_cache_hit", return_value=("cached prompt", 500)):
         view._clipboard_service.copy_to_clipboard = MagicMock(
             return_value=(False, "clipboard error")
         )
@@ -181,18 +180,20 @@ def test_copy_context_background_no_security(context_view, tmp_path):
     py_file = tmp_path / "main.py"
     py_file.write_text("x")
 
-    view.file_tree_widget.get_selected_paths = MagicMock(
-        return_value=[str(py_file)]
-    )
+    view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
     mock_settings = MagicMock()
     mock_settings.enable_security_check = False
     mock_settings.include_git_changes = False
 
-    with patch.object(view, '_try_cache_hit', return_value=None), \
-         patch("views.context._copy_actions.load_app_settings", return_value=mock_settings), \
-         patch.object(view, '_do_copy_context') as mock_do, \
-         patch("services.settings_manager.add_instruction_history"):
+    with (
+        patch.object(view, "_try_cache_hit", return_value=None),
+        patch(
+            "views.context._copy_actions.load_app_settings", return_value=mock_settings
+        ),
+        patch.object(view, "_do_copy_context") as mock_do,
+        patch("services.settings_manager.add_instruction_history"),
+    ):
         view._copy_context()
         mock_do.assert_called_once()
 
@@ -203,17 +204,19 @@ def test_copy_context_security_enabled(context_view, tmp_path):
     py_file = tmp_path / "main.py"
     py_file.write_text("x")
 
-    view.file_tree_widget.get_selected_paths = MagicMock(
-        return_value=[str(py_file)]
-    )
+    view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
     mock_settings = MagicMock()
     mock_settings.enable_security_check = True
 
-    with patch.object(view, '_try_cache_hit', return_value=None), \
-         patch("views.context._copy_actions.load_app_settings", return_value=mock_settings), \
-         patch.object(view, '_run_security_check_then_copy') as mock_sec, \
-         patch("services.settings_manager.add_instruction_history"):
+    with (
+        patch.object(view, "_try_cache_hit", return_value=None),
+        patch(
+            "views.context._copy_actions.load_app_settings", return_value=mock_settings
+        ),
+        patch.object(view, "_run_security_check_then_copy") as mock_sec,
+        patch("services.settings_manager.add_instruction_history"),
+    ):
         view._copy_context()
         mock_sec.assert_called_once()
 
@@ -221,6 +224,7 @@ def test_copy_context_security_enabled(context_view, tmp_path):
 # ═══════════════════════════════════════════════════════════════
 # _copy_smart_context
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_copy_smart_no_workspace(context_view):
     """Kiem tra _copy_smart_context no workspace (line 762-765)."""
@@ -245,14 +249,14 @@ def test_copy_smart_cache_hit(context_view, tmp_path):
     view = context_view
     py_file = tmp_path / "main.py"
     py_file.write_text("x")
-    view.file_tree_widget.get_selected_paths = MagicMock(
-        return_value=[str(py_file)]
-    )
+    view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
-    with patch.object(view, '_try_cache_hit', return_value=("smart prompt", 300)):
+    with patch.object(view, "_try_cache_hit", return_value=("smart prompt", 300)):
         view._clipboard_service.copy_to_clipboard = MagicMock(return_value=(True, None))
-        with patch.object(view, '_show_copy_breakdown'), \
-             patch("services.settings_manager.add_instruction_history"):
+        with (
+            patch.object(view, "_show_copy_breakdown"),
+            patch("services.settings_manager.add_instruction_history"),
+        ):
             view._copy_smart_context()
             view._clipboard_service.copy_to_clipboard.assert_called_with("smart prompt")
 
@@ -262,14 +266,17 @@ def test_copy_smart_background(context_view, tmp_path):
     view = context_view
     py_file = tmp_path / "main.py"
     py_file.write_text("x")
-    view.file_tree_widget.get_selected_paths = MagicMock(
-        return_value=[str(py_file)]
-    )
+    view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
-    with patch.object(view, '_try_cache_hit', return_value=None), \
-         patch.object(view, '_run_copy_in_background') as mock_run, \
-         patch("services.settings_manager.add_instruction_history"), \
-         patch("views.context._copy_actions.load_app_settings", return_value=MagicMock(include_git_changes=False)):
+    with (
+        patch.object(view, "_try_cache_hit", return_value=None),
+        patch.object(view, "_run_copy_in_background") as mock_run,
+        patch("services.settings_manager.add_instruction_history"),
+        patch(
+            "views.context._copy_actions.load_app_settings",
+            return_value=MagicMock(include_git_changes=False),
+        ),
+    ):
         view._copy_smart_context()
         mock_run.assert_called_once()
 
@@ -277,6 +284,7 @@ def test_copy_smart_background(context_view, tmp_path):
 # ═══════════════════════════════════════════════════════════════
 # _copy_tree_map_only
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_copy_tree_map_no_workspace(context_view):
     """Kiem tra _copy_tree_map_only no workspace (line 836-839)."""
@@ -291,10 +299,12 @@ def test_copy_tree_map_cache_hit(context_view, tmp_path):
     """Kiem tra _copy_tree_map_only cache hit (line 851-869)."""
     view = context_view
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[])
-    with patch.object(view, '_try_cache_hit', return_value=("treemap prompt", 50)):
+    with patch.object(view, "_try_cache_hit", return_value=("treemap prompt", 50)):
         view._clipboard_service.copy_to_clipboard = MagicMock(return_value=(True, None))
-        with patch.object(view, '_show_copy_breakdown'), \
-             patch("services.settings_manager.add_instruction_history"):
+        with (
+            patch.object(view, "_show_copy_breakdown"),
+            patch("services.settings_manager.add_instruction_history"),
+        ):
             view._copy_tree_map_only()
 
 
@@ -303,9 +313,11 @@ def test_copy_tree_map_background(context_view, tmp_path):
     view = context_view
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[])
 
-    with patch.object(view, '_try_cache_hit', return_value=None), \
-         patch.object(view, '_run_copy_in_background') as mock_run, \
-         patch("services.settings_manager.add_instruction_history"):
+    with (
+        patch.object(view, "_try_cache_hit", return_value=None),
+        patch.object(view, "_run_copy_in_background") as mock_run,
+        patch("services.settings_manager.add_instruction_history"),
+    ):
         view._copy_tree_map_only()
         mock_run.assert_called_once()
 
@@ -314,9 +326,11 @@ def test_copy_tree_map_background(context_view, tmp_path):
 # _collect_all_tree_paths / _scan_full_tree
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_collect_all_tree_paths(context_view):
     """Kiem tra _collect_all_tree_paths (line 913-923)."""
     from core.utils.file_utils import TreeItem
+
     view = context_view
     root = TreeItem(label="root", path="/root")
     child1 = TreeItem(label="a.py", path="/root/a.py")
@@ -334,13 +348,14 @@ def test_scan_full_tree(context_view, tmp_path):
     view = context_view
     with patch("views.context._copy_actions.scan_directory") as mock_scan:
         mock_scan.return_value = MagicMock()
-        result = view._scan_full_tree(tmp_path)
+        view._scan_full_tree(tmp_path)
         mock_scan.assert_called_once()
 
 
 # ═══════════════════════════════════════════════════════════════
 # _show_diff_only_dialog
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_show_diff_only_dialog_no_workspace(context_view):
     """Kiem tra _show_diff_only_dialog no workspace (line 935-938)."""
@@ -354,8 +369,10 @@ def test_show_diff_only_dialog_no_workspace(context_view):
 def test_show_diff_only_dialog(context_view):
     """Kiem tra _show_diff_only_dialog opens dialog (line 933-974)."""
     view = context_view
-    with patch("components.dialogs_qt.DiffOnlyDialogQt") as mock_dialog, \
-         patch("services.settings_manager.add_instruction_history"):
+    with (
+        patch("components.dialogs_qt.DiffOnlyDialogQt") as mock_dialog,
+        patch("services.settings_manager.add_instruction_history"),
+    ):
         mock_instance = MagicMock()
         mock_dialog.return_value = mock_instance
         view._show_diff_only_dialog()
@@ -366,9 +383,11 @@ def test_show_diff_only_dialog(context_view):
 def test_show_diff_only_dialog_exception(context_view):
     """Kiem tra _show_diff_only_dialog xu ly exception (line 973-974)."""
     view = context_view
-    with patch("components.dialogs_qt.DiffOnlyDialogQt", side_effect=Exception("Fail")), \
-         patch("services.settings_manager.add_instruction_history"), \
-         patch("components.toast_qt.toast_error") as mock_error:
+    with (
+        patch("components.dialogs_qt.DiffOnlyDialogQt", side_effect=Exception("Fail")),
+        patch("services.settings_manager.add_instruction_history"),
+        patch("components.toast_qt.toast_error") as mock_error,
+    ):
         view._show_diff_only_dialog()
         assert "Error" in mock_error.call_args[0][0]
 
@@ -376,6 +395,7 @@ def test_show_diff_only_dialog_exception(context_view):
 # ═══════════════════════════════════════════════════════════════
 # _show_copy_breakdown
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_show_copy_breakdown_basic(context_view):
     """Kiem tra _show_copy_breakdown (line 976-1038)."""
@@ -402,8 +422,10 @@ def test_show_copy_breakdown_with_opx(context_view):
         "include_opx": True,
         "copy_mode": "Copy + OPX",
     }
-    with patch("components.toast_qt.toast_success") as mock_toast, \
-         patch("core.opx_instruction.XML_FORMATTING_INSTRUCTIONS", "some instructions"):
+    with (
+        patch("components.toast_qt.toast_success") as mock_toast,
+        patch("core.opx_instruction.XML_FORMATTING_INSTRUCTIONS", "some instructions"),
+    ):
         view._prompt_builder.count_tokens = MagicMock(return_value=100)
         view._show_copy_breakdown(600, pre_snapshot)
         mock_toast.assert_called_once()
@@ -427,6 +449,7 @@ def test_show_copy_breakdown_overflow(context_view):
 # ═══════════════════════════════════════════════════════════════
 # _run_copy_in_background / _do_copy_context
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_run_copy_in_background_stale_gen(context_view):
     """Kiem tra _run_copy_in_background voi stale generation (line 617-618)."""
@@ -461,11 +484,13 @@ def test_do_copy_context_dispatches(context_view, tmp_path):
     mock_settings = MagicMock()
     mock_settings.include_git_changes = False
 
-    with patch.object(view, '_run_copy_in_background') as mock_run, \
-         patch("views.context._copy_actions.load_app_settings", return_value=mock_settings):
-        view._do_copy_context(
-            gen, tmp_path, [tmp_path / "a.py"], "instructions", False
-        )
+    with (
+        patch.object(view, "_run_copy_in_background") as mock_run,
+        patch(
+            "views.context._copy_actions.load_app_settings", return_value=mock_settings
+        ),
+    ):
+        view._do_copy_context(gen, tmp_path, [tmp_path / "a.py"], "instructions", False)
         mock_run.assert_called_once()
 
 
@@ -474,9 +499,13 @@ def test_do_copy_context_exception(context_view, tmp_path):
     view = context_view
     gen = view._begin_copy_operation()
 
-    with patch("views.context._copy_actions.load_app_settings",
-               side_effect=Exception("Fail")), \
-         patch("components.toast_qt.toast_error") as mock_error:
+    with (
+        patch(
+            "views.context._copy_actions.load_app_settings",
+            side_effect=Exception("Fail"),
+        ),
+        patch("components.toast_qt.toast_error") as mock_error,
+    ):
         view._do_copy_context(gen, tmp_path, [], "instr", False)
         assert "Error" in mock_error.call_args[0][0]
 
@@ -484,6 +513,7 @@ def test_do_copy_context_exception(context_view, tmp_path):
 # ═══════════════════════════════════════════════════════════════
 # _run_security_check_then_copy
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_run_security_check_stale_gen(context_view, tmp_path):
     """Kiem tra _run_security_check_then_copy stale gen (line 508-510)."""

@@ -105,6 +105,9 @@ class TestAppSettings:
             "use_relative_paths",
             "enable_security_check",
             "instruction_history",
+            "ai_api_key",
+            "ai_base_url",
+            "ai_model_id",
             "rule_file_names",
         }
         assert set(d.keys()) == expected_keys

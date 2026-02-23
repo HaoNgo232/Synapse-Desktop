@@ -59,6 +59,14 @@ class AppSettings:
     # Luu tru lich su cac instruction da su dung (toi da 30)
     instruction_history: list[str] = field(default_factory=list)
 
+    # --- AI Context Builder Settings ---
+    # API key cho LLM provider (luu plaintext, app ca nhan)
+    ai_api_key: str = ""
+    # Base URL cua OpenAI-compatible API (mac dinh: OpenAI chinh thuc)
+    ai_base_url: str = "https://api.openai.com/v1"
+    # Model ID dung cho Context Builder (VD: "gpt-4o", "deepseek-chat")
+    ai_model_id: str = ""
+
     # --- Rule Settings ---
     # Danh sach cac ten file project rules de tu dong boc tach (VD: .cursorrules)
     rule_file_names: list[str] = field(
@@ -137,6 +145,9 @@ class AppSettings:
             "use_relative_paths": self.use_relative_paths,
             "enable_security_check": self.enable_security_check,
             "instruction_history": self.instruction_history,
+            "ai_api_key": self.ai_api_key,
+            "ai_base_url": self.ai_base_url,
+            "ai_model_id": self.ai_model_id,
             "rule_file_names": self.rule_file_names,
         }
 

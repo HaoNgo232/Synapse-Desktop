@@ -475,6 +475,56 @@ class ContextViewQt(
 
         self._show_status(f"Recounting tokens with {model_id}...")
 
+    # ===== AI Context Builder =====
+
+    def _open_ai_context_builder(self) -> None:
+        """
+        Mo AI Context Builder Dialog (Floating Dialog).
+
+        Truyen file tree, all paths, workspace root va callback de apply selection.
+        """
+        from views.ai_context_builder_dialog import AIContextBuilderDialog
+
+        workspace = self.get_workspace()
+        # Thu thap tat ca file paths tu tree bang cach duyet recursive
+        all_paths = self._collect_all_tree_paths(self.tree) if self.tree else set()
+
+        dialog = AIContextBuilderDialog(
+            tree=self.tree,
+            all_file_paths=all_paths,
+            workspace_root=workspace,
+            on_apply_selection=self._on_ai_selection_applied,
+            parent=self,
+        )
+        dialog.show()
+
+    def _on_ai_selection_applied(self, paths: list) -> None:
+        """
+        Callback khi nguoi dung nhan Apply tren AI Context Builder Dialog.
+
+        Replace toan bo selection hien tai bang danh sach files do AI goi y.
+
+        Args:
+            paths: Danh sach absolute hoac relative file paths tu LLM
+        """
+        workspace = self.get_workspace()
+
+        # Convert relative paths sang absolute paths neu can
+        resolved_paths: set[str] = set()
+        for p in paths:
+            if workspace and not Path(p).is_absolute():
+                full_path = workspace / p
+                if full_path.exists():
+                    resolved_paths.add(str(full_path))
+                else:
+                    # Thu voi path goc (co the la absolute)
+                    resolved_paths.add(p)
+            else:
+                resolved_paths.add(p)
+
+        if resolved_paths:
+            self.file_tree_widget.set_selected_paths(resolved_paths)
+
     # ===== Helpers =====
 
     def _show_status(self, message: str, is_error: bool = False) -> None:

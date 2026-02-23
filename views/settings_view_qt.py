@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSizePolicy,
     QComboBox,
+    QLineEdit,
 )
 from PySide6.QtCore import Qt, Slot, QTimer, Signal
 
@@ -32,6 +33,7 @@ from components.tag_chips_widget import TagChipsWidget
 from services.clipboard_utils import copy_to_clipboard, get_clipboard_text
 from services.session_state import clear_session_state
 from services.settings_manager import load_settings, save_settings, DEFAULT_SETTINGS
+from services.settings_manager import load_app_settings, update_app_setting
 from components.toast_qt import toast_success, toast_error
 
 
@@ -243,6 +245,7 @@ class SettingsViewQt(QWidget):
         super().__init__(parent)
         self.on_settings_changed = on_settings_changed
         self._has_unsaved = False
+        self._fetch_worker = None  # Optional background worker cho fetch models
 
         # Debounced auto-save timer (800ms)
         self._auto_save_timer = QTimer(self)
@@ -535,6 +538,124 @@ class SettingsViewQt(QWidget):
         col2_layout.addWidget(card3)
 
         # ─────────────────────────────
+        # CARD 3b: AI Context Builder (LLM Provider)
+        # ─────────────────────────────
+        app_settings = load_app_settings()
+
+        card3b = _make_card()
+        card3b_layout = QVBoxLayout(card3b)
+        card3b_layout.setContentsMargins(22, 22, 22, 22)
+        card3b_layout.setSpacing(0)
+
+        card3b_layout.addWidget(_AccentDotLabel("AI Context Builder"))
+        card3b_layout.addSpacing(8)
+
+        ai_desc = QLabel(
+            "Configure LLM provider for AI-powered file discovery. "
+            "Supports any OpenAI-compatible API."
+        )
+        ai_desc.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
+        ai_desc.setWordWrap(True)
+        card3b_layout.addWidget(ai_desc)
+        card3b_layout.addSpacing(14)
+
+        # API Key input
+        api_key_label = QLabel("API Key")
+        api_key_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        card3b_layout.addWidget(api_key_label)
+        card3b_layout.addSpacing(4)
+
+        self._ai_api_key_input = QLineEdit()
+        self._ai_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._ai_api_key_input.setPlaceholderText("sk-...")
+        self._ai_api_key_input.setText(app_settings.ai_api_key)
+        self._ai_api_key_input.setFixedHeight(34)
+        self._ai_api_key_input.setStyleSheet(
+            f"""
+            QLineEdit {{
+                background: {ThemeColors.BG_PAGE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border-color: {ThemeColors.PRIMARY};
+            }}
+        """
+        )
+        self._ai_api_key_input.textChanged.connect(self._mark_changed)
+        card3b_layout.addWidget(self._ai_api_key_input)
+
+        card3b_layout.addSpacing(12)
+
+        # Base URL input
+        base_url_label = QLabel("Base URL")
+        base_url_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        card3b_layout.addWidget(base_url_label)
+        card3b_layout.addSpacing(4)
+
+        self._ai_base_url_input = QLineEdit()
+        self._ai_base_url_input.setPlaceholderText("https://api.openai.com/v1")
+        self._ai_base_url_input.setText(app_settings.ai_base_url)
+        self._ai_base_url_input.setFixedHeight(34)
+        self._ai_base_url_input.setStyleSheet(
+            self._ai_api_key_input.styleSheet()  # Reuse style
+        )
+        self._ai_base_url_input.textChanged.connect(self._mark_changed)
+        card3b_layout.addWidget(self._ai_base_url_input)
+
+        card3b_layout.addSpacing(4)
+        url_hint = QLabel(
+            "Local LLM: http://localhost:1234/v1 "
+            "| OpenRouter: https://openrouter.ai/api/v1"
+        )
+        url_hint.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
+        url_hint.setWordWrap(True)
+        card3b_layout.addWidget(url_hint)
+
+        card3b_layout.addSpacing(12)
+
+        # Model selector row
+        model_label = QLabel("Model")
+        model_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        card3b_layout.addWidget(model_label)
+        card3b_layout.addSpacing(4)
+
+        model_row = QHBoxLayout()
+        model_row.setSpacing(8)
+
+        self._ai_model_combo = QComboBox()
+        self._ai_model_combo.setEditable(True)
+        self._ai_model_combo.setFixedHeight(34)
+        self._ai_model_combo.setStyleSheet(
+            self._preset_combo.styleSheet()  # Reuse combo style
+        )
+        # Them model hien tai neu co
+        if app_settings.ai_model_id:
+            self._ai_model_combo.addItem(app_settings.ai_model_id)
+            self._ai_model_combo.setCurrentText(app_settings.ai_model_id)
+        self._ai_model_combo.currentTextChanged.connect(self._mark_changed)
+        model_row.addWidget(self._ai_model_combo, stretch=1)
+
+        # Nut Fetch Models tu server
+        fetch_btn = _make_ghost_btn("Fetch Models")
+        fetch_btn.setFixedWidth(120)
+        fetch_btn.clicked.connect(self._fetch_ai_models)
+        model_row.addWidget(fetch_btn)
+
+        card3b_layout.addLayout(model_row)
+
+        col2_layout.addWidget(card3b)
+
+        # ─────────────────────────────
         # CARD 4: Security
         # ─────────────────────────────
         card4 = _make_card()
@@ -655,6 +776,14 @@ class SettingsViewQt(QWidget):
             "use_relative_paths": self._relative_toggle.isChecked(),
         }
 
+        # Luu AI settings rieng qua typed API (tranh merge xung dot voi legacy API)
+        update_app_setting(
+            ai_api_key=self._ai_api_key_input.text().strip(),
+            ai_base_url=self._ai_base_url_input.text().strip()
+            or "https://api.openai.com/v1",
+            ai_model_id=self._ai_model_combo.currentText().strip(),
+        )
+
         # Immediate visual feedback
         self._auto_save_indicator.setText("Saving...")
 
@@ -727,6 +856,11 @@ class SettingsViewQt(QWidget):
         self._git_toggle.setChecked(True)
         self._relative_toggle.setChecked(True)
 
+        # Reset AI Context Builder fields
+        self._ai_api_key_input.clear()
+        self._ai_base_url_input.setText("https://api.openai.com/v1")
+        self._ai_model_combo.clear()
+
         # Save immediately for destructive actions
         self._save_settings()
         self._show_status("Reset to defaults applied.")
@@ -784,6 +918,8 @@ class SettingsViewQt(QWidget):
             "include_git_changes": self._git_toggle.isChecked(),
             "use_relative_paths": self._relative_toggle.isChecked(),
             "enable_security_check": self._security_toggle.isChecked(),
+            "ai_base_url": self._ai_base_url_input.text().strip(),
+            "ai_model_id": self._ai_model_combo.currentText().strip(),
             "export_version": "1.0",
         }
         success, _ = copy_to_clipboard(json.dumps(data, indent=2, ensure_ascii=False))
@@ -839,6 +975,14 @@ class SettingsViewQt(QWidget):
         self._relative_toggle.setChecked(imported.get("use_relative_paths", True))
         self._security_toggle.setChecked(imported.get("enable_security_check", True))
 
+        # Import AI Context Builder fields (neu co)
+        if "ai_base_url" in imported:
+            self._ai_base_url_input.setText(imported.get("ai_base_url", ""))
+        if "ai_model_id" in imported:
+            model_id = imported.get("ai_model_id", "")
+            if model_id:
+                self._ai_model_combo.setCurrentText(model_id)
+
         # Save immediately for imports
         self._save_settings()
         self._show_status("Settings imported from clipboard.")
@@ -859,3 +1003,89 @@ class SettingsViewQt(QWidget):
             toast_error(message)
         else:
             toast_success(message)
+
+    @Slot()
+    def _fetch_ai_models(self) -> None:
+        """
+        Goi endpoint /v1/models de lay danh sach model tu server.
+
+        Su dung QRunnable background worker de tranh block main UI thread.
+        Network request co the mat toi 15 giay neu server cham.
+        """
+        from core.ai.openai_provider import OpenAICompatibleProvider
+        from PySide6.QtCore import QThreadPool, QRunnable, QObject, Signal
+        from PySide6.QtCore import Slot as QSlot
+
+        api_key = self._ai_api_key_input.text().strip()
+        base_url = self._ai_base_url_input.text().strip()
+
+        if not api_key:
+            self._show_status("Please enter an API Key first.", is_error=True)
+            return
+
+        self._show_status("Fetching models...")
+
+        # Inner classes cho background worker (khong tao file rieng vi chi dung o day)
+        class _FetchSignals(QObject):
+            """Signals cho fetch models worker."""
+
+            finished = Signal(list)
+            error = Signal(str)
+
+        class _FetchWorker(QRunnable):
+            """Background worker goi GET /v1/models."""
+
+            def __init__(self, key: str, url: str) -> None:
+                super().__init__()
+                self.signals = _FetchSignals()
+                self.setAutoDelete(True)
+                self._key = key
+                self._url = url
+
+            @QSlot()
+            def run(self) -> None:
+                try:
+                    provider = OpenAICompatibleProvider()
+                    provider.configure(api_key=self._key, base_url=self._url)
+                    models = provider.fetch_available_models()
+                    self.signals.finished.emit(models)
+                except Exception as e:
+                    self.signals.error.emit(str(e))
+
+        worker = _FetchWorker(api_key, base_url)
+        # Giu reference de tranh GC truoc khi signal duoc deliver
+        self._fetch_worker = worker
+        worker.signals.finished.connect(self._on_models_fetched)
+        worker.signals.error.connect(
+            lambda msg: (
+                setattr(self, "_fetch_worker", None),
+                self._show_status(msg, is_error=True),
+            )
+        )
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_models_fetched(self, models: list) -> None:
+        """
+        Callback khi fetch models hoan thanh tren background thread.
+
+        Cap nhat model dropdown voi danh sach models moi.
+        """
+        self._fetch_worker = None  # Giai phong reference
+
+        if not models:
+            self._show_status("No models found on this server.", is_error=True)
+            return
+
+        # Luu lai model dang chon truoc khi clear
+        current_model = self._ai_model_combo.currentText()
+
+        self._ai_model_combo.blockSignals(True)
+        self._ai_model_combo.clear()
+        self._ai_model_combo.addItems(models)
+
+        # Khoi phuc lai selection cu neu van con trong list moi
+        if current_model in models:
+            self._ai_model_combo.setCurrentText(current_model)
+        self._ai_model_combo.blockSignals(False)
+
+        self._show_status(f"Fetched {len(models)} models.")

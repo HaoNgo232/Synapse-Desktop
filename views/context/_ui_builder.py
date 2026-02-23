@@ -183,6 +183,33 @@ class UIBuilderMixin:
         remote_btn.setMenu(remote_menu)
         layout.addWidget(remote_btn)
 
+        # AI Context Builder button
+        ai_btn = QToolButton()
+        ai_btn.setText("AI Select")
+        ai_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        ai_btn.setIconSize(QSize(14, 14))
+        ai_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: {ThemeColors.BG_ELEVATED};
+                border: 1px solid {ThemeColors.PRIMARY}50;
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 11px;
+                color: {ThemeColors.PRIMARY};
+                font-weight: 600;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.PRIMARY}20;
+                border-color: {ThemeColors.PRIMARY};
+            }}
+        """
+        )
+        ai_btn.setToolTip("Open AI Context Builder - auto-select files by task")
+        ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        ai_btn.clicked.connect(self._open_ai_context_builder)
+        layout.addWidget(ai_btn)
+
         # Related files dropdown menu with presets
         self._related_menu_btn = QToolButton()
         self._related_menu_btn.setIcon(QIcon(os.path.join(assets_dir, "layers.svg")))

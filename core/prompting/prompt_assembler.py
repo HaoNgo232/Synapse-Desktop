@@ -44,17 +44,21 @@ import re
 
 
 def _sanitize_memory_content(raw: str) -> str:
-    """Loai bo XML tags nguy hiem co the thoat khoi context boundary."""
-    dangerous_tags = [
-        "previous_session_context",
-        "user_instructions",
-        "project_rules",
-        "file_summary",
-        "system_instruction",
-    ]
-    for tag in dangerous_tags:
-        raw = re.sub(rf"<\s*/?\s*{tag}[^>]*>", "", raw, flags=re.IGNORECASE)
-    return raw.strip()
+    """
+    Lam sach noi dung memory de ngan persistent prompt injection.
+
+    Thay vi dung deny-list (chi bo mot so tag cu the), su dung allow-list:
+    - Loai bo TOAN BO XML/HTML-like tags (bat ky chuoi nam trong <...>)
+    - Giu lai chi plain text de LLM su dung lam context tieu su
+
+    Cach lam nay dam bao cac the OPX (<edit>, <put>, <find>, ...) hoac
+    cac the tuy y do LLM tao ra khong the chay vao trong prompt chinh.
+    """
+    # Remove all XML/HTML-like tags hoan toan
+    cleaned = re.sub(r"<[^>]+>", "", raw)
+    # Collapse nhieu dong trong thanh toi da 2 dong lien tiep
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def assemble_prompt(

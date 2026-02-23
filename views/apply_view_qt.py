@@ -2,6 +2,7 @@
 Apply View (PySide6) - Tab để paste OPX và apply changes.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, List, Callable
 
@@ -37,6 +38,9 @@ from services.error_context import (
 )
 from components.diff_viewer_qt import DiffViewerWidget
 from components.toast_qt import toast_success, toast_error
+
+
+logger = logging.getLogger(__name__)
 
 
 class ApplyViewColors:
@@ -515,8 +519,23 @@ class ApplyViewQt(QWidget):
                                 content,
                                 re.IGNORECASE | re.DOTALL,
                             )
+                            # Loai bo cac block bi rong/qua ngan (artifact do regex bi vo)
+                            blocks = [
+                                b.strip()
+                                for b in blocks
+                                if b and b.strip() and len(b.strip()) > 10
+                            ]
+                            # Neu khong parse duoc gi nhung file co content -> fallback
+                            if not blocks and content.strip():
+                                logger.warning(
+                                    "Could not parse existing synapse memory blocks, "
+                                    "preserving truncated raw content."
+                                )
+                                blocks = [content.strip()[:2000]]
                         except Exception as parse_e:
-                            print(f"Failed to parse existing memory: {parse_e}")
+                            logger.warning(
+                                "Failed to parse existing synapse memory: %s", parse_e
+                            )
                             blocks = []
 
                     blocks.append(_new_block)
@@ -533,7 +552,7 @@ class ApplyViewQt(QWidget):
                         "\n\n".join(formatted_blocks) + "\n", encoding="utf-8"
                     )
                 except Exception as e:
-                    print(f"Failed to save synapse memory: {e}")
+                    logger.error("Failed to save synapse memory: %s", e)
 
         try:
             from core.utils.qt_utils import schedule_background

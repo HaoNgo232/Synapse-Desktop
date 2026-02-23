@@ -5,6 +5,7 @@ Refactored using Mixin pattern for better organization.
 """
 
 import threading
+import logging
 from pathlib import Path
 from typing import Optional, Set, List, Callable, TYPE_CHECKING
 
@@ -29,6 +30,9 @@ from views.context._ui_builder import UIBuilderMixin
 from views.context._copy_actions import CopyActionsMixin
 from views.context._related_files import RelatedFilesMixin
 from views.context._tree_management import TreeManagementMixin
+
+
+logger = logging.getLogger(__name__)
 
 
 class ContextViewQt(
@@ -119,11 +123,10 @@ class ContextViewQt(
 
         # Invalidate any in-flight AI suggest request
         self._ai_suggest_generation += 1
-        if self._ai_suggest_worker is not None:
-            self._ai_suggest_worker = None
-            if hasattr(self, "_ai_suggest_btn"):
-                self._ai_suggest_btn.setEnabled(True)
-                self._ai_suggest_btn.setText("AI Suggest Select")
+        self._cancel_ai_suggest_worker()
+        if hasattr(self, "_ai_suggest_btn"):
+            self._ai_suggest_btn.setEnabled(True)
+            self._ai_suggest_btn.setText("AI Suggest Select")
 
         # 1. Stop file watcher for old workspace
         if self._file_watcher:
@@ -195,7 +198,7 @@ class ContextViewQt(
         self._copy_generation += 1
 
         self._ai_suggest_generation += 1
-        self._ai_suggest_worker = None
+        self._cancel_ai_suggest_worker()
 
         # Force cleanup all stale refs
         for obj in self._stale_workers:
@@ -225,6 +228,47 @@ class ContextViewQt(
             self._file_watcher = None
 
         self.file_tree_widget.cleanup()
+
+    def _cancel_ai_suggest_worker(self) -> None:
+        """
+        Huy va ngat ket noi signals cua AIContextWorker neu dang chay.
+
+        Giu nguyen generation guard trong _on_ai_suggest_finished/_on_ai_suggest_error
+        de bo qua ket qua stale, nhung van dam bao khong co signal nao
+        duoc deliver vao QWidget da bi huy.
+        """
+        worker = self._ai_suggest_worker
+        if worker is None:
+            return
+
+        try:
+            cancel = getattr(worker, "cancel", None)
+            if callable(cancel):
+                cancel()
+        except Exception:
+            # Khong de viec huy worker lam vo UI
+            logger.debug("Failed to cancel AIContextWorker", exc_info=True)
+
+        try:
+            signals = getattr(worker, "signals", None)
+            if signals is not None:
+                try:
+                    signals.finished.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                try:
+                    signals.error.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                try:
+                    signals.progress.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+        except RuntimeError:
+            # signals co the da bi xoa boi Qt
+            pass
+
+        self._ai_suggest_worker = None
 
     # ===== Slots =====
 
@@ -504,21 +548,45 @@ class ContextViewQt(
 
         # Convert relative paths sang absolute paths neu can
         resolved_paths: set[str] = set()
+        unresolved: list[str] = []
+
         for p in paths:
             if workspace and not Path(p).is_absolute():
                 full_path = workspace / p
                 if full_path.exists():
                     resolved_paths.add(str(full_path))
                 else:
-                    # Thu voi path goc (co the la absolute)
-                    resolved_paths.add(p)
+                    unresolved.append(p)
             else:
                 resolved_paths.add(p)
 
-        # Undo case: paths rong = user muon xoa selection
-        if not resolved_paths:
+        # Undo case: user ro rang muon clear selection
+        if not paths:
             self.file_tree_widget.set_selected_paths(set())
             return
+
+        # Neu khong resolve duoc bat ky path nao -> thong bao loi ro rang
+        if not resolved_paths:
+            from components.toast_qt import toast_error
+
+            toast_error(
+                "AI suggested paths could not be resolved. "
+                "Please check that the files exist in the current workspace."
+            )
+            if unresolved:
+                logger.warning(
+                    "AI suggested %d unresolved paths (sample): %s",
+                    len(unresolved),
+                    unresolved[:5],
+                )
+            return
+
+        if unresolved:
+            logger.warning(
+                "AI suggested %d paths that do not exist on disk (sample): %s",
+                len(unresolved),
+                unresolved[:5],
+            )
 
         self.file_tree_widget.set_selected_paths(resolved_paths)
 

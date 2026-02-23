@@ -1013,6 +1013,33 @@ class SettingsViewQt(QWidget):
         else:
             toast_success(message)
 
+    def closeEvent(self, event) -> None:
+        """
+        Clean up background workers khi Settings view bi dong.
+
+        Dam bao khong con signal nao co the chay vao QWidget da bi huy,
+        tranh RuntimeError: Internal C++ object already deleted.
+        """
+        if self._fetch_worker is not None:
+            try:
+                signals = getattr(self._fetch_worker, "signals", None)
+                if signals is not None:
+                    try:
+                        signals.finished.disconnect(self._on_models_fetched)
+                    except (RuntimeError, TypeError):
+                        pass
+                    try:
+                        signals.error.disconnect()
+                    except (RuntimeError, TypeError):
+                        pass
+            except RuntimeError:
+                # Worker hoac signals da bi GC / xoa truoc do
+                pass
+            finally:
+                self._fetch_worker = None
+
+        super().closeEvent(event)
+
     @Slot()
     def _fetch_ai_models(self) -> None:
         """
@@ -1065,12 +1092,7 @@ class SettingsViewQt(QWidget):
         # Giu reference de tranh GC truoc khi signal duoc deliver
         self._fetch_worker = worker
         worker.signals.finished.connect(self._on_models_fetched)
-        worker.signals.error.connect(
-            lambda msg: (
-                setattr(self, "_fetch_worker", None),
-                self._show_status(msg, is_error=True),
-            )
-        )
+        worker.signals.error.connect(self._on_models_fetch_error)
         QThreadPool.globalInstance().start(worker)
 
     def _on_models_fetched(self, models: list) -> None:
@@ -1098,3 +1120,14 @@ class SettingsViewQt(QWidget):
         self._ai_model_combo.blockSignals(False)
 
         self._show_status(f"Fetched {len(models)} models.")
+
+    @Slot(str)
+    def _on_models_fetch_error(self, msg: str) -> None:
+        """
+        Xu ly khi fetch models gap loi tren background worker.
+
+        Dam bao giai phong reference worker va hien thi toast loi ro rang.
+        """
+        self._fetch_worker = None
+        if msg:
+            self._show_status(msg, is_error=True)

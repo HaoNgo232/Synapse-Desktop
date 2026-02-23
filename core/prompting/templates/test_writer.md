@@ -11,4 +11,10 @@ Your task is to write robust, comprehensive, and maintainable automated tests fo
 ## Output format
 - Emit your ENTIRE response inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, explain the testing strategy briefly, then output the complete test code in fenced tildes (~~~) blocks.
+- Inside the block, write in PLAIN TEXT only:
+  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, TESTING STRATEGY, TEST CODE).
+  - Use dashes (-) for bullet lists and indentation for sub-items.
+  - Reference files as path/to/file.ext:L42 format.
+  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
+- For the test code section, indent all code with 4 spaces.
+- Start the report with an EXECUTIVE SUMMARY section (3-5 sentences).

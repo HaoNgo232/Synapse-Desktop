@@ -10,7 +10,7 @@ from core.logging_config import log_error, log_warning
 
 def copy_to_clipboard(text: str) -> Tuple[bool, str]:
     """
-    Copy text to clipboard với error handling.
+    Copy text to clipboard với error handling. Uu tien dung Qt Application de tranh deadlock tren Linux.
 
     Args:
         text: Text cần copy
@@ -18,12 +18,25 @@ def copy_to_clipboard(text: str) -> Tuple[bool, str]:
     Returns:
         Tuple (success: bool, message: str)
     """
-    # Try pyperclip first
+    # 1. Try Qt Application first (chong deadlock tren Linux wayland/x11)
+    try:
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if isinstance(app, QApplication) and app.clipboard() is not None:
+            app.clipboard().setText(text)
+            return True, "Copied to clipboard"
+    except ImportError:
+        pass
+    except Exception as e:
+        log_warning(f"Qt clipboard copy failed: {e}")
+
+    # 2. Try pyperclip
     try:
         import pyperclip
 
         pyperclip.copy(text)
-        return True, "Copied to clipboard"
+        return True, "Copied to clipboard (pyperclip)"
     except Exception as e:
         log_warning(f"pyperclip failed: {e}")
 
@@ -72,11 +85,28 @@ def copy_to_clipboard(text: str) -> Tuple[bool, str]:
 
 def get_clipboard_text() -> Tuple[bool, str]:
     """
-    Get text from clipboard với error handling.
+    Get text from clipboard với error handling. Uu tien dung Qt clipboard de tranh deadlock tren Linux.
 
     Returns:
         Tuple (success: bool, text_or_error: str)
     """
+    # 1. Try Qt Application first
+    try:
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if isinstance(app, QApplication) and app.clipboard() is not None:
+            text = app.clipboard().text()
+            if text:
+                return True, text
+            else:
+                return False, "Clipboard is empty"
+    except ImportError:
+        pass
+    except Exception as e:
+        log_warning(f"Qt clipboard paste failed: {e}")
+
+    # 2. Try pyperclip
     try:
         import pyperclip
 

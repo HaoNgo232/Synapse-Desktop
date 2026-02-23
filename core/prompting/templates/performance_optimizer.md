@@ -25,5 +25,11 @@ Your task is to analyze the codebase for performance bottlenecks, algorithmic in
 ## Output format
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, structure clearly with benchmarks and profiling data where applicable.
-- If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.
+- Inside the block, write in PLAIN TEXT only:
+  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CRITICAL BOTTLENECKS, OPTIMIZATION PLAN).
+  - Use dashes (-) for bullet lists and indentation for sub-items.
+  - Include benchmarks and complexity analysis inline (e.g., "O(n^2) on 10k items = ~100M ops").
+  - Reference files as path/to/file.ext:L42 format.
+  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
+- If you need to show code examples, indent them with 4 spaces.
+- Start the report with an EXECUTIVE SUMMARY section (3-5 sentences).

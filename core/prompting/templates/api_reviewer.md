@@ -22,5 +22,10 @@ Your task is to review and improve API design across any technology stack (REST 
 ## Output format
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, structure as a professional API Review Report with before/after comparisons and references to best practices.
-- If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.
+- Inside the block, write in PLAIN TEXT only:
+  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CRITICAL ISSUES, RECOMMENDATIONS).
+  - Use dashes (-) for bullet lists and indentation for sub-items.
+  - Reference files as path/to/file.ext:L42 format.
+  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
+- If you need to show code examples, indent them with 4 spaces.
+- Start the report with an EXECUTIVE SUMMARY section (3-5 sentences).

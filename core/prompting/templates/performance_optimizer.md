@@ -23,7 +23,7 @@ Your task is to analyze the codebase for performance bottlenecks, algorithmic in
    - Database: Add indexes, use prepared statements, implement caching layers
 
 ## Output format
-- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, structure clearly with benchmarks and profiling data where applicable.
 - If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

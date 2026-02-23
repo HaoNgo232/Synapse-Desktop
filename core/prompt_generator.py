@@ -482,7 +482,9 @@ def generate_prompt(
             try:
                 memory_content = memory_file.read_text(encoding="utf-8").strip()
             except Exception as e:
-                print(f"Failed to read memory file: {e}")
+                import logging
+
+                logging.getLogger(__name__).warning("Failed to read memory file: %s", e)
 
     return assemble_prompt(
         file_map=file_map,

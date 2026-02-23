@@ -58,21 +58,23 @@ def _is_format_unsupported_error(error_msg: str) -> bool:
         True neu loi lien quan den response_format khong duoc ho tro
     """
     msg_lower = error_msg.lower()
-    # Can it nhat 1 keyword lien quan response_format
-    format_keywords = ["response_format", "json_schema", "json_object"]
-    error_keywords = [
-        "not supported",
-        "not available",
-        "invalid",
-        "unrecognized",
-        "unknown",
-        "unsupported",
-        "bad request",
-        "is not",
+    unsupported_patterns = [
+        "response_format" in msg_lower
+        and any(
+            kw in msg_lower
+            for kw in [
+                "not supported",
+                "not available",
+                "unsupported",
+                "unrecognized",
+                "unknown parameter",
+            ]
+        ),
+        "json_schema" in msg_lower
+        and any(kw in msg_lower for kw in ["not supported", "is not", "unsupported"]),
+        "response_format" in msg_lower and "invalid type" in msg_lower,
     ]
-    has_format = any(kw in msg_lower for kw in format_keywords)
-    has_error = any(kw in msg_lower for kw in error_keywords)
-    return has_format and has_error
+    return any(unsupported_patterns)
 
 
 class OpenAICompatibleProvider(BaseLLMProvider):

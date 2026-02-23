@@ -10,7 +10,7 @@ Your task is to analyze and validate the logical flow, data flow, and control fl
 4. If the flow is well-designed, explain what patterns are correctly implemented (e.g., proper separation of concerns, clear data flow, robust error boundaries).
 
 ## Output format
-- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, structure as a professional Flow Analysis Report with diagrams or pseudocode where helpful.
 - If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

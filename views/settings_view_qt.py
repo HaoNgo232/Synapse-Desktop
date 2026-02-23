@@ -922,18 +922,15 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _export_settings(self) -> None:
-        patterns = self._tag_chips.get_patterns()
-        data = {
-            "excluded_folders": "\n".join(patterns),
-            "rule_file_names": self._rule_chips.get_patterns(),
-            "use_gitignore": self._gitignore_toggle.isChecked(),
-            "include_git_changes": self._git_toggle.isChecked(),
-            "use_relative_paths": self._relative_toggle.isChecked(),
-            "enable_security_check": self._security_toggle.isChecked(),
-            "ai_base_url": self._ai_base_url_input.text().strip(),
-            "ai_model_id": self._ai_model_combo.currentText().strip(),
-            "export_version": "1.0",
-        }
+        from services.settings_manager import load_app_settings
+
+        # Save current UI state first
+        self._save_settings()
+
+        app_settings = load_app_settings()
+        data = app_settings.to_safe_dict()
+        data["export_version"] = "1.0"
+        data.pop("instruction_history", None)
         success, _ = copy_to_clipboard(json.dumps(data, indent=2, ensure_ascii=False))
         self._show_status(
             "Settings exported to clipboard" if success else "Export failed",

@@ -18,6 +18,7 @@ import json
 from typing import Optional
 
 from core.utils.git_utils import GitDiffResult, GitLogResult
+
 from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 from config.output_format import OutputStyle
 from core.prompting.formatters.xml import (
@@ -38,6 +39,22 @@ from core.prompting.formatters.system_prompts import (
     MEMORY_INSTRUCTION_PROMPT,
     PREVIOUS_MEMORY_TEMPLATE,
 )
+
+import re
+
+
+def _sanitize_memory_content(raw: str) -> str:
+    """Loai bo XML tags nguy hiem co the thoat khoi context boundary."""
+    dangerous_tags = [
+        "previous_session_context",
+        "user_instructions",
+        "project_rules",
+        "file_summary",
+        "system_instruction",
+    ]
+    for tag in dangerous_tags:
+        raw = re.sub(rf"<\s*/?\s*{tag}[^>]*>", "", raw, flags=re.IGNORECASE)
+    return raw.strip()
 
 
 def assemble_prompt(
@@ -146,8 +163,9 @@ def assemble_smart_prompt(
 
     memory_injection = ""
     if memory_content and memory_content.strip():
+        safe_memory = _sanitize_memory_content(memory_content.strip())
         memory_injection = "\n" + PREVIOUS_MEMORY_TEMPLATE.format(
-            memory_content=memory_content.strip()
+            memory_content=safe_memory
         )
 
     prompt = f"""{file_summary}
@@ -255,8 +273,9 @@ def _assemble_xml(
     # Prepend previous memory if available
     memory_injection = ""
     if memory_content and memory_content.strip():
+        safe_memory = _sanitize_memory_content(memory_content.strip())
         memory_injection = "\n" + PREVIOUS_MEMORY_TEMPLATE.format(
-            memory_content=memory_content.strip()
+            memory_content=safe_memory
         )
 
     prompt = f"""{file_summary}

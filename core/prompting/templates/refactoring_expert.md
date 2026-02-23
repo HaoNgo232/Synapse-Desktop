@@ -18,7 +18,7 @@ Your task is to review the provided codebase and suggest refactoring opportuniti
 5. Focus on structural improvements, not just stylistic nitpicks. Suggest design patterns where appropriate (Strategy, Factory, Observer, etc.).
 
 ## Output format
-- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, use standard Markdown formatting with clear headings, severity ratings, and Before/After code blocks.
 - If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

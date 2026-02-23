@@ -622,6 +622,7 @@ class AIContextBuilderDialog(QDialog):
         Tranh crash khi worker emit signal vao dialog da bi destroy (Bug #4 fix).
         """
         if self._current_worker is not None:
+            self._current_worker.cancel()
             try:
                 self._current_worker.signals.finished.disconnect(
                     self._on_worker_finished

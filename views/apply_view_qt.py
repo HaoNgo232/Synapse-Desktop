@@ -88,6 +88,11 @@ class ApplyViewQt(QWidget):
         self.last_opx_text: str = ""
         self._cached_file_actions: List = []
         self._cached_memory_block: Optional[str] = None
+
+        import threading
+
+        self._memory_write_lock = threading.Lock()
+
         self.expanded_diffs: set = set()
 
         self._build_ui()
@@ -488,12 +493,6 @@ class ApplyViewQt(QWidget):
         """
         _ws = workspace
         _new_block = memory_block.strip()
-
-        # Ensure lock exists on class or instance
-        if not hasattr(self, "_memory_write_lock"):
-            import threading
-
-            self._memory_write_lock = threading.Lock()
 
         _lock = self._memory_write_lock
 

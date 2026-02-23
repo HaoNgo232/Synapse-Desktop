@@ -20,7 +20,7 @@ Your task is to review and improve API design across any technology stack (REST 
    - Class interfaces: Method signatures, dependency injection, SOLID principles
 
 ## Output format
-- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, structure as a professional API Review Report with before/after comparisons and references to best practices.
 - If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

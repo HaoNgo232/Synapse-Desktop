@@ -89,6 +89,7 @@ class AIContextWorker(QRunnable):
         super().__init__()
         self.signals = AIContextWorkerSignals()
         self.setAutoDelete(True)
+        self._cancelled = False
 
         # Luu tham so de dung trong run()
         self._api_key = api_key
@@ -101,6 +102,10 @@ class AIContextWorker(QRunnable):
         self._workspace_root = workspace_root
         self._chat_history = chat_history
 
+    def cancel(self) -> None:
+        """Yeu cau worker dung som neu chua bat dau buoc goi API."""
+        self._cancelled = True
+
     @Slot()
     def run(self) -> None:
         """
@@ -111,6 +116,9 @@ class AIContextWorker(QRunnable):
         Giao tiep voi Main thread CHI qua self.signals.
         """
         try:
+            if self._cancelled:
+                return
+
             # Generate Repo Map tren background thread (tranh block main UI)
             repo_map_str: Optional[str] = None
             if self._all_file_paths and self._workspace_root:
@@ -132,6 +140,9 @@ class AIContextWorker(QRunnable):
                 except Exception as e:
                     logger.warning("Could not generate Repo Map: %s", e)
 
+            if self._cancelled:
+                return
+
             self.signals.progress.emit("Connecting to LLM...")
 
             # Khoi tao provider rieng cho worker nay (khong chia se state)
@@ -146,6 +157,14 @@ class AIContextWorker(QRunnable):
                 repo_map=repo_map_str,
                 chat_history=self._chat_history,
             )
+
+            if not self._model_id:
+                raise ValueError(
+                    "Invalid AI model configuration. Please check your settings."
+                )
+
+            if self._cancelled:
+                return
 
             self.signals.progress.emit("Waiting for AI response...")
 
@@ -187,10 +206,20 @@ class AIContextWorker(QRunnable):
         Raises:
             ValueError: Khi response khong phai JSON hop le
         """
+        import re
+
+        cleaned = content.strip()
+        md_match = re.match(r"^```(?:json)?\s*\n?(.*?)\n?\s*```$", cleaned, re.DOTALL)
+        if md_match:
+            cleaned = md_match.group(1).strip()
+
         try:
-            data = json.loads(content)
+            data = json.loads(cleaned)
         except json.JSONDecodeError as e:
-            raise ValueError(f"LLM tra ve response khong phai JSON hop le: {e}") from e
+            raise ValueError(
+                f"LLM tra ve response khong phai JSON hop le: {e}\n"
+                f"Raw content (first 300 chars): {content[:300]}"
+            ) from e
 
         if not isinstance(data, dict):
             raise ValueError(f"Expected JSON object, got {type(data).__name__}")

@@ -158,14 +158,14 @@ GIT_LOG_INSTRUCTION = (
 
 REPORT_OUTPUT_FORMAT_INSTRUCTION = """
 ## Output format
-- Emit your ENTIRE report/analysis inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE report/analysis inside a single fenced ```plaintext ... ``` block.
 - This ensures the user can copy the complete output reliably.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, use standard Markdown formatting (headers, lists, code blocks, tables, etc.).
 - If you need to include code snippets inside the report, use indented code blocks (4 spaces) or tildes (~~~) to avoid conflicting with the outer fence.
 
 Example structure:
-```markdown
+```plaintext
 # Report Title
 
 ## Section 1

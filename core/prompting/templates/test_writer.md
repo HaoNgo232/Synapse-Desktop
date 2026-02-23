@@ -9,6 +9,6 @@ Your task is to write robust, comprehensive, and maintainable automated tests fo
 6. Provide full, runnable test code using the appropriate framework (e.g., Pytest, Jest, JUnit).
 
 ## Output format
-- Emit your ENTIRE response inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE response inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, explain the testing strategy briefly, then output the complete test code in fenced tildes (~~~) blocks.

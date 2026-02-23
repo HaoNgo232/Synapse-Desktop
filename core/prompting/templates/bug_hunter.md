@@ -9,7 +9,7 @@ Your task is to review the provided codebase for potential bugs, edge cases, rac
    - A proposed code fix.
 
 ## Output format
-- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, use standard Markdown formatting.
 - If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

@@ -28,6 +28,12 @@ from core.utils.git_utils import GitDiffResult
 
 CONTEXT_BUILDER_SYSTEM_PROMPT = """You are a Context Engineer Agent. Your sole job is to select the MOST RELEVANT files from a project's file tree based on the user's task description.
 
+You will receive:
+- A project file tree (list of all file paths)
+- A Repo Map (optional): structural outline of code files showing class names, function signatures, and method signatures without full source code. Use this to understand WHERE specific logic lives.
+- Git diff (optional): recent uncommitted changes
+- The user's task description
+
 RULES:
 1. ONLY return files that actually exist in the provided file tree
 2. For code changes: include the target files AND their closely related files (imports, tests, configs)
@@ -36,6 +42,7 @@ RULES:
 5. Be SELECTIVE - prefer fewer, more relevant files over dumping everything
 6. Include test files when the task involves testing or the user mentions tests
 7. Include config files (package.json, tsconfig, requirements.txt) only when relevant to the task
+8. Use the Repo Map to identify files containing relevant classes/functions by their signatures
 
 RESPONSE FORMAT:
 You MUST respond with a valid JSON object. No markdown, no explanation, no code blocks.
@@ -82,21 +89,24 @@ def build_context_builder_messages(
     file_tree: str,
     user_query: str,
     git_diff: Optional[str] = None,
+    repo_map: Optional[str] = None,
     chat_history: Optional[List[LLMMessage]] = None,
 ) -> List[LLMMessage]:
     """
-    Ghep system prompt, file tree, git diff, va user query thanh
+    Ghep system prompt, file tree, repo map, git diff, va user query thanh
     danh sach messages san sang gui cho LLM.
 
     Thiet ke de toi uu token:
-    - Chi gui file tree (ten file, khong gui noi dung file)
+    - File tree chi chua ten file (khong gui noi dung)
+    - Repo Map cung cap cau truc code (class/function signatures)
     - Git diff chi gui khi nguoi dung bat toggle
     - Chat history cho phep multi-turn conversation
 
     Args:
         file_tree: Cay thu muc project (output tu generate_file_map)
-        user_query: Mo ta cong viec tu nguoi dung (VD: "Fix bug in settings")
+        user_query: Mo ta cong viec tu nguoi dung
         git_diff: Optional diff cua uncommitted changes
+        repo_map: Optional Repo Map (AST outline cua code files)
         chat_history: Optional lich su hoi thoai truoc do (multi-turn)
 
     Returns:
@@ -111,11 +121,15 @@ def build_context_builder_messages(
     if chat_history:
         messages.extend(chat_history)
 
-    # 3. Xay dung user message voi context (file tree + git diff + query)
+    # 3. Xay dung user message voi context (file tree + repo map + git diff + query)
     user_content_parts: List[str] = []
 
     # File tree - luon co
     user_content_parts.append(f"<project_file_tree>\n{file_tree}\n</project_file_tree>")
+
+    # Repo Map - cung cap cau truc code (class/function signatures)
+    if repo_map and repo_map.strip():
+        user_content_parts.append(f"<repo_map>\n{repo_map}\n</repo_map>")
 
     # Git diff - chi them khi nguoi dung bat toggle
     if git_diff and git_diff.strip():

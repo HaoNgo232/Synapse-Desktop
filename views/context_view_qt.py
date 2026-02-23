@@ -494,6 +494,7 @@ class ContextViewQt(
             all_file_paths=all_paths,
             workspace_root=workspace,
             on_apply_selection=self._on_ai_selection_applied,
+            get_current_selection=lambda: self.file_tree_widget.get_selected_paths(),
             parent=self,
         )
         dialog.show()
@@ -522,8 +523,12 @@ class ContextViewQt(
             else:
                 resolved_paths.add(p)
 
-        if resolved_paths:
-            self.file_tree_widget.set_selected_paths(resolved_paths)
+        # Undo case: paths rong = user muon xoa selection
+        if not resolved_paths:
+            self.file_tree_widget.set_selected_paths(set())
+            return
+
+        self.file_tree_widget.set_selected_paths(resolved_paths)
 
     # ===== Helpers =====
 

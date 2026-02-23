@@ -108,6 +108,7 @@ class TestAppSettings:
             "ai_api_key",
             "ai_base_url",
             "ai_model_id",
+            "ai_auto_apply",
             "rule_file_names",
         }
         assert set(d.keys()) == expected_keys

@@ -17,6 +17,7 @@ voi Main thread. Chi giao tiep qua Qt Signals (thread-safe).
 
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
@@ -67,6 +68,8 @@ class AIContextWorker(QRunnable):
         file_tree: str,
         user_query: str,
         git_diff: Optional[str] = None,
+        all_file_paths: Optional[List[str]] = None,
+        workspace_root: Optional[Path] = None,
         chat_history: Optional[List[LLMMessage]] = None,
     ) -> None:
         """
@@ -79,6 +82,8 @@ class AIContextWorker(QRunnable):
             file_tree: Cay thu muc project (ASCII tree)
             user_query: Mo ta cong viec tu nguoi dung
             git_diff: Optional git diff string
+            all_file_paths: Danh sach file paths de generate Repo Map (tren bg thread)
+            workspace_root: Thu muc goc de tao relative paths cho Repo Map
             chat_history: Optional lich su chat truoc do
         """
         super().__init__()
@@ -92,6 +97,8 @@ class AIContextWorker(QRunnable):
         self._file_tree = file_tree
         self._user_query = user_query
         self._git_diff = git_diff
+        self._all_file_paths = all_file_paths
+        self._workspace_root = workspace_root
         self._chat_history = chat_history
 
     @Slot()
@@ -104,17 +111,39 @@ class AIContextWorker(QRunnable):
         Giao tiep voi Main thread CHI qua self.signals.
         """
         try:
+            # Generate Repo Map tren background thread (tranh block main UI)
+            repo_map_str: Optional[str] = None
+            if self._all_file_paths and self._workspace_root:
+                self.signals.progress.emit("Generating Repo Map...")
+                try:
+                    from core.utils.ast_parser import generate_repo_map
+
+                    file_list = [
+                        str(self._workspace_root / p)
+                        if not Path(p).is_absolute()
+                        else p
+                        for p in self._all_file_paths
+                    ]
+                    repo_map_str = generate_repo_map(
+                        file_list, workspace_root=self._workspace_root
+                    )
+                    if repo_map_str and not repo_map_str.strip():
+                        repo_map_str = None
+                except Exception as e:
+                    logger.warning("Could not generate Repo Map: %s", e)
+
             self.signals.progress.emit("Connecting to LLM...")
 
             # Khoi tao provider rieng cho worker nay (khong chia se state)
             provider = OpenAICompatibleProvider()
             provider.configure(api_key=self._api_key, base_url=self._base_url)
 
-            # Xay dung messages cho LLM
+            # Xay dung messages cho LLM (co Repo Map neu co)
             messages = build_context_builder_messages(
                 file_tree=self._file_tree,
                 user_query=self._user_query,
                 git_diff=self._git_diff,
+                repo_map=repo_map_str,
                 chat_history=self._chat_history,
             )
 

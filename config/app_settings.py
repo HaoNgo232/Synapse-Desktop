@@ -66,6 +66,8 @@ class AppSettings:
     ai_base_url: str = "https://api.openai.com/v1"
     # Model ID dung cho Context Builder (VD: "gpt-4o", "deepseek-chat")
     ai_model_id: str = ""
+    # Tu dong apply ket qua AI vao file tree (khong can nhan Apply thu cong)
+    ai_auto_apply: bool = True
 
     # --- Rule Settings ---
     # Danh sach cac ten file project rules de tu dong boc tach (VD: .cursorrules)
@@ -148,8 +150,23 @@ class AppSettings:
             "ai_api_key": self.ai_api_key,
             "ai_base_url": self.ai_base_url,
             "ai_model_id": self.ai_model_id,
+            "ai_auto_apply": self.ai_auto_apply,
             "rule_file_names": self.rule_file_names,
         }
+
+    def to_safe_dict(self) -> dict[str, Any]:
+        """
+        Export settings KHONG bao gom sensitive data (API keys, tokens).
+
+        Su dung cho export settings ra file, logging, hoac bat ky
+        noi nao khong nen lo API key.
+
+        Returns:
+            Dict settings da loai bo cac truong sensitive
+        """
+        d = self.to_dict()
+        d.pop("ai_api_key", None)
+        return d
 
     def get_excluded_patterns_list(self) -> list[str]:
         """

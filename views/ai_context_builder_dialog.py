@@ -3,10 +3,11 @@ AI Context Builder Dialog - Floating chat dialog cho AI-powered file discovery.
 
 Giao dien cho phep nguoi dung:
 1. Nhap mo ta cong viec (task description)
-2. Tuy chon: include git diff, active file context
+2. Tuy chon: include git diff, auto-apply ket qua
 3. Nhan nut "Suggest Files" de LLM phan tich va goi y
 4. Xem ket qua (danh sach files + reasoning)
-5. Apply ket qua vao file tree (tick cac files duoc goi y)
+5. Apply ket qua vao file tree (tu dong hoac thu cong)
+6. Undo selection neu AI chon sai (khoi phuc selection cu)
 
 Giao dien su dung card-based design nhat quan voi Settings view.
 """
@@ -35,7 +36,7 @@ from core.utils.file_utils import TreeItem
 from core.utils.git_utils import get_git_diffs
 from core.prompting.context_builder_prompts import build_full_tree_string
 from services.ai_context_worker import AIContextWorker
-from services.settings_manager import load_app_settings
+from services.settings_manager import load_app_settings, save_app_settings
 from components.toast_qt import toast_success, toast_error
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ class AIContextBuilderDialog(QDialog):
     Floating dialog cho AI Context Builder.
 
     Cho phep nguoi dung mo ta cong viec va nhan goi y files tu LLM.
-    Ket qua co the duoc apply vao file tree qua callback.
+    Ket qua co the duoc apply vao file tree tu dong hoac thu cong.
     """
 
     def __init__(
@@ -55,6 +56,7 @@ class AIContextBuilderDialog(QDialog):
         all_file_paths: set[str],
         workspace_root: Optional[Path],
         on_apply_selection: Optional[Callable[[List[str]], None]] = None,
+        get_current_selection: Optional[Callable[[], List[str]]] = None,
         parent=None,
     ) -> None:
         """
@@ -64,7 +66,8 @@ class AIContextBuilderDialog(QDialog):
             tree: TreeItem root cua file tree hien tai
             all_file_paths: Set tat ca file paths trong workspace
             workspace_root: Duong dan goc cua workspace
-            on_apply_selection: Callback khi nguoi dung nhan Apply
+            on_apply_selection: Callback khi apply selection moi
+            get_current_selection: Callback lay selection hien tai tu parent view
             parent: Parent widget
         """
         super().__init__(parent)
@@ -72,8 +75,11 @@ class AIContextBuilderDialog(QDialog):
         self._all_file_paths = all_file_paths
         self._workspace_root = workspace_root
         self._on_apply_selection = on_apply_selection
+        self._get_current_selection = get_current_selection
         self._last_suggested_paths: List[str] = []
         self._is_loading = False
+        # Snapshot selection CUA PARENT VIEW truoc khi apply, phuc vu Undo
+        self._snapshot_before_apply: Optional[List[str]] = None
         # Giu reference toi worker dang chay de tranh Python GC
         # xoa worker/signals truoc khi signal duoc deliver (PySide6 race condition)
         self._current_worker: Optional[AIContextWorker] = None
@@ -150,10 +156,8 @@ class AIContextBuilderDialog(QDialog):
         options_row = QHBoxLayout()
         options_row.setSpacing(16)
 
-        self._git_diff_checkbox = QCheckBox("Include Git Diff")
-        self._git_diff_checkbox.setChecked(True)
-        self._git_diff_checkbox.setStyleSheet(
-            f"""
+        # Style chung cho tat ca checkboxes trong options row
+        checkbox_style = f"""
             QCheckBox {{
                 color: {ThemeColors.TEXT_SECONDARY};
                 font-size: 12px;
@@ -171,8 +175,23 @@ class AIContextBuilderDialog(QDialog):
                 border-color: {ThemeColors.PRIMARY};
             }}
         """
-        )
+
+        self._git_diff_checkbox = QCheckBox("Include Git Diff")
+        self._git_diff_checkbox.setChecked(True)
+        self._git_diff_checkbox.setStyleSheet(checkbox_style)
         options_row.addWidget(self._git_diff_checkbox)
+
+        # Auto-apply checkbox: tu dong ap dung ket qua AI vao context tree
+        settings = load_app_settings()
+        self._auto_apply_checkbox = QCheckBox("Auto-apply")
+        self._auto_apply_checkbox.setChecked(settings.ai_auto_apply)
+        self._auto_apply_checkbox.setToolTip(
+            "Automatically apply AI suggestions to the file tree"
+        )
+        self._auto_apply_checkbox.setStyleSheet(checkbox_style)
+        self._auto_apply_checkbox.toggled.connect(self._on_auto_apply_toggled)
+        options_row.addWidget(self._auto_apply_checkbox)
+
         options_row.addStretch()
 
         layout.addLayout(options_row)
@@ -317,6 +336,30 @@ class AIContextBuilderDialog(QDialog):
         self._apply_btn.clicked.connect(self._on_apply_clicked)
         bottom_row.addWidget(self._apply_btn)
 
+        # Nut Undo: khoi phuc lai selection TRUOC KHI apply
+        self._undo_btn = QPushButton("Undo")
+        self._undo_btn.setFixedHeight(36)
+        self._undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._undo_btn.setVisible(False)  # An mac dinh, chi hien sau khi apply
+        self._undo_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: transparent;
+                color: {ThemeColors.WARNING};
+                border: 1px solid {ThemeColors.WARNING};
+                border-radius: 8px;
+                padding: 0 16px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: rgba(255, 170, 0, 0.08);
+            }}
+        """
+        )
+        self._undo_btn.clicked.connect(self._on_undo_clicked)
+        bottom_row.addWidget(self._undo_btn)
+
         bottom_row.addStretch()
 
         close_btn = QPushButton("Close")
@@ -345,12 +388,24 @@ class AIContextBuilderDialog(QDialog):
 
     # === Slots ===
 
+    def _on_auto_apply_toggled(self, checked: bool) -> None:
+        """
+        Luu trang thai auto-apply vao AppSettings khi user toggle checkbox.
+
+        Args:
+            checked: Trang thai moi cua checkbox
+        """
+        settings = load_app_settings()
+        settings.ai_auto_apply = checked
+        save_app_settings(settings)
+
     def _on_suggest_clicked(self) -> None:
         """
         Xu ly khi nguoi dung nhan nut Suggest Files.
 
         Doc settings, tao file tree, (optional) git diff,
         tao worker va quang vao thread pool.
+        Repo Map duoc generate TRONG worker (background thread) de tranh UI freeze.
         """
         user_query = self._task_input.toPlainText().strip()
         if not user_query:
@@ -390,10 +445,14 @@ class AIContextBuilderDialog(QDialog):
             except Exception as e:
                 logger.warning("Could not get git diffs: %s", e)
 
-        # Disable UI de tranh double-click
+        # An nut Undo khi bat dau request moi
+        self._undo_btn.setVisible(False)
+
+        # Set loading TRUOC khi bat dau bat ky I/O nao (Bug #3 fix)
         self._set_loading(True)
 
-        # Tao worker va quang vao thread pool
+        # Tao worker - truyen all_file_paths de worker tu generate Repo Map
+        # tren background thread, KHONG block main thread
         worker = AIContextWorker(
             api_key=settings.ai_api_key,
             base_url=settings.ai_base_url,
@@ -401,6 +460,8 @@ class AIContextBuilderDialog(QDialog):
             file_tree=file_tree_map,
             user_query=user_query,
             git_diff=git_diff_str,
+            all_file_paths=list(self._all_file_paths),
+            workspace_root=self._workspace_root,
         )
         worker.signals.finished.connect(self._on_worker_finished)
         worker.signals.error.connect(self._on_worker_error)
@@ -416,6 +477,7 @@ class AIContextBuilderDialog(QDialog):
         Xu ly khi worker hoan thanh thanh cong.
 
         Hien thi danh sach files va reasoning tren UI.
+        Neu auto-apply dang bat, tu dong ap dung ket qua vao context tree.
         """
         self._current_worker = None  # Giai phong reference sau khi worker xong
         self._set_loading(False)
@@ -452,6 +514,10 @@ class AIContextBuilderDialog(QDialog):
         else:
             self._status_label.setText("Done")
 
+        # Auto-apply: Neu checkbox bat va co paths, tu dong apply vao tree
+        if self._auto_apply_checkbox.isChecked() and paths:
+            self._do_apply(show_toast=True)
+
     def _on_worker_error(self, error_msg: str) -> None:
         """Xu ly khi worker gap loi."""
         self._current_worker = None  # Giai phong reference sau khi worker xong
@@ -468,20 +534,66 @@ class AIContextBuilderDialog(QDialog):
 
     def _on_apply_clicked(self) -> None:
         """
-        Apply danh sach files duoc suggest vao file tree.
+        Apply danh sach files duoc suggest vao file tree (nhan thu cong).
 
         Goi callback on_apply_selection voi danh sach paths.
         """
         if not self._last_suggested_paths:
             return
+        self._do_apply(show_toast=True)
+        self.close()
 
-        if self._on_apply_selection:
-            self._on_apply_selection(self._last_suggested_paths)
+    def _do_apply(self, show_toast: bool = False) -> None:
+        """
+        Logic chung de apply suggested paths vao context tree.
+
+        Duoc goi boi auto-apply (sau khi worker xong) hoac manual apply.
+        Luu snapshot selection hien tai CUA PARENT VIEW de phuc vu Undo.
+
+        Args:
+            show_toast: Co hien thi toast notification hay khong
+        """
+        if not self._last_suggested_paths or not self._on_apply_selection:
+            return
+
+        # Chup snapshot selection hien tai CUA PARENT TREE truoc khi apply
+        # De Undo co the khoi phuc lai dung trang thai
+        if self._get_current_selection:
+            try:
+                self._snapshot_before_apply = list(self._get_current_selection())
+            except Exception:
+                self._snapshot_before_apply = None
+        else:
+            self._snapshot_before_apply = None
+
+        self._on_apply_selection(self._last_suggested_paths)
+
+        if show_toast:
             toast_success(
                 f"Applied {len(self._last_suggested_paths)} files to context."
             )
 
-        self.close()
+        # Hien thi nut Undo de user co the khoi phuc
+        self._undo_btn.setVisible(True)
+        # Disable nut Apply sau khi da ap dung (tranh double-apply)
+        self._apply_btn.setEnabled(False)
+
+    def _on_undo_clicked(self) -> None:
+        """
+        Khoi phuc selection ve trang thai TRUOC KHI apply.
+
+        Neu co snapshot -> apply lai snapshot cu.
+        Neu khong co snapshot -> xoa selection (fallback an toan).
+        """
+        if self._on_apply_selection:
+            # Khoi phuc selection cu thay vi xoa sach
+            restore_paths = self._snapshot_before_apply or []
+            self._on_apply_selection(restore_paths)
+            toast_success("Selection restored to previous state.")
+
+        self._undo_btn.setVisible(False)
+        self._apply_btn.setEnabled(True)
+        self._snapshot_before_apply = None
 
     def _set_loading(self, loading: bool) -> None:
         """Toggle trang thai loading tren UI."""
@@ -502,3 +614,24 @@ class AIContextBuilderDialog(QDialog):
             QApplication.processEvents()
         else:
             self._suggest_btn.setText("Suggest Files")
+
+    def closeEvent(self, event) -> None:
+        """
+        Cleanup khi dialog bi dong: disconnect signals tu worker dang chay.
+
+        Tranh crash khi worker emit signal vao dialog da bi destroy (Bug #4 fix).
+        """
+        if self._current_worker is not None:
+            try:
+                self._current_worker.signals.finished.disconnect(
+                    self._on_worker_finished
+                )
+                self._current_worker.signals.error.disconnect(self._on_worker_error)
+                self._current_worker.signals.progress.disconnect(
+                    self._on_worker_progress
+                )
+            except RuntimeError:
+                # Signal da bi disconnect hoac object da bi destroy
+                pass
+            self._current_worker = None
+        super().closeEvent(event)

@@ -36,11 +36,11 @@ You will receive:
 
 RULES:
 1. ONLY return files that actually exist in the provided file tree
-2. For code changes: include the target files AND their closely related files (imports, tests, configs)
-3. For bug fixes: include the likely broken file(s) AND recent git diff files if provided
+2. The user's task description may contain long, detailed formatting rules or code snippets. Focus ONLY on the core intent of WHAT needs to be changed/reviewed, ignoring the formatting instructions when selecting files.
+3. For code changes/bug fixes: include the target files AND their closely related files (imports, tests, configs)
 4. For new features: include similar existing patterns/files to reference
-5. Be SELECTIVE - prefer fewer, more relevant files over dumping everything
-6. Include test files when the task involves testing or the user mentions tests
+5. For generic reviews (e.g. "review UI/UX", "audit security"): include a broad, representative set of relevant files (e.g. main specific UI components, core layout files) AND their associated tests.
+6. When uncertain about a file's relevance, INCLUDE it. False positives are acceptable; false negatives are not.
 7. Include config files (package.json, tsconfig, requirements.txt) only when relevant to the task
 8. Use the Repo Map to identify files containing relevant classes/functions by their signatures
 

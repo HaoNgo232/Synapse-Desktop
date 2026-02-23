@@ -183,33 +183,6 @@ class UIBuilderMixin:
         remote_btn.setMenu(remote_menu)
         layout.addWidget(remote_btn)
 
-        # AI Context Builder button
-        ai_btn = QToolButton()
-        ai_btn.setText("AI Select")
-        ai_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        ai_btn.setIconSize(QSize(14, 14))
-        ai_btn.setStyleSheet(
-            f"""
-            QToolButton {{
-                background: {ThemeColors.BG_ELEVATED};
-                border: 1px solid {ThemeColors.PRIMARY}50;
-                border-radius: 6px;
-                padding: 4px 10px;
-                font-size: 11px;
-                color: {ThemeColors.PRIMARY};
-                font-weight: 600;
-            }}
-            QToolButton:hover {{
-                background: {ThemeColors.PRIMARY}20;
-                border-color: {ThemeColors.PRIMARY};
-            }}
-        """
-        )
-        ai_btn.setToolTip("Open AI Context Builder - auto-select files by task")
-        ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        ai_btn.clicked.connect(self._open_ai_context_builder)
-        layout.addWidget(ai_btn)
-
         # Related files dropdown menu with presets
         self._related_menu_btn = QToolButton()
         self._related_menu_btn.setIcon(QIcon(os.path.join(assets_dir, "layers.svg")))
@@ -494,9 +467,41 @@ class UIBuilderMixin:
             """
         )
         self._clear_history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._clear_history_btn.setToolTip("Xóa toàn bộ Prompt History")
+        self._clear_history_btn.setToolTip("Xoa toan bo Prompt History")
         self._clear_history_btn.clicked.connect(self._clear_prompt_history)
         header.addWidget(self._clear_history_btn)
+
+        # AI Suggest Select button: doc instruction va tu dong chon files
+        self._ai_suggest_btn = QToolButton()
+        self._ai_suggest_btn.setText("AI Suggest Select")
+        self._ai_suggest_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.PRIMARY};
+                border: 1px solid {ThemeColors.PRIMARY}50;
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.PRIMARY}20;
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            QToolButton:disabled {{
+                background: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_MUTED};
+                border-color: {ThemeColors.BORDER};
+            }}
+            """
+        )
+        self._ai_suggest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ai_suggest_btn.setToolTip(
+            "AI reads your instruction and auto-selects relevant files"
+        )
+        self._ai_suggest_btn.clicked.connect(self._run_ai_suggest_from_instructions)
+        header.addWidget(self._ai_suggest_btn)
 
         header.addStretch()
 

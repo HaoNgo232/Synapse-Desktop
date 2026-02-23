@@ -81,6 +81,10 @@ class ContextViewQt(
         # TreeManagementMixin
         self._repo_manager: Optional[RepoManager] = None  # Lazy init as RepoManager
 
+        # AI Suggest Select state: worker reference + snapshot cho Undo
+        self._ai_suggest_worker = None
+        self._ai_suggest_previous_selection: Optional[List[str]] = None
+
         # Services (with dependency injection support)
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
 
@@ -477,28 +481,6 @@ class ContextViewQt(
 
     # ===== AI Context Builder =====
 
-    def _open_ai_context_builder(self) -> None:
-        """
-        Mo AI Context Builder Dialog (Floating Dialog).
-
-        Truyen file tree, all paths, workspace root va callback de apply selection.
-        """
-        from views.ai_context_builder_dialog import AIContextBuilderDialog
-
-        workspace = self.get_workspace()
-        # Thu thap tat ca file paths tu tree bang cach duyet recursive
-        all_paths = self._collect_all_tree_paths(self.tree) if self.tree else set()
-
-        dialog = AIContextBuilderDialog(
-            tree=self.tree,
-            all_file_paths=all_paths,
-            workspace_root=workspace,
-            on_apply_selection=self._on_ai_selection_applied,
-            get_current_selection=lambda: self.file_tree_widget.get_selected_paths(),
-            parent=self,
-        )
-        dialog.show()
-
     def _on_ai_selection_applied(self, paths: list) -> None:
         """
         Callback khi nguoi dung nhan Apply tren AI Context Builder Dialog.
@@ -529,6 +511,127 @@ class ContextViewQt(
             return
 
         self.file_tree_widget.set_selected_paths(resolved_paths)
+
+    # ===== AI Suggest Select (doc tu Instructions field) =====
+
+    def _run_ai_suggest_from_instructions(self) -> None:
+        """
+        Doc noi dung tu Instructions field va chay AI worker de tu dong chon files.
+
+        Luong xu ly:
+        1. Doc text tu _instructions_field
+        2. Validate settings (API key, model, tree)
+        3. Luu snapshot selection hien tai cho Undo
+        4. Tao AIContextWorker chay tren background thread
+        5. Khi worker xong -> auto-apply ket qua vao file tree
+        """
+        user_query = self._instructions_field.toPlainText().strip()
+        if not user_query:
+            from components.toast_qt import toast_error
+
+            toast_error("Please write your instruction first.")
+            return
+
+        from services.settings_manager import load_app_settings
+        from services.ai_context_worker import AIContextWorker
+        from core.prompt_generator import generate_file_map
+        from core.utils.git_utils import get_git_diffs
+        from core.prompting.context_builder_prompts import build_full_tree_string
+        from components.toast_qt import toast_error
+
+        settings = load_app_settings()
+        if not settings.ai_api_key:
+            toast_error("Please configure AI API Key in Settings first.")
+            return
+        if not settings.ai_model_id:
+            toast_error("Please select an AI model in Settings first.")
+            return
+        if self.tree is None:
+            toast_error("No project loaded. Open a folder first.")
+            return
+
+        workspace = self.get_workspace()
+        all_paths = self._collect_all_tree_paths(self.tree)
+
+        file_tree_map = generate_file_map(
+            self.tree,
+            all_paths,
+            workspace_root=workspace,
+            use_relative_paths=True,
+        )
+
+        # Optional: Git diff
+        git_diff_str = None
+        if workspace:
+            try:
+                diff_result = get_git_diffs(workspace)
+                if diff_result is not None:
+                    _, git_diff_str = build_full_tree_string(
+                        file_tree_map, diff_result, include_git=True
+                    )
+            except Exception:
+                pass
+
+        # Luu snapshot selection hien tai de phuc vu Undo
+        self._ai_suggest_previous_selection = list(
+            self.file_tree_widget.get_selected_paths()
+        )
+
+        # Disable button khi dang chay
+        self._ai_suggest_btn.setEnabled(False)
+        self._ai_suggest_btn.setText("Analyzing...")
+
+        # Tao worker chay tren background thread
+        worker = AIContextWorker(
+            api_key=settings.ai_api_key,
+            base_url=settings.ai_base_url,
+            model_id=settings.ai_model_id,
+            file_tree=file_tree_map,
+            user_query=user_query,
+            git_diff=git_diff_str,
+            all_file_paths=list(all_paths),
+            workspace_root=workspace,
+        )
+        worker.signals.finished.connect(self._on_ai_suggest_finished)
+        worker.signals.error.connect(self._on_ai_suggest_error)
+        worker.signals.progress.connect(self._on_ai_suggest_progress)
+
+        # Giu reference tranh GC
+        self._ai_suggest_worker = worker
+        from PySide6.QtCore import QThreadPool
+
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_ai_suggest_finished(self, paths: list, reasoning: str, usage: dict) -> None:
+        """Xu ly khi AI suggest worker hoan thanh thanh cong."""
+        self._ai_suggest_worker = None
+        self._ai_suggest_btn.setEnabled(True)
+        self._ai_suggest_btn.setText("AI Suggest Select")
+
+        if paths:
+            self._on_ai_selection_applied(paths)
+
+            from components.toast_qt import toast_success
+
+            toast_success(f"AI selected {len(paths)} files.")
+        else:
+            from components.toast_qt import toast_error
+
+            toast_error(f"AI could not find relevant files. {reasoning}")
+
+    def _on_ai_suggest_error(self, error_msg: str) -> None:
+        """Xu ly khi AI suggest worker gap loi."""
+        self._ai_suggest_worker = None
+        self._ai_suggest_btn.setEnabled(True)
+        self._ai_suggest_btn.setText("AI Suggest Select")
+
+        from components.toast_qt import toast_error
+
+        toast_error(error_msg)
+
+    def _on_ai_suggest_progress(self, status: str) -> None:
+        """Cap nhat text button khi worker dang chay."""
+        self._ai_suggest_btn.setText(status)
 
     # ===== Helpers =====
 

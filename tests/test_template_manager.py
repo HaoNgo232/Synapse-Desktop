@@ -165,10 +165,10 @@ class TestLocalCustomTemplateProvider:
         assert templates[0].description == "User custom template"
 
     def test_load_template(self, custom_provider, tmp_path):
-        """Doc duoc noi dung."""
+        """Doc duoc noi dung (da tu dong cat bo frontmatter)."""
         test_md = tmp_path / "my_custom.md"
         test_md.write_text("<!-- name: X -->\nContent", encoding="utf-8")
-        assert custom_provider.load_template("my_custom") == "<!-- name: X -->\nContent"
+        assert custom_provider.load_template("my_custom") == "Content"
 
     def test_get_template_info(self, custom_provider, tmp_path):
         """Lay info cua isolated file."""

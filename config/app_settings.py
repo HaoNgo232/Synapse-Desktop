@@ -68,6 +68,9 @@ class AppSettings:
     ai_model_id: str = ""
     # Tu dong apply ket qua AI vao file tree (khong can nhan Apply thu cong)
     ai_auto_apply: bool = True
+    # Bat tinh nang Continuous Memory: LLM tu tom tat phien lam viec,
+    # Synapse luu lai va inject vao prompt lan sau (CHI ap dung OPX)
+    enable_ai_memory: bool = True
 
     # --- Rule Settings ---
     # Danh sach cac ten file project rules de tu dong boc tach (VD: .cursorrules)
@@ -151,6 +154,7 @@ class AppSettings:
             "ai_base_url": self.ai_base_url,
             "ai_model_id": self.ai_model_id,
             "ai_auto_apply": self.ai_auto_apply,
+            "enable_ai_memory": self.enable_ai_memory,
             "rule_file_names": self.rule_file_names,
         }
 

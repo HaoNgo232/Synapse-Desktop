@@ -87,6 +87,7 @@ class ApplyViewQt(QWidget):
         self.last_apply_results: List[ApplyRowResult] = []
         self.last_opx_text: str = ""
         self._cached_file_actions: List = []
+        self._cached_memory_block: Optional[str] = None
         self.expanded_diffs: set = set()
 
         self._build_ui()
@@ -370,6 +371,7 @@ class ApplyViewQt(QWidget):
                 return
 
             self._cached_file_actions = file_actions
+            self._cached_memory_block = parse_result.memory_block
             self.last_opx_text = opx_text
 
             preview_data = analyze_file_actions(file_actions, workspace)
@@ -419,9 +421,11 @@ class ApplyViewQt(QWidget):
         try:
             if self._cached_file_actions:
                 file_actions = self._cached_file_actions
+                memory_block = self._cached_memory_block
             else:
                 parse_result = parse_opx_response(opx_text)
                 file_actions = parse_result.file_actions
+                memory_block = parse_result.memory_block
             if not file_actions:
                 self._show_status("No valid OPX actions found", is_error=True)
                 return
@@ -465,8 +469,23 @@ class ApplyViewQt(QWidget):
                 f"Applied {success_count}/{len(results)} changes",
                 is_error=success_count < len(results),
             )
+
+            # Save continuous memory if apply was at least partially successful
+            if success_count > 0 and memory_block:
+                self._save_memory_block(workspace, memory_block)
+
         except Exception as e:
             self._show_status(f"Apply error: {e}", is_error=True)
+
+    def _save_memory_block(self, workspace: Path, memory_block: str) -> None:
+        """Save the memory block to .synapse/memory.xml."""
+        try:
+            synapse_dir = workspace / ".synapse"
+            synapse_dir.mkdir(exist_ok=True, parents=True)
+            memory_file = synapse_dir / "memory.xml"
+            memory_file.write_text(memory_block.strip() + "\n", encoding="utf-8")
+        except Exception as e:
+            print(f"Failed to save synapse memory: {e}")
 
     @Slot()
     def _copy_error_context(self) -> None:

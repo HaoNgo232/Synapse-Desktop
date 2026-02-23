@@ -35,6 +35,8 @@ from core.prompting.formatters.system_prompts import (
     SUMMARY_NOTES,
     GIT_DIFF_INSTRUCTION,
     GIT_LOG_INSTRUCTION,
+    MEMORY_INSTRUCTION_PROMPT,
+    PREVIOUS_MEMORY_TEMPLATE,
 )
 
 
@@ -47,6 +49,8 @@ def assemble_prompt(
     git_logs: Optional[GitLogResult] = None,
     output_style: OutputStyle = OutputStyle.XML,
     project_rules: str = "",
+    memory_content: Optional[str] = None,
+    enable_ai_memory: bool = False,
 ) -> str:
     """
     Lap rap prompt hoan chinh tu cac sections.
@@ -78,6 +82,8 @@ def assemble_prompt(
             git_diffs,
             git_logs,
             project_rules,
+            memory_content,
+            enable_ai_memory,
         )
     elif output_style == OutputStyle.JSON:
         return _assemble_json(
@@ -117,6 +123,7 @@ def assemble_smart_prompt(
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
     project_rules: str = "",
+    memory_content: Optional[str] = None,
 ) -> str:
     """
     Lap rap prompt cho Copy Smart - gom file_summary (voi agent_role),
@@ -128,13 +135,24 @@ def assemble_smart_prompt(
         user_instructions: Huong dan tu nguoi dung
         git_diffs: Optional git diffs
         git_logs: Optional git logs
+        project_rules: Quy tac project
+        memory_content: Noi dung memory.xml
 
     Returns:
         Prompt string day du
     """
     # generate_smart_summary_xml() da bao gom agent_role
     file_summary = generate_smart_summary_xml()
+
+    memory_injection = ""
+    if memory_content and memory_content.strip():
+        memory_injection = PREVIOUS_MEMORY_TEMPLATE.format(
+            memory_content=memory_content.strip()
+        )
+
     prompt = f"""{file_summary}
+
+{memory_injection}
 <directory_structure>
 {file_map}
 </directory_structure>
@@ -228,11 +246,23 @@ def _assemble_xml(
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
+    memory_content: Optional[str] = None,
+    enable_ai_memory: bool = False,
 ) -> str:
     """Lap rap prompt theo XML format voi AI-Friendly header va Agent Role."""
     # generate_file_summary_xml() da bao gom agent_role ben trong
     file_summary = generate_file_summary_xml()
+
+    # Prepend previous memory if available
+    memory_injection = ""
+    if memory_content and memory_content.strip():
+        memory_injection = PREVIOUS_MEMORY_TEMPLATE.format(
+            memory_content=memory_content.strip()
+        )
+
     prompt = f"""{file_summary}
+
+{memory_injection}
 <directory_structure>
 {file_map}
 </directory_structure>
@@ -243,6 +273,8 @@ def _assemble_xml(
 
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
+        if enable_ai_memory:
+            prompt += f"\n{MEMORY_INSTRUCTION_PROMPT}\n"
 
     if project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"

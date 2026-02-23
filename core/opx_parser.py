@@ -49,6 +49,7 @@ class ParseResult:
     file_actions: list[FileAction] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     plan: Optional[str] = None  # OPX khong define plan, giu de tuong thich
+    memory_block: Optional[str] = None  # Luu tru Continuous Context Memory
 
 
 @dataclass
@@ -83,6 +84,11 @@ FIND_TAG_REGEX = re.compile(
 )
 WHY_TAG_REGEX = re.compile(r"<\s*why\s*>([\s\S]*?)<\s*/\s*why\s*>", re.IGNORECASE)
 
+# Memory block pattern
+MEMORY_TAG_REGEX = re.compile(
+    r"<\s*synapse_memory\s*>([\s\S]*?)<\s*/\s*synapse_memory\s*>", re.IGNORECASE
+)
+
 
 def parse_opx_response(xml_content: str) -> ParseResult:
     """
@@ -107,6 +113,13 @@ def parse_opx_response(xml_content: str) -> ParseResult:
             )
 
         cleaned = _sanitize_response(xml_content)
+
+        # Extract memory block FIRST (before it gets sanitized out if it's outside OPX)
+        # We can extract it from the original xml_content to be safe
+        memory_match = MEMORY_TAG_REGEX.search(xml_content)
+        if memory_match:
+            result.memory_block = memory_match.group(1).strip()
+
         if not cleaned:
             return ParseResult(errors=["Empty input after sanitization"])
 

@@ -140,6 +140,7 @@ class PromptBuildService:
                 git_diffs=git_diffs,
                 git_logs=git_logs,
                 project_rules=project_rules,
+                workspace_root=workspace,
             )
 
         tokenizer = get_tokenization_service()
@@ -253,6 +254,7 @@ class PromptBuildService:
             git_diffs=git_diffs,
             git_logs=git_logs,
             project_rules=project_rules,
+            workspace_root=workspace,
         )
 
     def _extract_rule_files(

@@ -10,3 +10,4 @@ stubs/
 .coverage
 =
 lint_output.json
+.synapse

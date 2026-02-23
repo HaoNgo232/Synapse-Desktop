@@ -405,6 +405,7 @@ def build_smart_prompt(
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
     project_rules: str = "",
+    workspace_root: Optional[Path] = None,
 ) -> str:
     """
     Tao prompt day du cho Copy Smart.
@@ -417,12 +418,25 @@ def build_smart_prompt(
         user_instructions: Huong dan tu nguoi dung
         git_diffs: Optional git diffs
         git_logs: Optional git logs
+        project_rules: Project rules
+        workspace_root: Optional workspace root de doc memory.xml
 
     Returns:
         Prompt string day du
     """
+
+    # Copy Smart does not include OPX formatting, so we do not inject memory
+    # to avoid polluting the context without a way to update the memory.
+    memory_content = None
+
     return assemble_smart_prompt(
-        smart_contents, file_map, user_instructions, git_diffs, git_logs, project_rules
+        smart_contents=smart_contents,
+        file_map=file_map,
+        user_instructions=user_instructions,
+        git_diffs=git_diffs,
+        git_logs=git_logs,
+        project_rules=project_rules,
+        memory_content=memory_content,
     )
 
 
@@ -435,6 +449,7 @@ def generate_prompt(
     git_logs: Optional[GitLogResult] = None,
     output_style: OutputStyle = OutputStyle.XML,
     project_rules: str = "",
+    workspace_root: Optional[Path] = None,
 ) -> str:
     """
     Tao prompt hoan chinh de gui cho LLM.
@@ -449,17 +464,35 @@ def generate_prompt(
         git_diffs: Optional git diffs (work tree & staged)
         git_logs: Optional git logs
         output_style: Dinh dang dau ra
+        project_rules: Project rules
+        workspace_root: Optional workspace root de doc memory.xml
 
     Returns:
         Prompt hoan chinh
     """
+    from services.settings_manager import load_app_settings
+
+    settings = load_app_settings()
+    enable_ai_memory = settings.enable_ai_memory
+
+    memory_content = None
+    if enable_ai_memory and workspace_root and include_xml_formatting:
+        memory_file = workspace_root / ".synapse" / "memory.xml"
+        if memory_file.exists():
+            try:
+                memory_content = memory_file.read_text(encoding="utf-8").strip()
+            except Exception as e:
+                print(f"Failed to read memory file: {e}")
+
     return assemble_prompt(
-        file_map,
-        file_contents,
-        user_instructions,
-        include_xml_formatting,
-        git_diffs,
-        git_logs,
-        output_style,
-        project_rules,
+        file_map=file_map,
+        file_contents=file_contents,
+        user_instructions=user_instructions,
+        include_xml_formatting=include_xml_formatting,
+        git_diffs=git_diffs,
+        git_logs=git_logs,
+        output_style=output_style,
+        project_rules=project_rules,
+        memory_content=memory_content,
+        enable_ai_memory=enable_ai_memory,
     )

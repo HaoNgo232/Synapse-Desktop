@@ -151,3 +151,34 @@ GIT_LOG_INSTRUCTION = (
     "the project's recent development history, commit patterns, and the evolution "
     "of the codebase over time."
 )
+
+# ===========================================================================
+# Memory Injection - Continuous Context Memory cho OPX
+# ===========================================================================
+
+MEMORY_INSTRUCTION_PROMPT = """
+<synapse_memory_instructions>
+IMPORTANT: You MUST append a <synapse_memory> block at the end of your response.
+This block helps maintain continuity across sessions.
+
+Format:
+<synapse_memory>
+COMPLETED: [1-2 sentences summarizing what you just did]
+CONTEXT: [Key technical decisions, patterns used, or dependencies affected]
+NEXT_STEPS: [What the user should logically do next based on this change]
+</synapse_memory>
+
+Rules:
+- Keep the memory block under 150 words total.
+- Be specific: mention file names, function names, and architectural decisions.
+- Do NOT repeat the full code or OPX content inside the memory block.
+</synapse_memory_instructions>
+"""
+
+PREVIOUS_MEMORY_TEMPLATE = """<previous_session_context>
+The following is a summary from the previous coding session on this project.
+Use it to understand what was done before and maintain continuity.
+
+{memory_content}
+</previous_session_context>
+"""

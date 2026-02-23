@@ -288,7 +288,9 @@ class ContextViewQt(
         try:
             content = load_template(template_id)
             cursor = self._instructions_field.textCursor()
-            cursor.select(cursor.SelectionType.Document)
+            cursor.movePosition(cursor.MoveOperation.End)
+            if self._instructions_field.toPlainText().strip():
+                cursor.insertText("\n\n")
             cursor.insertText(content)
             self._show_status("Template inserted")
         except Exception as e:

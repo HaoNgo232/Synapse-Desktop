@@ -21,4 +21,8 @@ Your task is to generate or update comprehensive, developer-friendly documentati
    - Contributing (if open source)
 4. Ensure the tone is professional, clear, and concise. Use badges, emojis sparingly for visual appeal.
 
-Output only the RAW Markdown content for the documentation. If updating an existing README, clearly indicate which sections were modified with inline comments.
+## Output format
+- Emit your ENTIRE documentation inside a single fenced ```markdown ... ``` block.
+- Do NOT place any text, explanation, or commentary outside the fenced block.
+- If updating an existing README, clearly indicate which sections were modified with inline comments inside the block.
+- If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

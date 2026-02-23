@@ -146,12 +146,11 @@ def assemble_smart_prompt(
 
     memory_injection = ""
     if memory_content and memory_content.strip():
-        memory_injection = PREVIOUS_MEMORY_TEMPLATE.format(
+        memory_injection = "\n" + PREVIOUS_MEMORY_TEMPLATE.format(
             memory_content=memory_content.strip()
         )
 
     prompt = f"""{file_summary}
-
 {memory_injection}
 <directory_structure>
 {file_map}
@@ -256,12 +255,11 @@ def _assemble_xml(
     # Prepend previous memory if available
     memory_injection = ""
     if memory_content and memory_content.strip():
-        memory_injection = PREVIOUS_MEMORY_TEMPLATE.format(
+        memory_injection = "\n" + PREVIOUS_MEMORY_TEMPLATE.format(
             memory_content=memory_content.strip()
         )
 
     prompt = f"""{file_summary}
-
 {memory_injection}
 <directory_structure>
 {file_map}

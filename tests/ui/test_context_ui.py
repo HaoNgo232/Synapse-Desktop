@@ -256,8 +256,8 @@ def test_on_template_selected(context_view):
     assert "Template content" in view._instructions_field.toPlainText()
 
 
-def test_on_template_selected_append_to_existing(context_view):
-    """Kiem tra _on_template_selected append khi da co text (line 258-261)."""
+def test_on_template_selected_replaces_existing(context_view):
+    """Kiem tra _on_template_selected replace khi da co text."""
     view = context_view
     view._instructions_field.setPlainText("Existing instructions")
     mock_action = MagicMock()
@@ -269,7 +269,7 @@ def test_on_template_selected_append_to_existing(context_view):
         view._on_template_selected(mock_action)
 
     text = view._instructions_field.toPlainText()
-    assert "Existing instructions" in text
+    assert "Existing instructions" not in text
     assert "New template" in text
 
 

@@ -84,6 +84,7 @@ class ContextViewQt(
         # AI Suggest Select state: worker reference + snapshot cho Undo
         self._ai_suggest_worker = None
         self._ai_suggest_previous_selection: Optional[List[str]] = None
+        self._ai_suggest_generation: int = 0
 
         # Services (with dependency injection support)
         self._file_watcher: Optional[FileWatcher] = FileWatcher()
@@ -115,6 +116,14 @@ class ContextViewQt(
         # Old workers will still run but their results will be ignored.
         self._begin_copy_operation()
         self._set_copy_buttons_enabled(True)
+
+        # Invalidate any in-flight AI suggest request
+        self._ai_suggest_generation += 1
+        if self._ai_suggest_worker is not None:
+            self._ai_suggest_worker = None
+            if hasattr(self, "_ai_suggest_btn"):
+                self._ai_suggest_btn.setEnabled(True)
+                self._ai_suggest_btn.setText("AI Suggest Select")
 
         # 1. Stop file watcher for old workspace
         if self._file_watcher:
@@ -184,6 +193,9 @@ class ContextViewQt(
         """Cleanup resources."""
         # Invalidate all pending workers — their callbacks will be ignored
         self._copy_generation += 1
+
+        self._ai_suggest_generation += 1
+        self._ai_suggest_worker = None
 
         # Force cleanup all stale refs
         for obj in self._stale_workers:
@@ -287,12 +299,8 @@ class ContextViewQt(
 
         try:
             content = load_template(template_id)
-            cursor = self._instructions_field.textCursor()
-            cursor.movePosition(cursor.MoveOperation.End)
-            if self._instructions_field.toPlainText().strip():
-                cursor.insertText("\n\n")
-            cursor.insertText(content)
-            self._show_status("Template inserted")
+            self._instructions_field.setPlainText(content)
+            self._show_status("Template loaded")
         except Exception as e:
             self._show_status(f"Failed to load template: {e}", is_error=True)
 
@@ -594,8 +602,18 @@ class ContextViewQt(
             all_file_paths=list(all_paths),
             workspace_root=workspace,
         )
-        worker.signals.finished.connect(self._on_ai_suggest_finished)
-        worker.signals.error.connect(self._on_ai_suggest_error)
+
+        self._ai_suggest_generation += 1
+        current_gen = self._ai_suggest_generation
+
+        worker.signals.finished.connect(
+            lambda paths, reasoning, usage, g=current_gen: self._on_ai_suggest_finished(
+                paths, reasoning, usage, g
+            )
+        )
+        worker.signals.error.connect(
+            lambda msg, g=current_gen: self._on_ai_suggest_error(msg, g)
+        )
         worker.signals.progress.connect(self._on_ai_suggest_progress)
 
         # Giu reference tranh GC
@@ -604,8 +622,13 @@ class ContextViewQt(
 
         QThreadPool.globalInstance().start(worker)
 
-    def _on_ai_suggest_finished(self, paths: list, reasoning: str, usage: dict) -> None:
+    def _on_ai_suggest_finished(
+        self, paths: list, reasoning: str, usage: dict, generation: int
+    ) -> None:
         """Xu ly khi AI suggest worker hoan thanh thanh cong."""
+        if generation != self._ai_suggest_generation:
+            return
+
         self._ai_suggest_worker = None
         self._ai_suggest_btn.setEnabled(True)
         self._ai_suggest_btn.setText("AI Suggest Select")
@@ -621,8 +644,11 @@ class ContextViewQt(
 
             toast_error(f"AI could not find relevant files. {reasoning}")
 
-    def _on_ai_suggest_error(self, error_msg: str) -> None:
+    def _on_ai_suggest_error(self, error_msg: str, generation: int) -> None:
         """Xu ly khi AI suggest worker gap loi."""
+        if generation != self._ai_suggest_generation:
+            return
+
         self._ai_suggest_worker = None
         self._ai_suggest_btn.setEnabled(True)
         self._ai_suggest_btn.setText("AI Suggest Select")

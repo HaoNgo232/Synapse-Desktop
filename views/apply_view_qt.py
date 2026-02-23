@@ -349,6 +349,8 @@ class ApplyViewQt(QWidget):
     def _clear_input(self) -> None:
         self._opx_input.clear()
         self._clear_results()
+        self._cached_file_actions.clear()
+        self._cached_memory_block = None
 
     @Slot()
     def _preview_changes(self) -> None:
@@ -478,14 +480,69 @@ class ApplyViewQt(QWidget):
             self._show_status(f"Apply error: {e}", is_error=True)
 
     def _save_memory_block(self, workspace: Path, memory_block: str) -> None:
-        """Save the memory block to .synapse/memory.xml."""
+        """Save the memory block to .synapse/memory.xml.
+
+        Maintains a rolling window of the last 5 memory blocks.
+        Runs on a background thread to avoid blocking the main UI thread.
+        Uses a thread lock to prevent race conditions from concurrent applies.
+        """
+        _ws = workspace
+        _new_block = memory_block.strip()
+
+        # Ensure lock exists on class or instance
+        if not hasattr(self, "_memory_write_lock"):
+            import threading
+
+            self._memory_write_lock = threading.Lock()
+
+        _lock = self._memory_write_lock
+
+        def _write() -> None:
+            with _lock:
+                try:
+                    synapse_dir = _ws / ".synapse"
+                    synapse_dir.mkdir(exist_ok=True, parents=True)
+                    memory_file = synapse_dir / "memory.xml"
+
+                    blocks = []
+                    if memory_file.exists():
+                        try:
+                            import re
+
+                            content = memory_file.read_text(encoding="utf-8")
+                            # Extract all existing blocks
+                            blocks = re.findall(
+                                r"<synapse_memory>\s*(.*?)\s*</synapse_memory>",
+                                content,
+                                re.IGNORECASE | re.DOTALL,
+                            )
+                        except Exception as parse_e:
+                            print(f"Failed to parse existing memory: {parse_e}")
+                            blocks = []
+
+                    blocks.append(_new_block)
+                    # Keep only the last 5 memory blocks
+                    blocks = blocks[-5:]
+
+                    formatted_blocks = []
+                    for b in blocks:
+                        formatted_blocks.append(
+                            f"<synapse_memory>\n{b.strip()}\n</synapse_memory>"
+                        )
+
+                    memory_file.write_text(
+                        "\n\n".join(formatted_blocks) + "\n", encoding="utf-8"
+                    )
+                except Exception as e:
+                    print(f"Failed to save synapse memory: {e}")
+
         try:
-            synapse_dir = workspace / ".synapse"
-            synapse_dir.mkdir(exist_ok=True, parents=True)
-            memory_file = synapse_dir / "memory.xml"
-            memory_file.write_text(memory_block.strip() + "\n", encoding="utf-8")
-        except Exception as e:
-            print(f"Failed to save synapse memory: {e}")
+            from core.utils.qt_utils import schedule_background
+
+            schedule_background(_write)
+        except ImportError:
+            # Fallback: run synchronously if utility not available
+            _write()
 
     @Slot()
     def _copy_error_context(self) -> None:

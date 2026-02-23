@@ -8,4 +8,8 @@ Your task is to review the provided codebase for potential bugs, edge cases, rac
    - The exact file and line number (if possible).
    - A proposed code fix.
 
-Provide your final report in Markdown format.
+## Output format
+- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Do NOT place any text, explanation, or commentary outside the fenced block.
+- Inside the block, use standard Markdown formatting.
+- If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

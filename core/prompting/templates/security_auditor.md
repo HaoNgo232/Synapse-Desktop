@@ -7,3 +7,9 @@ Your task is to conduct a comprehensive security audit of the provided codebase 
 4. If the code appears secure, explain why and what defensive mechanisms are correctly implemented.
 
 Structure your response as a professional Security Audit Report.
+
+## Output format
+- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Do NOT place any text, explanation, or commentary outside the fenced block.
+- Inside the block, use standard Markdown formatting.
+- If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

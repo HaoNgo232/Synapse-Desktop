@@ -2,272 +2,215 @@
 inclusion: always
 ---
 
-# GEMINI.md - Antigravity Kit
+# AGENTS.md - Synapse Desktop Development Guide
 
-> This file defines how the AI behaves in this workspace.
+Guidelines and commands for agentic coding agents working on Synapse Desktop - a lightweight AI-assisted code editing tool built with Python and PySide6.
 
----
+## Build & Development Commands
 
-## CRITICAL: AGENT & SKILL PROTOCOL (START HERE)
+### Environment Setup
+```bash
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
 
-> **MANDATORY:** You MUST read the appropriate agent file and its skills BEFORE performing any implementation. This is the highest priority rule.
-
-### 1. Modular Skill Loading Protocol
-
-Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Read specific sections.
-
-- **Selective Reading:** DO NOT read ALL files in a skill folder. Read `SKILL.md` first, then only read sections matching the user's request.
-- **Rule Priority:** P0 (GEMINI.md) > P1 (Agent .md) > P2 (SKILL.md). All rules are binding.
-
-### 2. Enforcement Protocol
-
-1. **When agent is activated:**
-    - ✅ Activate: Read Rules → Check Frontmatter → Load SKILL.md → Apply All.
-2. **Forbidden:** Never skip reading agent rules or skill instructions. "Read → Understand → Apply" is mandatory.
-
----
-
-## 📥 REQUEST CLASSIFIER (STEP 1)
-
-**Before ANY action, classify the request:**
-
-| Request Type     | Trigger Keywords                           | Active Tiers                   | Result                      |
-| ---------------- | ------------------------------------------ | ------------------------------ | --------------------------- |
-| **QUESTION**     | "what is", "how does", "explain"           | TIER 0 only                    | Text Response               |
-| **SURVEY/INTEL** | "analyze", "list files", "overview"        | TIER 0 + Explorer              | Session Intel (No File)     |
-| **SIMPLE CODE**  | "fix", "add", "change" (single file)       | TIER 0 + TIER 1 (lite)         | Inline Edit                 |
-| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **{task-slug}.md Required** |
-| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **{task-slug}.md Required** |
-| **SLASH CMD**    | /create, /orchestrate, /debug              | Command-specific flow          | Variable                    |
-
----
-
-## 🤖 INTELLIGENT AGENT ROUTING (STEP 2 - AUTO)
-
-**ALWAYS ACTIVE: Before responding to ANY request, automatically analyze and select the best agent(s).**
-
-> 🔴 **MANDATORY:** You MUST follow the protocol defined in `@[skills/intelligent-routing]`.
-
-### Auto-Selection Protocol
-
-1. **Analyze (Silent)**: Detect domains (Frontend, Backend, Security, etc.) from user request.
-2. **Select Agent(s)**: Choose the most appropriate specialist(s).
-3. **Inform User**: Concisely state which expertise is being applied.
-4. **Apply**: Generate response using the selected agent's persona and rules.
-
-### Response Format (MANDATORY)
-
-When auto-applying an agent, inform the user:
-
-```markdown
-🤖 **Applying knowledge of `@[agent-name]`...**
-
-[Continue with specialized response]
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-**Rules:**
+### Running the Application
+```bash
+# Standard run
+python main_window.py
+# OR
+./start.sh
 
-1. **Silent Analysis**: No verbose meta-commentary ("I am analyzing...").
-2. **Respect Overrides**: If user mentions `@agent`, use it.
-3. **Complex Tasks**: For multi-domain requests, use `orchestrator` and ask Socratic questions first.
-
-### ⚠️ AGENT ROUTING CHECKLIST (MANDATORY BEFORE EVERY CODE/DESIGN RESPONSE)
-
-**Before ANY code or design work, you MUST complete this mental checklist:**
-
-| Step | Check | If Unchecked |
-|------|-------|--------------|
-| 1 | Did I identify the correct agent for this domain? | → STOP. Analyze request domain first. |
-| 2 | Did I READ the agent's `.md` file (or recall its rules)? | → STOP. Open `.agent/agents/{agent}.md` |
-| 3 | Did I announce `🤖 Applying knowledge of @[agent]...`? | → STOP. Add announcement before response. |
-| 4 | Did I load required skills from agent's frontmatter? | → STOP. Check `skills:` field and read them. |
-
-**Failure Conditions:**
-
-- ❌ Writing code without identifying an agent = **PROTOCOL VIOLATION**
-- ❌ Skipping the announcement = **USER CANNOT VERIFY AGENT WAS USED**
-- ❌ Ignoring agent-specific rules (e.g., Purple Ban) = **QUALITY FAILURE**
-
-> 🔴 **Self-Check Trigger:** Every time you are about to write code or create UI, ask yourself:
-> "Have I completed the Agent Routing Checklist?" If NO → Complete it first.
-
----
-
-## TIER 0: UNIVERSAL RULES (Always Active)
-
-### 🌐 Language Handling
-
-When user's prompt is NOT in English:
-
-1. **Internally translate** for better comprehension
-2. **Respond in user's language** - match their communication
-3. **Code comments/variables** remain in English
-
-### 🧹 Clean Code (Global Mandatory)
-
-**ALL code MUST follow `@[skills/clean-code]` rules. No exceptions.**
-
-- **Code**: Concise, direct, no over-engineering. Self-documenting.
-- **Testing**: Mandatory. Pyramid (Unit > Int > E2E) + AAA Pattern.
-- **Performance**: Measure first. Adhere to 2025 standards (Core Web Vitals).
-- **Infra/Safety**: 5-Phase Deployment. Verify secrets security.
-
-### 📁 File Dependency Awareness
-
-**Before modifying ANY file:**
-
-1. Check `CODEBASE.md` → File Dependencies
-2. Identify dependent files
-3. Update ALL affected files together
-
-### 🗺️ System Map Read
-
-> 🔴 **MANDATORY:** Read `ARCHITECTURE.md` at session start to understand Agents, Skills, and Scripts.
-
-**Path Awareness:**
-
-- Agents: `.agent/` (Project)
-- Skills: `.agent/skills/` (Project)
-- Runtime Scripts: `.agent/skills/<skill>/scripts/`
-
-### 🧠 Read → Understand → Apply
-
-```
-❌ WRONG: Read agent file → Start coding
-✅ CORRECT: Read → Understand WHY → Apply PRINCIPLES → Code
+# With debug logging
+SYNAPSE_DEBUG=1 python main_window.py
 ```
 
-**Before coding, answer:**
+### Testing Commands
+```bash
+# Run ALL tests
+pytest tests/ -v
 
-1. What is the GOAL of this agent/skill?
-2. What PRINCIPLES must I apply?
-3. How does this DIFFER from generic output?
+# Run single test file
+pytest tests/test_token_counter.py -v
 
----
+# Run single test class
+pytest tests/test_diff_viewer.py::TestGenerateDiffLines -v
 
-## TIER 1: CODE RULES (When Writing Code)
+# Run single test method
+pytest tests/test_token_counter.py::TestCountTokens::test_simple_text -v
 
-### 📱 Project Type Routing
+# Run with coverage
+pytest tests/ --cov=core --cov=services --cov=components -v
+```
 
-| Project Type                           | Primary Agent         | Skills                        |
-| -------------------------------------- | --------------------- | ----------------------------- |
-| **MOBILE** (iOS, Android, RN, Flutter) | `mobile-developer`    | mobile-design                 |
-| **WEB** (Next.js, React web)           | `frontend-specialist` | frontend-design               |
-| **BACKEND** (API, server, DB)          | `backend-specialist`  | api-patterns, database-design |
+### Linting & Type Checking
+```bash
+# Type checking with pyrefly
+pyrefly check
 
-> 🔴 **Mobile + frontend-specialist = WRONG.** Mobile = mobile-developer ONLY.
+# Check unused imports/variables with ruff
+ruff check --select F401,F841 --exclude tests/,stubs/,.agent/ .
 
-### 🛑 Socratic Gate
+# Auto-fix issues
+ruff check --select F401,F841 --exclude tests/,stubs/,.agent/ --fix .
 
-**For complex requests, STOP and ASK first:**
+# Full ruff check (all rules)
+ruff check .
 
-### 🛑 GLOBAL SOCRATIC GATE (TIER 0)
+# Format code with ruff
+ruff format .
+```
 
-**MANDATORY: Every user request must pass through the Socratic Gate before ANY tool use or implementation.**
+### Building
+```bash
+# Build AppImage (Linux only)
+./build-appimage.sh
+```
 
-| Request Type            | Strategy       | Required Action                                                   |
-| ----------------------- | -------------- | ----------------------------------------------------------------- |
-| **New Feature / Build** | Deep Discovery | ASK minimum 3 strategic questions                                 |
-| **Code Edit / Bug Fix** | Context Check  | Confirm understanding + ask impact questions                      |
-| **Vague / Simple**      | Clarification  | Ask Purpose, Users, and Scope                                     |
-| **Full Orchestration**  | Gatekeeper     | **STOP** subagents until user confirms plan details               |
-| **Direct "Proceed"**    | Validation     | **STOP** → Even if answers are given, ask 2 "Edge Case" questions |
+## Code Style Guidelines
 
-**Protocol:**
+### Import Style
+- **Always use absolute imports** instead of relative imports
+- Group imports in this order with blank lines between:
+  1. Standard library imports
+  2. Third-party imports
+  3. Local application imports
 
-1. **Never Assume:** If even 1% is unclear, ASK.
-2. **Handle Spec-heavy Requests:** When user gives a list (Answers 1, 2, 3...), do NOT skip the gate. Instead, ask about **Trade-offs** or **Edge Cases** (e.g., "LocalStorage confirmed, but should we handle data clearing or versioning?") before starting.
-3. **Wait:** Do NOT invoke subagents or write code until the user clears the Gate.
-4. **Reference:** Full protocol in `@[skills/brainstorming]`.
+```python
+# Good example
+import os
+import json
+from pathlib import Path
+from typing import Optional, Dict, List
 
-### 🏁 Final Checklist Protocol
+from PySide6 import QtWidgets as qw
+import pytest
 
-**Trigger:** When the user says "son kontrolleri yap", "final checks", "çalıştır tüm testleri", or similar phrases.
+from views.context_view_qt import ContextViewQt
+from core.utils.file_utils import scan_directory, TreeItem
+```
 
-| Task Stage       | Command                                            | Purpose                        |
-| ---------------- | -------------------------------------------------- | ------------------------------ |
-| **Manual Audit** | `python .agent/scripts/checklist.py .`             | Priority-based project audit   |
-| **Pre-Deploy**   | `python .agent/scripts/checklist.py . --url <URL>` | Full Suite + Performance + E2E |
+### Naming Conventions
+- **Classes**: `PascalCase` (e.g., `ContextView`, `FileTreeComponent`)
+- **Functions/variables**: `snake_case` (e.g., `scan_directory`, `workspace_path`)
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_SETTINGS`, `BINARY_EXTENSIONS`)
+- **Private methods**: Prefix with underscore (e.g., `_on_folder_picked`)
 
-**Priority Execution Order:**
+### File Structure
+- **Services**: `services/` - Background services and utilities
+- **Core**: `core/` - Business logic and main functionality
+- **Views**: `views/` - UI components and screens
+- **Components**: `components/` - Reusable UI widgets
+- **Config**: `config/` - Configuration and constants
 
-1. **Security** → 2. **Lint** → 3. **Schema** → 4. **Tests** → 5. **UX** → 6. **Seo** → 7. **Lighthouse/E2E**
+### Type Hints
+- **Always use type hints** for function parameters and return values
+- Use `Optional[T]` for nullable values
+- Use `Dict[str, Any]` for JSON-like data structures
 
-**Rules:**
+```python
+def load_settings() -> Dict[str, Any]:
+def _get_workspace_path(self) -> Optional[Path]:
+def generate_prompt(
+    self,
+    selected_paths: Set[str],
+    instructions: str,
+) -> str:
+```
 
-- **Completion:** A task is NOT finished until `checklist.py` returns success.
-- **Reporting:** If it fails, fix the **Critical** blockers first (Security/Lint).
+### Documentation Style
+- **Vietnamese comments** for business logic and user-facing text
+- **English comments** for technical implementation details
+- Use triple quotes for docstrings
+- Include parameter and return type information in docstrings
 
-**Available Scripts (12 total):**
+```python
+# Vietnamese for business logic
+"""
+Context View - Tab de chon files va copy context
+"""
 
-| Script                     | Skill                 | When to Use         |
-| -------------------------- | --------------------- | ------------------- |
-| `security_scan.py`         | vulnerability-scanner | Always on deploy    |
-| `dependency_analyzer.py`   | vulnerability-scanner | Weekly / Deploy     |
-| `lint_runner.py`           | lint-and-validate     | Every code change   |
-| `test_runner.py`           | testing-patterns      | After logic change  |
-| `schema_validator.py`      | database-design       | After DB change     |
-| `ux_audit.py`              | frontend-design       | After UI change     |
-| `accessibility_checker.py` | frontend-design       | After UI change     |
-| `seo_checker.py`           | seo-fundamentals      | After page change   |
-| `bundle_analyzer.py`       | performance-profiling | Before deploy       |
-| `mobile_audit.py`          | mobile-design         | After mobile change |
-| `lighthouse_audit.py`      | performance-profiling | Before deploy       |
-| `playwright_runner.py`     | webapp-testing        | Before deploy       |
+# English for technical details
+def _on_folder_picked(self, e: ft.FilePickerResultEvent):
+    """Xu ly khi user chon folder"""
+```
 
-> 🔴 **Agents & Skills can invoke ANY script** via `python .agent/skills/<skill>/scripts/<script>.py`
+### Error Handling
+- Use try-except blocks for file operations and external calls
+- Log errors appropriately using the logging system
+- Return meaningful error messages to users
+- Use specific exception types when possible
 
-### 🎭 Gemini Mode Mapping
+```python
+def load_settings() -> Dict[str, Any]:
+    try:
+        if SETTINGS_FILE.exists():
+            content = SETTINGS_FILE.read_text(encoding="utf-8")
+            saved = json.loads(content)
+            return {**DEFAULT_SETTINGS, **saved}
+    except (OSError, json.JSONDecodeError):
+        pass
+    return DEFAULT_SETTINGS.copy()
+```
 
-| Mode     | Agent             | Behavior                                     |
-| -------- | ----------------- | -------------------------------------------- |
-| **plan** | `project-planner` | 4-phase methodology. NO CODE before Phase 4. |
-| **ask**  | -                 | Focus on understanding. Ask questions.       |
-| **edit** | `orchestrator`    | Execute. Check `{task-slug}.md` first.       |
+## Project Architecture
 
-**Plan Mode (4-Phase):**
+### Core Components
+- **File Tree**: `components/file_tree.py` - Hierarchical file navigation
+- **Token Counter**: `core/token_counter.py` - Token counting with tiktoken/rs-bpe
+- **Smart Context**: `core/smart_context/` - Tree-sitter based code analysis
+- **Security**: `core/security_check.py` - Secret detection with detect-secrets
+- **OPX System**: `core/opx_parser.py` - Apply operations in OPX format
 
-1. ANALYSIS → Research, questions
-2. PLANNING → `{task-slug}.md`, task breakdown
-3. SOLUTIONING → Architecture, design (NO CODE!)
-4. IMPLEMENTATION → Code + tests
+### Services
+- **Settings**: `services/settings_manager.py` - Application settings persistence
+- **Session**: `services/session_state.py` - Workspace and UI state management
+- **File Watcher**: `services/file_watcher.py` - Auto-refresh on file changes
+- **History**: `services/history_service.py` - Operation history tracking
 
-> 🔴 **Edit mode:** If multi-file or structural change → Offer to create `{task-slug}.md`. For single-file fixes → Proceed directly.
+## Best Practices
 
----
+### Thread Safety (PySide6)
+- Use PySide6 signal/slot mechanism for thread safety
+- Use `run_on_main_thread()` or `schedule_background()` from `qt_utils` for async operations
+- Follow the existing theme structure (`ThemeColors`)
 
-## TIER 2: DESIGN RULES (Reference)
+### File Operations
+- Always check file existence before operations
+- Use context managers for file handling
+- Implement proper error handling for I/O operations
+- Respect `.gitignore` and exclusion patterns
 
-> **Design rules are in the specialist agents, NOT here.**
+### Security
+- Always validate file paths to prevent directory traversal
+- Use dry-run mode for destructive operations
+- Scan for secrets before copying code context
 
-| Task         | Read                            |
-| ------------ | ------------------------------- |
-| Web UI/UX    | `.agent/frontend-specialist.md` |
-| Mobile UI/UX | `.agent/mobile-developer.md`    |
+### Performance
+- Use async operations for file scanning and token counting
+- Implement debounced UI updates for large operations
+- Cache expensive computations (token counts, file scans)
+- Clear token caches when workspace changes
 
-**These agents contain:**
+### Testing
+- Use `pytest` for unit tests
+- Test both success and failure cases
+- Use descriptive test method names
+- Include setup and teardown for test isolation
+- Test security features thoroughly
 
-- Purple Ban (no violet/purple colors)
-- Template Ban (no standard layouts)
-- Anti-cliché rules
-- Deep Design Thinking protocol
+## Debugging & Logging
+- Use `SYNAPSE_DEBUG=1` environment variable for verbose logging
+- Check `~/.synapse-desktop/logs/app.log` for application logs
+- Use the Logs tab in the UI for real-time logging
 
-> 🔴 **For design work:** Open and READ the agent file. Rules are there.
-
----
-
-## 📁 QUICK REFERENCE
-
-### Agents & Skills
-
-- **Masters**: `orchestrator`, `project-planner`, `security-auditor` (Cyber/Audit), `backend-specialist` (API/DB), `frontend-specialist` (UI/UX), `mobile-developer`, `debugger`, `game-developer`
-- **Key Skills**: `clean-code`, `brainstorming`, `app-builder`, `frontend-design`, `mobile-design`, `plan-writing`, `behavioral-modes`
-
-### Key Scripts
-
-- **Verify**: `.agent/scripts/verify_all.py`, `.agent/scripts/checklist.py`
-- **Scanners**: `security_scan.py`, `dependency_analyzer.py`
-- **Audits**: `ux_audit.py`, `mobile_audit.py`, `lighthouse_audit.py`, `seo_checker.py`
-- **Test**: `playwright_runner.py`, `test_runner.py`
-
----
+## Notes for Agents
+- This is a desktop application using PySide6 for the UI
+- The project uses tree-sitter for smart code context extraction
+- Security scanning is a core feature using detect-secrets
+- Token counting is essential for LLM context management
+- Vietnamese comments are used for business logic and user-facing text

@@ -74,6 +74,16 @@ def generate_tree_map_with_summary(
     Returns:
         Prompt string chua file_map, summary va user_instructions
     """
+    # Build is_dir_map once for O(n) instead of O(m * n^2)
+    is_dir_map: dict[str, bool] = {}
+
+    def _build_map(item: TreeItem) -> None:
+        is_dir_map[item.path] = item.is_dir
+        for child in item.children:
+            _build_map(child)
+
+    _build_map(tree)
+
     file_map = generate_file_map(
         tree,
         selected_paths,
@@ -81,8 +91,8 @@ def generate_tree_map_with_summary(
         use_relative_paths=use_relative_paths,
     )
 
-    # Count files va folders
-    file_count = sum(1 for p in selected_paths if not tree_item_is_dir(tree, p))
+    # Count files va folders using pre-built map (O(m) instead of O(m * n^2))
+    file_count = sum(1 for p in selected_paths if not is_dir_map.get(p, False))
     total_selected = len(selected_paths)
     folder_count = total_selected - file_count
 
@@ -103,37 +113,37 @@ def generate_tree_map_with_summary(
     return prompt
 
 
-def tree_item_is_dir(tree: TreeItem, path: str) -> bool:
+def tree_item_is_dir(
+    tree: TreeItem, path: str, is_dir_map: dict[str, bool] | None = None
+) -> bool:
     """
     Kiem tra path co phai la directory trong tree khong.
-    Traverse tree de tim item theo path.
+
+    Args:
+        tree: TreeItem root
+        path: Path can kiem tra
+        is_dir_map: Pre-built map {path: is_dir} de tra cuu O(1)
 
     Returns:
-        True neu la directory, False neu la file hoac khong tim thay trong tree
+        True neu la directory, False neu la file
     """
-    # Exact match
+    # Use pre-built map if available (O(1) lookup)
+    if is_dir_map is not None:
+        return is_dir_map.get(path, False)
+
+    # Fallback: simple O(n) recursive search
     if tree.path == path:
         return tree.is_dir
 
-    # Search children recursively
     for child in tree.children:
         if child.path == path:
             return child.is_dir
-        if child.is_dir and child.children:
-            result = tree_item_is_dir(child, path)
-            # Only return if we actually found the path in this subtree
-            if child.path == path or any(
-                _tree_contains_path(c, path) for c in child.children
-            ):
-                return result
+        if child.is_dir:
+            result = tree_item_is_dir(child, path, None)
+            if result:  # Found in subtree
+                return True
 
-    # Fallback: check filesystem directly
-    from pathlib import Path as FsPath
-
-    try:
-        return FsPath(path).is_dir()
-    except OSError:
-        return False
+    return False
 
 
 def _tree_contains_path(tree: TreeItem, path: str) -> bool:

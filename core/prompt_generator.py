@@ -9,10 +9,8 @@ Backward-compatible public API. Tat ca logic da chuyen sang:
 Giu lai trong file nay:
 - generate_file_map() + tree helpers (khong bi trung lap)
 - generate_smart_context() (tree-sitter specific)
-- calculate_markdown_delimiter() (dung chung boi markdown formatter + smart_context)
 """
 
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +26,7 @@ from config.output_format import OutputStyle
 # === Pipeline imports ===
 from core.prompting.file_collector import collect_files
 from core.prompting.formatters.markdown import format_files_markdown
+from core.prompting.delimiter_utils import calculate_markdown_delimiter
 from core.prompting.formatters.xml import (
     format_files_xml,
 )
@@ -40,36 +39,11 @@ from core.prompting.prompt_assembler import (
 
 
 # ===========================================================================
-# calculate_markdown_delimiter - Dung chung cho markdown formatter + smart_context
+# Re-export calculate_markdown_delimiter for backward compatibility
 # ===========================================================================
-
-
-def calculate_markdown_delimiter(contents: list[str]) -> str:
-    """
-    Tinh toan delimiter an toan cho markdown code blocks.
-
-    Khi file content chua backticks (```), can dung nhieu backticks hon
-    cho code block wrapper de tranh broken markdown.
-
-    Port tu Repomix (src/core/output/outputGenerate.ts lines 26-31)
-
-    Args:
-        contents: Danh sach noi dung files
-
-    Returns:
-        Delimiter string (toi thieu 3 backticks, hoac nhieu hon neu can)
-    """
-    max_backticks = 0
-
-    for content in contents:
-        # Tim tat ca cac day backticks trong content
-        matches = re.findall(r"`+", content)
-        if matches:
-            # Lay do dai lon nhat cua day backticks
-            max_backticks = max(max_backticks, max(len(m) for m in matches))
-
-    # Delimiter phai lon hon max backticks tim thay, toi thieu 3
-    return "`" * max(3, max_backticks + 1)
+# Moved to core.prompting.delimiter_utils to avoid circular imports
+# Re-exported here for backward compatibility with existing code
+__all__ = ["calculate_markdown_delimiter"]
 
 
 # ===========================================================================
@@ -114,16 +88,16 @@ def generate_file_map(
     return "\n".join(lines)
 
 
-def _has_selected_descendant(item: TreeItem, selected_paths: set[str]) -> bool:
-    """Kiem tra item hoac descendants co duoc chon khong"""
-    if item.path in selected_paths:
+def _has_selected_descendant(item: TreeItem, selected_set: set[str]) -> bool:
+    """
+    Kiem tra item hoac descendants co duoc chon khong.
+
+    Uses any() for short-circuit evaluation (stops at first True).
+    Safe because this is a pure predicate with no side effects.
+    """
+    if item.path in selected_set:
         return True
-
-    for child in item.children:
-        if _has_selected_descendant(child, selected_paths):
-            return True
-
-    return False
+    return any(_has_selected_descendant(child, selected_set) for child in item.children)
 
 
 def _filter_selected_tree(
@@ -299,7 +273,7 @@ def generate_smart_context(
     Returns:
         Smart context string voi code signatures
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
     from core.smart_context import smart_parse, is_supported
 
     sorted_paths = sorted(selected_paths)
@@ -354,17 +328,10 @@ def generate_smart_context(
 
     if len(sorted_paths) > 5:
         # PARALLEL processing voi ThreadPoolExecutor
+        # Use executor.map() to maintain order automatically
         with ThreadPoolExecutor(max_workers=min(8, len(sorted_paths))) as executor:
-            futures = {
-                executor.submit(_process_single_file, p): p for p in sorted_paths
-            }
-            for future in as_completed(futures):
-                result = future.result()
-                file_data.append(result)
-                if result[1]:  # smart_content exists
-                    all_contents.append(result[1])
-        # Sort lai theo path de maintain order
-        file_data.sort(key=lambda x: str(x[0]))
+            file_data = list(executor.map(_process_single_file, sorted_paths))
+            all_contents = [result[1] for result in file_data if result[1]]
     else:
         # Sequential processing cho it files
         for path_str in sorted_paths:

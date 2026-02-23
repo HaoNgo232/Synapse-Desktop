@@ -28,6 +28,11 @@ from core.ignore_engine import (
 # Cac module khac (file_scanner, file_tree_model) import truc tiep tu file_utils.
 # Giu lai re-exports de khong break import paths.
 _read_gitignore = read_gitignore
+
+# Pre-compile regex for is_system_path (module-level optimization)
+_WINDOWS_RESERVED_PATTERN = re.compile(
+    r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", re.IGNORECASE
+)
 _find_git_root = find_git_root
 
 
@@ -104,8 +109,8 @@ def is_system_path(file_path: Path) -> bool:
     path_str = str(file_path)
 
     if system == "Windows":
-        # Check reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
-        if re.match(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", name, re.IGNORECASE):
+        # Check reserved names using pre-compiled regex
+        if _WINDOWS_RESERVED_PATTERN.match(name):
             return True
         # Check system folders
         lower_path = path_str.lower()
@@ -372,24 +377,25 @@ def get_selected_file_paths(tree: TreeItem, selected_paths: set[str]) -> list[Pa
 
     Returns:
         List cac Path objects cho files duoc chon (chi files, khong co dirs)
+        Sorted for deterministic ordering.
     """
-    result: list[Path] = []
+    result_set: set[Path] = set()  # Use set to avoid duplicates
 
     def _walk(item: TreeItem):
         if item.path in selected_paths:
             if not item.is_dir:
-                result.append(Path(item.path))
+                result_set.add(Path(item.path))
             else:
                 # Neu chon folder thi lay tat ca files trong do
                 for f in flatten_tree_files(item):
-                    result.append(f)
+                    result_set.add(f)
         else:
             # Van can check children vi co the chon file trong folder chua duoc chon
             for child in item.children:
                 _walk(child)
 
     _walk(tree)
-    return result
+    return sorted(result_set)  # Sort for deterministic ordering
 
 
 # _find_git_root da chuyen sang core.ignore_engine.find_git_root
@@ -464,15 +470,20 @@ def load_folder_children(
         except ValueError:
             rel_path_str = entry_name
 
+        # Optimize: Single pathspec check for directories
+        # NOTE: Single check is sufficient because:
+        # 1. DIRECTORY_QUICK_SKIP handles common dirs by name
+        # 2. Pathspec uses gitignore semantics where unanchored patterns match at any level
+        # 3. Anchored patterns (starting with /) correctly match against rel_path_str
         if entry.is_dir():
             rel_path_str += "/"
-            # Cũng check entry name với trailing slash
-            if spec.match_file(entry_name + "/"):
+            # Check if should be ignored (single check instead of 2)
+            if spec.match_file(rel_path_str):
                 continue
-
-        # Check if should be ignored
-        if spec.match_file(rel_path_str):
-            continue
+        else:
+            # Check if should be ignored
+            if spec.match_file(rel_path_str):
+                continue
 
         # Add child
         if entry.is_dir():

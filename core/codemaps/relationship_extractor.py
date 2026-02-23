@@ -76,16 +76,19 @@ def extract_relationships(
 
         relationships: list[Relationship] = []
 
+        # Split lines once and pass to all extractors (OPTIMIZATION)
+        lines = content.split("\n")
+
         # Extract function calls
-        calls = _extract_calls(language, tree, content, ext, file_path)
+        calls = _extract_calls(language, tree, lines, ext, file_path)
         relationships.extend(calls)
 
         # Extract class inheritance
-        inheritance = _extract_inheritance(language, tree, content, ext, file_path)
+        inheritance = _extract_inheritance(language, tree, lines, ext, file_path)
         relationships.extend(inheritance)
 
         # Extract imports (currently for JS/TS)
-        imports = _extract_imports(language, tree, content, ext, file_path)
+        imports = _extract_imports(language, tree, lines, ext, file_path)
         relationships.extend(imports)
 
         # Filter by known_symbols nếu có
@@ -104,10 +107,13 @@ def extract_relationships(
 
 
 def _extract_calls(
-    language: Language, tree, content: str, ext: str, file_path: str
+    language: Language, tree, lines: list[str], ext: str, file_path: str
 ) -> list[Relationship]:
     """
     Extract function/method calls từ AST.
+
+    Args:
+        lines: Pre-split lines from content (OPTIMIZATION)
 
     Returns:
         List Relationship với kind=CALLS
@@ -134,7 +140,6 @@ def _extract_calls(
         captures = query_cursor.captures(tree.root_node)
 
         relationships: list[Relationship] = []
-        lines = content.split("\n")
 
         # OPTIMIZATION: Build function boundaries map once
         boundaries_map = _build_function_boundaries_map(tree.root_node, lines)
@@ -172,10 +177,13 @@ def _extract_calls(
 
 
 def _extract_inheritance(
-    language: Language, tree, content: str, ext: str, file_path: str
+    language: Language, tree, lines: list[str], ext: str, file_path: str
 ) -> list[Relationship]:
     """
     Extract class inheritance từ AST.
+
+    Args:
+        lines: Pre-split lines from content (OPTIMIZATION)
 
     Returns:
         List Relationship với kind=INHERITS
@@ -205,7 +213,6 @@ def _extract_inheritance(
         captures = query_cursor.captures(tree.root_node)
 
         relationships: list[Relationship] = []
-        lines = content.split("\n")
 
         # Group captures by class
         class_bases: dict[str, list[tuple[str, int]]] = {}
@@ -291,9 +298,14 @@ def _extract_js_ts_inheritance(tree) -> list[Relationship]:
 
 
 def _extract_imports(
-    language: Language, tree, content: str, ext: str, file_path: str
+    language: Language, tree, lines: list[str], ext: str, file_path: str
 ) -> list[Relationship]:
-    """Extract imports for JS/TS and resolve to workspace-relative modules when possible."""
+    """
+    Extract imports for JS/TS and resolve to workspace-relative modules when possible.
+
+    Args:
+        lines: Pre-split lines from content (OPTIMIZATION)
+    """
     if ext not in {"js", "jsx", "ts", "tsx", "mjs", "cjs", "mts", "cts"}:
         return []
 
@@ -308,7 +320,6 @@ def _extract_imports(
 
         relationships: list[Relationship] = []
         seen: set[tuple[str, int]] = set()
-        lines = content.split("\n")
 
         for _capture_name, nodes in captures.items():
             for node in nodes:

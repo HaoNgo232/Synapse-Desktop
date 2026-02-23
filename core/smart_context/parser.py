@@ -8,7 +8,7 @@ Refactored to use modular config and loader.
 """
 
 import os
-import hashlib
+import threading
 from typing import Optional
 from tree_sitter import Parser, Node, Language, Tree  # type: ignore
 
@@ -18,9 +18,14 @@ from core.smart_context.loader import get_language, get_query
 # Chunk separator giống Repomix
 CHUNK_SEPARATOR = "⋮----"
 
-# LRU Cache cho relationships (max 128 files)
+# LRU Cache cho relationships
+# Default 128 files - sufficient for most projects
+# For large projects (50k+ files), consider increasing via environment variable
+# Set SYNAPSE_RELATIONSHIP_CACHE_SIZE to override (e.g., 8192 or 16384)
+
+_CACHE_MAX_SIZE = int(os.environ.get("SYNAPSE_RELATIONSHIP_CACHE_SIZE", "128"))
 _RELATIONSHIPS_CACHE: dict[str, str] = {}
-_CACHE_MAX_SIZE = 128
+_CACHE_LOCK = threading.Lock()
 
 
 def _get_cache_key(file_path: str, content_hash: str) -> str:
@@ -36,8 +41,9 @@ def _get_cached_relationships(file_path: str, content_hash: str) -> str | None:
         Cached string nếu có, None nếu cache miss
         "" (empty string) nếu cached result là 'no relationships'
     """
-    key = _get_cache_key(file_path, content_hash)
-    return _RELATIONSHIPS_CACHE.get(key)
+    with _CACHE_LOCK:
+        key = _get_cache_key(file_path, content_hash)
+        return _RELATIONSHIPS_CACHE.get(key)
 
 
 def _cache_relationships(file_path: str, content_hash: str, result: str | None) -> None:
@@ -47,15 +53,16 @@ def _cache_relationships(file_path: str, content_hash: str, result: str | None) 
     Args:
         result: Relationships section string, hoặc "" nếu không có relationships
     """
-    # Evict oldest entries nếu cache đầy
-    if len(_RELATIONSHIPS_CACHE) >= _CACHE_MAX_SIZE:
-        # Remove 25% oldest entries (simple LRU approximation)
-        keys_to_remove = list(_RELATIONSHIPS_CACHE.keys())[: _CACHE_MAX_SIZE // 4]
-        for k in keys_to_remove:
-            del _RELATIONSHIPS_CACHE[k]
+    with _CACHE_LOCK:
+        # Evict oldest entries nếu cache đầy
+        if len(_RELATIONSHIPS_CACHE) >= _CACHE_MAX_SIZE:
+            # Remove 25% oldest entries (simple LRU approximation)
+            keys_to_remove = list(_RELATIONSHIPS_CACHE.keys())[: _CACHE_MAX_SIZE // 4]
+            for k in keys_to_remove:
+                _RELATIONSHIPS_CACHE.pop(k, None)  # safe if already deleted
 
-    key = _get_cache_key(file_path, content_hash)
-    _RELATIONSHIPS_CACHE[key] = result if result else ""
+        key = _get_cache_key(file_path, content_hash)
+        _RELATIONSHIPS_CACHE[key] = result if result else ""
 
 
 def smart_parse(
@@ -166,12 +173,19 @@ def _build_relationships_section(
     OPTIMIZATIONS:
     - Truyền tree để tránh double parsing (~50% faster)
     - LRU cache để tránh re-extract (~O(1) cho repeated calls)
+
+    CACHE KEY DESIGN:
+    - Uses hash(content) for cache invalidation
+    - hash() is fast (O(1) after first call, cached by CPython)
+    - Birthday collision probability is negligible for typical use
+    - NOTE: hash() is randomized per-process (PYTHONHASHSEED), so cache
+      cannot be persisted to disk or shared between processes
     """
-    # Tính content hash cho caching
-    content_hash = hashlib.md5(content.encode()).hexdigest()[:16]
+    # Use Python's built-in hash (cached, O(1), no allocation)
+    content_key = str(hash(content))
 
     # Check cache
-    cached = _get_cached_relationships(file_path, content_hash)
+    cached = _get_cached_relationships(file_path, content_key)
     if cached is not None:
         return cached if cached else None  # "" means no relationships
 
@@ -185,7 +199,7 @@ def _build_relationships_section(
         )
 
         if not relationships:
-            _cache_relationships(file_path, content_hash, "")  # Cache empty result
+            _cache_relationships(file_path, content_key, "")  # Cache empty result
             return None
 
         # Group by kind
@@ -216,7 +230,7 @@ def _build_relationships_section(
                 lines.append(f"- Imports `{rel.target}` (line {rel.source_line})")
 
         result = "\n".join(lines)
-        _cache_relationships(file_path, content_hash, result)  # Cache result
+        _cache_relationships(file_path, content_key, result)  # Cache result
         return result
 
     except Exception as e:

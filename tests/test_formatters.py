@@ -13,10 +13,8 @@ import json
 from pathlib import Path
 
 from core.prompting.types import FileEntry
-from core.prompting.formatters.markdown import (
-    format_files_markdown,
-    _calculate_max_backticks,
-)
+from core.prompting.formatters.markdown import format_files_markdown
+from core.prompting.delimiter_utils import calculate_markdown_delimiter
 from core.prompting.formatters.xml import (
     format_files_xml,
     generate_file_summary_xml,
@@ -55,40 +53,31 @@ def _make_entry(
 
 
 class TestCalculateMaxBackticks:
-    """Test _calculate_max_backticks() helper."""
+    """Test calculate_markdown_delimiter() helper."""
 
     def test_no_backticks(self):
         """Content khong co backticks -> 3."""
-        entries = [_make_entry(content="no backticks here")]
-        assert _calculate_max_backticks(entries) == 3
+        contents = ["no backticks here"]
+        assert calculate_markdown_delimiter(contents) == "```"
 
     def test_triple_backticks(self):
         """Content co ``` -> can 4."""
-        entries = [_make_entry(content="some ```code``` here")]
-        assert _calculate_max_backticks(entries) == 4
+        contents = ["some ```code``` here"]
+        assert calculate_markdown_delimiter(contents) == "````"
 
     def test_quad_backticks(self):
         """Content co ```` -> can 5."""
-        entries = [_make_entry(content="text ````nested```` end")]
-        assert _calculate_max_backticks(entries) == 5
+        contents = ["text ````nested```` end"]
+        assert calculate_markdown_delimiter(contents) == "`````"
 
     def test_empty_entries(self):
         """Empty list -> 3."""
-        assert _calculate_max_backticks([]) == 3
+        assert calculate_markdown_delimiter([]) == "```"
 
-    def test_skipped_entries_ignored(self):
-        """Entries voi content=None bi bo qua."""
-        entries = [_make_entry(content=None, error="Binary file")]
-        assert _calculate_max_backticks(entries) == 3
-
-    def test_multiple_entries_max(self):
-        """Nhieu entries lay max backticks."""
-        entries = [
-            _make_entry(content="no ticks"),
-            _make_entry(content="has ``` triple"),
-            _make_entry(content="has ````` quintuple"),
-        ]
-        assert _calculate_max_backticks(entries) == 6
+    def test_multiple_contents(self):
+        """Multiple contents with different backtick counts."""
+        contents = ["no backticks", "has ``` here", "has ```` here"]
+        assert calculate_markdown_delimiter(contents) == "`````"
 
 
 class TestFormatFilesMarkdown:

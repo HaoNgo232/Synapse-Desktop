@@ -84,6 +84,9 @@ class SynapseMainWindow(QMainWindow):
         self._memory_monitor = get_memory_monitor()
         self._memory_monitor.on_update = self._on_memory_update
 
+        # Set window icon (de hien thi icon tren taskbar)
+        self._set_window_icon()
+
         # Setup window
         self._update_window_title()
         self.setMinimumSize(900, 640)
@@ -109,6 +112,31 @@ class SynapseMainWindow(QMainWindow):
         # Start memory monitoring
         self._memory_monitor.start()
 
+    # ── Window icon ───────────────────────────────────────────────
+    def _set_window_icon(self) -> None:
+        """Set window icon tu assets/icon.ico hoac icon.png."""
+        # Tim icon file: uu tien .ico, sau do .png
+        # Xu ly ca truong hop chay tu source code va tu EXE (PyInstaller bundle)
+        base_path = Path(__file__).parent
+        
+        # Neu la PyInstaller bundle, icon co the o trong _MEIPASS
+        if hasattr(sys, "_MEIPASS"):
+            assets_dir = Path(sys._MEIPASS) / "assets"
+        else:
+            assets_dir = base_path / "assets"
+        
+        # Tim icon file
+        icon_path = None
+        if (assets_dir / "icon.ico").exists():
+            icon_path = assets_dir / "icon.ico"
+        elif (assets_dir / "icon.png").exists():
+            icon_path = assets_dir / "icon.png"
+        
+        # Set icon neu tim thay
+        if icon_path:
+            icon = QIcon(str(icon_path))
+            self.setWindowIcon(icon)
+    
     # ── Window title (dynamic) ────────────────────────────────────
     def _update_window_title(self) -> None:
         """Set window title: 'Synapse Desktop — [Folder Name]'."""
@@ -662,6 +690,11 @@ def main() -> None:
     import multiprocessing
     multiprocessing.freeze_support()
 
+    # CRITICAL for Windows taskbar icon: Set AppUserModelID TRƯỚC KHI tạo QApplication
+    # Windows nhóm app theo AppUserModelID - nếu không set, Windows sẽ dùng icon của Python
+    from core.utils.windows_utils import set_app_user_model_id, get_default_app_user_model_id
+    set_app_user_model_id(get_default_app_user_model_id())
+
     from config.paths import ensure_app_directories
     from services.encoder_registry import initialize_encoder
 
@@ -678,6 +711,23 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Synapse Desktop")
     app.setOrganizationName("Synapse")
+
+    # Set application icon (de hien thi icon tren taskbar)
+    # Tim icon file: uu tien .ico, sau do .png
+    base_path = Path(__file__).parent
+    if hasattr(sys, "_MEIPASS"):
+        assets_dir = Path(sys._MEIPASS) / "assets"
+    else:
+        assets_dir = base_path / "assets"
+    
+    icon_path = None
+    if (assets_dir / "icon.ico").exists():
+        icon_path = assets_dir / "icon.ico"
+    elif (assets_dir / "icon.png").exists():
+        icon_path = assets_dir / "icon.png"
+    
+    if icon_path:
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     # Apply global dark stylesheet (single source of truth)
     apply_theme(app)

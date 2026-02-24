@@ -163,7 +163,14 @@ All Python dependencies are listed in `requirements.txt`.
 
 **Requirements**: Python 3.10+, Git (optional, for branch detection and diff context)
 
-### Auto-script (Linux/macOS)
+### Quick Start (Windows)
+
+Double-click `start.bat`.
+
+### Quick Start (Linux/macOS)
+
+Use `start.sh`:
+
 ~~~bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
@@ -172,6 +179,7 @@ chmod +x start.sh
 ~~~
 
 ### Manual Installation
+
 ~~~bash
 # 1. Clone the repository
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
@@ -199,6 +207,26 @@ pip install scandir-rs
 ~~~
 
 Synapse automatically detects and uses it when available; no configuration needed.
+
+---
+
+## Building Windows EXE
+
+To create a Windows `.exe` file, simply run:
+
+~~~powershell
+.\build-windows.ps1
+~~~
+
+### Requirements
+
+- Python 3.10+ with virtual environment set up
+- PyInstaller (will be automatically installed if missing)
+
+### Output
+
+After a successful build, the EXE file will be located at:
+`build/dist/Synapse-Desktop/Synapse-Desktop.exe`
 
 ---
 

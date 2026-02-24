@@ -394,16 +394,30 @@ class SynapseMainWindow(QMainWindow):
             return "0 files | 0 tokens"
 
     def _detect_git_branch(self) -> Optional[str]:
-        """Detect current git branch for the workspace (returns None if not a git repo)."""
+        """Detect current git branch for the workspace (returns None if not a git repo).
+
+        WINDOWS EXE FIX: Uses CREATE_NO_WINDOW flag to prevent a console
+        window from flashing every time this method is called.
+        The status bar timer calls this every 1.2s, so without the flag
+        users would see a CMD window popping up repeatedly.
+        """
         if not self.workspace_path:
             return None
         try:
+            # On Windows, prevent subprocess from creating a visible console window.
+            # This is the #1 cause of "flashing black window" in PyInstaller builds.
+            import platform
+            creationflags = 0
+            if platform.system() == "Windows":
+                creationflags = subprocess.CREATE_NO_WINDOW  # 0x08000000
+
             result = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
                 cwd=str(self.workspace_path),
                 capture_output=True,
                 text=True,
                 timeout=3,
+                creationflags=creationflags,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -642,6 +656,12 @@ class SynapseMainWindow(QMainWindow):
 
 def main() -> None:
     """Entry point for Synapse Desktop."""
+    # CRITICAL for Windows EXE: Prevent fork bomb when using multiprocessing.
+    # Without this, each spawned process re-executes main(), creating infinite
+    # window spawning loops (the "flashing windows" issue).
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     from config.paths import ensure_app_directories
     from services.encoder_registry import initialize_encoder
 

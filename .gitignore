@@ -11,3 +11,4 @@ stubs/
 =
 lint_output.json
 .synapse
+build-win/

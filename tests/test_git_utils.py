@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import subprocess
 import os
+import sys
 
 from core.utils.git_utils import (
     is_git_repo,
@@ -180,6 +181,24 @@ class TestGetGitLogs:
                     assert result is not None
                     assert len(result.commits) == 0
                     assert result.log_content == ""
+
+    def test_windows_sanitizes_null_char_in_log_content(self, tmp_path):
+        """Tren Windows, log_content khong duoc chua NULL char (\\x00) de tranh clipboard truncate."""
+        # Format: \x00hash|date|subject\nfile1\nfile2
+        mock_log = "\x00abc1234|2024-12-20|First commit\nfile1.py\nfile2.py"
+        mock_log += "\x00def5678|2024-12-19|Second commit\nfile3.py"
+
+        with patch("shutil.which", return_value="/usr/bin/git"):
+            with patch("core.utils.git_utils.is_git_repo", return_value=True):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = MagicMock(stdout=mock_log, returncode=0)
+                    with patch.object(sys, "platform", "win32"):
+                        result = get_git_logs(tmp_path, max_commits=10)
+
+        assert result is not None
+        assert "\x00" not in result.log_content
+        # Ensure still contains commit headers
+        assert "abc1234|2024-12-20|First commit" in result.log_content
 
     def test_max_commits_parameter(self, tmp_path):
         """max_commits parameter is passed to git command."""

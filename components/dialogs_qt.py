@@ -345,7 +345,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
             return
 
-        if not result.diff_content.strip():
+        if not (result.diff_content or "").strip():
             self._status.setText("No changes found")
             self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
             return

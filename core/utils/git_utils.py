@@ -2,8 +2,9 @@
 Git Utilities - Handle git operations (diff, log, status)
 """
 
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List
@@ -201,9 +202,15 @@ def get_git_logs(root_path: Path, max_commits: int = 10) -> Optional[GitLogResul
         raw_output = result.stdout
         commits = _parse_git_log(raw_output, sep)
 
+        # Windows clipboard/app destination co the truncate text khi gap NULL char (\x00).
+        # Chi sanitize log_content tren Windows de tranh anh huong behavior tren Linux/macOS.
+        display_output = raw_output
+        if display_output and "\x00" in display_output and sys.platform.startswith("win"):
+            display_output = display_output.replace("\x00", "\n")
+
         return GitLogResult(
             commits=commits,
-            log_content=raw_output,  # Raw content might be useful for debugging
+            log_content=display_output,  # Raw content might be useful for debugging
         )
 
     except Exception as e:
@@ -296,7 +303,8 @@ def get_diff_only(
                 text=True,
                 timeout=30,
             )
-            if result.returncode == 0 and result.stdout.strip():
+            result_stdout = result.stdout or ""
+            if result.returncode == 0 and result_stdout.strip():
                 unstaged_diff = subprocess.run(
                     ["git", "diff"],
                     cwd=workspace_path,
@@ -304,16 +312,17 @@ def get_diff_only(
                     text=True,
                     timeout=30,
                 )
-                if unstaged_diff.stdout.strip():
+                unstaged_stdout = unstaged_diff.stdout or ""
+                if unstaged_stdout.strip():
                     diff_parts.append("# Unstaged Changes (Working Tree)\n")
-                    diff_parts.append(unstaged_diff.stdout)
+                    diff_parts.append(unstaged_stdout)
                     # Parse stats
-                    stats = _parse_diff_stats(result.stdout)
+                    stats = _parse_diff_stats(result_stdout)
                     total_files += stats[0]
                     total_insertions += stats[1]
                     total_deletions += stats[2]
                     # Collect changed files
-                    changed_files.extend(_extract_changed_files(result.stdout))
+                    changed_files.extend(_extract_changed_files(result_stdout))
 
         if include_staged:
             # Staged changes (index vs HEAD)
@@ -324,7 +333,8 @@ def get_diff_only(
                 text=True,
                 timeout=30,
             )
-            if result.returncode == 0 and result.stdout.strip():
+            result_stdout = result.stdout or ""
+            if result.returncode == 0 and result_stdout.strip():
                 staged_diff = subprocess.run(
                     ["git", "diff", "--cached"],
                     cwd=workspace_path,
@@ -332,15 +342,16 @@ def get_diff_only(
                     text=True,
                     timeout=30,
                 )
-                if staged_diff.stdout.strip():
+                staged_stdout = staged_diff.stdout or ""
+                if staged_stdout.strip():
                     diff_parts.append("\n# Staged Changes (Ready to Commit)\n")
-                    diff_parts.append(staged_diff.stdout)
-                    stats = _parse_diff_stats(result.stdout)
+                    diff_parts.append(staged_stdout)
+                    stats = _parse_diff_stats(result_stdout)
                     total_files += stats[0]
                     total_insertions += stats[1]
                     total_deletions += stats[2]
                     # Collect changed files
-                    changed_files.extend(_extract_changed_files(result.stdout))
+                    changed_files.extend(_extract_changed_files(result_stdout))
 
         # 2. Recent commits diff
         commits_included = 0
@@ -353,8 +364,9 @@ def get_diff_only(
                 text=True,
                 timeout=30,
             )
-            if result.returncode == 0 and result.stdout.strip():
-                commit_lines = result.stdout.strip().split("\n")
+            result_stdout = result.stdout or ""
+            if result.returncode == 0 and result_stdout.strip():
+                commit_lines = result_stdout.strip().split("\n")
                 commits_included = len(commit_lines)
 
                 # Get combined diff
@@ -365,7 +377,8 @@ def get_diff_only(
                     text=True,
                     timeout=60,
                 )
-                if diff_result.returncode == 0 and diff_result.stdout.strip():
+                diff_stdout = diff_result.stdout or ""
+                if diff_result.returncode == 0 and diff_stdout.strip():
                     diff_parts.append(
                         f"\n# Recent Commits ({commits_included} commits)\n"
                     )
@@ -384,7 +397,7 @@ def get_diff_only(
                         timeout=30,
                     )
                     if stat_result.returncode == 0:
-                        stats = _parse_diff_stats(stat_result.stdout)
+                        stats = _parse_diff_stats(stat_result.stdout or "")
                         total_files += stats[0]
                         total_insertions += stats[1]
                         total_deletions += stats[2]

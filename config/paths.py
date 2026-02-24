@@ -30,10 +30,26 @@ _LEGACY_APP_DIR = Path.home() / f".{APP_NAME}"  # ~/.synapse-desktop (cũ)
 
 
 def _get_app_dir() -> Path:
-    """Lấy thư mục app data, ưu tiên XDG để đảm bảo persistence."""
+    """Lấy thư mục app data, ưu tiên XDG/APPDATA để đảm bảo persistence.
+
+    Windows: %APPDATA%/synapse-desktop (e.g. C:/Users/X/AppData/Roaming/synapse-desktop)
+    Linux:   $XDG_CONFIG_HOME/synapse-desktop hoặc ~/.config/synapse-desktop
+    macOS:   ~/Library/Application Support/synapse-desktop (via XDG fallback)
+    """
+    # 1. Explicit XDG override (cross-platform)
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
         return Path(xdg) / APP_NAME
+
+    # 2. Windows: use %APPDATA% (standard location)
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / APP_NAME
+        # Fallback for Windows if APPDATA not set (very rare)
+        return Path.home() / "AppData" / "Roaming" / APP_NAME
+
+    # 3. Linux/macOS: ~/.config/
     return Path.home() / ".config" / APP_NAME
 
 

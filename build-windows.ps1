@@ -270,7 +270,9 @@ Write-Host "[7/7] Verifying build output..." -ForegroundColor Green
 if ($OneFile) {
     $exePath = Join-Path $DIST_DIR "$APP_NAME.exe"
 } else {
-    $exePath = Join-Path $DIST_DIR $APP_NAME "$APP_NAME.exe"
+    # Join-Path chi nhan 2 tham so (Path, ChildPath), nen can join 2 lan.
+    $appDir = Join-Path $DIST_DIR $APP_NAME
+    $exePath = Join-Path $appDir "$APP_NAME.exe"
 }
 
 if (Test-Path $exePath) {

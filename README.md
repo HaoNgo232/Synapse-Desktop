@@ -5,12 +5,14 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Linux%20(Stable)%20%7C%20Windows%20(Beta)-orange)
 ![Qt](https://img.shields.io/badge/GUI-PySide6%20(Qt6)-41cd52)
 ![Version](https://img.shields.io/badge/version-1.0.0-purple)
 
 <!-- [UPDATED] Expanded project description -->
 A desktop application that bridges your codebase and AI assistants (ChatGPT, Claude, Gemini, or any OpenAI-compatible API). Synapse Desktop lets you select files from a project tree, package them into structured prompts with accurate token counts, and then apply AI-generated code changes back to your codebase — all with visual diffs, auto-backup, and continuous memory across sessions.
+
+> ⚠️ **Platform Status:** Currently stable on **Linux**. The **Windows** version is in experimental/beta phase. **macOS** is currently unsupported/untested due to lack of testing environments.
 
 - **Send Context**: Select files in your project → copy structured prompt → paste into ChatGPT / Claude / Gemini
 - **Apply Changes**: Paste XML response from AI → view visual diff → apply to codebase with auto-backup
@@ -163,11 +165,11 @@ All Python dependencies are listed in `requirements.txt`.
 
 **Requirements**: Python 3.10+, Git (optional, for branch detection and diff context)
 
-### Quick Start (Windows)
+### Quick Start (Windows - Experimental)
 
 Double-click `start.bat`.
 
-### Quick Start (Linux/macOS)
+### Quick Start (Linux - Stable)
 
 Use `start.sh`:
 

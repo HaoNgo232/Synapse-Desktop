@@ -96,12 +96,23 @@ class TokenizationService(ITokenizationService):
             return _estimate_tokens(text)
 
         try:
-            # HF tokenizer su dung .encode().ids
-            if self._encoder_type == "hf":
-                return len(encoder.encode(text).ids)
-            # rs-bpe va tiktoken su dung .encode()
+            # Phân tách cách lấy base token count
+            if getattr(self, "_encoder_type", "") == "hf":
+                # HF tokenizer
+                base_count = len(encoder.encode(text).ids)
             else:
-                return len(encoder.encode(text))
+                # rs-bpe va tiktoken
+                base_count = len(encoder.encode(text))
+
+            # --- DINH CHINH CLAUDE HEAVY WHITESPACE PENALTY ---
+            # Khi luong khoang trang nhiu, Claude tokenizer tokenization hieu qua rat thap
+            if self._tokenizer_repo == "Xenova/claude-tokenizer":
+                whitespace_count = text.count(" ") + text.count("\t") + text.count("\n")
+                # Cong them 3% mac dinh (cấu trúc hệ thống) va khoang 0.25 token cho moi whitespace/tab/newline
+                claude_corrected = int(base_count * 1.03) + int(whitespace_count * 0.25)
+                return claude_corrected
+
+            return base_count
         except Exception:
             # Fallback neu encode that bai
             return _estimate_tokens(text)

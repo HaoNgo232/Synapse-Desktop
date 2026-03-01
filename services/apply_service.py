@@ -122,8 +122,17 @@ def save_memory_block(
                 f"<synapse_memory>\n{b.strip()}\n</synapse_memory>" for b in blocks
             ]
 
-            memory_file.write_text(
-                "\n\n".join(formatted_blocks) + "\n", encoding="utf-8"
-            )
+            # Atomic write using temp file
+            import os
+
+            tmp_file = memory_file.with_suffix(".tmp")
+            tmp_file.write_text("\n\n".join(formatted_blocks) + "\n", encoding="utf-8")
+            os.replace(str(tmp_file), str(memory_file))
         except Exception as e:
             logger.error("Failed to save synapse memory: %s", e)
+            try:
+                tmp_file = memory_file.with_suffix(".tmp")
+                if tmp_file.exists():
+                    tmp_file.unlink()
+            except OSError:
+                pass

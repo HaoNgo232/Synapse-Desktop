@@ -118,13 +118,24 @@ def remove_recent_folder(folder_path: str) -> bool:
 
             data = {"folders": folders, "updated_at": datetime.now().isoformat()}
 
-            RECENT_FOLDERS_FILE.write_text(
+            # Atomic write using temp file
+            import os
+
+            tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+            tmp_file.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
             )
+            os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
             return True
 
     except (OSError, IOError) as e:
         log_error(f"Failed to remove recent folder: {e}")
+        try:
+            tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+            if tmp_file.exists():
+                tmp_file.unlink()
+        except OSError:
+            pass
 
     return False
 

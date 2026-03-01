@@ -101,6 +101,7 @@ class MemoryMonitor:
         self._is_running = False
         if self._timer:
             self._timer.stop()
+            self._timer.deleteLater()
             self._timer = None
 
     def set_token_cache_count(self, count: int):

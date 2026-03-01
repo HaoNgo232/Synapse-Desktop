@@ -106,6 +106,13 @@ def load_session_state() -> Optional[SessionState]:
             data = json.loads(content)
             if candidate != SESSION_FILE:
                 log_info(f"Recovered session from {candidate.name}")
+                # Promote .tmp to main file
+                try:
+                    import os
+
+                    os.replace(str(candidate), str(SESSION_FILE))
+                except OSError:
+                    pass
             break
         except (OSError, json.JSONDecodeError) as e:
             log_warning(f"Failed to parse {candidate.name}: {e}")

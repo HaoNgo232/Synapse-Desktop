@@ -452,10 +452,14 @@ class SynapseMainWindow(QMainWindow):
         workspace = self.workspace_path
         if not workspace:
             self._cached_git_branch = None
+            self._git_branch_pending = False
             return
         if self._git_branch_pending:
             return  # Previous detection still running
         self._git_branch_pending = True
+
+        # Capture workspace at schedule time to detect stale results
+        expected_workspace = workspace
 
         def _detect() -> Optional[str]:
             try:
@@ -481,6 +485,9 @@ class SynapseMainWindow(QMainWindow):
 
         def _on_result(branch: object) -> None:
             self._git_branch_pending = False
+            # Discard result if workspace changed while detection was running
+            if self.workspace_path != expected_workspace:
+                return
             # branch is Optional[str] but signal emits object
             self._cached_git_branch = branch if isinstance(branch, str) else None
 
@@ -527,6 +534,8 @@ class SynapseMainWindow(QMainWindow):
     def _set_workspace(self, path: Path) -> None:
         """Set workspace path and notify all views."""
         self.workspace_path = path
+        self._cached_git_branch = None  # Clear stale branch
+        self._git_branch_pending = False  # Allow immediate re-detection
 
         # Update top bar breadcrumb
         self._folder_path_label.setText(str(path))

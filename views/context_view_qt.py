@@ -369,6 +369,7 @@ class ContextViewQt(
                 sub = menu.addMenu(tmpl.display_name)
                 if tmpl.description:
                     sub.setToolTip(tmpl.description)
+                    sub.menuAction().setToolTip(tmpl.description)
 
                 ins = sub.addAction("Insert")
                 ins.setData({"action": "insert", "id": tmpl.template_id})

@@ -5,7 +5,7 @@ Chua tat ca cac methods xay dung UI components.
 """
 
 import os
-from typing import TYPE_CHECKING
+from typing import Any
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -34,14 +34,11 @@ from config.output_format import (
 )
 from services.settings_manager import load_app_settings
 
-if TYPE_CHECKING:
-    from views.context_view_qt import ContextViewQt
-
 
 class UIBuilderMixin:
     """Mixin chua tat ca UI building methods cho ContextViewQt."""
 
-    def _build_ui(self: "ContextViewQt") -> None:
+    def _build_ui(self: Any) -> None:
         """Xay dung UI voi top toolbar + 3-panel splitter (30:45:25)."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
@@ -87,7 +84,7 @@ class UIBuilderMixin:
 
         layout.addWidget(splitter)
 
-    def _build_toolbar(self: "ContextViewQt") -> QFrame:
+    def _build_toolbar(self: Any) -> QFrame:
         """Build top toolbar chua controls va token counter."""
         toolbar = QFrame()
         toolbar.setFixedHeight(40)
@@ -294,7 +291,7 @@ class UIBuilderMixin:
 
         return toolbar
 
-    def _build_left_panel(self: "ContextViewQt") -> QFrame:
+    def _build_left_panel(self: Any) -> QFrame:
         """Build left panel chi chua header + file tree (controls da len toolbar)."""
         panel = QFrame()
         panel.setProperty("class", "surface")
@@ -323,7 +320,7 @@ class UIBuilderMixin:
 
         return panel
 
-    def _build_instructions_panel(self: "ContextViewQt") -> QFrame:
+    def _build_instructions_panel(self: Any) -> QFrame:
         """Build center panel voi instructions textarea va format selector."""
         panel = QFrame()
         panel.setProperty("class", "surface")
@@ -366,6 +363,8 @@ class UIBuilderMixin:
         self._template_btn.setToolTip("Insert a task-specific prompt template")
 
         self._template_menu = QMenu(self._template_btn)
+        # Required for QAction tooltips to show while hovering menu items
+        self._template_menu.setToolTipsVisible(True)
         self._template_menu.setStyleSheet(
             f"""
             QMenu {{
@@ -576,7 +575,7 @@ class UIBuilderMixin:
 
         return panel
 
-    def _build_actions_panel(self: "ContextViewQt") -> QFrame:
+    def _build_actions_panel(self: Any) -> QFrame:
         """Build right panel: Token stats (top) -> Copy buttons -> Status (bottom)."""
         panel = QFrame()
         panel.setProperty("class", "surface")
@@ -603,7 +602,7 @@ class UIBuilderMixin:
 
         return panel
 
-    def _build_action_buttons(self: "ContextViewQt") -> QWidget:
+    def _build_action_buttons(self: Any) -> QWidget:
         """Build copy buttons voi visual hierarchy: CTA -> Secondary -> Tertiary."""
         widget = QWidget()
         widget.setStyleSheet("background-color: transparent; border: none;")

@@ -130,6 +130,54 @@ class BuiltInTemplateProvider(TemplateProvider):
                 description="Phân tích execution flow, data flow, control flow và phát hiện vấn đề về luồng xử lý",
                 is_custom=False,
             ),
+            "architecture_reviewer": TemplateInfo(
+                template_id="architecture_reviewer",
+                display_name="Architecture Reviewer",
+                description="Review kiến trúc tổng thể, SOLID compliance, design patterns và long-term maintainability",
+                is_custom=False,
+            ),
+            "code_review_gate": TemplateInfo(
+                template_id="code_review_gate",
+                display_name="Code Review Gate",
+                description="Pre-merge quality gate với SOLID/Clean Code checklist và severity-based recommendations",
+                is_custom=False,
+            ),
+            "tech_debt_analyzer": TemplateInfo(
+                template_id="tech_debt_analyzer",
+                display_name="Tech Debt Analyzer",
+                description="Phát hiện, đo lường và prioritize technical debt với debt scoring và repayment roadmap",
+                is_custom=False,
+            ),
+            "code_explainer": TemplateInfo(
+                template_id="code_explainer",
+                display_name="Code Explainer",
+                description="Giải thích kiến trúc, components và execution flows để onboard nhanh vào codebase mới",
+                is_custom=False,
+            ),
+            "pull_request_generator": TemplateInfo(
+                template_id="pull_request_generator",
+                display_name="PR Generator",
+                description="Tạo tiêu đề và mô tả Pull Request chuẩn Conventional Commits từ git diff",
+                is_custom=False,
+            ),
+            "dependency_auditor": TemplateInfo(
+                template_id="dependency_auditor",
+                display_name="Dependency Auditor",
+                description="Kiểm tra dependencies về security vulnerabilities, licenses, và outdated packages",
+                is_custom=False,
+            ),
+            "devops_reviewer": TemplateInfo(
+                template_id="devops_reviewer",
+                display_name="DevOps Reviewer",
+                description="Review Docker, K8s, CI/CD pipelines và infrastructure configs về security và performance",
+                is_custom=False,
+            ),
+            "database_optimizer": TemplateInfo(
+                template_id="database_optimizer",
+                display_name="Database Optimizer",
+                description="Tối ưu database queries, indexes, schema design và caching strategy",
+                is_custom=False,
+            ),
         }
 
     def list_templates(self) -> list[TemplateInfo]:

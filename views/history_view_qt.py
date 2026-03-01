@@ -933,17 +933,72 @@ class HistoryViewQt(QWidget):
 
     @Slot(QListWidgetItem)
     def _on_entry_clicked(self, item: QListWidgetItem) -> None:
-        """Handle khi user click vào một entry."""
+        """Handle khi user click vào một entry.
+
+        Only updates the styling of the previously-selected and
+        newly-selected items instead of re-rendering the entire list.
+        """
         entry_id = item.data(Qt.ItemDataRole.UserRole)
         if not entry_id:
             return
 
+        old_selected_id = self.selected_entry_id
         self.selected_entry_id = entry_id
-        self._render_entry_list()  # Re-render để update selected state
+
+        # Update styling for old and new selected items in-place
+        self._update_entry_selection_style(old_selected_id, selected=False)
+        self._update_entry_selection_style(entry_id, selected=True)
 
         entry = get_entry_by_id(entry_id)
         if entry:
             self._show_detail(entry)
+
+    def _update_entry_selection_style(
+        self, entry_id: Optional[str], selected: bool
+    ) -> None:
+        """Update the visual style of a single entry widget without re-rendering.
+
+        Walks the list to find the widget matching entry_id and applies
+        the selected/deselected stylesheet directly.
+        """
+        if not entry_id:
+            return
+
+        for i in range(self._entry_list.count()):
+            list_item = self._entry_list.item(i)
+            if not list_item:
+                continue
+            if list_item.data(Qt.ItemDataRole.UserRole) != entry_id:
+                continue
+
+            widget = self._entry_list.itemWidget(list_item)
+            if not widget:
+                break
+
+            if selected:
+                widget.setStyleSheet(
+                    f"""
+                    QFrame {{
+                        background-color: rgba(124, 111, 255, 0.1);
+                        border-left: 4px solid {ThemeColors.PRIMARY};
+                        border-radius: 8px;
+                    }}
+                """
+                )
+            else:
+                widget.setStyleSheet(
+                    """
+                    QFrame {
+                        background-color: transparent;
+                        border-left: 4px solid transparent;
+                        border-radius: 8px;
+                    }
+                    QFrame:hover {
+                        background-color: rgba(45, 45, 68, 0.4);
+                    }
+                """
+                )
+            break
 
     # ═══════════════════════════════════════════════════════════════
     # INTERNAL - DETAIL PANEL

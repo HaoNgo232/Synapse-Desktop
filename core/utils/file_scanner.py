@@ -291,6 +291,10 @@ class FileScanner:
                     if is_system_path(Path(abs_file_path)):
                         continue
 
+                    # Skip binary files (parity with Python scanner)
+                    if is_binary_file(Path(abs_file_path)):
+                        continue
+
                     # Check ignore patterns
                     try:
                         rel_path = Path(abs_file_path).relative_to(root_path)

@@ -172,6 +172,7 @@ class TestGetSelectedPathsSkipsBinary:
         text_file.write_text("x = 1")
 
         model = FileTreeModel()
+        model._workspace_path = tmp_path  # Required for get_selected_paths()
 
         # Simulate: add nodes to model
         from components.file_tree_model import TreeNode
@@ -188,8 +189,8 @@ class TestGetSelectedPathsSkipsBinary:
         model._path_to_node[str(text_file)] = txt_node
         model._path_to_node[str(tmp_path)] = root_node
 
-        # Select both files
-        model._selected_paths = {str(binary_file), str(text_file)}
+        # Select both files using proper API
+        model._selection_mgr.add_many({str(binary_file), str(text_file)})
 
         selected = model.get_selected_paths()
 

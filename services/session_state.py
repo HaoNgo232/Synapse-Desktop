@@ -23,7 +23,7 @@ from typing import List, Optional
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
-from core.logging_config import log_error, log_debug, log_info
+from core.logging_config import log_error, log_debug, log_info, log_warning
 from config.paths import SESSION_FILE
 
 
@@ -45,6 +45,9 @@ def save_session_state(state: SessionState) -> bool:
     """
     Lưu session state ra file.
 
+    Uses atomic write (temp file + rename) to prevent corruption
+    if the app crashes or is killed mid-write.
+
     Args:
         state: SessionState object
 
@@ -58,16 +61,29 @@ def save_session_state(state: SessionState) -> bool:
         state.saved_at = datetime.now().isoformat()
 
         data = asdict(state)
+        content = json.dumps(data, indent=2, ensure_ascii=False)
 
-        SESSION_FILE.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        # Atomic write: write to temp file then rename
+        # os.replace() is atomic on POSIX and near-atomic on Windows
+        tmp_file = SESSION_FILE.with_suffix(".tmp")
+        tmp_file.write_text(content, encoding="utf-8")
+
+        import os
+
+        os.replace(str(tmp_file), str(SESSION_FILE))
 
         log_debug(f"Session saved: {state.workspace_path}")
         return True
 
     except (OSError, IOError) as e:
         log_error(f"Failed to save session: {e}")
+        # Clean up temp file if it exists
+        try:
+            tmp_file = SESSION_FILE.with_suffix(".tmp")
+            if tmp_file.exists():
+                tmp_file.unlink()
+        except OSError:
+            pass
         return False
 
 
@@ -75,16 +91,30 @@ def load_session_state() -> Optional[SessionState]:
     """
     Load session state từ file.
 
+    If the main file is corrupted, attempts to recover from the .tmp
+    file left by a previous interrupted save.
+
     Returns:
         SessionState nếu load thành công, None nếu không có hoặc lỗi
     """
+    # Try main file first, then fallback to temp file
+    for candidate in (SESSION_FILE, SESSION_FILE.with_suffix(".tmp")):
+        if not candidate.exists():
+            continue
+        try:
+            content = candidate.read_text(encoding="utf-8")
+            data = json.loads(content)
+            if candidate != SESSION_FILE:
+                log_info(f"Recovered session from {candidate.name}")
+            break
+        except (OSError, json.JSONDecodeError) as e:
+            log_warning(f"Failed to parse {candidate.name}: {e}")
+            continue
+    else:
+        # Neither file exists or both are corrupt
+        return None
+
     try:
-        if not SESSION_FILE.exists():
-            return None
-
-        content = SESSION_FILE.read_text(encoding="utf-8")
-        data = json.loads(content)
-
         # Validate workspace still exists
         workspace = data.get("workspace_path")
         if workspace and not Path(workspace).exists():

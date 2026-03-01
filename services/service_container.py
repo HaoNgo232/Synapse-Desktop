@@ -72,14 +72,28 @@ class ServiceContainer:
         initialize_encoder()
         logger.info("ServiceContainer: model change reset completed")
 
+    def shutdown(self) -> None:
+        """
+        Cleanup all owned services.
+
+        Call from MainWindow.closeEvent() to ensure graceful shutdown.
+        Invalidates all caches and releases resources.
+        """
+        try:
+            self.cache_registry.invalidate_all()
+        except Exception as e:
+            logger.warning("Failed to invalidate caches during shutdown: %s", e)
+
+        logger.info("ServiceContainer shut down")
+
     def get_health_report(self) -> dict[str, Any]:
         """
-        Tra ve health report cua tat ca services.
+        Return a health report of all services.
 
-        Huu ich cho monitoring va debugging.
+        Useful for monitoring and debugging.
 
         Returns:
-            Dict chua cache stats va danh sach caches da dang ky
+            Dict containing cache stats and list of registered caches
         """
         report: dict[str, Any] = {}
         try:

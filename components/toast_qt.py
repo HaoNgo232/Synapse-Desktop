@@ -1,16 +1,16 @@
 """
 Global Toast Notification System — Synapse Desktop
 
-He thong thong bao toast toan cuc, hien thi overlay top-center voi
-glassmorphism, background elevation, va slide + fade animation.
+Overlay top-center toast notifications with glassmorphism,
+background elevation, and slide + fade animation.
 
 Usage:
     from components.toast_qt import init_toast_manager, show_toast, ToastType
 
-    # Khoi tao 1 lan trong MainWindow.__init__
+    # Initialize once in MainWindow.__init__
     init_toast_manager(main_window)
 
-    # Goi tu bat ky dau trong app
+    # Call from anywhere in the app
     show_toast(ToastType.SUCCESS, "Copied!", "12,345 tokens")
     show_toast(ToastType.ERROR, "No files selected")
 """
@@ -45,7 +45,7 @@ from core.theme import ThemeColors, ThemeRadius
 
 
 class ToastType(Enum):
-    """Cac loai toast notification voi accent color tuong ung."""
+    """Toast notification types with corresponding accent colors."""
 
     SUCCESS = "success"
     ERROR = "error"
@@ -92,13 +92,13 @@ _ANIMATION_DURATION = 300  # ms cho slide + fade
 
 class ToastNotification(QFrame):
     """
-    Widget thong bao toast don le.
+    Single toast notification widget.
 
-    Bao gom: accent strip (4px ben trai), icon, title/message, close button.
-    Co shadow, fade in/slide animation, va auto-dismiss timer.
+    Contains: accent strip (4px left), icon, title/message, close button.
+    Features shadow, fade-in/slide animation, and auto-dismiss timer.
     """
 
-    # Signal de thong bao ToastManager khi toast dong
+    # Signal to notify ToastManager when toast is closed
     closed = Signal(object)  # emit self
 
     def __init__(
@@ -319,21 +319,21 @@ class ToastNotification(QFrame):
 
 class ToastManager:
     """
-    Quan ly hien thi va xep chong toast notifications.
+    Manage display and stacking of toast notifications.
 
-    Singleton pattern — chi tao 1 instance, gan vao MainWindow.
-    Toast duoc hien thi o chinh giua phia tren cua parent widget,
-    xep chong xuong duoi khi co nhieu toast cung luc.
+    Singleton pattern — only one instance, attached to MainWindow.
+    Toasts are displayed top-center of the parent widget,
+    stacking downward when multiple toasts are visible.
     """
 
     _instance: Optional["ToastManager"] = None
 
     def __init__(self, parent: QWidget) -> None:
         """
-        Khoi tao ToastManager voi parent widget (thuong la MainWindow).
+        Initialize ToastManager with a parent widget (typically MainWindow).
 
         Args:
-            parent: Widget cha — toast se hien thi overlay tren widget nay.
+            parent: Parent widget — toasts are rendered as overlays on this widget.
         """
         self._parent = parent
         self._active_toasts: List[ToastNotification] = []
@@ -346,7 +346,7 @@ class ToastManager:
     @classmethod
     def initialize(cls, parent: QWidget) -> "ToastManager":
         """
-        Khoi tao singleton instance. Goi 1 lan trong MainWindow.__init__.
+        Initialize the singleton instance. Call once in MainWindow.__init__.
 
         Args:
             parent: MainWindow instance.
@@ -495,7 +495,7 @@ class ToastManager:
 
 def init_toast_manager(parent: QWidget) -> ToastManager:
     """
-    Khoi tao global ToastManager. Goi 1 lan trong MainWindow.__init__.
+    Initialize the global ToastManager. Call once in MainWindow.__init__.
 
     Args:
         parent: MainWindow instance.
@@ -514,17 +514,17 @@ def show_toast(
     duration: Optional[int] = None,
 ) -> Optional[ToastNotification]:
     """
-    Hien thi toast notification. Goi tu bat ky dau trong app.
+    Show a toast notification. Can be called from anywhere in the app.
 
     Args:
-        toast_type: Loai toast (SUCCESS, ERROR, WARNING, INFO).
-        message: Noi dung thong bao chinh.
-        title: Tieu de (optional).
-        tooltip: Tooltip chi tiet (optional).
-        duration: Thoi gian hien thi ms (optional, dung default).
+        toast_type: Toast type (SUCCESS, ERROR, WARNING, INFO).
+        message: Main notification content.
+        title: Title text (optional, displayed above message).
+        tooltip: Detailed tooltip (optional, shown on hover).
+        duration: Display duration in ms (optional, uses type default).
 
     Returns:
-        ToastNotification widget hoac None neu manager chua khoi tao.
+        ToastNotification widget, or None if manager is not initialized.
     """
     manager = ToastManager.instance()
     if manager is None:

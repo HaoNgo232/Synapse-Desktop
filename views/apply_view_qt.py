@@ -36,6 +36,7 @@ from services.error_context import (
     build_general_error_context,
     ApplyRowResult,
 )
+from services.apply_service import convert_to_row_results, save_memory_block
 from components.diff_viewer_qt import DiffViewerWidget
 from components.toast_qt import toast_success, toast_error
 
@@ -92,10 +93,6 @@ class ApplyViewQt(QWidget):
         self.last_opx_text: str = ""
         self._cached_file_actions: List = []
         self._cached_memory_block: Optional[str] = None
-
-        import threading
-
-        self._memory_write_lock = threading.Lock()
 
         self.expanded_diffs: set = set()
 
@@ -455,7 +452,7 @@ class ApplyViewQt(QWidget):
             results = apply_file_actions(file_actions, [workspace])
 
             # Convert ActionResult -> ApplyRowResult de Copy Error co context day du
-            self.last_apply_results = _convert_to_row_results(results, file_actions)
+            self.last_apply_results = convert_to_row_results(results, file_actions)
 
             self._render_results(results)
 
@@ -483,84 +480,17 @@ class ApplyViewQt(QWidget):
 
             # Save continuous memory if apply was at least partially successful
             if success_count > 0 and memory_block:
-                self._save_memory_block(workspace, memory_block)
+                try:
+                    from core.utils.qt_utils import schedule_background
+
+                    schedule_background(
+                        lambda: save_memory_block(workspace, memory_block)
+                    )
+                except ImportError:
+                    save_memory_block(workspace, memory_block)
 
         except Exception as e:
             self._show_status(f"Apply error: {e}", is_error=True)
-
-    def _save_memory_block(self, workspace: Path, memory_block: str) -> None:
-        """Save the memory block to .synapse/memory.xml.
-
-        Maintains a rolling window of the last 5 memory blocks.
-        Runs on a background thread to avoid blocking the main UI thread.
-        Uses a thread lock to prevent race conditions from concurrent applies.
-        """
-        _ws = workspace
-        _new_block = memory_block.strip()
-
-        _lock = self._memory_write_lock
-
-        def _write() -> None:
-            with _lock:
-                try:
-                    synapse_dir = _ws / ".synapse"
-                    synapse_dir.mkdir(exist_ok=True, parents=True)
-                    memory_file = synapse_dir / "memory.xml"
-
-                    blocks = []
-                    if memory_file.exists():
-                        try:
-                            import re
-
-                            content = memory_file.read_text(encoding="utf-8")
-                            # Extract all existing blocks
-                            blocks = re.findall(
-                                r"<synapse_memory>\s*(.*?)\s*</synapse_memory>",
-                                content,
-                                re.IGNORECASE | re.DOTALL,
-                            )
-                            # Loai bo cac block bi rong/qua ngan (artifact do regex bi vo)
-                            blocks = [
-                                b.strip()
-                                for b in blocks
-                                if b and b.strip() and len(b.strip()) > 10
-                            ]
-                            # Neu khong parse duoc gi nhung file co content -> fallback
-                            if not blocks and content.strip():
-                                logger.warning(
-                                    "Could not parse existing synapse memory blocks, "
-                                    "preserving truncated raw content."
-                                )
-                                blocks = [content.strip()[:2000]]
-                        except Exception as parse_e:
-                            logger.warning(
-                                "Failed to parse existing synapse memory: %s", parse_e
-                            )
-                            blocks = []
-
-                    blocks.append(_new_block)
-                    # Keep only the last 5 memory blocks
-                    blocks = blocks[-5:]
-
-                    formatted_blocks = []
-                    for b in blocks:
-                        formatted_blocks.append(
-                            f"<synapse_memory>\n{b.strip()}\n</synapse_memory>"
-                        )
-
-                    memory_file.write_text(
-                        "\n\n".join(formatted_blocks) + "\n", encoding="utf-8"
-                    )
-                except Exception as e:
-                    logger.error("Failed to save synapse memory: %s", e)
-
-        try:
-            from core.utils.qt_utils import schedule_background
-
-            schedule_background(_write)
-        except ImportError:
-            # Fallback: run synchronously if utility not available
-            _write()
 
     @Slot()
     def _copy_error_context(self) -> None:
@@ -857,36 +787,3 @@ class ApplyViewQt(QWidget):
             toast_error(message)
         else:
             toast_success(message)
-
-
-def _convert_to_row_results(
-    results: List[ActionResult],
-    file_actions: list,
-) -> List[ApplyRowResult]:
-    """
-    Convert List[ActionResult] tu file_actions module sang List[ApplyRowResult]
-    de error_context module co du data cho AI fix.
-
-    Detect cascade failures: khi file da duoc modify thanh cong boi operation truoc,
-    cac operation sau tren cung file co the fail do search pattern khong con match.
-    """
-    row_results: List[ApplyRowResult] = []
-    # Track files da duoc modify thanh cong de detect cascade
-    modified_files: set = set()
-
-    for i, result in enumerate(results):
-        is_cascade = not result.success and result.path in modified_files
-        row_results.append(
-            ApplyRowResult(
-                row_index=i,
-                path=result.path,
-                action=result.action,
-                success=result.success,
-                message=result.message,
-                is_cascade_failure=is_cascade,
-            )
-        )
-        if result.success:
-            modified_files.add(result.path)
-
-    return row_results

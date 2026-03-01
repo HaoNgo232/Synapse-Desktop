@@ -8,7 +8,8 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 from PySide6.QtWidgets import QMessageBox
 
-from views.apply_view_qt import ApplyViewQt, _convert_to_row_results
+from views.apply_view_qt import ApplyViewQt
+from services.apply_service import convert_to_row_results
 from core.file_actions import ActionResult
 
 
@@ -449,26 +450,26 @@ def test_show_status_empty(apply_view):
 
 
 def test_convert_to_row_results_success():
-    """Kiem tra _convert_to_row_results voi thanh cong (line 779-798)."""
+    """Kiem tra convert_to_row_results voi thanh cong (line 779-798)."""
     results = [
         ActionResult(success=True, action="create", path="a.py", message="OK"),
         ActionResult(success=True, action="modify", path="b.py", message="OK"),
     ]
-    row_results = _convert_to_row_results(results, [MagicMock(), MagicMock()])
+    row_results = convert_to_row_results(results, [MagicMock(), MagicMock()])
     assert len(row_results) == 2
     assert all(r.success for r in row_results)
     assert not any(r.is_cascade_failure for r in row_results)
 
 
 def test_convert_to_row_results_cascade():
-    """Kiem tra _convert_to_row_results detect cascade failure."""
+    """Kiem tra convert_to_row_results detect cascade failure."""
     results = [
         ActionResult(success=True, action="modify", path="a.py", message="OK"),
         ActionResult(
             success=False, action="modify", path="a.py", message="Search fail"
         ),
     ]
-    row_results = _convert_to_row_results(results, [MagicMock(), MagicMock()])
+    row_results = convert_to_row_results(results, [MagicMock(), MagicMock()])
     assert len(row_results) == 2
     assert row_results[0].success is True
     assert row_results[1].success is False

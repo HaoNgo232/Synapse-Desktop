@@ -12,6 +12,7 @@ Features:
 
 from pathlib import Path
 from typing import Dict, Callable, Set, Optional, List
+from collections import OrderedDict
 import threading
 import time
 
@@ -64,8 +65,10 @@ class TokenDisplayService:
 
         # Folder token cache: folder_path -> (total_tokens, is_complete, file_count)
         # Giúp tránh tính toán lại tổng tokens cho folders mỗi lần render
-        self._folder_cache: Dict[str, tuple[int, bool, int]] = {}
+        # Using OrderedDict for explicit LRU behavior
+        self._folder_cache: OrderedDict[str, tuple[int, bool, int]] = OrderedDict()
         self._folder_cache_lock = threading.Lock()
+        self._MAX_FOLDER_CACHE_SIZE = 2000  # Prevent unbounded growth
 
         # Tracking loading state
         self._loading_paths: Set[str] = set()
@@ -233,7 +236,10 @@ class TokenDisplayService:
             # Schedule UI update
             self._schedule_ui_update()
 
-        except Exception:
+        except Exception as e:
+            from core.logging_config import log_debug
+
+            log_debug(f"[TokenDisplayService] Failed to count tokens for {path}: {e}")
             with self._lock:
                 self._cache[path] = 0
             with self._update_lock:
@@ -384,6 +390,8 @@ class TokenDisplayService:
         BATCH_DELAY = 0.5  # 500ms between batches - giảm UI blocking
 
         def count_batch(batch_files):
+            from core.logging_config import log_debug
+
             # Check cancellation FIRST - before doing ANY work
             if not is_counting_tokens() or self._is_disposed:
                 log_debug("[TokenDisplayService] count_batch cancelled at start")
@@ -405,7 +413,12 @@ class TokenDisplayService:
                     )
                     with self._lock:
                         self._cache[path] = tokens
-                except Exception:
+                except Exception as e:
+                    from core.logging_config import log_debug
+
+                    log_debug(
+                        f"[TokenDisplayService] Deferred count failed for {path}: {e}"
+                    )
                     with self._lock:
                         self._cache[path] = 0
 
@@ -537,6 +550,8 @@ class TokenDisplayService:
         with self._folder_cache_lock:
             if folder_path in self._folder_cache:
                 total, is_complete, _ = self._folder_cache[folder_path]
+                # Move to end for LRU (most recently used)
+                self._folder_cache.move_to_end(folder_path)
                 return (total, is_complete)
 
         # Cache miss - calculate
@@ -558,8 +573,15 @@ class TokenDisplayService:
                 else:
                     all_cached = False
 
-        # Cache the result
+        # Cache the result (with eviction if over limit)
         with self._folder_cache_lock:
+            if len(self._folder_cache) >= self._MAX_FOLDER_CACHE_SIZE:
+                # Evict oldest 25% of entries
+                evict_count = self._MAX_FOLDER_CACHE_SIZE // 4
+                keys_to_evict = list(self._folder_cache.keys())[:evict_count]
+                for k in keys_to_evict:
+                    del self._folder_cache[k]
+
             self._folder_cache[folder_path] = (total, all_cached, len(file_paths))
 
         return (total, all_cached)
@@ -646,5 +668,7 @@ class TokenDisplayService:
         if self.on_update:
             try:
                 self.on_update()
-            except Exception:
-                pass  # Ignore errors - callback có thể fail safely
+            except Exception as e:
+                from core.logging_config import log_debug
+
+                log_debug(f"[TokenDisplayService] UI update callback error: {e}")

@@ -9,9 +9,12 @@ Cung cấp:
 """
 
 import os
-from threading import Timer
 from typing import Callable, Optional
 from dataclasses import dataclass
+
+from PySide6.QtCore import QTimer
+
+from core.logging_config import log_error
 
 # psutil should always be available (in requirements.txt)
 # but wrap in try/except for runtime errors
@@ -40,9 +43,13 @@ class MemoryMonitor:
     """
     Service theo dõi memory usage của app.
 
+    Uses QTimer on the main thread — psutil.memory_info() is fast (<1ms)
+    so it's safe to call without a background thread. This eliminates
+    the need to marshal callbacks back to the UI thread.
+
     Features:
-    - Periodic monitoring (mặc định mỗi 5 giây)
-    - Callback khi có update
+    - Periodic monitoring (default 10 seconds)
+    - Callback khi có update (runs on main thread — safe for UI)
     - Warning khi memory vượt ngưỡng
     """
 
@@ -50,18 +57,19 @@ class MemoryMonitor:
     WARNING_THRESHOLD_MB = 500
     CRITICAL_THRESHOLD_MB = 1000
 
-    # Update interval (seconds) - increased to reduce overhead
-    UPDATE_INTERVAL = 10.0
+    # Update interval (milliseconds)
+    UPDATE_INTERVAL_MS = 10_000
 
     def __init__(self, on_update: Optional[Callable[[MemoryStats], None]] = None):
         """
         Khởi tạo MemoryMonitor.
 
         Args:
-            on_update: Callback khi có memory stats mới
+            on_update: Callback khi có memory stats mới.
+                       Called on main thread — safe for direct UI updates.
         """
         self.on_update = on_update
-        self._timer: Optional[Timer] = None
+        self._timer: Optional[QTimer] = None
         self._is_running = False
         self._process = psutil.Process(os.getpid())
 
@@ -70,18 +78,29 @@ class MemoryMonitor:
         self._file_count = 0
 
     def start(self):
-        """Bắt đầu monitoring"""
+        """Bắt đầu monitoring. Must be called from main thread."""
         if self._is_running:
             return
 
+        # Guard: QTimer must be created on the main thread
+        from PySide6.QtCore import QThread, QCoreApplication
+
+        app = QCoreApplication.instance()
+        if app and QThread.currentThread() != app.thread():
+            log_error("MemoryMonitor.start() called from non-main thread")
+            return
+
         self._is_running = True
-        self._schedule_update()
+        self._timer = QTimer()
+        self._timer.setInterval(self.UPDATE_INTERVAL_MS)
+        self._timer.timeout.connect(self._do_update)
+        self._timer.start()
 
     def stop(self):
         """Dừng monitoring"""
         self._is_running = False
         if self._timer:
-            self._timer.cancel()
+            self._timer.stop()
             self._timer = None
 
     def set_token_cache_count(self, count: int):
@@ -138,17 +157,11 @@ class MemoryMonitor:
             pass
         return 0.0
 
-    def _schedule_update(self):
-        """Schedule next update"""
-        if not self._is_running:
-            return
-
-        self._timer = Timer(self.UPDATE_INTERVAL, self._do_update)
-        self._timer.daemon = True
-        self._timer.start()
-
     def _do_update(self):
-        """Thực hiện update và notify callback"""
+        """Thực hiện update và notify callback.
+
+        Runs on main thread via QTimer — safe to update UI directly.
+        """
         if not self._is_running:
             return
 
@@ -157,11 +170,10 @@ class MemoryMonitor:
         if self.on_update:
             try:
                 self.on_update(stats)
-            except Exception:
-                pass  # Ignore callback errors
+            except Exception as e:
+                from core.logging_config import log_debug
 
-        # Schedule next update
-        self._schedule_update()
+                log_debug(f"[MemoryMonitor] Callback error: {e}")
 
 
 # Singleton instance

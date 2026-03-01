@@ -32,7 +32,6 @@ from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors, ThemeFonts, apply_theme
 from core.utils.qt_utils import (
-    run_on_main_thread,
     get_signal_bridge,
 )
 from core.utils.threading_utils import shutdown_all, set_active_view
@@ -83,6 +82,10 @@ class SynapseMainWindow(QMainWindow):
         # Memory monitor
         self._memory_monitor = get_memory_monitor()
         self._memory_monitor.on_update = self._on_memory_update
+
+        # Cached git branch (refreshed asynchronously by _refresh_git_branch_async)
+        self._cached_git_branch: Optional[str] = None
+        self._git_branch_pending = False
 
         # Set window icon (de hien thi icon tren taskbar)
         self._set_window_icon()
@@ -389,10 +392,18 @@ class SynapseMainWindow(QMainWindow):
         self._update_status_bar()
 
     def _update_status_bar(self) -> None:
-        """Update status bar with current workspace + git info."""
+        """Update status bar with current workspace + git info.
+
+        Git branch is read from cache (non-blocking) and refreshed
+        asynchronously in a background thread to avoid UI freezes.
+        """
         if self.workspace_path:
             self._status_workspace.setText(f"📁 {self.workspace_path}")
-            # Detect git branch
+
+            # Trigger async refresh (result available on next cycle)
+            self._refresh_git_branch_async()
+
+            # Read cached value (may be from previous cycle — acceptable for status bar)
             branch = self._detect_git_branch()
             if branch:
                 self._status_git.setText(f"⎇ {branch}")
@@ -422,37 +433,60 @@ class SynapseMainWindow(QMainWindow):
             return "0 files | 0 tokens"
 
     def _detect_git_branch(self) -> Optional[str]:
-        """Detect current git branch for the workspace (returns None if not a git repo).
+        """Return cached git branch name. Updated asynchronously by background timer.
+
+        Returns the last known branch name immediately (non-blocking).
+        A background thread refreshes the value periodically.
+        """
+        return getattr(self, "_cached_git_branch", None)
+
+    def _refresh_git_branch_async(self) -> None:
+        """Spawn a background thread to detect the current git branch.
+
+        Called by _update_status_bar(). The result is cached in
+        _cached_git_branch and picked up on the next UI refresh cycle.
 
         WINDOWS EXE FIX: Uses CREATE_NO_WINDOW flag to prevent a console
         window from flashing every time this method is called.
-        The status bar timer calls this every 1.2s, so without the flag
-        users would see a CMD window popping up repeatedly.
         """
-        if not self.workspace_path:
+        workspace = self.workspace_path
+        if not workspace:
+            self._cached_git_branch = None
+            return
+        if self._git_branch_pending:
+            return  # Previous detection still running
+        self._git_branch_pending = True
+
+        def _detect() -> Optional[str]:
+            try:
+                import platform as _platform
+
+                creationflags = 0
+                if _platform.system() == "Windows":
+                    creationflags = subprocess.CREATE_NO_WINDOW
+
+                result = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    cwd=str(workspace),
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                    creationflags=creationflags,
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except Exception:
+                pass
             return None
-        try:
-            # On Windows, prevent subprocess from creating a visible console window.
-            # This is the #1 cause of "flashing black window" in PyInstaller builds.
-            import platform
 
-            creationflags = 0
-            if platform.system() == "Windows":
-                creationflags = subprocess.CREATE_NO_WINDOW  # 0x08000000
+        def _on_result(branch: object) -> None:
+            self._git_branch_pending = False
+            # branch is Optional[str] but signal emits object
+            self._cached_git_branch = branch if isinstance(branch, str) else None
 
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=str(self.workspace_path),
-                capture_output=True,
-                text=True,
-                timeout=3,
-                creationflags=creationflags,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception:
-            pass
-        return None
+        from core.utils.qt_utils import schedule_background
+
+        schedule_background(_detect, on_result=_on_result)
 
     # ── Recent folders ────────────────────────────────────────────
     def _refresh_recent_folders_menu(self) -> None:
@@ -546,26 +580,26 @@ class SynapseMainWindow(QMainWindow):
 
     # ── Memory monitor callback ───────────────────────────────────
     def _on_memory_update(self, stats: MemoryStats) -> None:
-        """Update memory display (called from background thread)."""
+        """Update memory display.
 
-        def update_ui():
-            display_text = f"🧠 {format_memory_display(stats)}"
-            self._memory_label.setText(display_text)
+        Called on main thread (QTimer-based MemoryMonitor) — safe to
+        update UI widgets directly without marshalling.
+        """
+        display_text = f"🧠 {format_memory_display(stats)}"
+        self._memory_label.setText(display_text)
 
-            if stats.warning and "Critical" in stats.warning:
-                color = ThemeColors.ERROR
-            elif stats.warning:
-                color = ThemeColors.WARNING
-            else:
-                color = ThemeColors.TEXT_MUTED
+        if stats.warning and "Critical" in stats.warning:
+            color = ThemeColors.ERROR
+        elif stats.warning:
+            color = ThemeColors.WARNING
+        else:
+            color = ThemeColors.TEXT_MUTED
 
-            self._memory_label.setStyleSheet(
-                f"font-size: {ThemeFonts.SIZE_CAPTION}px; "
-                f"font-family: {ThemeFonts.FAMILY_MONO}; "
-                f"color: {color};"
-            )
-
-        run_on_main_thread(update_ui)
+        self._memory_label.setStyleSheet(
+            f"font-size: {ThemeFonts.SIZE_CAPTION}px; "
+            f"font-family: {ThemeFonts.FAMILY_MONO}; "
+            f"color: {color};"
+        )
 
     @Slot()
     def _clear_memory(self) -> None:
@@ -655,30 +689,82 @@ class SynapseMainWindow(QMainWindow):
             self._toast_manager.reposition_on_resize()
 
     def closeEvent(self, event) -> None:
-        """Handle app close — cleanup resources and save session."""
-        from core.utils.file_scanner import stop_scanning
-        from services.token_display import stop_token_counting
+        """Handle app close — cleanup resources and save session.
 
-        stop_scanning()
-        stop_token_counting()
-        shutdown_all()
+        Each step is wrapped individually so that a failure in one
+        does not prevent subsequent cleanup from running.
+        """
+        from core.logging_config import log_error
 
-        # Dong tat ca toast truoc khi thoat
-        if hasattr(self, "_toast_manager") and self._toast_manager:
-            self._toast_manager.dismiss_all()
+        # 1. Stop background scanning
+        try:
+            from core.utils.file_scanner import stop_scanning
 
-        if hasattr(self, "_status_timer"):
-            self._status_timer.stop()
+            stop_scanning()
+        except Exception as e:
+            log_error("closeEvent: stop_scanning failed", e)
 
-        self._save_session()
-        self._memory_monitor.stop()
+        # 2. Stop token counting
+        try:
+            from services.token_display import stop_token_counting
 
-        self.context_view.cleanup()
+            stop_token_counting()
+        except Exception as e:
+            log_error("closeEvent: stop_token_counting failed", e)
 
-        from core.logging_config import flush_logs, cleanup_old_logs
+        # 3. Shutdown thread pools
+        try:
+            shutdown_all()
+        except Exception as e:
+            log_error("closeEvent: shutdown_all failed", e)
 
-        flush_logs()
-        cleanup_old_logs(max_age_days=7)
+        # 4. Dismiss toasts
+        try:
+            if hasattr(self, "_toast_manager") and self._toast_manager:
+                self._toast_manager.dismiss_all()
+        except Exception as e:
+            log_error("closeEvent: dismiss_all failed", e)
+
+        # 5. Stop status timer
+        try:
+            if hasattr(self, "_status_timer"):
+                self._status_timer.stop()
+        except Exception as e:
+            log_error("closeEvent: status_timer.stop failed", e)
+
+        # 6. Save session (important — should survive earlier failures)
+        try:
+            self._save_session()
+        except Exception as e:
+            log_error("closeEvent: _save_session failed", e)
+
+        # 7. Stop memory monitor
+        try:
+            self._memory_monitor.stop()
+        except Exception as e:
+            log_error("closeEvent: memory_monitor.stop failed", e)
+
+        # 8. Cleanup context view
+        try:
+            self.context_view.cleanup()
+        except Exception as e:
+            log_error("closeEvent: context_view.cleanup failed", e)
+
+        # 9. Shutdown service container (caches, etc.)
+        try:
+            if hasattr(self, "_services"):
+                self._services.shutdown()
+        except Exception as e:
+            log_error("closeEvent: services.shutdown failed", e)
+
+        # 10. Flush and cleanup logs (last — so earlier errors get logged)
+        try:
+            from core.logging_config import flush_logs, cleanup_old_logs
+
+            flush_logs()
+            cleanup_old_logs(max_age_days=7)
+        except Exception:
+            pass  # Nothing we can do if logging itself fails
 
         event.accept()
 

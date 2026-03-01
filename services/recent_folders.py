@@ -74,15 +74,28 @@ def add_recent_folder(folder_path: str) -> bool:
 
         data = {"folders": folders, "updated_at": datetime.now().isoformat()}
 
-        RECENT_FOLDERS_FILE.write_text(
+        # Atomic write: temp file + rename
+        tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+        tmp_file.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+
+        import os
+
+        os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
 
         log_debug(f"Added recent folder: {folder_path}")
         return True
 
     except (OSError, IOError) as e:
         log_error(f"Failed to save recent folder: {e}")
+        # Clean up temp file
+        try:
+            tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+            if tmp_file.exists():
+                tmp_file.unlink()
+        except OSError:
+            pass
         return False
 
 

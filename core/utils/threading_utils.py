@@ -1,8 +1,10 @@
 """
-Threading Utilities - Quản lý background threads an toàn
+Threading Utilities — Background thread management for PySide6 app.
 
-- Global stop event cho app shutdown
-- View-aware task management
+Provides:
+- Global stop event for graceful app shutdown
+- Active view tracking (only update UI if view is still active)
+- TaskManager for cancellable background tasks
 """
 
 import threading
@@ -10,136 +12,99 @@ from typing import Callable, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+# ────────────────────────────────────────────────────────────────
+# Global Stop Event — set when app is closing
+# ────────────────────────────────────────────────────────────────
 
-# Global stop event - set khi app đang close
 _app_stop_event = threading.Event()
-
-# Active view tracking - chỉ update UI nếu view còn active
-_active_view_id: Optional[str] = None
-_view_lock = threading.Lock()
 
 
 def get_app_stop_event() -> threading.Event:
-    """
-    Lấy global stop event.
-    Background threads nên check event này định kỳ.
-    """
+    """Get global stop event. Background threads should check this periodically."""
     return _app_stop_event
 
 
-def signal_app_shutdown():
-    """
-    Gọi khi app đang close để signal tất cả threads dừng.
-    """
+def signal_app_shutdown() -> None:
+    """Signal all threads to stop. Call when app is closing."""
     _app_stop_event.set()
 
 
 def is_app_stopping() -> bool:
-    """Check xem app có đang shutdown không."""
+    """Check whether the app is shutting down."""
     return _app_stop_event.is_set()
 
 
-def reset_app_state():
-    """Reset state khi app restart (mainly for testing)."""
+def reset_app_state() -> None:
+    """Reset state (mainly for testing)."""
     _app_stop_event.clear()
 
 
-def set_active_view(view_id: str):
-    """Set ID của view đang active."""
+# ────────────────────────────────────────────────────────────────
+# Active View Tracking
+# ────────────────────────────────────────────────────────────────
+
+_active_view_id: Optional[str] = None
+_view_lock = threading.Lock()
+
+
+def set_active_view(view_id: str) -> None:
+    """Set the currently active view ID."""
     global _active_view_id
     with _view_lock:
         _active_view_id = view_id
 
 
 def get_active_view() -> Optional[str]:
-    """Lấy ID của view đang active."""
+    """Get the currently active view ID."""
     with _view_lock:
         return _active_view_id
 
 
 def is_view_active(view_id: str) -> bool:
-    """
-    Check xem view có còn active không.
-    Dùng để quyết định có nên update UI không.
-    """
+    """Check whether a view is still active. Used to decide if UI should be updated."""
     with _view_lock:
         return _active_view_id == view_id
 
 
-def safe_ui_callback(
-    page: Any,
-    view_id: str,
-    callback: Callable[[], None],
-) -> None:
-    """
-    Chạy callback trên UI thread một cách an toàn (legacy Flet API).
-
-    Chỉ chạy nếu:
-    - App không đang shutdown
-    - View còn active
-    - Page còn tồn tại
-
-    Args:
-        page: Flet Page object
-        view_id: ID của view đã request callback
-        callback: Function sẽ được gọi trên UI thread
-    """
-    if is_app_stopping():
-        return
-
-    if not is_view_active(view_id):
-        return
-
-    if not page:
-        return
-
-    try:
-        # Kiểm tra page có method run_thread không (Flet >= 0.21)
-        if hasattr(page, "run_thread"):
-            # run_thread chạy callback trên UI thread từ background
-            page.run_thread(callback)
-        else:
-            # Fallback: gọi trực tiếp (không thread-safe nhưng có try-catch)
-            callback()
-    except Exception:
-        pass  # Ignore errors from detached controls
+# ────────────────────────────────────────────────────────────────
+# TaskHandle & TaskManager
+# ────────────────────────────────────────────────────────────────
 
 
 @dataclass
 class TaskHandle:
-    """Handle để track và cancel một background task."""
+    """Handle to track and cancel a background task."""
 
     task_id: str
     view_id: str
     cancel_event: threading.Event
 
-    def cancel(self):
-        """Cancel task này."""
+    def cancel(self) -> None:
+        """Cancel this task."""
         self.cancel_event.set()
 
     def is_cancelled(self) -> bool:
-        """Check xem task đã bị cancel chưa."""
+        """Check whether this task has been cancelled or the app is stopping."""
         return self.cancel_event.is_set() or is_app_stopping()
 
 
 class TaskManager:
     """
-    Quản lý background tasks với view tracking và cancellation.
+    Manage background tasks with view tracking and cancellation.
 
     Usage:
         manager = TaskManager()
 
-        # Start task
         handle = manager.start_task(
             view_id="context_view",
             task_func=my_long_task,
             on_complete=on_task_done,
         )
 
-        # Cancel khi switch view
+        # Cancel when switching view
         manager.cancel_view_tasks("context_view")
 
-        # Shutdown khi app close
+        # Shutdown when app closes
         manager.shutdown()
     """
 
@@ -156,15 +121,15 @@ class TaskManager:
         on_complete: Optional[Callable[[Any], None]] = None,
     ) -> TaskHandle:
         """
-        Start một background task.
+        Start a background task.
 
         Args:
-            view_id: ID của view sở hữu task
-            task_func: Function nhận cancel_event và return result
-            on_complete: Callback khi task hoàn thành (chạy trên worker thread)
+            view_id: ID of the view that owns this task
+            task_func: Function receiving a cancel_event, returns a result
+            on_complete: Callback when task completes (runs on worker thread)
 
         Returns:
-            TaskHandle để track/cancel task
+            TaskHandle to track/cancel the task
         """
         with self._lock:
             self._task_counter += 1
@@ -173,11 +138,9 @@ class TaskManager:
             handle = TaskHandle(task_id, view_id, cancel_event)
             self._tasks[task_id] = handle
 
-        def wrapped_task():
+        def wrapped_task() -> None:
             try:
                 result = task_func(cancel_event)
-
-                # Chỉ gọi callback nếu không bị cancel và view còn active
                 if not handle.is_cancelled() and is_view_active(view_id):
                     if on_complete:
                         on_complete(result)
@@ -190,57 +153,59 @@ class TaskManager:
         self._executor.submit(wrapped_task)
         return handle
 
-    def cancel_task(self, task_id: str):
-        """Cancel một task theo ID."""
+    def cancel_task(self, task_id: str) -> None:
+        """Cancel a single task by ID."""
         with self._lock:
             handle = self._tasks.get(task_id)
             if handle:
                 handle.cancel()
 
-    def cancel_view_tasks(self, view_id: str):
-        """Cancel tất cả tasks của một view."""
+    def cancel_view_tasks(self, view_id: str) -> None:
+        """Cancel all tasks belonging to a view."""
         with self._lock:
             for handle in list(self._tasks.values()):
                 if handle.view_id == view_id:
                     handle.cancel()
 
-    def cancel_all(self):
-        """Cancel tất cả tasks."""
+    def cancel_all(self) -> None:
+        """Cancel all tasks."""
         with self._lock:
             for handle in self._tasks.values():
                 handle.cancel()
 
-    def shutdown(self, wait: bool = False):
-        """
-        Shutdown executor.
+    def shutdown(self, wait: bool = False) -> None:
+        """Shutdown the executor.
 
         Args:
-            wait: Có đợi tasks hoàn thành không
+            wait: Whether to wait for running tasks to complete
         """
         self.cancel_all()
         try:
             self._executor.shutdown(wait=wait, cancel_futures=True)
         except TypeError:
-            # Python < 3.9 không có cancel_futures
+            # Python < 3.9 doesn't have cancel_futures
             self._executor.shutdown(wait=wait)
 
 
-# Global task manager
+# ────────────────────────────────────────────────────────────────
+# Global TaskManager Singleton
+# ────────────────────────────────────────────────────────────────
+
 _global_task_manager: Optional[TaskManager] = None
 
 
 def get_task_manager() -> TaskManager:
-    """Lấy global task manager (singleton)."""
+    """Get or create the global TaskManager singleton."""
     global _global_task_manager
     if _global_task_manager is None:
         _global_task_manager = TaskManager()
     return _global_task_manager
 
 
-def shutdown_all():
+def shutdown_all() -> None:
     """
-    Shutdown tất cả resources khi app close.
-    Gọi từ main.py on_close handler.
+    Shutdown all resources when app closes.
+    Call from MainWindow.closeEvent().
     """
     signal_app_shutdown()
 

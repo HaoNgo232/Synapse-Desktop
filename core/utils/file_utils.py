@@ -407,6 +407,8 @@ def load_folder_children(
     excluded_patterns: Optional[list[str]] = None,
     use_gitignore: bool = True,
     use_default_ignores: bool = True,
+    *,
+    workspace_root: Optional[Path] = None,
 ) -> None:
     """
     Load children cho folder chua duoc scan (is_loaded=False).
@@ -419,6 +421,9 @@ def load_folder_children(
         excluded_patterns: Patterns de exclude
         use_gitignore: Co doc .gitignore khong
         use_default_ignores: Co dung EXTENDED_IGNORE_PATTERNS khong
+        workspace_root: Root workspace path (bat buoc de ignore patterns
+                        match dung relative path o moi level).
+                        Raise ValueError neu None.
     """
     if not folder_item.is_dir:
         return  # Khong phai folder
@@ -428,8 +433,13 @@ def load_folder_children(
 
     folder_path = Path(folder_item.path)
 
-    # Tim git root de match ignore patterns dung
-    root_path = find_git_root(folder_path)
+    # workspace_root bat buoc - caller phai truyen
+    if workspace_root is None:
+        raise ValueError(
+            "workspace_root is required for load_folder_children. "
+            "Caller must provide workspace root path."
+        )
+    root_path = workspace_root.resolve()
 
     # Delegate cho ignore_engine (single source of truth)
     spec = build_pathspec(

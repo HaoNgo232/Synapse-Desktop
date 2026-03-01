@@ -73,7 +73,19 @@ def build_ignore_patterns(
 
     # 4. Gitignore patterns (.gitignore + .git/info/exclude + global)
     if use_gitignore:
+        # Phat hien monorepo bang cach doc them .gitignore tu git root
+        git_root = find_git_root(root_path)
         gitignore_pats = read_gitignore(root_path)
+
+        # Neu workspace nam trong thuc muc con cua repo (monorepo),
+        # doc them patterns tu root cua repo
+        if git_root != root_path:
+            parent_pats = read_gitignore(git_root)
+            # Gop nhung patterns cua parent ma chua co (de tranh trung)
+            for pat in parent_pats:
+                if pat not in gitignore_pats:
+                    gitignore_pats.append(pat)
+
         patterns.extend(gitignore_pats)
 
     return patterns

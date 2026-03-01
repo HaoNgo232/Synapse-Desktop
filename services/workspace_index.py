@@ -43,14 +43,14 @@ def build_search_index(
     """
     from core.constants import DIRECTORY_QUICK_SKIP
     from core.utils.file_utils import is_binary_file, is_system_path
-    from core.ignore_engine import build_pathspec, find_git_root
+    from core.ignore_engine import build_pathspec
     from services.workspace_config import (
         get_excluded_patterns,
         get_use_gitignore,
     )
 
-    # Tim git root tu workspace
-    root_path = find_git_root(workspace_path)
+    # Dung workspace_path lam root (co resolve)
+    root_path = workspace_path.resolve()
     excluded = get_excluded_patterns()
 
     # Delegate cho ignore_engine (single source of truth)
@@ -101,7 +101,7 @@ def build_search_index(
     return index
 
 
-def search_in_index(index: Dict[str, List[str]], query: str) -> List[str]:
+def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[str]:
     """
     Tim files theo query trong search index (case-insensitive substring).
 
@@ -142,25 +142,25 @@ def collect_files_from_disk(
 
     Args:
         folder: Thu muc can scan.
-        workspace_path: Workspace root (de resolve git root chinh xac).
-                        Neu None, dung folder lam root.
+        workspace_path: Workspace root (bat buoc de ignore patterns
+                        match dung relative path o moi level).
+                        Raise ValueError neu None.
 
     Returns:
         List cac full paths (khong trung lap, da loc binary/ignored).
     """
     from core.utils.file_utils import is_binary_file, is_system_path
-    from core.ignore_engine import build_pathspec, find_git_root
+    from core.ignore_engine import build_pathspec
     from services.workspace_config import get_excluded_patterns, get_use_gitignore
     from core.constants import DIRECTORY_QUICK_SKIP
 
-    # Tim git root
-    root_path = find_git_root(folder)
-
-    # Fallback to workspace root neu co
-    if workspace_path and workspace_path != root_path:
-        ws_root = find_git_root(workspace_path)
-        if ws_root != workspace_path:
-            root_path = ws_root
+    # workspace_path bat buoc - caller phai truyen
+    if workspace_path is None:
+        raise ValueError(
+            "workspace_path is required for collect_files_from_disk. "
+            "Caller must provide workspace root path."
+        )
+    root_path = workspace_path.resolve()
 
     excluded = get_excluded_patterns()
 

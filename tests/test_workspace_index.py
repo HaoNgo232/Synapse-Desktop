@@ -242,7 +242,7 @@ class TestCollectFilesFromDisk:
             patch("core.utils.file_utils.is_system_path", return_value=False),
             patch("core.ignore_engine.build_pathspec", return_value=mock_spec),
         ):
-            result = collect_files_from_disk(tmp_path)
+            result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
 
         assert len(result) == 3
         paths = set(result)
@@ -269,7 +269,7 @@ class TestCollectFilesFromDisk:
             patch("core.utils.file_utils.is_system_path", return_value=False),
             patch("core.ignore_engine.build_pathspec", return_value=mock_spec),
         ):
-            result = collect_files_from_disk(tmp_path)
+            result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
 
         assert len(result) == 1
         assert str(tmp_path / "code.py") in result
@@ -289,7 +289,7 @@ class TestCollectFilesFromDisk:
             patch("core.utils.file_utils.is_system_path", return_value=False),
             patch("core.ignore_engine.build_pathspec", return_value=mock_spec),
         ):
-            result = collect_files_from_disk(tmp_path)
+            result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
 
         # Khong co file trung lap
         assert len(result) == len(set(result))
@@ -306,7 +306,7 @@ class TestCollectFilesFromDisk:
             patch("core.ignore_engine.build_pathspec", return_value=mock_spec),
             patch("os.walk", side_effect=PermissionError("denied")),
         ):
-            result = collect_files_from_disk(tmp_path)
+            result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
 
         assert result == []
 
@@ -321,6 +321,13 @@ class TestCollectFilesFromDisk:
             patch("services.workspace_config.get_use_gitignore", return_value=False),
             patch("core.ignore_engine.build_pathspec", return_value=mock_spec),
         ):
-            result = collect_files_from_disk(tmp_path)
+            result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
 
         assert result == []
+
+    def test_collect_files_raises_without_workspace_path(self, tmp_path):
+        """workspace_path=None hoac thieu phai raise ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="workspace_path is required"):
+            collect_files_from_disk(tmp_path)

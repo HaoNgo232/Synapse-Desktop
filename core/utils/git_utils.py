@@ -205,7 +205,11 @@ def get_git_logs(root_path: Path, max_commits: int = 10) -> Optional[GitLogResul
         # Windows clipboard/app destination co the truncate text khi gap NULL char (\x00).
         # Chi sanitize log_content tren Windows de tranh anh huong behavior tren Linux/macOS.
         display_output = raw_output
-        if display_output and "\x00" in display_output and sys.platform.startswith("win"):
+        if (
+            display_output
+            and "\x00" in display_output
+            and sys.platform.startswith("win")
+        ):
             display_output = display_output.replace("\x00", "\n")
 
         return GitLogResult(

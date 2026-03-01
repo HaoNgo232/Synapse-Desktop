@@ -455,6 +455,11 @@ class FileTreeModel(QAbstractItemModel):
         if not node.is_dir or node.is_loaded:
             return
 
+        if self._workspace_path is None:
+            logger.warning("fetchMore called before load_tree - skipping")
+            node.is_loaded = True
+            return
+
         # Load children từ filesystem
         folder_path = Path(node.path)
         if not folder_path.exists():
@@ -483,6 +488,7 @@ class FileTreeModel(QAbstractItemModel):
                 temp_item,
                 excluded_patterns=get_excluded_patterns(),
                 use_gitignore=get_use_gitignore(),
+                workspace_root=self._workspace_path,
             )
             children_items = temp_item.children
         except Exception as e:
@@ -605,6 +611,9 @@ class FileTreeModel(QAbstractItemModel):
         Dam bao token counting luon day du du tree chua expand.
         Skip binary/image files.
         """
+        if self._workspace_path is None:
+            return []
+
         from core.utils.file_utils import is_binary_file
         from services.workspace_index import collect_files_from_disk
 
@@ -659,6 +668,9 @@ class FileTreeModel(QAbstractItemModel):
         Xem _deselect_node() + _remove_ancestors_from_selected() de hieu
         tai sao ancestor folders bi xoa khoi _selected_paths.
         """
+        if self._workspace_path is None:
+            return
+
         from core.utils.file_utils import is_binary_file
         from services.workspace_index import collect_files_from_disk
 

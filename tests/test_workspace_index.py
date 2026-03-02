@@ -98,6 +98,66 @@ class TestSearchInIndex:
         result = search_in_index(index, "nonexistent")
         assert result == []
 
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch("os.path.getsize", return_value=100)
+    def test_content_search_basic(self, mock_getsize, mock_open):
+        """Tim kiem noi dung hieu qua voi prefix code:"""
+        index = {
+            "main.py": ["/project/main.py"],
+            "utils.py": ["/project/utils.py"],
+        }
+
+        # Mock file content
+        def mock_file_content(*args, **kwargs):
+            file_path = args[0]
+            mock_file = MagicMock()
+            if "main.py" in file_path:
+                mock_file.__enter__.return_value.read.return_value = (
+                    "def hello_world():\n    pass"
+                )
+            else:
+                mock_file.__enter__.return_value.read.return_value = "import os\n"
+            return mock_file
+
+        mock_open.side_effect = mock_file_content
+
+        # Search for "hello"
+        result = search_in_index(index, "code: hello")
+        assert result == ["/project/main.py"]
+
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch("os.path.getsize", return_value=100)
+    def test_content_search_case_insensitive(self, mock_getsize, mock_open):
+        """Tim kiem noi dung khong phan biet hoa thuong."""
+        index = {"main.py": ["/project/main.py"]}
+
+        mock_file = MagicMock()
+        mock_file.__enter__.return_value.read.return_value = "class MyAwesomeModel:"
+        mock_open.return_value = mock_file
+
+        result = search_in_index(index, "cOdE: AWESOME")
+        assert result == ["/project/main.py"]
+
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch("os.path.getsize", return_value=100)
+    def test_content_search_skip_large_files(self, mock_getsize, mock_open):
+        """Bo qua cac file qua lon khi tim kiem noi dung."""
+        index = {"large.txt": ["/project/large.txt"]}
+        # MAX_CONTENT_SEARCH_SIZE = 2 * 1024 * 1024
+        mock_getsize.return_value = 3 * 1024 * 1024
+
+        result = search_in_index(index, "code: find_me")
+        assert result == []
+        mock_open.assert_not_called()
+
+    @patch("builtins.open", side_effect=PermissionError("Permission denied"))
+    @patch("os.path.getsize", return_value=100)
+    def test_content_search_handle_read_error(self, mock_getsize, mock_open):
+        """Bo qua loi doc file khi tim kiem noi dung."""
+        index = {"secret.txt": ["/project/secret.txt"]}
+        result = search_in_index(index, "code: secret")
+        assert result == []
+
 
 # =============================================================================
 # Test build_search_index (can mock filesystem)

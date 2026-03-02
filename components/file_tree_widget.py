@@ -244,7 +244,7 @@ class FileTreeWidget(QWidget):
         self._search_field.clear()
         self._match_count_label.setText("")
         self._delegate.set_search_query("")
-        self._filter_proxy.set_search_query("")
+        self._filter_proxy.set_search_state("", None)
         self._last_search_results = []
         self._select_results_btn.hide()
 
@@ -354,13 +354,22 @@ class FileTreeWidget(QWidget):
             skip_expand: True nếu expandAll đã được gọi trước đó (vd. từ returnPressed).
         """
         query = self._pending_search
-        self._filter_proxy.set_search_query(query)
+
+        # Nếu đang gõ "code:" nhưng chưa nhập từ khóa, restore tree về nguyên trạng,
+        # không trigger tìm kiếm.
+        stripped = query.strip().lower()
+        if stripped == "code:" or (
+            stripped.startswith("code:") and not stripped[5:].strip()
+        ):
+            query = ""
+
         self._delegate.set_search_query(query)
 
         if query:
             # Use flat index for accurate full-tree search
             self._last_search_results = self._model.search_files(query)
             match_count = len(self._last_search_results)
+            self._filter_proxy.set_search_state(query, set(self._last_search_results))
 
             # Expand visible tree để filter có đủ nodes để match. Hiển thị wait cursor
             # khi expandAll chạy lâu trên project lớn. Skip nếu đã expand (returnPressed).
@@ -399,6 +408,7 @@ class FileTreeWidget(QWidget):
             self._last_search_results = []
             self._match_count_label.setText("")
             self._select_results_btn.hide()
+            self._filter_proxy.set_search_state("", None)
             self.search_results_changed.emit(0)
 
         # Trigger repaint

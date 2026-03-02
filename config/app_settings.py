@@ -77,10 +77,7 @@ class AppSettings:
     rule_file_names: list[str] = field(
         default_factory=lambda: [
             ".cursorrules",
-            "synapse-instructions.md",
             ".windsurfrules",
-            ".synapse-rules",
-            "prompt.md",
             "AGENTS.md",
             "CLAUDE.md",
         ]

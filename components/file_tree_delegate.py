@@ -207,7 +207,12 @@ class FileTreeDelegate(QStyledItemDelegate):
 
     def set_search_query(self, query: str) -> None:
         """Set search query để highlight matches."""
-        self._search_query = query.lower()
+        stripped = query.strip()
+        CODE_PREFIX = "code:"
+        if stripped.lower().startswith(CODE_PREFIX):
+            self._search_query = stripped[len(CODE_PREFIX) :].strip().lower()
+        else:
+            self._search_query = stripped.lower()
 
     def paint(
         self,

@@ -113,11 +113,16 @@ def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[s
     """
     Tim files theo query trong search index (case-insensitive substring).
 
+    Ho tro 2 che do tim kiem:
+    - Tim theo ten file (mac dinh): query la substring cua ten file
+    - Tim theo noi dung file (prefix "code:"): quet noi dung cac file trong index
+
     Independent voi lazy loading — tim duoc ca files chua expand trong tree.
 
     Args:
         index: Search index tu build_search_index()
-        query: Chuoi tim kiem (case-insensitive)
+        query: Chuoi tim kiem (case-insensitive).
+               Neu bat dau bang "code:", se tim trong noi dung file.
 
     Returns:
         Sorted list cac full paths matching query.
@@ -125,14 +130,70 @@ def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[s
     if not index:
         return []
 
-    query_lower = (query or "").lower().strip()
-    if not query_lower:
+    query_stripped = (query or "").strip()
+    if not query_stripped:
         return []
 
+    # Kiem tra prefix "code:" de chuyen sang che do tim kiem noi dung file
+    CODE_PREFIX = "code:"
+    if query_stripped.lower().startswith(CODE_PREFIX):
+        content_query = query_stripped[len(CODE_PREFIX) :].strip()
+        if not content_query:
+            return []
+        return _search_content_in_files(index, content_query)
+
+    # Che do mac dinh: tim theo ten file (case-insensitive substring)
+    query_lower = query_stripped.lower()
     results: List[str] = []
     for filename_lower, paths in index.items():
         if query_lower in filename_lower:
             results.extend(paths)
+
+    results.sort()
+    return results
+
+
+def _search_content_in_files(
+    index: Dict[str, List[str]], content_query: str
+) -> List[str]:
+    """
+    Tim kiem noi dung ben trong cac file da duoc index.
+
+    Quet tung file trong flat index, doc noi dung va tim substring
+    (case-insensitive). Bo qua cac file khong doc duoc (encoding loi,
+    permission denied, file qua lon).
+
+    Args:
+        index: Search index tu build_search_index() (filename_lower -> [full_paths])
+        content_query: Chuoi can tim trong noi dung file (chua strip, chua lower)
+
+    Returns:
+        Sorted list cac full paths chua noi dung matching query.
+    """
+    # Gioi han kich thuoc file de tranh doc file qua lon (2MB)
+    MAX_CONTENT_SEARCH_SIZE = 2 * 1024 * 1024
+
+    query_lower = content_query.lower()
+    results: List[str] = []
+
+    for _filename, paths in index.items():
+        for full_path in paths:
+            try:
+                import os
+
+                # Bo qua file qua lon de tranh block UI lau
+                file_size = os.path.getsize(full_path)
+                if file_size > MAX_CONTENT_SEARCH_SIZE:
+                    continue
+
+                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+
+                if query_lower in content.lower():
+                    results.append(full_path)
+            except (OSError, PermissionError, UnicodeDecodeError):
+                # Bo qua cac file khong doc duoc
+                continue
 
     results.sort()
     return results

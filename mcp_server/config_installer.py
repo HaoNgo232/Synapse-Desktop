@@ -14,9 +14,12 @@ Moi target deu:
 """
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
+
+logger = logging.getLogger("synapse.mcp.config_installer")
 
 
 # Dinh nghia cac AI client duoc ho tro
@@ -276,8 +279,8 @@ def auto_update_installed_configs() -> list[str]:
             success, _ = install_config(target_name)
             if success:
                 updated.append(target_name)
-        except Exception:
-            # Khong de loi auto-update lam crash app khoi dong
-            pass
+        except Exception as e:
+            # Khong de loi auto-update lam crash app khoi dong, nhung log de de debug
+            logger.warning("Auto-update failed for %s: %s", target_name, e)
 
     return updated

@@ -12,6 +12,8 @@ Cach chay:
 
 import logging
 import os
+import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -26,49 +28,41 @@ if str(_project_root) not in sys.path:
 
 logger = logging.getLogger("synapse.mcp")
 
+# Regex validate git ref name: chi cho phep ky tu an toan (branch, tag, commit hash).
+# Khong cho phep bat dau bang '-' de chan git option injection (vi du: '--output=/tmp/pwned').
+_SAFE_GIT_REF = re.compile(r"^[A-Za-z0-9_./@^~][A-Za-z0-9_./@^~\-]*$")
+# Timeout cho moi lenh git subprocess (seconds). 15s la du cho local git operations.
+_GIT_TIMEOUT = 15
+# Regex cho find_references: loc string literals va inline comments truoc khi match symbol
+_INLINE_COMMENT_RE = re.compile(r"(#|//).*$")
+_STRING_LITERAL_RE: re.Pattern[str] = re.compile(
+    r'"(?:[^"\\]|\\.)*"|' + r"'(?:[^'\\]|\\.)*'"
+)
+
 # Khoi tao MCP Server voi ten hien thi cho AI clients
 mcp = FastMCP(
     "Synapse Desktop",
     instructions=(
-        "You have access to Synapse Desktop — a powerful codebase exploration toolkit.\n"
+        "Synapse Desktop — AI-powered codebase exploration toolkit with 15 tools.\n"
         "\n"
-        "🚨 CRITICAL WORKFLOW - ALWAYS START WITH:\n"
-        "  1. start_session → Auto-discover project structure, folders, and technical debt\n"
-        "     OR manually run: get_project_structure → list_directories → find_todos\n"
-        "  2. Use get_codemap to understand file structure before reading full content\n"
-        "  3. Use read_file only when you need implementation details\n"
+        "🚨 CRITICAL WORKFLOW:\n"
+        "  1. ALWAYS start with: start_session (auto-discover) OR get_project_structure\n"
+        "  2. Use get_codemap BEFORE reading files (saves 90% tokens)\n"
+        "  3. Verify code structure by reading files — don't assume from names\n"
         "\n"
-        "⚠️  NEVER guess code structure. ALWAYS read actual files first.\n"
+        "COMMON PATTERNS:\n"
+        "  • New codebase: start_session → get_codemap → read files\n"
+        "  • Find code: find_references / find_todos → read files\n"
+        "  • Code review: diff_summary → get_codemap → read files\n"
+        "  • Refactoring: find_references → get_imports_graph → estimate_tokens\n"
+        "  • Build context: manage_selection → estimate_tokens → build_prompt\n"
         "\n"
-        "DISCOVERY:\n"
-        "  • start_session → One-click project onboarding (structure + tree + todos)\n"
-        "  • get_project_structure → File counts, frameworks, project size\n"
-        "  • list_directories → Folder layout (tree format)\n"
-        "  • list_files → Full file listing, filterable by extension\n"
+        "TOKEN MANAGEMENT:\n"
+        "  • Always estimate_tokens before build_prompt\n"
+        "  • Use read_file_range for large files (line range support)\n"
+        "  • Prefer get_codemap (signatures only) over full file reads\n"
         "\n"
-        "READING:\n"
-        "  • read_file → Read file contents (supports line ranges)\n"
-        "  • get_codemap → Extract function/class signatures WITHOUT implementation (saves tokens)\n"
-        "  • get_symbols → Structured JSON list of all symbols (for programmatic analysis)\n"
-        "\n"
-        "ANALYSIS:\n"
-        "  • get_file_metrics → LOC, functions/classes count, TODO/FIXME/HACK, complexity\n"
-        "  • find_references → Find all usages of a symbol (refactoring impact)\n"
-        "  • find_todos → Scan entire project for TODO/FIXME/HACK comments\n"
-        "  • get_imports_graph → Dependency graph (JSON) to understand coupling\n"
-        "  • estimate_tokens → Check token count before building context\n"
-        "  • diff_summary → Smart git changes summary (functions added/modified/deleted)\n"
-        "\n"
-        "BUILDING:\n"
-        "  • build_prompt → Generate complete AI-ready prompt\n"
-        "  • manage_selection → Track selected files for context\n"
-        "\n"
-        "BEST PRACTICES:\n"
-        "  • Use estimate_tokens to avoid context window overruns\n"
-        "  • Use find_references before refactoring to see impact radius\n"
-        "  • Use get_imports_graph to understand module coupling\n"
-        "  • Use diff_summary before code review to understand changes\n"
-        "  • When analyzing code, read actual files — don't guess"
+        "All tools have detailed docstrings — check them for specific usage."
     ),
 )
 
@@ -270,24 +264,20 @@ def list_directories(
 
 
 # ===========================================================================
-# Tool 3: read_file - Doc noi dung 1 file cu the
+# Tool 3: read_file_range - Doc noi dung file voi line range support
 # ===========================================================================
 @mcp.tool()
-def read_file(
+def read_file_range(
     workspace_path: str,
     relative_path: str,
     start_line: Optional[int] = None,
     end_line: Optional[int] = None,
 ) -> str:
-    """Read the contents of a specific file in the workspace.
+    """Read file contents with optional line range support (enhanced version).
 
-    Returns the full file content (or a line range) along with line count and
-    estimated token usage. Use start_line/end_line to read only a section of
-    large files and save context window space.
-
-    When to use: You need to see the actual implementation of a function, review
-    a config file, check imports, or verify any code detail. Prefer get_codemap
-    first for an overview, then read_file for specific sections you need.
+    This is Synapse's enhanced file reader with line range support.
+    Use this when you need to read specific sections of large files to save tokens.
+    For simple full-file reads, use your client's built-in read_file tool.
 
     Args:
         workspace_path: Absolute path to the workspace root directory.
@@ -926,12 +916,12 @@ def get_file_metrics(
         fixme_count = content.upper().count("FIXME")
         hack_count = content.upper().count("HACK")
 
-        # Cyclomatic complexity heuristic
+        # McCabe cyclomatic complexity heuristic
+        # Luu y: "else" KHONG tang cyclomatic complexity vi khong tao decision point moi
         complexity = 1
         for kw in [
             "if",
             "elif",
-            "else",
             "for",
             "while",
             "case",
@@ -990,9 +980,14 @@ def find_references(
 
                 for i, line in enumerate(lines, start=1):
                     stripped = line.strip()
-                    if stripped.startswith(("#", "//")):
+                    # Bo qua dong comment hoan toan (bao gom ca block comment markers)
+                    if stripped.startswith(("#", "//", "/*", "*")):
                         continue
-                    if re.search(pattern, line):
+                    # Loc string literals va inline comments truoc khi match
+                    # de giam false positives (vi du: "Cannot find mySymbol" hoac # rename mySymbol)
+                    cleaned = _STRING_LITERAL_RE.sub("", line)
+                    cleaned = _INLINE_COMMENT_RE.sub("", cleaned)
+                    if re.search(pattern, cleaned):
                         rel_path = os.path.relpath(file_path, ws)
                         snippet = line.strip()[:80]
                         references.append((rel_path, i, snippet))
@@ -1065,14 +1060,15 @@ def find_todos(
                 lines = content.splitlines()
 
                 for i, line in enumerate(lines, start=1):
-                    upper_line = line.upper()
                     comment_type = None
 
-                    if "TODO" in upper_line:
+                    # Dung word-boundary regex de tranh false positives
+                    # (vi du: "TODOLIST", "AUTOHACK" se KHONG match nua)
+                    if re.search(r"\bTODO\b", line, re.IGNORECASE):
                         comment_type = "TODO"
-                    elif "FIXME" in upper_line:
+                    elif re.search(r"\bFIXME\b", line, re.IGNORECASE):
                         comment_type = "FIXME"
-                    elif include_hack and "HACK" in upper_line:
+                    elif include_hack and re.search(r"\bHACK\b", line, re.IGNORECASE):
                         comment_type = "HACK"
 
                     if comment_type:
@@ -1287,27 +1283,40 @@ def diff_summary(
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
 
+    # Bug #1 fix: Validate target de chong git argument injection.
+    # Ngay ca khi dung list-form subprocess (khong shell=True),
+    # git van dien giai arguments bat dau voi "--" nhu options.
+    if not _SAFE_GIT_REF.match(target):
+        return (
+            f"Error: Invalid git target '{target}'. "
+            "Use a branch name, tag, or commit hash."
+        )
+
     try:
-        import subprocess
         from core.codemaps.symbol_extractor import extract_symbols
 
-        # Check if git repo
+        # Bug #2 fix: Them timeout cho tat ca subprocess calls de tranh hang MCP server.
+        # MCP stdio la single-threaded, mot subprocess hang = toan bo server chet.
+
+        # Kiem tra co phai git repo khong
         git_check = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
             cwd=ws,
             capture_output=True,
             text=True,
+            timeout=_GIT_TIMEOUT,
         )
         if git_check.returncode != 0:
             return "Error: Not a git repository"
 
-        # Get changed files
-        diff_cmd = ["git", "diff", "--name-only", target]
+        # Lay danh sach file thay doi. Dung "--" de tach git options khoi revision arguments.
+        diff_cmd = ["git", "diff", "--name-only", target, "--"]
         result = subprocess.run(
             diff_cmd,
             cwd=ws,
             capture_output=True,
             text=True,
+            timeout=_GIT_TIMEOUT,
         )
 
         if result.returncode != 0:
@@ -1352,6 +1361,7 @@ def diff_summary(
                     cwd=ws,
                     capture_output=True,
                     text=True,
+                    timeout=_GIT_TIMEOUT,
                 )
 
                 if old_content_result.returncode == 0:
@@ -1400,6 +1410,12 @@ def diff_summary(
 
         return summary
 
+    except subprocess.TimeoutExpired:
+        # Git hang (co the do credential prompt, .git/index.lock, hoac slow remote)
+        return (
+            "Error: Git operation timed out. "
+            "Check for .git/index.lock files or credential prompts."
+        )
     except Exception as e:
         logger.error("diff_summary error: %s", e)
         return f"Error: {e}"

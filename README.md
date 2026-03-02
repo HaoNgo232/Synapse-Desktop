@@ -131,7 +131,7 @@ All Python dependencies are listed in `requirements.txt`.
 
 | File | Description |
 |---|---|
-| `mcp_server/server.py` | MCP Server implementation using `FastMCP`. Exposes 7 tools to AI clients: `list_files`, `list_directories`, `read_file`, `get_codemap`, `get_project_structure`, `manage_selection`, `build_prompt`. Runs headless via stdio transport with proper logging redirection to stderr. |
+| `mcp_server/server.py` | MCP Server implementation using `FastMCP`. **Exposes 15 tools** to AI clients for comprehensive codebase exploration. Runs headless via stdio transport with proper logging redirection to stderr. |
 | `mcp_server/config_installer.py` | Auto-installer for MCP configuration files. Supports Cursor (`~/.cursor/mcp.json`), GitHub Copilot (`~/.vscode/mcp.json`), and Antigravity (`~/.gemini/antigravity/mcp_config.json`). Merges Synapse entry without affecting existing MCP servers. |
 
 ---
@@ -156,16 +156,35 @@ All Python dependencies are listed in `requirements.txt`.
 - **Continuous Memory**: AI summarizes its actions; Synapse saves this to `.synapse/memory.xml` and injects it into future prompts for multi-session continuity.
 - **Error Context**: One-click "Copy Error Context" provides the AI with detailed diagnostics (file content, search pattern, OPX instruction) for self-repair.
 
-### **<!-- [NEW] --> MCP Server Integration**
+### **<!-- [UPDATED] --> MCP Server Integration**
 - **Direct AI Access**: Run Synapse as an MCP server to expose workspace tools directly to AI clients (Cursor, GitHub Copilot, Antigravity).
-- **7 Core Tools**: 
+- **15 Comprehensive Tools**:
+  
+  **Onboarding (1)**
+  - `start_session` — One-click project discovery (structure + tree + todos)
+  
+  **Discovery (4)**
   - `list_files` — List all workspace files respecting `.gitignore`
   - `list_directories` — Show directory tree structure
-  - `read_file` — Read file contents with line range support
-  - `get_codemap` — Extract code structure without implementation
   - `get_project_structure` — Project summary with frameworks and file stats
+  - `find_todos` — Scan entire project for TODO/FIXME/HACK comments
+  
+  **Reading (3)**
+  - `read_file_range` — Read file contents with line range support
+  - `get_codemap` — Extract code structure without implementation (human-readable)
+  - `get_symbols` — Structured JSON symbol list (for programmatic analysis)
+  
+  **Analysis (5)**
+  - `get_file_metrics` — LOC, functions/classes count, TODO/FIXME/HACK, complexity
+  - `find_references` — Find all usages of a symbol (refactoring impact)
+  - `get_imports_graph` — Dependency graph (JSON adjacency list)
+  - `estimate_tokens` — Check token count before building context
+  - `diff_summary` — Smart git changes summary (functions added/modified/deleted)
+  
+  **Building (2)**
   - `manage_selection` — Track selected files for context building
   - `build_prompt` — Generate complete AI-ready prompts
+
 - **Auto-Configuration**: One-click installation of MCP config files via Settings tab.
 - **Headless Operation**: No GUI overhead when running in MCP mode — pure stdio transport for maximum efficiency.
 
@@ -201,7 +220,7 @@ All Python dependencies are listed in `requirements.txt`.
 
 3. **AI Explores Autonomously**
    - The AI client spawns Synapse in headless mode (`--run-mcp`).
-   - AI calls tools like `list_files`, `read_file`, `get_codemap` as needed.
+   - AI calls tools like `list_files`, `read_file_range`, `get_codemap` as needed.
    - No manual copy/paste — the AI has direct workspace access.
 
 **Manual MCP Server Launch:**

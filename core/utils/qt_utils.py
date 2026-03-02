@@ -59,7 +59,10 @@ class SignalBridge(QObject):
         Args:
             callback: Function không nhận argument
         """
-        self.callback_signal.emit(callback)
+        try:
+            self.callback_signal.emit(callback)
+        except RuntimeError:
+            pass  # Object deleted during app shutdown
 
 
 # Global signal bridge instance
@@ -188,12 +191,21 @@ class BackgroundWorker(QRunnable):
         """Execute worker function."""
         try:
             result = self.fn(*self.args, **self.kwargs)
-            self.signals.result.emit(result)
+            try:
+                self.signals.result.emit(result)
+            except RuntimeError:
+                pass
         except Exception as e:
             logger.error(f"BackgroundWorker error: {e}")
-            self.signals.error.emit(str(e))
+            try:
+                self.signals.error.emit(str(e))
+            except RuntimeError:
+                pass
         finally:
-            self.signals.finished.emit()
+            try:
+                self.signals.finished.emit()
+            except RuntimeError:
+                pass
 
 
 def schedule_background(

@@ -1,7 +1,8 @@
 """
 Context View (PySide6) - Tab để chọn files và copy context.
 
-Refactored using Mixin pattern for better organization.
+Refactored to use Composition pattern (controllers thay vi Mixins) de tach biet
+logic khoi UI va tuan thu Single Responsibility Principle.
 """
 
 import threading
@@ -10,10 +11,10 @@ from pathlib import Path
 from typing import Optional, Set, List, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.utils.repo_manager import RepoManager
+    pass
 
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Slot, QTimer, QObject
+from PySide6.QtCore import Slot, QTimer
 
 
 from core.utils.file_utils import TreeItem
@@ -27,9 +28,11 @@ from config.output_format import (
 
 # Import mixins
 from views.context._ui_builder import UIBuilderMixin
-from views.context._copy_actions import CopyActionsMixin
-from views.context._related_files import RelatedFilesMixin
-from views.context._tree_management import TreeManagementMixin
+from views.context.copy_action_controller import CopyActionController
+
+# Import controllers (composition-based replacements)
+from views.context.related_files_controller import RelatedFilesController
+from views.context.tree_management_controller import TreeManagementController
 
 
 logger = logging.getLogger(__name__)
@@ -37,9 +40,6 @@ logger = logging.getLogger(__name__)
 
 class ContextViewQt(
     UIBuilderMixin,
-    CopyActionsMixin,
-    RelatedFilesMixin,
-    TreeManagementMixin,
     QWidget,
 ):
     """View cho Context tab - PySide6 version."""
@@ -57,34 +57,10 @@ class ContextViewQt(
         # State
         self.tree: Optional[TreeItem] = None
         self._selected_output_style: OutputStyle = DEFAULT_OUTPUT_STYLE
-        self._last_ignored_patterns: List[str] = []
-        self._related_mode_active: bool = False
-        self._related_depth: int = 1
-        self._last_added_related_files: Set[str] = set()
-        self._resolving_related: bool = False  # Guard against recursive triggers
         self._loading_lock = threading.Lock()
         self._is_loading = False
         self._pending_refresh = False
         self._token_generation = 0
-        # Note: These attributes are used by mixins but owned by ContextViewQt
-        # CopyActionsMixin worker/signal references — must be kept alive
-        # to prevent GC while background work is in progress
-        self._current_copy_worker = None
-        self._current_copy_signals = None
-        self._current_security_worker = None
-        self._current_security_signals = None
-        # Generation counter — incremented each copy request to discard stale results
-        self._copy_generation: int = 0
-        self._copy_buttons_disabled: bool = False
-        # Stale worker/signal refs — kept alive until their callback fires
-        self._stale_workers: list = []
-        # Prompt-level cache — skips heavy work when nothing changed
-        from views.context._copy_actions import PromptCache
-
-        self._prompt_cache: PromptCache = PromptCache()
-        # TreeManagementMixin
-        self._repo_manager: Optional[RepoManager] = None  # Lazy init as RepoManager
-
         # AI Suggest Select state: worker reference + snapshot cho Undo
         self._ai_suggest_worker = None
         self._ai_suggest_previous_selection: Optional[List[str]] = None
@@ -105,6 +81,17 @@ class ContextViewQt(
             clipboard_service = QtClipboardService()
         self._clipboard_service = clipboard_service
 
+        # RelatedFilesController: quan ly logic auto-select related files
+        # TreeManagementController: quan ly refresh tree, ignore patterns, file watchers
+        # NOTE: parent=None de tranh QObject init phuc tap khi QWidget.__init__ bi mock trong tests
+        self._related_controller: RelatedFilesController = RelatedFilesController(self)
+        self._tree_controller: TreeManagementController = TreeManagementController(
+            self, parent=None
+        )
+        self._copy_controller: CopyActionController = CopyActionController(
+            self, parent=None
+        )
+
         # Build UI (from UIBuilderMixin)
         self._build_ui()
 
@@ -112,14 +99,20 @@ class ContextViewQt(
 
     def on_workspace_changed(self, workspace_path: Path) -> None:
         """Handle workspace change."""
+        if (
+            not self._copy_controller
+            or not self._related_controller
+            or not self._tree_controller
+        ):
+            return
+
         from core.logging_config import log_info
 
         log_info(f"[ContextView] Workspace changing to: {workspace_path}")
 
         # 0. Invalidate any pending copy operations by incrementing generation.
-        # Old workers will still run but their results will be ignored.
-        self._begin_copy_operation()
-        self._set_copy_buttons_enabled(True)
+        self._copy_controller._begin_copy_operation()
+        self.set_copy_buttons_enabled(True)
 
         # Invalidate any in-flight AI suggest request
         self._ai_suggest_generation += 1
@@ -133,16 +126,13 @@ class ContextViewQt(
             self._file_watcher.stop()
 
         # 2. Deactivate related mode to clean up state
-        if self._related_mode_active:
-            self._related_mode_active = False
-            self._last_added_related_files.clear()
-            self._related_menu_btn.setText("Related: Off")
+        self._related_controller.set_mode(False, 0, silent=True)
 
         # 3. Clear all caches for old workspace via CacheRegistry
         from services.cache_registry import cache_registry
 
         cache_registry.invalidate_for_workspace()
-        self._prompt_cache.invalidate_all()
+        self._copy_controller._prompt_cache.invalidate_all()
 
         # 4. Load new tree (this increments generation counter, cancels old workers)
         self.file_tree_widget.load_tree(workspace_path)
@@ -159,10 +149,10 @@ class ContextViewQt(
             self._file_watcher.start(
                 path=workspace_path,
                 callbacks=WatcherCallbacks(
-                    on_file_modified=self._on_file_modified,
-                    on_file_created=self._on_file_created,
-                    on_file_deleted=self._on_file_deleted,
-                    on_batch_change=self._on_file_system_changed,
+                    on_file_modified=self._tree_controller.on_file_modified,
+                    on_file_created=self._tree_controller.on_file_created,
+                    on_file_deleted=self._tree_controller.on_file_deleted,
+                    on_batch_change=self._tree_controller.on_file_system_changed,
                 ),
                 debounce_seconds=0.5,
             )
@@ -186,32 +176,211 @@ class ContextViewQt(
     def get_instructions_text(self) -> str:
         return self._instructions_field.toPlainText()
 
-    def get_selected_paths(self) -> List[str]:
-        return self.file_tree_widget.get_selected_paths()
+    def get_selected_paths(self) -> Set[str]:
+        return set(self.file_tree_widget.get_selected_paths())
 
     def get_expanded_paths(self) -> List[str]:
         return self.file_tree_widget.get_expanded_paths()
 
+    # ===== Protocol Adapter Methods (cho Controllers) =====
+    # Cac methods nay implement Protocol interfaces can thiet boi controllers
+    # Ma khong expose chi tiet noi tai cua ContextViewQt.
+
+    def get_all_selected_paths(self) -> Set[str]:
+        """
+        Tra ve tat ca selected paths (ca files va folders).
+
+        Adapter method cho RelatedFilesViewProtocol va TreeManagementViewProtocol.
+        """
+        return self.file_tree_widget.get_all_selected_paths()
+
+    def add_paths_to_selection(self, paths: Set[str]) -> int:
+        """Adapter: them paths vao file tree selection."""
+        return self.file_tree_widget.add_paths_to_selection(paths)
+
+    def remove_paths_from_selection(self, paths: Set[str]) -> int:
+        """Adapter: xoa paths khoi file tree selection."""
+        return self.file_tree_widget.remove_paths_from_selection(paths)
+
+    def load_tree(self, workspace: Path) -> None:
+        """Adapter: reload file tree widget."""
+        self.file_tree_widget.load_tree(workspace)
+
+    def show_status(self, message: str, is_error: bool = False) -> None:
+        """
+        Adapter cho controller protocol (public version cua _show_status).
+
+        Delegate sang _show_status (private method cua mixin).
+        """
+        self._show_status(message, is_error=is_error)
+
+    def scan_full_tree(self, workspace: Path):
+        """
+        Adapter: Scan full workspace tree de build file index day du.
+
+        Su dung cho RelatedFilesController khi resolve dependencies.
+        """
+        if not self._copy_controller:
+            return None
+        return self._copy_controller._scan_full_tree(workspace)
+
+    def get_output_style(self):
+        return self._selected_output_style
+
+    def get_total_tokens(self) -> int:
+        return self.file_tree_widget.get_total_tokens()
+
+    def get_clipboard_service(self):
+        return self._clipboard_service
+
+    def get_prompt_builder(self):
+        return self._prompt_builder
+
+    def parent_widget(self):
+        return self
+
+    def set_copy_buttons_enabled(self, enabled: bool) -> None:
+        for btn in (
+            self._diff_btn,
+            self._tree_map_btn,
+            self._smart_btn,
+            self._copy_btn,
+            self._opx_btn,
+        ):
+            btn.setEnabled(enabled)
+
+    def show_copy_breakdown(self, token_count: int, pre_snapshot: dict) -> None:
+        from components.toast_qt import toast_success
+
+        file_t = pre_snapshot.get("file_tokens", 0)
+        instr_t = pre_snapshot.get("instruction_tokens", 0)
+        include_opx = pre_snapshot.get("include_opx", False)
+        mode = pre_snapshot.get("copy_mode", "Copy")
+
+        opx_t = 0
+        if include_opx:
+            try:
+                from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+
+                opx_t = self._prompt_builder.count_tokens(XML_FORMATTING_INSTRUCTIONS)
+            except ImportError:
+                opx_t = 0
+
+        sum_parts = file_t + instr_t + opx_t
+        if sum_parts > token_count:
+            ratio = token_count / sum_parts if sum_parts > 0 else 1.0
+            file_t = int(file_t * ratio)
+            instr_t = int(instr_t * ratio)
+            opx_t = int(opx_t * ratio)
+            structure_t = 0
+        else:
+            structure_t = max(0, token_count - file_t - instr_t - opx_t)
+
+        parts = []
+        if file_t > 0:
+            parts.append(f"{file_t:,} content")
+        if instr_t > 0:
+            parts.append(f"{instr_t:,} instructions")
+        if opx_t > 0:
+            parts.append(f"{opx_t:,} OPX")
+        if structure_t > 0:
+            parts.append(f"{structure_t:,} system prompt")
+
+        breakdown_text = " + ".join(parts) if parts else ""
+
+        tooltip_lines = [
+            f"Total: {token_count:,} tokens",
+            "",
+            f"File content: {file_t:,} tokens",
+            f"Instructions: {instr_t:,} tokens",
+        ]
+        if opx_t > 0:
+            tooltip_lines.append(f"OPX instructions: {opx_t:,} tokens")
+        tooltip_lines.extend(
+            [
+                f"Prompt structure: {structure_t:,} tokens",
+                "  (includes: tree map, git diff/log, XML tags)",
+            ]
+        )
+
+        if len(parts) > 0:
+            toast_success(
+                message=f"{mode} successful! {token_count:,} tokens\n({breakdown_text})",
+                title=f"{mode} successful! {token_count:,} tokens",
+                tooltip="\n".join(tooltip_lines),
+                duration=8000,
+            )
+        else:
+            toast_success(
+                message=f"{mode} successful! {token_count:,} tokens",
+                title=f"{mode} successful! {token_count:,} tokens",
+                tooltip="\n".join(tooltip_lines),
+                duration=8000,
+            )
+
+    def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
+        paths = set()
+
+        def _walk(node):
+            paths.add(node.path)
+            for child in node.children:
+                _walk(child)
+
+        _walk(root)
+        return paths
+
+    def update_related_button_text(self, active: bool, depth: int, count: int) -> None:
+        """
+        Adapter: Cap nhat text cua related mode button.
+
+        Duoc goi boi RelatedFilesController khi trang thai thay doi.
+        """
+        if not hasattr(self, "_related_menu_btn"):
+            return
+
+        if not active:
+            self._related_menu_btn.setText("Related: Off")
+            return
+
+        depth_names = {1: "Direct", 2: "Nearby", 3: "Deep", 4: "Deeper", 5: "Deepest"}
+        depth_name = depth_names.get(depth, f"Depth {depth}")
+
+        if count > 0:
+            self._related_menu_btn.setText(f"Related: {depth_name} ({count})")
+        else:
+            self._related_menu_btn.setText(f"Related: {depth_name}")
+
+    @Slot(str)
+    def _preview_file(self, file_path: str) -> None:
+        """Preview file in dialog."""
+        from components.dialogs_qt import FilePreviewDialogQt
+
+        FilePreviewDialogQt.show_preview(self, file_path)
+
+    def invalidate_prompt_cache(self) -> None:
+        """Adapter: Invalidate prompt-level cache (duoc goi boi TreeManagementController)."""
+        if self._copy_controller:
+            self._copy_controller._prompt_cache.invalidate_all()
+
     def cleanup(self) -> None:
         """Cleanup resources."""
         # Invalidate all pending workers — their callbacks will be ignored
-        self._copy_generation += 1
+        if self._copy_controller:
+            self._copy_controller._begin_copy_operation()
 
         self._ai_suggest_generation += 1
         self._cancel_ai_suggest_worker()
 
-        # Force cleanup all stale refs
-        for obj in self._stale_workers:
-            if isinstance(obj, QObject):
-                try:
-                    obj.deleteLater()
-                except RuntimeError:
-                    pass
-        self._stale_workers.clear()
-        self._current_copy_worker = None
-        self._current_copy_signals = None
-        self._current_security_worker = None
-        self._current_security_signals = None
+        # Detach and destroy controllers manually since they use parent=None
+        if self._related_controller:
+            self._related_controller.deleteLater()
+            self._related_controller = None  # type: ignore
+        if self._tree_controller:
+            self._tree_controller.deleteLater()
+            self._tree_controller = None  # type: ignore
+        if self._copy_controller:
+            self._copy_controller.deleteLater()
+            self._copy_controller = None  # type: ignore
 
         # Dismiss all toasts
         try:
@@ -275,13 +444,15 @@ class ContextViewQt(
     @Slot(set)
     def _on_selection_changed(self, selected_paths: set) -> None:
         """Handle selection change — update display + trigger related resolution if active."""
+        if not self._copy_controller or not self._related_controller:
+            return
+
         self._token_generation += 1
-        self._prompt_cache.invalidate_all()
+        self._copy_controller._prompt_cache.invalidate_all()
         self._update_token_display()
 
         # Auto-resolve related files when mode is active
-        if self._related_mode_active and not self._resolving_related:
-            self._resolve_related_files()
+        self._related_controller.resolve_for_current_selection()
 
     @Slot()
     def _on_instructions_changed(self) -> None:
@@ -299,7 +470,8 @@ class ContextViewQt(
             try:
                 self._selected_output_style = get_style_by_id(format_id)
                 update_app_setting(output_format=format_id)
-                self._prompt_cache.invalidate_all()
+                if self._copy_controller:
+                    self._copy_controller._prompt_cache.invalidate_all()
             except ValueError:
                 pass
 
@@ -523,7 +695,8 @@ class ContextViewQt(
         initialize_encoder()  # Re-inject new config vao TokenizationService
 
         # Invalidate prompt cache (token counts will differ with new tokenizer)
-        self._prompt_cache.invalidate_all()
+        if self._copy_controller:
+            self._copy_controller._prompt_cache.invalidate_all()
 
         # Clear token cache (since tokenizer has changed)
         model = self.file_tree_widget.get_model()

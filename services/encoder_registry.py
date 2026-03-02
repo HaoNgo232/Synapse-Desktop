@@ -1,13 +1,12 @@
 """
-Encoder Registry - Provider/Container cho TokenizationService.
+Encoder Registry - Provider cho TokenizationService.
 
-Module nay la single access point cho TokenizationService instance.
-Thay the cac global state cu, cung cap dependency injection cho
-toan bo ung dung.
+DEPRECATED: Module nay giu lai de backward compatibility.
+Cach dung MOI: truyen TokenizationService qua ServiceContainer.
 
 Functions:
-- get_tokenization_service(): Lay TokenizationService singleton
-- initialize_encoder(): Set model config cho service (goi khi app start)
+- get_tokenization_service(): Lay TokenizationService singleton (deprecated, dung ServiceContainer)
+- initialize_encoder(): Cap nhat encoder config (deprecated, dung container.reset_for_model_change())
 - get_current_model(): Lay model ID tu settings
 - get_tokenizer_repo(): Resolve tokenizer repo tu current model settings
 
@@ -21,7 +20,8 @@ from typing import Optional
 from services.interfaces.tokenization_service import ITokenizationService
 from services.tokenization_service import TokenizationService
 
-# TokenizationService singleton instance (thread-safe)
+# TokenizationService singleton instance (thread-safe) - backward compat
+# Preference: Su dung ServiceContainer.tokenization thay the
 _service_instance: Optional[TokenizationService] = None
 _service_lock = threading.Lock()
 
@@ -31,7 +31,8 @@ def get_tokenization_service() -> ITokenizationService:
     Lay TokenizationService singleton instance.
 
     Thread-safe lazy initialization.
-    Day la entry point chinh cho toan bo ung dung.
+    Day la entry point chinh cho cac code chua duoc chuyen sang
+    ServiceContainer injection.
 
     Returns:
         ITokenizationService instance
@@ -53,6 +54,9 @@ def initialize_encoder() -> None:
 
     Goi function nay khi app start hoac khi user doi model.
     Se update tokenizer_repo trong service instance.
+
+    NOTE: Neu dang dung ServiceContainer, hay goi container.reset_for_model_change()
+    thay the de dam bao nhat quan.
     """
     repo = get_tokenizer_repo()
     service = get_tokenization_service()

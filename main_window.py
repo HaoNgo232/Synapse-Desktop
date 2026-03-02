@@ -467,7 +467,7 @@ class SynapseMainWindow(QMainWindow):
 
                 creationflags = 0
                 if _platform.system() == "Windows":
-                    creationflags = subprocess.CREATE_NO_WINDOW
+                    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
                 result = subprocess.run(
                     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -682,8 +682,8 @@ class SynapseMainWindow(QMainWindow):
         """Save current session state."""
         state = SessionState(
             workspace_path=str(self.workspace_path) if self.workspace_path else None,
-            selected_files=self.context_view.get_selected_paths(),
-            expanded_folders=self.context_view.get_expanded_paths(),
+            selected_files=list(self.context_view.get_selected_paths()),
+            expanded_folders=list(self.context_view.get_expanded_paths()),
             instructions_text=self.context_view.get_instructions_text(),
             active_tab_index=self._current_tab_index,
             window_width=self.width(),
@@ -801,10 +801,14 @@ def main() -> None:
 
     ensure_app_directories()
 
-    # Initialize encoder config (inject settings into core layer)
+    # Khoi tao encoder config (inject settings vao core layer)
+    # NOTE: Cach moi nen dung ServiceContainer.tokenization thay the.
+    # initialize_encoder() van duoc goi o day de backward compat voi cac module
+    # chua duoc migrate sang DI injection pattern.
     initialize_encoder()
 
     # Register all cache adapters into CacheRegistry
+    # NOTE: Sau khi Phase 2 hoan tat, cac adapters se dang ky vao container.cache_registry
     from services.cache_adapters import register_all_caches
 
     register_all_caches()

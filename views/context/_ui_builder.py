@@ -129,7 +129,7 @@ class UIBuilderMixin:
         refresh_btn.setToolTip("Refresh file tree (F5)")
         refresh_btn.setStyleSheet(icon_btn_style)
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        refresh_btn.clicked.connect(self._refresh_tree)
+        refresh_btn.clicked.connect(self._tree_controller.refresh_tree)
         layout.addWidget(refresh_btn)
 
         # Separator nho
@@ -146,7 +146,7 @@ class UIBuilderMixin:
         ignore_btn.setToolTip("Ignore selected files")
         ignore_btn.setStyleSheet(icon_btn_style)
         ignore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        ignore_btn.clicked.connect(self._add_to_ignore)
+        ignore_btn.clicked.connect(self._tree_controller.add_to_ignore)
         layout.addWidget(ignore_btn)
 
         # Undo ignore button
@@ -156,7 +156,7 @@ class UIBuilderMixin:
         undo_btn.setToolTip("Undo last ignore")
         undo_btn.setStyleSheet(icon_btn_style)
         undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        undo_btn.clicked.connect(self._undo_ignore)
+        undo_btn.clicked.connect(self._tree_controller.undo_ignore)
         layout.addWidget(undo_btn)
 
         # Separator
@@ -175,8 +175,14 @@ class UIBuilderMixin:
         remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         remote_menu = QMenu(remote_btn)
-        remote_menu.addAction("Clone Repository", self._open_remote_repo_dialog)
-        remote_menu.addAction("Manage Cache", self._open_cache_management_dialog)
+        remote_menu.addAction(
+            "Clone Repository",
+            lambda: self._tree_controller.open_remote_repo_dialog(self),
+        )
+        remote_menu.addAction(
+            "Manage Cache",
+            lambda: self._tree_controller.open_cache_management_dialog(self),
+        )
         remote_btn.setMenu(remote_menu)
         layout.addWidget(remote_btn)
 
@@ -252,18 +258,27 @@ class UIBuilderMixin:
         deepest_action = related_menu.addAction("Deepest (depth 5)")
 
         # Connect actions
-        off_action.triggered.connect(lambda: self._set_related_mode(False, 0))
-        direct_action.triggered.connect(lambda: self._set_related_mode(True, 1))
-        nearby_action.triggered.connect(lambda: self._set_related_mode(True, 2))
-        deep_action.triggered.connect(lambda: self._set_related_mode(True, 3))
-        deeper_action.triggered.connect(lambda: self._set_related_mode(True, 4))
-        deepest_action.triggered.connect(lambda: self._set_related_mode(True, 5))
+        off_action.triggered.connect(
+            lambda: self._related_controller.set_mode(False, 0)
+        )
+        direct_action.triggered.connect(
+            lambda: self._related_controller.set_mode(True, 1)
+        )
+        nearby_action.triggered.connect(
+            lambda: self._related_controller.set_mode(True, 2)
+        )
+        deep_action.triggered.connect(
+            lambda: self._related_controller.set_mode(True, 3)
+        )
+        deeper_action.triggered.connect(
+            lambda: self._related_controller.set_mode(True, 4)
+        )
+        deepest_action.triggered.connect(
+            lambda: self._related_controller.set_mode(True, 5)
+        )
 
         self._related_menu_btn.setMenu(related_menu)
         layout.addWidget(self._related_menu_btn)
-
-        # Track current depth for internal use
-        self._related_depth = 1
 
         # Stretch de day token counter sang ben phai
         layout.addStretch()
@@ -661,7 +676,9 @@ class UIBuilderMixin:
         )
         self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
         self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._opx_btn.clicked.connect(lambda: self._copy_context(include_xml=True))
+        self._opx_btn.clicked.connect(
+            lambda: self._copy_controller._copy_context(include_xml=True)
+        )
         layout.addWidget(self._opx_btn)
 
         # === SECONDARY: Copy Context ===
@@ -669,7 +686,9 @@ class UIBuilderMixin:
         self._copy_btn.setStyleSheet(secondary_style)
         self._copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._copy_btn.clicked.connect(lambda: self._copy_context(include_xml=False))
+        self._copy_btn.clicked.connect(
+            lambda: self._copy_controller._copy_context(include_xml=False)
+        )
         layout.addWidget(self._copy_btn)
 
         # === SECONDARY: Copy Smart ===
@@ -702,7 +721,7 @@ class UIBuilderMixin:
         )
         self._smart_btn.setToolTip("Copy code structure only (Smart Context)")
         self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._smart_btn.clicked.connect(self._copy_smart_context)
+        self._smart_btn.clicked.connect(self._copy_controller._copy_smart_context)
         layout.addWidget(self._smart_btn)
 
         # === SECONDARY: Copy Diff Only ===
@@ -734,7 +753,7 @@ class UIBuilderMixin:
         )
         self._diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
         self._diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._diff_btn.clicked.connect(self._show_diff_only_dialog)
+        self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
         layout.addWidget(self._diff_btn)
 
         # === TERTIARY: Copy Tree Map ===
@@ -742,7 +761,7 @@ class UIBuilderMixin:
         self._tree_map_btn.setStyleSheet(secondary_style)
         self._tree_map_btn.setToolTip("Copy only file structure")
         self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tree_map_btn.clicked.connect(self._copy_tree_map_only)
+        self._tree_map_btn.clicked.connect(self._copy_controller._copy_tree_map_only)
         layout.addWidget(self._tree_map_btn)
 
         return widget

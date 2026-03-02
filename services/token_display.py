@@ -1,24 +1,27 @@
 """
-Token Display Service - Quan ly va cache token counts cho files
+Token Display Service - Quan ly va cache token counts cho files.
 
-Phien ban Sync - Don gian nhat, giong PasteMax.
-Khong dung threading hay async de tranh race conditions.
+Phien ban Signal-based - khong con phu thuoc vao UI framework.
+TokenDisplayService ke thua QObject de co the emit signals.
+UI layers lang nghe signals nay thay vi duoc truyen callback.
 
 Features:
 - Cache token counts de tranh tinh toan lai
 - Global cancellation flag (tu core.tokenization.cancellation)
 - Aggregate tokens cho folders
+- Qt Signals cho thread-safe UI updates (khong can UI page reference)
 """
 
 from pathlib import Path
-from typing import Dict, Callable, Set, Optional, List
+from typing import Dict, Set, Optional, List
 from collections import OrderedDict
 import threading
 import time
 
+from PySide6.QtCore import QObject, Signal
+
 from core.utils.file_utils import TreeItem
 from services.encoder_registry import get_tokenization_service
-from core.utils.safe_timer import SafeTimer  # RACE CONDITION FIX
 
 # Cancellation flag - import tu core layer (fix circular dependency)
 # Re-export de backward compat (main_window.py, tests import tu day)
@@ -29,42 +32,52 @@ from core.tokenization.cancellation import (  # noqa: F401
 )
 
 
-class TokenDisplayService:
+class TokenDisplayService(QObject):
     """
-    Service quản lý token display cho file tree.
+    Service quan ly token display cho file tree.
 
-    Phiên bản SYNC - đơn giản nhất, không race condition.
-    Token counting chạy synchronous với global flag để cancel.
+    Phien ban SIGNAL-BASED - emit Qt signals thay vi goi UI callback truc tiep.
+    Giup tach biet hoan toan tầng Service khoi tầng UI.
+
+    CACH SU DUNG:
+        service = TokenDisplayService()
+        # UI layer tu ket noi signal:
+        service.cache_updated.connect(my_widget.on_token_cache_updated)
 
     PERFORMANCE OPTIMIZATIONS:
     - Priority queue: count visible/selected files first
     - Smarter batching with size-aware scheduling
     - Incremental cache updates
-    - Folder token cache: cache tổng tokens cho folders để tránh tính lại
+    - Folder token cache: cache tong tokens cho folders de tranh tinh lai
     """
+
+    # Signal emit khi token cache duoc update (de UI refresh)
+    # Khong can truyen tham so - UI tu doc tu get_token_count()
+    cache_updated = Signal()
 
     # Config
     MAX_CACHE_SIZE = 10000  # Maximum cache entries
-    PROGRESS_INTERVAL = 10  # Update progress mỗi N files (reduced for responsiveness)
+    PROGRESS_INTERVAL = 10  # Update progress moi N files (reduced for responsiveness)
 
     # Size thresholds for smart scheduling
     SMALL_FILE_THRESHOLD = 10000  # bytes - count immediately
     LARGE_FILE_THRESHOLD = 100000  # bytes - defer to background
 
-    def __init__(self, on_update: Optional[Callable[[], None]] = None, page=None):
+    def __init__(self, parent: Optional[QObject] = None):
         """
+        Khoi tao TokenDisplayService.
+
         Args:
-            on_update: Callback khi token cache được update (để refresh UI)
+            parent: QObject parent (tuy chon, de quan ly lifecycle)
         """
-        self.on_update = on_update
-        self._page = page
+        super().__init__(parent)
 
         # Cache: path -> token count
         self._cache: Dict[str, int] = {}
         self._lock = threading.Lock()
 
         # Folder token cache: folder_path -> (total_tokens, is_complete, file_count)
-        # Giúp tránh tính toán lại tổng tokens cho folders mỗi lần render
+        # Giup tranh tinh toan lai tong tokens cho folders moi lan render
         # Using OrderedDict for explicit LRU behavior
         self._folder_cache: OrderedDict[str, tuple[int, bool, int]] = OrderedDict()
         self._folder_cache_lock = threading.Lock()
@@ -76,17 +89,14 @@ class TokenDisplayService:
         # Race condition prevention
         self._update_lock = threading.Lock()
         self._pending_updates: Set[str] = set()
-        self._update_timer: Optional[SafeTimer] = (
-            None  # RACE CONDITION FIX: Use SafeTimer
-        )
-        self._is_disposed = False  # Disposal flag để prevent callbacks sau cleanup
+        self._is_disposed = False  # Disposal flag de prevent callbacks sau cleanup
 
-        # Track all deferred timers để cancel khi stop
-        self._deferred_timers: List[SafeTimer] = []
-        self._deferred_timers_lock = threading.Lock()
+        # Track all deferred timers de cancel khi stop
+        self._deferred_threads: List[threading.Timer] = []
+        self._deferred_threads_lock = threading.Lock()
 
     def clear_cache(self):
-        """Xóa toàn bộ cache (khi reload tree)"""
+        """Xoa toan bo cache (khi reload tree)."""
         from core.logging_config import log_debug
 
         log_debug("[TokenDisplayService] clear_cache() called")
@@ -107,27 +117,21 @@ class TokenDisplayService:
 
         with self._update_lock:
             self._pending_updates.clear()
-            if self._update_timer:
-                try:
-                    self._update_timer.dispose()
-                except Exception:
-                    pass
-                self._update_timer = None
 
         log_debug("[TokenDisplayService] clear_cache() complete")
 
     def stop(self):
         """
-        Stop processing và cleanup IMMEDIATELY.
+        Stop processing va cleanup IMMEDIATELY.
 
-        RACE CONDITION FIX: Set disposal flag TRƯỚC khi cancel timers.
-        Cancel ALL deferred timers để đảm bảo không có background work còn chạy.
+        Set disposal flag TRUOC khi cancel timers.
+        Cancel ALL deferred timers de dam bao khong co background work con chay.
         """
         from core.logging_config import log_debug
 
         log_debug("[TokenDisplayService] stop() called - cancelling all operations")
 
-        # Set disposal flag FIRST - this causes all callbacks to exit early
+        # Set disposal flag FIRST - causes all callbacks to exit early
         self._is_disposed = True
 
         # Stop global token counting flag IMMEDIATELY
@@ -140,12 +144,6 @@ class TokenDisplayService:
         self._loading_paths.clear()
         with self._update_lock:
             self._pending_updates.clear()
-            if self._update_timer:
-                try:
-                    self._update_timer.dispose()
-                except Exception:
-                    pass
-                self._update_timer = None
 
         # Also clear cache to prevent stale data
         with self._lock:
@@ -155,41 +153,41 @@ class TokenDisplayService:
 
     def _cancel_all_deferred_timers(self):
         """
-        Cancel tất cả deferred timers đang pending.
+        Cancel tat ca deferred timers dang pending.
 
-        CRITICAL: Gọi method này khi switch folder hoặc stop service
-        để đảm bảo không có background token counting còn chạy.
+        CRITICAL: Goi method nay khi switch folder hoac stop service
+        de dam bao khong co background token counting con chay.
         """
         from core.logging_config import log_debug
 
-        with self._deferred_timers_lock:
-            timer_count = len(self._deferred_timers)
+        with self._deferred_threads_lock:
+            timer_count = len(self._deferred_threads)
             if timer_count > 0:
                 log_debug(
                     f"[TokenDisplayService] Cancelling {timer_count} deferred timers"
                 )
 
-            for timer in self._deferred_timers:
+            for timer in self._deferred_threads:
                 try:
-                    timer.dispose()
+                    timer.cancel()
                 except Exception:
                     pass
-            self._deferred_timers.clear()
+            self._deferred_threads.clear()
 
     def cleanup_stale_entries(self, valid_paths: set):
-        """Xóa các cache entries không còn tồn tại trong tree."""
+        """Xoa cac cache entries khong con ton tai trong tree."""
         with self._lock:
             stale_keys = [k for k in self._cache.keys() if k not in valid_paths]
             for key in stale_keys:
                 del self._cache[key]
 
     def get_token_count(self, path: str) -> Optional[int]:
-        """Lấy token count từ cache. Returns None nếu chưa được tính."""
+        """Lay token count tu cache. Returns None neu chua duoc tinh."""
         with self._lock:
             return self._cache.get(path)
 
     def get_token_display(self, path: str) -> str:
-        """Lấy string hiển thị token count. Returns empty string nếu chưa có."""
+        """Lay string hien thi token count. Returns empty string neu chua co."""
         with self._lock:
             count = self._cache.get(path)
             if count is None:
@@ -199,25 +197,27 @@ class TokenDisplayService:
             return self._format_tokens(count)
 
     def is_loading(self, path: str) -> bool:
-        """Check xem path đang được load không"""
+        """Check xem path dang duoc load khong."""
         return path in self._loading_paths
 
-    def request_token_count(self, path: str, page=None):
+    def request_token_count(self, path: str):
         """
-        Request tính token count cho file - prevent duplicate requests
+        Request tinh token count cho file - prevent duplicate requests.
+
+        Sau khi tinh xong, se emit cache_updated signal de UI tu refresh.
         """
         with self._update_lock:
             if path in self._cache or path in self._pending_updates:
                 return
             self._pending_updates.add(path)
 
-        # Chỉ tính cho files
+        # Chi tinh cho files
         if Path(path).is_dir():
             with self._update_lock:
                 self._pending_updates.discard(path)
             return
 
-        # Check cancellation - RACE CONDITION FIX: Sử dụng thread-safe function
+        # Check cancellation
         if not is_counting_tokens():
             with self._update_lock:
                 self._pending_updates.discard(path)
@@ -230,11 +230,16 @@ class TokenDisplayService:
             with self._update_lock:
                 self._pending_updates.discard(path)
 
-            # Invalidate folder cache vì file token đã thay đổi
+            # Invalidate folder cache vi file token da thay doi
             self.invalidate_folder_cache(path)
 
-            # Schedule UI update
-            self._schedule_ui_update()
+            # Emit signal de UI tu update (thread-safe qua Qt signal mechanism)
+            if not self._is_disposed:
+                from core.utils.qt_utils import run_on_main_thread
+
+                run_on_main_thread(
+                    lambda: self.cache_updated.emit() if not self._is_disposed else None
+                )
 
         except Exception as e:
             from core.logging_config import log_debug
@@ -248,31 +253,28 @@ class TokenDisplayService:
     def request_tokens_for_tree(
         self,
         tree: TreeItem,
-        page=None,
         visible_only: bool = True,
         visible_paths: Optional[set] = None,
-        max_immediate: int = 30,  # Slightly increased with smart prioritization
+        max_immediate: int = 30,
     ):
         """
-        Request token counts cho toàn bộ tree.
+        Request token counts cho toan bo tree.
 
-        Tối ưu:
+        Toi uu:
         - Prioritize small files for immediate counting
         - Large files deferred to background
         - Selected/visible files get priority
 
         Args:
             tree: Root TreeItem
-            page: Flet page
-            visible_only: Chỉ count visible files
-            visible_paths: Set paths đang visible
-            max_immediate: Số files count ngay (default 30)
+            visible_only: Chi count visible files
+            visible_paths: Set paths dang visible
+            max_immediate: So files count ngay (default 30)
         """
-        # Bắt đầu token counting (set flag = True)
+        # Bat dau token counting (set flag = True)
         start_token_counting()
-        self._page = page
 
-        # Check if disposed hoặc có vấn đề
+        # Check if disposed hoac co van de
         if self._is_disposed:
             return
 
@@ -316,12 +318,12 @@ class TokenDisplayService:
                 except OSError:
                     deferred_files.append(path)
 
-        # Count immediate files PARALLEL - sử dụng ThreadPoolExecutor + mmap
-        # AN TOÀN: count_tokens_batch_parallel() đã xử lý race condition
+        # Count immediate files PARALLEL - su dung ThreadPoolExecutor + mmap
+        # AN TOAN: count_tokens_batch_parallel() da xu ly race condition
         if immediate_files and is_counting_tokens():
             from core.logging_config import log_info
 
-            # PERFORMANCE TRACKING: Bắt đầu đếm
+            # PERFORMANCE TRACKING
             start_time = time.perf_counter()
             log_info(
                 f"[TokenCounter] START counting {len(immediate_files)} files (parallel)"
@@ -331,30 +333,26 @@ class TokenDisplayService:
             immediate_paths = [Path(p) for p in immediate_files]
 
             # Parallel counting - nhanh hon 3-4x
-            # TokenizationService da quan ly tokenizer_repo noi bo
             service = get_tokenization_service()
             results = service.count_tokens_batch_parallel(
                 immediate_paths, max_workers=4
             )
 
-            # PERFORMANCE TRACKING: Kết thúc đếm
+            # PERFORMANCE TRACKING
             elapsed = time.perf_counter() - start_time
             total_tokens = sum(results.values()) if results else 0
             log_info(
                 f"[TokenCounter] COMPLETE: {len(results)} files, {total_tokens:,} tokens in {elapsed:.3f}s ({len(results) / elapsed:.1f} files/sec)"
             )
 
-            # Update cache MỘT LẦN (batch update, không lock từng file)
+            # Update cache MOT LAN (batch update, khong lock tung file)
             if results and is_counting_tokens():
                 with self._lock:
                     self._cache.update(results)
 
-                # UI update
-                if self.on_update:
-                    try:
-                        self.on_update()
-                    except Exception:
-                        pass
+                # Emit signal de UI refresh (thread-safe qua Qt queued connection)
+                if not self._is_disposed:
+                    self.cache_updated.emit()
 
         # Schedule deferred files counting if any and not cancelled
         if deferred_files and is_counting_tokens():
@@ -364,10 +362,10 @@ class TokenDisplayService:
         """
         Schedule counting cho deferred files.
 
-        Count từng batch nhỏ với delay để không block UI.
+        Count tung batch nho voi delay de khong block UI.
 
-        PERFORMANCE FIX: Smaller batches and more frequent cancellation checks.
-        FOLDER SWITCH FIX: Track all timers để cancel khi switch folder.
+        FOLDER SWITCH FIX: Track all timers de cancel khi switch folder.
+        Su dung threading.Timer thay vi SafeTimer de giam phu thuoc vao UI.
         """
         from core.logging_config import log_debug
 
@@ -385,23 +383,23 @@ class TokenDisplayService:
             )
             return
 
-        # PERFORMANCE: Tăng batch size và delay cho project lớn (700+ files)
-        BATCH_SIZE = 100  # Tăng lên 100 để giảm số lần schedule
-        BATCH_DELAY = 0.5  # 500ms between batches - giảm UI blocking
+        # PERFORMANCE: Batch size va delay cho project lon (700+ files)
+        BATCH_SIZE = 100  # Giam so lan schedule
+        BATCH_DELAY = 0.5  # 500ms between batches
 
         def count_batch(batch_files):
+            """Dem tokens cho mot batch files."""
             from core.logging_config import log_debug
 
-            # Check cancellation FIRST - before doing ANY work
+            # Check cancellation FIRST
             if not is_counting_tokens() or self._is_disposed:
                 log_debug("[TokenDisplayService] count_batch cancelled at start")
                 return
 
             for path in batch_files:
-                # Check cancellation for EACH file - CRITICAL
                 if not is_counting_tokens() or self._is_disposed:
                     log_debug("[TokenDisplayService] count_batch cancelled mid-batch")
-                    return  # Exit immediately
+                    return
 
                 with self._lock:
                     if path in self._cache:
@@ -422,9 +420,9 @@ class TokenDisplayService:
                     with self._lock:
                         self._cache[path] = 0
 
-            # PERFORMANCE: Chỉ notify UI sau batch cuối cùng
-            # Tránh spam re-render với project lớn
-            pass
+            # Emit signal sau khi batch hoan thanh
+            if not self._is_disposed and is_counting_tokens():
+                self.cache_updated.emit()
 
         # Clear old deferred timers before scheduling new ones
         self._cancel_all_deferred_timers()
@@ -435,7 +433,6 @@ class TokenDisplayService:
 
         # Process in batches - check cancellation before each batch
         for i in range(0, len(files), BATCH_SIZE):
-            # Check cancellation before scheduling each batch
             if not is_counting_tokens() or self._is_disposed:
                 log_debug(
                     f"[TokenDisplayService] batch scheduling cancelled at batch {i}"
@@ -443,25 +440,22 @@ class TokenDisplayService:
                 return
 
             batch = files[i : i + BATCH_SIZE]
+            delay = BATCH_DELAY * (i // BATCH_SIZE + 1)
 
-            # Use SafeTimer for thread-safe deferred execution
+            # Su dung threading.Timer thay vi SafeTimer de giam phu thuoc vao UI page
             def create_batch_callback(batch_data):
+                """Tao closure cho moi batch de tranh late binding bug."""
                 return lambda: count_batch(batch_data)
 
-            timer = SafeTimer(
-                interval=BATCH_DELAY * (i // BATCH_SIZE + 1),
-                callback=create_batch_callback(batch),
-                page=self._page,
-                use_main_thread=False,  # Count in background
-            )
+            timer = threading.Timer(delay, create_batch_callback(batch))
+            timer.daemon = True  # Daemon thread - tu dong ket thuc khi app dong
 
-            # Track timer để cancel later
-            with self._deferred_timers_lock:
-                # Final check before adding
+            # Track timer de cancel later
+            with self._deferred_threads_lock:
                 if self._is_disposed:
-                    timer.dispose()
+                    timer.cancel()
                     return
-                self._deferred_timers.append(timer)
+                self._deferred_threads.append(timer)
 
             timer.start()
 
@@ -472,32 +466,30 @@ class TokenDisplayService:
         visible_paths: Optional[set],
         result: list,
     ):
-        """Recursive collect files cần tính token"""
-        # Check cancellation - RACE CONDITION FIX: Sử dụng thread-safe function
+        """Recursive collect files can tinh token."""
         if not is_counting_tokens():
             return
 
-        # Skip nếu visible_only và item không visible
+        # Skip neu visible_only va item khong visible
         if visible_only and visible_paths and item.path not in visible_paths:
             return
 
         if not item.is_dir:
-            # Là file - add to list
+            # La file - add to list
             with self._lock:
                 cached = item.path in self._cache
 
             if not cached:
                 result.append(item.path)
         else:
-            # Là folder - recurse vào children
+            # La folder - recurse vao children
             for child in item.children:
-                # RACE CONDITION FIX: Sử dụng thread-safe function
                 if not is_counting_tokens():
                     break
                 self._collect_files_to_count(child, visible_only, visible_paths, result)
 
     def _cleanup_cache_if_needed(self):
-        """Remove oldest cache entries nếu cache quá lớn"""
+        """Remove oldest cache entries neu cache qua lon."""
         with self._lock:
             if len(self._cache) > self.MAX_CACHE_SIZE:
                 remove_count = len(self._cache) // 5
@@ -510,7 +502,6 @@ class TokenDisplayService:
         Tinh tong tokens cua folder tu cache.
 
         Return partial sum ngay ca khi chua cache het de hien thi cho user.
-        Truoc day tra ve None neu chua complete - nay tra ve partial sum.
         """
         folder_item = self._find_item_by_path(tree, folder_path)
         if not folder_item:
@@ -519,7 +510,6 @@ class TokenDisplayService:
         total = 0
         file_paths = self._get_all_file_paths(folder_item)
 
-        # Neu khong co files, return None de UI khong hien thi badge
         if not file_paths:
             return None
 
@@ -528,8 +518,6 @@ class TokenDisplayService:
                 if file_path in self._cache:
                     total += self._cache[file_path]
 
-        # Return partial sum ngay ca khi chua hoan thanh
-        # Chi return None neu chua co bat ky file nao duoc cache
         return total if total > 0 else None
 
     def get_folder_tokens_status(
@@ -538,8 +526,8 @@ class TokenDisplayService:
         """
         Lay token count va status complete cua folder.
 
-        OPTIMIZED: Sử dụng folder cache để tránh tính toán lại.
-        Cache được invalidate khi file cache thay đổi.
+        OPTIMIZED: Su dung folder cache de tranh tinh toan lai.
+        Cache duoc invalidate khi file cache thay doi.
 
         Returns:
             Tuple (total_tokens, is_complete)
@@ -588,16 +576,14 @@ class TokenDisplayService:
 
     def invalidate_folder_cache(self, file_path: str):
         """
-        Invalidate folder cache khi một file được update.
+        Invalidate folder cache khi mot file duoc update.
 
-        Xóa cache của tất cả folders chứa file này.
+        Xoa cache cua tat ca folders chua file nay.
 
         Args:
-            file_path: Path của file vừa được update
+            file_path: Path cua file vua duoc update
         """
         with self._folder_cache_lock:
-            # Xóa cache của tất cả folders có thể chứa file này
-            # Bằng cách check prefix
             folders_to_remove = []
             for folder_path in self._folder_cache:
                 if file_path.startswith(folder_path + "/") or file_path.startswith(
@@ -609,7 +595,7 @@ class TokenDisplayService:
                 del self._folder_cache[folder]
 
     def _get_all_file_paths(self, item: TreeItem) -> list:
-        """Lấy tất cả file paths trong item"""
+        """Lay tat ca file paths trong item."""
         paths = []
         if not item.is_dir:
             paths.append(item.path)
@@ -620,7 +606,7 @@ class TokenDisplayService:
     def _find_item_by_path(
         self, item: TreeItem, target_path: str
     ) -> Optional[TreeItem]:
-        """Tìm TreeItem theo path"""
+        """Tim TreeItem theo path."""
         if item.path == target_path:
             return item
         for child in item.children:
@@ -631,44 +617,10 @@ class TokenDisplayService:
 
     @staticmethod
     def _format_tokens(count: int) -> str:
-        """Format token count cho display"""
+        """Format token count cho display."""
         if count < 1000:
             return str(count)
         elif count < 10000:
             return f"{count / 1000:.1f}k"
         else:
             return f"{count // 1000}k"
-
-    def _schedule_ui_update(self):
-        """Schedule a debounced UI update - RACE CONDITION SAFE"""
-        with self._update_lock:
-            if self._update_timer:
-                self._update_timer.cancel()
-
-            # RACE CONDITION FIX: Use SafeTimer instead of Timer
-            self._update_timer = SafeTimer(
-                interval=0.1,
-                callback=self._do_ui_update,
-                page=getattr(self, "_page", None),
-                use_main_thread=True,
-            )
-            self._update_timer.start()
-
-    def _do_ui_update(self):
-        """
-        Actual UI update với disposal check.
-
-        RACE CONDITION FIX: Check disposal trước khi gọi callback.
-        Timer callback có thể chạy sau khi service đã cleanup.
-        """
-        # Skip nếu đã disposed
-        if self._is_disposed:
-            return
-
-        if self.on_update:
-            try:
-                self.on_update()
-            except Exception as e:
-                from core.logging_config import log_debug
-
-                log_debug(f"[TokenDisplayService] UI update callback error: {e}")

@@ -90,6 +90,10 @@ def test_app_race_conditions():
 
         # Test TokenDisplayService
         print("\n5. Testing TokenDisplayService...")
+        # TokenDisplayService ke thua QObject, can QCoreApplication de chay
+        from PySide6.QtCore import QCoreApplication
+
+        _app = QCoreApplication.instance() or QCoreApplication([])
         service = TokenDisplayService()
 
         # Test concurrent requests

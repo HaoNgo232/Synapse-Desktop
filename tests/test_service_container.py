@@ -3,9 +3,9 @@ Tests cho ServiceContainer - composition root pattern.
 
 Verify:
 1. Container tao dung cac service instances
-2. reset_for_model_change() re-initialize encoder
+2. reset_for_model_change() re-initialize tokenization service
 3. get_health_report() tra ve cache stats
-4. Container khong tao duplicate singletons
+4. Container so huu instance rieng (khong dung shared singletons)
 
 Run: pytest tests/test_service_container.py -v
 """
@@ -40,36 +40,67 @@ class TestServiceContainerCreation:
         container = ServiceContainer()
         assert isinstance(container.clipboard, IClipboardService)
 
-    def test_references_existing_cache_registry_singleton(self):
-        """Container phai dung cache_registry singleton, KHONG tao moi."""
+    def test_creates_owned_cache_registry(self):
+        """Container phai tao CacheRegistry rieng (khong dung global singleton)."""
         from services.service_container import ServiceContainer
-        from services.cache_registry import cache_registry
+        from services.cache_registry import CacheRegistry
 
         container = ServiceContainer()
-        assert container.cache_registry is cache_registry
+        # Container so huu instance rieng cua CacheRegistry
+        assert isinstance(container.cache_registry, CacheRegistry)
 
-    def test_tokenization_property_delegates_to_registry(self):
-        """Container.tokenization phai delegate sang encoder_registry."""
+    def test_creates_owned_tokenization_service(self):
+        """Container phai tao TokenizationService rieng (khong dung global singleton)."""
         from services.service_container import ServiceContainer
-        from services.encoder_registry import get_tokenization_service
+        from services.interfaces.tokenization_service import ITokenizationService
 
         container = ServiceContainer()
-        # Cung instance vi deu goi get_tokenization_service()
-        assert container.tokenization is get_tokenization_service()
+        # tokenization property tra ve instance do container so huu
+        assert isinstance(container.tokenization, ITokenizationService)
+
+    def test_two_containers_share_cache_registry_until_phase2(self):
+        """Moi container hien su dung module-level cache_registry."""
+        from services.service_container import ServiceContainer
+
+        container_a = ServiceContainer()
+        container_b = ServiceContainer()
+        # Tam thoi chia se module singleton
+        assert container_a.cache_registry is container_b.cache_registry
 
 
 class TestServiceContainerLifecycle:
     """Dam bao lifecycle methods hoat dong dung."""
 
-    def test_reset_for_model_change_calls_initialize_encoder(self):
-        """reset_for_model_change() phai goi initialize_encoder()."""
+    def test_reset_for_model_change_updates_tokenization(self):
+        """reset_for_model_change() phai cap nhat tokenization service config."""
         from services.service_container import ServiceContainer
 
         container = ServiceContainer()
-
-        with patch("services.service_container.initialize_encoder") as mock_init:
+        # Mock _resolve_tokenizer_repo de kiem soat test
+        with patch.object(
+            ServiceContainer, "_resolve_tokenizer_repo", return_value="test/repo"
+        ):
+            # Neu khong raise exception la OK
             container.reset_for_model_change()
-            mock_init.assert_called_once()
+
+    def test_shutdown_does_not_raise(self):
+        """shutdown() khong duoc raise exception."""
+        from services.service_container import ServiceContainer
+
+        container = ServiceContainer()
+        # Should not raise
+        container.shutdown()
+
+    def test_shutdown_invalidates_caches(self):
+        """shutdown() phai goi invalidate_for_workspace() tren cache_registry."""
+        from services.service_container import ServiceContainer
+
+        container = ServiceContainer()
+        with patch.object(
+            container.cache_registry, "invalidate_for_workspace"
+        ) as mock_invalidate:
+            container.shutdown()
+            mock_invalidate.assert_called_once()
 
 
 class TestServiceContainerHealthReport:

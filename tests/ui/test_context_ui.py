@@ -14,8 +14,8 @@ def test_context_view_initialization(context_view):
     """Kiem tra ContextViewQt khoi tao thanh cong."""
     view = context_view
     assert view.tree is None
-    assert view._related_mode_active is False
-    assert view._related_depth == 1
+    assert view._related_controller.is_active is False
+    assert view._related_controller.depth == 1
     assert view._is_loading is False
 
 
@@ -102,8 +102,8 @@ def test_on_workspace_changed(context_view):
     """Kiem tra on_workspace_changed xu ly day du (lines 104-152)."""
     view = context_view
     view.file_tree_widget.load_tree = MagicMock()
-    view._related_mode_active = True
-    view._last_added_related_files = {"old.py"}
+    view._related_controller._mode_active = True
+    view._related_controller._last_added_related_files = {"old.py"}
 
     mock_watcher = MagicMock()
     view._file_watcher = mock_watcher
@@ -117,8 +117,8 @@ def test_on_workspace_changed(context_view):
         view.on_workspace_changed(new_path)
 
     mock_watcher.stop.assert_called_once()
-    assert view._related_mode_active is False
-    assert len(view._last_added_related_files) == 0
+    assert view._related_controller.is_active is False
+    assert len(view._related_controller._last_added_related_files) == 0
     mock_registry.invalidate_for_workspace.assert_called_once()
     view.file_tree_widget.load_tree.assert_called_once_with(new_path)
 
@@ -177,7 +177,9 @@ def test_cleanup(context_view):
 
     # Add some stale workers
     mock_qobj = MagicMock(spec=QObject)
-    view._stale_workers = [mock_qobj, "not_a_qobject"]
+
+    copy_controller = view._copy_controller
+    copy_controller._stale_workers = [mock_qobj, "not_a_qobject"]
 
     with patch("components.toast_qt.ToastManager") as mock_toast_mgr:
         mock_instance = MagicMock()
@@ -185,8 +187,11 @@ def test_cleanup(context_view):
         view.cleanup()
 
     mock_qobj.deleteLater.assert_called_once()
-    assert view._stale_workers == []
-    assert view._current_copy_worker is None
+    assert copy_controller._stale_workers == []
+    assert copy_controller._current_copy_worker is None
+    assert view._related_controller is None
+    assert view._tree_controller is None
+    assert view._copy_controller is None
     assert view._file_watcher is None
     mock_watcher.stop.assert_called_once()
     view.file_tree_widget.cleanup.assert_called_once()
@@ -207,7 +212,7 @@ def test_on_selection_changed(context_view):
     """Kiem tra _on_selection_changed tang generation va update display (lines 215-224)."""
     view = context_view
     old_gen = view._token_generation
-    view._related_mode_active = False
+    view._related_controller._mode_active = False
     view._on_selection_changed({"file1.py"})
     assert view._token_generation == old_gen + 1
 
@@ -215,9 +220,11 @@ def test_on_selection_changed(context_view):
 def test_on_selection_changed_triggers_related(context_view):
     """Kiem tra _on_selection_changed triggers related resolution khi active (line 223-224)."""
     view = context_view
-    view._related_mode_active = True
-    view._resolving_related = False
-    with patch.object(view, "_resolve_related_files") as mock_resolve:
+    view._related_controller._mode_active = True
+    view._related_controller._resolving = False
+    with patch.object(
+        view._related_controller, "_resolve_related_files"
+    ) as mock_resolve:
         view._on_selection_changed({"file.py"})
         mock_resolve.assert_called_once()
 

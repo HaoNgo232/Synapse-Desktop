@@ -13,17 +13,18 @@ Su dung:
     )
 
 Design decisions:
-- KHONG thay the cac global accessor hien co (get_tokenization_service(), cache_registry)
-- Chi wrap chung lai de cung cap single point of control
-- Cac module khac van co the import truc tiep ma khong bi anh huong
+- Container SO HUU truc tiep TokenizationService (khong dung global singleton)
+- encoder_registry.get_tokenization_service() hien van hoat dong de tuong thich
+  nguoc nhung delegate sang container neu co the
+- Cac module can TokenizationService nen nhan qua constructor, khong global import
 """
 
 import logging
 from typing import Any
 
 from services.prompt_build_service import PromptBuildService, QtClipboardService
-from services.cache_registry import cache_registry
-from services.encoder_registry import get_tokenization_service, initialize_encoder
+from services.cache_registry import CacheRegistry
+from services.tokenization_service import TokenizationService
 from services.service_interfaces import IPromptBuilder, IClipboardService
 from services.interfaces.tokenization_service import ITokenizationService
 
@@ -34,8 +35,8 @@ class ServiceContainer:
     """
     Composition root - single point of control cho service lifecycle.
 
-    So huu: PromptBuildService, QtClipboardService
-    Tham chieu: cache_registry (module singleton), encoder_registry (module singleton)
+    So huu: PromptBuildService, QtClipboardService, TokenizationService, CacheRegistry
+    Khong con dung module-level singletons (encoder_registry, cache_registry).
 
     Thread Safety: Khoi tao PHAI thuc hien tren main thread.
     Cac services ben trong deu thread-safe.
@@ -47,30 +48,41 @@ class ServiceContainer:
         self.prompt_builder: IPromptBuilder = PromptBuildService()
         self.clipboard: IClipboardService = QtClipboardService()
 
-        # Tham chieu den cac singleton hien co (KHONG tao instance moi)
-        self.cache_registry = cache_registry
+        # TokenizationService - khoi tao noi bo thay vi dung global singleton
+        # Lay tokenizer_repo tu settings hien tai
+        from services.encoder_registry import get_tokenizer_repo
 
-        logger.info("ServiceContainer initialized")
+        _repo = get_tokenizer_repo()
+        self._tokenization_service: TokenizationService = TokenizationService(
+            tokenizer_repo=_repo
+        )
+
+        # CacheRegistry - tam thoi giu lai module singleton o day cho den khi Phase 2 migration
+        from services.cache_registry import cache_registry as _module_registry
+
+        self.cache_registry: CacheRegistry = _module_registry
+
+        logger.info("ServiceContainer initialized with owned services")
 
     @property
     def tokenization(self) -> ITokenizationService:
         """
         Tra ve TokenizationService hien tai.
 
-        Delegate sang encoder_registry singleton de dam bao
-        moi noi trong app dung cung instance.
+        Tra ve instance do CONTAINER so huu, khong phai global singleton.
         """
-        return get_tokenization_service()
+        return self._tokenization_service
 
     def reset_for_model_change(self) -> None:
         """
-        Re-initialize services khi user doi model.
+        Re-initialize TokenizationService khi user doi model.
 
         Goi method nay thay vi goi initialize_encoder() truc tiep
         de tap trung lifecycle management tai mot diem.
         """
-        initialize_encoder()
-        logger.info("ServiceContainer: model change reset completed")
+        repo = self._resolve_tokenizer_repo()
+        self._tokenization_service.set_model_config(tokenizer_repo=repo)
+        logger.info("ServiceContainer: model change reset completed (repo=%s)", repo)
 
     def shutdown(self) -> None:
         """
@@ -80,7 +92,7 @@ class ServiceContainer:
         Invalidates all caches and releases resources.
         """
         try:
-            self.cache_registry.invalidate_all()
+            self.cache_registry.invalidate_for_workspace()
         except Exception as e:
             logger.warning("Failed to invalidate caches during shutdown: %s", e)
 
@@ -93,7 +105,7 @@ class ServiceContainer:
         Useful for monitoring and debugging.
 
         Returns:
-            Dict containing cache stats and list of registered caches
+            Dict chua cache stats va list of registered caches
         """
         report: dict[str, Any] = {}
         try:
@@ -104,3 +116,23 @@ class ServiceContainer:
             report["cache_error"] = str(e)
 
         return report
+
+    @staticmethod
+    def _resolve_tokenizer_repo() -> "str | None":
+        """
+        Lay Hugging Face tokenizer repo tu settings hien tai.
+
+        Tra ve None neu khong co model duoc cau hinh hoac gap loi.
+        """
+        try:
+            from services.settings_manager import load_app_settings
+            from config.model_config import get_model_by_id
+
+            settings = load_app_settings()
+            model_id = settings.model_id
+            model_config = get_model_by_id(model_id)
+            if model_config:
+                return model_config.tokenizer_repo
+            return None
+        except Exception:
+            return None

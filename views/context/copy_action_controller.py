@@ -23,7 +23,17 @@ WHY NOT CANCEL:
 
 import hashlib
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, List, Set, Callable, Dict, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Optional,
+    List,
+    Set,
+    Callable,
+    Dict,
+    Tuple,
+    Protocol,
+    Any,
+)
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 
 
@@ -38,7 +48,7 @@ from services.workspace_config import (
 from config.output_format import OutputStyle
 
 if TYPE_CHECKING:
-    from views.context_view_qt import ContextViewQt
+    pass
 
 
 # ============================================================
@@ -233,18 +243,46 @@ class SecurityCheckWorker(QRunnable):
                 pass
 
 
-class CopyActionsMixin:
-    """Mixin chua tat ca copy-related methods cho ContextViewQt.
+class CopyActionViewProtocol(Protocol):
+    def get_workspace(self) -> Optional[Path]: ...
+    def get_selected_paths(self) -> Set[str]: ...
+    def get_instructions_text(self) -> str: ...
+    def get_output_style(self) -> OutputStyle: ...
+    def show_status(self, message: str, is_error: bool = False) -> None: ...
+    def show_copy_breakdown(self, token_count: int, pre_snapshot: dict) -> None: ...
+    def get_total_tokens(self) -> int: ...
+    def set_copy_buttons_enabled(self, enabled: bool) -> None: ...
+    def get_clipboard_service(self) -> Any: ...
+    def get_prompt_builder(self) -> Any: ...
+    def scan_full_tree(self, workspace: Path) -> Any: ...
+    def parent_widget(self) -> Any: ...
+
+
+class CopyActionController(QObject):
+    """
+    Controller xu ly cac thao tac copy từ ContextView.
 
     CRASH FIX — "Generation Guard" pattern:
     - _copy_generation tang moi lan user nhan copy button.
     - Worker cu van chay, nhung ket qua bi ignore neu generation mismatch.
     - Signals chi duoc deleteLater() SAU KHI worker da emit (trong callback).
     - KHONG BAO GIO disconnect signals hoac deleteLater() khi worker dang chay.
-
-    Note: All instance attributes are initialized in ContextViewQt.__init__,
-    not here. Class-level annotations are for documentation/type-checking only.
     """
+
+    def __init__(self, view: CopyActionViewProtocol, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._view = view
+        self._copy_generation = 0
+        self._stale_workers = []
+        self._prompt_cache = PromptCache()
+        self._current_copy_worker = None
+        self._current_copy_signals = None
+        self._current_security_worker = None
+        self._current_security_signals = None
+
+        import threading
+
+        self._cleanup_lock = threading.Lock()
 
     # References to current workers/signals — kept alive to prevent GC
     # while background work is in progress. OLD workers are NOT cleaned up
@@ -254,8 +292,6 @@ class CopyActionsMixin:
     _current_security_worker: Optional["SecurityCheckWorker"]
     _current_security_signals: Optional["SecurityCheckSignals"]
     _copy_generation: int  # Incremented each copy request
-    _copy_buttons_disabled: bool  # Track button state to avoid redundant calls
-
     # Stale worker refs — workers whose generation is outdated but may still
     # be running on thread pool. We keep strong refs to prevent GC/segfault
     # until their callback fires and we can safely deleteLater().
@@ -265,7 +301,7 @@ class CopyActionsMixin:
     _prompt_cache: PromptCache
 
     def _try_cache_hit(
-        self: "ContextViewQt",
+        self,
         copy_mode: str,
         selected_paths: Set[str],
         instructions: str,
@@ -276,7 +312,7 @@ class CopyActionsMixin:
         This is called on the main thread BEFORE starting any background work.
         If cache hits, we skip all heavy work entirely.
         """
-        output_style_id = self._selected_output_style.value
+        output_style_id = self._view.get_output_style().value
         include_git = load_app_settings().include_git_changes
         use_rel = get_use_relative_paths()
 
@@ -296,7 +332,7 @@ class CopyActionsMixin:
         return None
 
     def _store_in_cache(
-        self: "ContextViewQt",
+        self,
         copy_mode: str,
         selected_paths: Set[str],
         instructions: str,
@@ -305,7 +341,7 @@ class CopyActionsMixin:
         include_xml: bool = False,
     ) -> None:
         """Store generated prompt in cache for future hits."""
-        output_style_id = self._selected_output_style.value
+        output_style_id = self._view.get_output_style().value
         include_git = load_app_settings().include_git_changes
         use_rel = get_use_relative_paths()
 
@@ -320,7 +356,7 @@ class CopyActionsMixin:
         )
         self._prompt_cache.put(copy_mode, fingerprint, prompt, token_count)
 
-    def _begin_copy_operation(self: "ContextViewQt") -> int:
+    def _begin_copy_operation(self) -> int:
         """Prepare for a new copy operation.
 
         - Increment generation counter.
@@ -374,10 +410,10 @@ class CopyActionsMixin:
             self._stale_workers.append(self._current_security_signals)
             self._current_security_signals = None
 
-        self._set_copy_buttons_enabled(False)
+        self._view.set_copy_buttons_enabled(False)
         return gen
 
-    def _cleanup_stale_refs(self: "ContextViewQt", gen: int) -> None:
+    def _cleanup_stale_refs(self, gen: int) -> None:
         """Thread-safe cleanup of stale worker/signal objects.
 
         Called from EVERY callback (finished/error) for EVERY generation.
@@ -409,23 +445,11 @@ class CopyActionsMixin:
                 except RuntimeError:
                     pass  # Object da bi delete roi
 
-    def _is_current_generation(self: "ContextViewQt", gen: int) -> bool:
+    def _is_current_generation(self, gen: int) -> bool:
         """Check if gen matches current _copy_generation."""
         return gen == self._copy_generation
 
-    def _set_copy_buttons_enabled(self: "ContextViewQt", enabled: bool) -> None:
-        """Enable/disable tat ca copy buttons."""
-        self._copy_buttons_disabled = not enabled
-        for btn in (
-            self._diff_btn,
-            self._tree_map_btn,
-            self._smart_btn,
-            self._copy_btn,
-            self._opx_btn,
-        ):
-            btn.setEnabled(enabled)
-
-    def _save_instruction_to_history(self: "ContextViewQt", text: str) -> None:
+    def _save_instruction_to_history(self, text: str) -> None:
         """Luu instruction vao history (thread-safe, atomic, deduplicate, max 30).
 
         Su dung add_instruction_history() de dam bao toan bo
@@ -436,20 +460,20 @@ class CopyActionsMixin:
 
         add_instruction_history(text)
 
-    def _copy_context(self: "ContextViewQt", include_xml: bool = False) -> None:
+    def _copy_context(self, include_xml: bool = False) -> None:
         """Copy context with selected format."""
-        workspace = self.get_workspace()
+        workspace = self._view.get_workspace()
         if not workspace:
-            self._show_status("No workspace selected", is_error=True)
+            self._view.show_status("No workspace selected", is_error=True)
             return
 
-        selected_files = self.file_tree_widget.get_selected_paths()
+        selected_files = self._view.get_selected_paths()
         if not selected_files:
-            self._show_status("No files selected", is_error=True)
+            self._view.show_status("No files selected", is_error=True)
             return
 
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
-        instructions = self._instructions_field.toPlainText()
+        instructions = self._view.get_instructions_text()
         self._save_instruction_to_history(instructions)
         copy_mode = "copy_opx" if include_xml else "copy_context"
         selected_path_strs = {str(p) for p in file_paths}
@@ -460,11 +484,13 @@ class CopyActionsMixin:
         )
         if cached is not None:
             prompt, token_count = cached
-            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
+            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                prompt
+            )
             if success:
                 pre_snapshot = {
-                    "file_tokens": self.file_tree_widget.get_total_tokens(),
-                    "instruction_tokens": self._prompt_builder.count_tokens(
+                    "file_tokens": self._view.get_total_tokens(),
+                    "instruction_tokens": self._view.get_prompt_builder().count_tokens(
                         instructions
                     )
                     if instructions
@@ -472,9 +498,9 @@ class CopyActionsMixin:
                     "include_opx": include_xml,
                     "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
                 }
-                self._show_copy_breakdown(token_count, pre_snapshot)
+                self._view.show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(f"Copy failed: {err_msg}", is_error=True)
+                self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
             return
 
         gen = self._begin_copy_operation()
@@ -482,7 +508,7 @@ class CopyActionsMixin:
         # Run security check in background to avoid UI freeze
         security_enabled = load_app_settings().enable_security_check
         if security_enabled:
-            self._show_status("Checking security...")
+            self._view.show_status("Checking security...")
             self._run_security_check_then_copy(
                 gen, workspace, file_paths, instructions, include_xml
             )
@@ -492,12 +518,12 @@ class CopyActionsMixin:
                     gen, workspace, file_paths, instructions, include_xml
                 )
             except Exception as e:
-                self._show_status(f"Error: {e}", is_error=True)
+                self._view.show_status(f"Error: {e}", is_error=True)
                 if self._is_current_generation(gen):
-                    self._set_copy_buttons_enabled(True)
+                    self._view.set_copy_buttons_enabled(True)
 
     def _run_security_check_then_copy(
-        self: "ContextViewQt",
+        self,
         gen: int,
         workspace: Path,
         file_paths: List[Path],
@@ -534,23 +560,23 @@ class CopyActionsMixin:
 
                 def _on_copy_anyway(_prompt: str) -> None:
                     if not self._is_current_generation(gen):
-                        self._set_copy_buttons_enabled(True)
+                        self._view.set_copy_buttons_enabled(True)
                         return
                     try:
                         self._do_copy_context(
                             gen, workspace, file_paths, instructions, include_xml
                         )
                     except Exception as e:
-                        self._show_status(f"Error: {e}", is_error=True)
+                        self._view.show_status(f"Error: {e}", is_error=True)
                         if self._is_current_generation(gen):
-                            self._set_copy_buttons_enabled(True)
+                            self._view.set_copy_buttons_enabled(True)
 
                 def _on_dialog_rejected() -> None:
                     if self._is_current_generation(gen):
-                        self._set_copy_buttons_enabled(True)
+                        self._view.set_copy_buttons_enabled(True)
 
                 dialog = SecurityDialogQt(
-                    parent=self,
+                    parent=self._view.parent_widget(),
                     matches=matches,
                     prompt="",
                     on_copy_anyway=_on_copy_anyway,
@@ -563,9 +589,9 @@ class CopyActionsMixin:
                         gen, workspace, file_paths, instructions, include_xml
                     )
                 except Exception as e:
-                    self._show_status(f"Error: {e}", is_error=True)
+                    self._view.show_status(f"Error: {e}", is_error=True)
                     if self._is_current_generation(gen):
-                        self._set_copy_buttons_enabled(True)
+                        self._view.set_copy_buttons_enabled(True)
 
         def on_security_error(error_msg: str) -> None:
             """Handle security scan error."""
@@ -576,8 +602,8 @@ class CopyActionsMixin:
 
             self._current_security_worker = None
             self._current_security_signals = None
-            self._show_status(f"Security check failed: {error_msg}", is_error=True)
-            self._set_copy_buttons_enabled(True)
+            self._view.show_status(f"Security check failed: {error_msg}", is_error=True)
+            self._view.set_copy_buttons_enabled(True)
 
         signals.finished.connect(
             on_security_finished, Qt.ConnectionType.QueuedConnection
@@ -586,7 +612,7 @@ class CopyActionsMixin:
         QThreadPool.globalInstance().start(worker)
 
     def _run_copy_in_background(
-        self: "ContextViewQt",
+        self,
         gen: int,
         task_fn: Callable[[], Tuple[str, int]],
         success_template: str = "Copied! ({token_count:,} tokens)",
@@ -617,7 +643,7 @@ class CopyActionsMixin:
         if not self._is_current_generation(gen):
             return
 
-        self._show_status("Preparing context...")
+        self._view.show_status("Preparing context...")
 
         signals = CopyTaskSignals()
         worker = CopyTaskWorker(task_fn, signals, generation=gen)
@@ -628,7 +654,7 @@ class CopyActionsMixin:
         def on_progress(step: str, progress: int) -> None:
             if not self._is_current_generation(gen):
                 return
-            self._show_status(f"{step} ({progress}%)")
+            self._view.show_status(f"{step} ({progress}%)")
 
         def on_finished(prompt: str, token_count: int) -> None:
             """Callback khi worker hoan thanh."""
@@ -653,19 +679,21 @@ class CopyActionsMixin:
                 except Exception:
                     pass  # Cache storage failure is non-critical
 
-            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
+            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                prompt
+            )
 
             if not success:
-                self._show_status(f"Copy failed: {err_msg}", is_error=True)
-                self._set_copy_buttons_enabled(True)
+                self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
+                self._view.set_copy_buttons_enabled(True)
                 return
 
             if pre_snapshot:
-                self._show_copy_breakdown(token_count, pre_snapshot)
+                self._view.show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(success_template.format(token_count=token_count))
+                self._view.show_status(success_template.format(token_count=token_count))
 
-            self._set_copy_buttons_enabled(True)
+            self._view.set_copy_buttons_enabled(True)
 
         def on_error(error_msg: str) -> None:
             """Callback khi worker gap loi."""
@@ -676,8 +704,8 @@ class CopyActionsMixin:
 
             self._current_copy_worker = None
             self._current_copy_signals = None
-            self._show_status(f"Error: {error_msg}", is_error=True)
-            self._set_copy_buttons_enabled(True)
+            self._view.show_status(f"Error: {error_msg}", is_error=True)
+            self._view.set_copy_buttons_enabled(True)
 
         signals.progress.connect(on_progress, Qt.ConnectionType.QueuedConnection)
         signals.finished.connect(on_finished, Qt.ConnectionType.QueuedConnection)
@@ -685,7 +713,7 @@ class CopyActionsMixin:
         QThreadPool.globalInstance().start(worker)
 
     def _do_copy_context(
-        self: "ContextViewQt",
+        self,
         gen: int,
         workspace: Path,
         file_paths: List[Path],
@@ -701,7 +729,7 @@ class CopyActionsMixin:
         try:
             selected_path_strs = {str(p) for p in file_paths}
             use_rel = get_use_relative_paths()
-            output_style = self._selected_output_style
+            output_style = self._view.get_output_style()
             include_git = load_app_settings().include_git_changes
 
             copy_mode = "copy_opx" if include_xml else "copy_context"
@@ -713,14 +741,14 @@ class CopyActionsMixin:
 
             def task() -> Tuple[str, int]:
                 """Heavy work - chay tren background thread."""
-                tree_item = self._scan_full_tree(workspace)
+                tree_item = self._view.scan_full_tree(workspace)
                 format_str = "xml"
                 if output_style == OutputStyle.JSON:
                     format_str = "json"
                 elif output_style == OutputStyle.PLAIN:
                     format_str = "plain"
 
-                return self._prompt_builder.build_prompt(
+                return self._view.get_prompt_builder().build_prompt(
                     file_paths=[Path(p) for p in selected_path_strs],
                     workspace=workspace,
                     instructions=instructions,
@@ -733,8 +761,10 @@ class CopyActionsMixin:
                 )
 
             pre_snapshot = {
-                "file_tokens": self.file_tree_widget.get_total_tokens(),
-                "instruction_tokens": self._prompt_builder.count_tokens(instructions)
+                "file_tokens": self._view.get_total_tokens(),
+                "instruction_tokens": self._view.get_prompt_builder().count_tokens(
+                    instructions
+                )
                 if instructions
                 else 0,
                 "include_opx": include_xml,
@@ -754,36 +784,38 @@ class CopyActionsMixin:
                 ),
             )
         except Exception as e:
-            self._show_status(f"Error preparing copy: {e}", is_error=True)
+            self._view.show_status(f"Error preparing copy: {e}", is_error=True)
             if self._is_current_generation(gen):
-                self._set_copy_buttons_enabled(True)
+                self._view.set_copy_buttons_enabled(True)
 
-    def _copy_smart_context(self: "ContextViewQt") -> None:
+    def _copy_smart_context(self) -> None:
         """Copy smart context (code structure only) tren background thread."""
-        workspace = self.get_workspace()
+        workspace = self._view.get_workspace()
         if not workspace:
-            self._show_status("No workspace selected", is_error=True)
+            self._view.show_status("No workspace selected", is_error=True)
             return
 
-        selected_files = self.file_tree_widget.get_selected_paths()
+        selected_files = self._view.get_selected_paths()
         if not selected_files:
-            self._show_status("No files selected", is_error=True)
+            self._view.show_status("No files selected", is_error=True)
             return
 
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         selected_path_strs = {str(p) for p in file_paths}
-        instructions = self._instructions_field.toPlainText()
+        instructions = self._view.get_instructions_text()
         self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
         cached = self._try_cache_hit("copy_smart", selected_path_strs, instructions)
         if cached is not None:
             prompt, token_count = cached
-            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
+            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                prompt
+            )
             if success:
                 pre_snapshot = {
-                    "file_tokens": self.file_tree_widget.get_total_tokens(),
-                    "instruction_tokens": self._prompt_builder.count_tokens(
+                    "file_tokens": self._view.get_total_tokens(),
+                    "instruction_tokens": self._view.get_prompt_builder().count_tokens(
                         instructions
                     )
                     if instructions
@@ -791,9 +823,9 @@ class CopyActionsMixin:
                     "include_opx": False,
                     "copy_mode": "Copy Smart",
                 }
-                self._show_copy_breakdown(token_count, pre_snapshot)
+                self._view.show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(f"Copy failed: {err_msg}", is_error=True)
+                self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
             return
 
         gen = self._begin_copy_operation()
@@ -803,8 +835,8 @@ class CopyActionsMixin:
         def task() -> Tuple[str, int]:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
-            tree_item = self._scan_full_tree(workspace)
-            return self._prompt_builder.build_prompt(
+            tree_item = self._view.scan_full_tree(workspace)
+            return self._view.get_prompt_builder().build_prompt(
                 file_paths=[Path(p) for p in selected_path_strs],
                 workspace=workspace,
                 instructions=instructions,
@@ -816,8 +848,10 @@ class CopyActionsMixin:
             )
 
         pre_snapshot = {
-            "file_tokens": self.file_tree_widget.get_total_tokens(),
-            "instruction_tokens": self._prompt_builder.count_tokens(instructions)
+            "file_tokens": self._view.get_total_tokens(),
+            "instruction_tokens": self._view.get_prompt_builder().count_tokens(
+                instructions
+            )
             if instructions
             else 0,
             "include_opx": False,
@@ -832,31 +866,29 @@ class CopyActionsMixin:
             cache_key=("copy_smart", selected_path_strs, instructions, False),
         )
 
-    def _copy_tree_map_only(self: "ContextViewQt") -> None:
+    def _copy_tree_map_only(self) -> None:
         """Copy tree map only tren background thread."""
-        workspace = self.get_workspace()
+        workspace = self._view.get_workspace()
         if not workspace:
-            self._show_status("No workspace selected", is_error=True)
+            self._view.show_status("No workspace selected", is_error=True)
             return
 
-        selected_files = self.file_tree_widget.get_selected_paths()
+        selected_files = self._view.get_selected_paths()
         selected_strs = set(selected_files) if selected_files else set()
-        instructions = (
-            self._instructions_field.toPlainText()
-            if hasattr(self, "_instructions_field")
-            else ""
-        )
+        instructions = self._view.get_instructions_text()
         self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
         cached = self._try_cache_hit("copy_treemap", selected_strs, instructions)
         if cached is not None:
             prompt, token_count = cached
-            success, err_msg = self._clipboard_service.copy_to_clipboard(prompt)
+            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                prompt
+            )
             if success:
                 pre_snapshot = {
                     "file_tokens": 0,
-                    "instruction_tokens": self._prompt_builder.count_tokens(
+                    "instruction_tokens": self._view.get_prompt_builder().count_tokens(
                         instructions
                     )
                     if instructions
@@ -864,9 +896,9 @@ class CopyActionsMixin:
                     "include_opx": False,
                     "copy_mode": "Copy Tree Map",
                 }
-                self._show_copy_breakdown(token_count, pre_snapshot)
+                self._view.show_copy_breakdown(token_count, pre_snapshot)
             else:
-                self._show_status(f"Copy failed: {err_msg}", is_error=True)
+                self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
             return
 
         gen = self._begin_copy_operation()
@@ -875,7 +907,7 @@ class CopyActionsMixin:
         def task() -> Tuple[str, int]:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
-            tree_item = self._scan_full_tree(workspace)
+            tree_item = self._view.scan_full_tree(workspace)
             if not tree_item:
                 raise ValueError("No file tree loaded")
 
@@ -891,12 +923,14 @@ class CopyActionsMixin:
             )
             # Thong nhat token counting path qua PromptBuildService
             # de dam bao cung tokenizer instance nhu cac copy operations khac
-            count = self._prompt_builder.count_tokens(prompt)
+            count = self._view.get_prompt_builder().count_tokens(prompt)
             return prompt, count
 
         pre_snapshot = {
             "file_tokens": 0,
-            "instruction_tokens": self._prompt_builder.count_tokens(instructions)
+            "instruction_tokens": self._view.get_prompt_builder().count_tokens(
+                instructions
+            )
             if instructions
             else 0,
             "include_opx": False,
@@ -911,7 +945,7 @@ class CopyActionsMixin:
             cache_key=("copy_treemap", selected_strs, instructions, False),
         )
 
-    def _collect_all_tree_paths(self: "ContextViewQt", root: TreeItem) -> Set[str]:
+    def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
         """Collect all node paths from a TreeItem tree."""
         paths: Set[str] = set()
 
@@ -923,7 +957,7 @@ class CopyActionsMixin:
         _walk(root)
         return paths
 
-    def _scan_full_tree(self: "ContextViewQt", workspace: Path) -> TreeItem:
+    def _scan_full_tree(self, workspace: Path) -> TreeItem:
         """Scan full workspace tree with current exclude settings."""
         return scan_directory(
             workspace,
@@ -931,24 +965,24 @@ class CopyActionsMixin:
             use_gitignore=get_use_gitignore(),
         )
 
-    def _show_diff_only_dialog(self: "ContextViewQt") -> None:
+    def _show_diff_only_dialog(self) -> None:
         """Show diff only dialog."""
-        workspace = self.get_workspace()
+        workspace = self._view.get_workspace()
         if not workspace:
-            self._show_status("No workspace selected", is_error=True)
+            self._view.show_status("No workspace selected", is_error=True)
             return
 
         # Diff dialog manages its own copy — just increment generation
         # to invalidate any pending workers from other modes.
         self._begin_copy_operation()
         # Re-enable buttons immediately since dialog handles its own flow
-        self._set_copy_buttons_enabled(True)
+        self._view.set_copy_buttons_enabled(True)
 
         try:
             from components.dialogs_qt import DiffOnlyDialogQt
             from core.utils.git_utils import build_diff_only_prompt
 
-            instructions = self._instructions_field.toPlainText()
+            instructions = self._view.get_instructions_text()
             self._save_instruction_to_history(instructions)
 
             def _build_diff_prompt(
@@ -964,75 +998,12 @@ class CopyActionsMixin:
                 )
 
             dialog = DiffOnlyDialogQt(
-                parent=self,
                 workspace=workspace,
+                parent=self._view.parent_widget(),
                 build_prompt_callback=_build_diff_prompt,
                 instructions=instructions,
-                on_success=lambda msg: self._show_status(msg),
+                on_success=lambda msg: self._view.show_status(msg),
             )
             dialog.exec()
         except Exception as e:
-            self._show_status(f"Error: {e}", is_error=True)
-
-    def _show_copy_breakdown(
-        self: "ContextViewQt", total_tokens: int, pre_snapshot: dict
-    ) -> None:
-        """Hien thi token breakdown sau khi copy qua Global Toast System."""
-        from components.toast_qt import toast_success
-
-        file_t = pre_snapshot.get("file_tokens", 0)
-        instr_t = pre_snapshot.get("instruction_tokens", 0)
-        include_opx = pre_snapshot.get("include_opx", False)
-
-        opx_t = 0
-        if include_opx:
-            try:
-                from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-
-                opx_t = self._prompt_builder.count_tokens(XML_FORMATTING_INSTRUCTIONS)
-            except ImportError:
-                opx_t = 0
-
-        sum_parts = file_t + instr_t + opx_t
-        if sum_parts > total_tokens:
-            ratio = total_tokens / sum_parts if sum_parts > 0 else 1.0
-            file_t = int(file_t * ratio)
-            instr_t = int(instr_t * ratio)
-            opx_t = int(opx_t * ratio)
-            structure_t = 0
-        else:
-            structure_t = max(0, total_tokens - file_t - instr_t - opx_t)
-
-        parts = []
-        if file_t > 0:
-            parts.append(f"{file_t:,} content")
-        if instr_t > 0:
-            parts.append(f"{instr_t:,} instructions")
-        if opx_t > 0:
-            parts.append(f"{opx_t:,} OPX")
-        if structure_t > 0:
-            parts.append(f"{structure_t:,} system prompt")
-
-        breakdown_text = " + ".join(parts) if parts else ""
-
-        tooltip_lines = [
-            f"Total: {total_tokens:,} tokens",
-            "",
-            f"File content: {file_t:,} tokens",
-            f"Instructions: {instr_t:,} tokens",
-        ]
-        if opx_t > 0:
-            tooltip_lines.append(f"OPX instructions: {opx_t:,} tokens")
-        tooltip_lines.extend(
-            [
-                f"Prompt structure: {structure_t:,} tokens",
-                "  (includes: tree map, git diff/log, XML tags)",
-            ]
-        )
-
-        toast_success(
-            message=breakdown_text or f"{total_tokens:,} tokens",
-            title=f"Copied! {total_tokens:,} tokens",
-            tooltip="\n".join(tooltip_lines),
-            duration=8000,
-        )
+            self._view.show_status(f"Error: {e}", is_error=True)

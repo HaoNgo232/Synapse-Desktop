@@ -123,7 +123,8 @@ class ToastNotification(QFrame):
         self._reposition_anim: Optional[QPropertyAnimation] = None
 
         # Cau hinh widget
-        self.setFixedWidth(_TOAST_WIDTH)
+        self.setMinimumWidth(300)
+        self.setMaximumWidth(600)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -139,20 +140,32 @@ class ToastNotification(QFrame):
         self._opacity_effect.setOpacity(0.0)
         self.setGraphicsEffect(self._opacity_effect)
 
-        # Auto-dismiss timer
+        # Auto-dismiss timer with pause on hover
         self._dismiss_timer = QTimer(self)
         self._dismiss_timer.setSingleShot(True)
         self._dismiss_timer.timeout.connect(self._start_close_animation)
-        self._dismiss_timer.start(int(self._duration))
+        self._remaining_time: int = int(self._duration)
+        self._dismiss_timer.start(self._remaining_time)
+
+    def enterEvent(self, event) -> None:
+        """Pause timer when mouse enters toast."""
+        if self._dismiss_timer.isActive():
+            self._remaining_time = self._dismiss_timer.remainingTime()
+            self._dismiss_timer.stop()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        """Resume timer when mouse leaves toast."""
+        if not self._is_closing and self._remaining_time > 0:
+            self._dismiss_timer.start(self._remaining_time)
+        super().leaveEvent(event)
 
     def _build_ui(self, message: str, title: Optional[str]) -> None:
-        """Xay dung layout: [accent strip] [icon] [title/message] [close btn]."""
+        """Xay dung layout: [accent strip] [icon] [title/message] [copy btn] [close btn]."""
         # Main container layout
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-
-        # Accent strip (4px) — ve truc tiep trong paintEvent
 
         # Content area
         content_frame = QFrame()
@@ -207,8 +220,13 @@ class ToastNotification(QFrame):
             )
             text_layout.addWidget(title_label)
 
+        # Store message for copy functionality
+        self._message_text = message
+        self._title_text = title or ""
+
         msg_label = QLabel(message)
         msg_label.setWordWrap(True)
+        msg_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         msg_label.setStyleSheet(
             f"""
             QLabel {{
@@ -223,6 +241,31 @@ class ToastNotification(QFrame):
         text_layout.addWidget(msg_label)
 
         content_layout.addLayout(text_layout, stretch=1)
+
+        # Copy button
+        copy_btn = QToolButton()
+        copy_btn.setText("\u2398")  # Copy icon
+        copy_btn.setFixedSize(20, 20)
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.setToolTip("Copy message")
+        copy_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                color: {ThemeColors.TEXT_MUTED};
+                font-size: 14px;
+                font-weight: 700;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.BG_HOVER};
+                color: {ThemeColors.PRIMARY};
+            }}
+        """
+        )
+        copy_btn.clicked.connect(self._copy_message)
+        content_layout.addWidget(copy_btn, alignment=Qt.AlignmentFlag.AlignTop)
 
         # Close button
         close_btn = QToolButton()
@@ -249,6 +292,22 @@ class ToastNotification(QFrame):
         content_layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignTop)
 
         main_layout.addWidget(content_frame)
+
+        # Auto-resize based on content
+        self.adjustSize()
+
+    @Slot()
+    def _copy_message(self) -> None:
+        """Copy toast message to clipboard."""
+        from PySide6.QtWidgets import QApplication
+
+        clipboard = QApplication.clipboard()
+        text = (
+            f"{self._title_text}\n{self._message_text}"
+            if self._title_text
+            else self._message_text
+        )
+        clipboard.setText(text.strip())
 
     # ── Animation ────────────────────────────────────────────────
 

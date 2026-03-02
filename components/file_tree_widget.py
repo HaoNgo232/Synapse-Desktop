@@ -26,8 +26,18 @@ from PySide6.QtWidgets import (
     QLabel,
     QAbstractItemView,
     QApplication,
+    QMenu,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QThreadPool, QModelIndex, QSize, QEvent
+from PySide6.QtCore import (
+    Qt,
+    Signal,
+    Slot,
+    QThreadPool,
+    QModelIndex,
+    QSize,
+    QEvent,
+    QPoint,
+)
 from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
@@ -207,6 +217,10 @@ class FileTreeWidget(QWidget):
 
         # Event filter de xu ly click theo zone — thay the clicked/doubleClicked
         self._tree_view.viewport().installEventFilter(self)
+
+        # Context menu
+        self._tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._tree_view.customContextMenuRequested.connect(self._on_context_menu)
 
         layout.addWidget(self._tree_view, stretch=1)
 
@@ -650,6 +664,63 @@ class FileTreeWidget(QWidget):
         """Handle token counting completion."""
         self._current_token_worker = None
         self.token_counting_done.emit()
+
+    @Slot(QPoint)
+    def _on_context_menu(self, pos: QPoint) -> None:
+        """Show context menu for file tree items."""
+        index = self._tree_view.indexAt(pos)
+        if not index.isValid():
+            return
+
+        source_idx = self._filter_proxy.mapToSource(index)
+        file_path = self._model.data(source_idx, FileTreeRoles.FILE_PATH_ROLE)
+        is_dir = self._model.data(source_idx, FileTreeRoles.IS_DIR_ROLE)
+
+        # Only show menu for files, not directories
+        if not file_path or is_dir:
+            return
+
+        workspace = self._model.get_workspace_path()
+        if not workspace:
+            return
+
+        from services.workspace_rules import (
+            is_rule_file,
+        )
+
+        menu = QMenu(self)
+        is_rule = is_rule_file(workspace, file_path)
+
+        if is_rule:
+            action = menu.addAction("✓ Unmark as Project Rule")
+            action.triggered.connect(
+                lambda: self._unmark_rule_file(workspace, file_path)
+            )
+        else:
+            action = menu.addAction("Mark as Project Rule")
+            action.triggered.connect(lambda: self._mark_rule_file(workspace, file_path))
+
+        menu.exec(self._tree_view.viewport().mapToGlobal(pos))
+
+    def _mark_rule_file(self, workspace: Path, file_path: str) -> None:
+        """Mark a file as project rule."""
+        from services.workspace_rules import add_rule_file
+        from components.toast_qt import toast_success
+
+        add_rule_file(workspace, file_path)
+        toast_success(f"Marked as project rule: {Path(file_path).name}")
+        # Trigger repaint to show badge
+        self._tree_view.viewport().update()
+
+    def _unmark_rule_file(self, workspace: Path, file_path: str) -> None:
+        """Unmark a file as project rule."""
+        from services.workspace_rules import remove_rule_file
+        from components.toast_qt import toast_success
+
+        remove_rule_file(workspace, file_path)
+        toast_success(f"Unmarked project rule: {Path(file_path).name}")
+        # Trigger repaint to hide badge
+        self._tree_view.viewport().update()
 
     # ===== Private Helpers =====
 

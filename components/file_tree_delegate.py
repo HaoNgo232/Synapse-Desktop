@@ -254,8 +254,38 @@ class FileTreeDelegate(QStyledItemDelegate):
         x += ICON_SIZE + SPACING
 
         # 3. Process Badges and Eye Icon widths to determine Label space
+        # Check if this is a rule file
+        file_path = index.data(FileTreeRoles.FILE_PATH_ROLE)
+        is_rule = False
+        if file_path and not is_dir:
+            # Get workspace from model
+            model = index.model()
+            if hasattr(model, "sourceModel"):
+                source_model = model.sourceModel()
+                workspace = (
+                    source_model.get_workspace_path()
+                    if hasattr(source_model, "get_workspace_path")
+                    else None
+                )
+            else:
+                workspace = (
+                    model.get_workspace_path()
+                    if hasattr(model, "get_workspace_path")
+                    else None
+                )
+
+            if workspace:
+                from services.workspace_rules import is_rule_file
+
+                is_rule = is_rule_file(workspace, file_path)
+
         # Badges vung khao sat
         badge_items: list[tuple[str, QColor]] = []
+
+        # Add RULE badge first if applicable
+        if is_rule:
+            badge_items.append(("RULE", QColor("#F59E0B")))  # Amber color
+
         if token_count is not None and token_count > 0:
             token_text = self._format_count(token_count)
             badge_color = COLOR_PRIMARY if is_dir else COLOR_SUCCESS

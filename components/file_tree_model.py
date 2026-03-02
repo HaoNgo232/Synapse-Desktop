@@ -550,6 +550,10 @@ class FileTreeModel(QAbstractItemModel):
 
     # ===== Public API =====
 
+    def get_workspace_path(self) -> Optional[Path]:
+        """Get current workspace path."""
+        return self._workspace_path
+
     def load_tree(self, workspace_path: Path) -> None:
         """
         Load file tree cho workspace mới.

@@ -129,7 +129,7 @@ class TestPromptBuildService:
     def test_build_prompt_extracts_rules(
         self, mock_gen_xml, mock_gen_prompt, mock_diff, mock_logs, tmp_path
     ):
-        """Test build_prompt removes rule files and passes project_rules args."""
+        """Test build_prompt loads rule files from workspace rules."""
         mock_svc = MagicMock()
         mock_svc.count_tokens.return_value = 42
         service = PromptBuildService(tokenization_service=mock_svc)
@@ -137,27 +137,28 @@ class TestPromptBuildService:
         rule_file = tmp_path / ".cursorrules"
         rule_file.write_text("Rule 1")
         normal_file = tmp_path / "a.py"
+        normal_file.write_text("print('hello')")
+
+        # Mark .cursorrules as a project rule
+        from services.workspace_rules import add_rule_file
+
+        add_rule_file(tmp_path, str(rule_file))
 
         mock_gen_xml.return_value = "<file contents>"
         mock_gen_prompt.return_value = "<prompt>test</prompt>"
         mock_diff.return_value = None
         mock_logs.return_value = None
 
-        with patch("services.settings_manager.load_app_settings") as mock_settings:
-            mock_settings_inst = MagicMock()
-            mock_settings_inst.get_rule_filenames_set.return_value = {".cursorrules"}
-            mock_settings.return_value = mock_settings_inst
+        prompt, count, breakdown = service.build_prompt(
+            file_paths=[rule_file, normal_file],
+            workspace=tmp_path,
+            instructions="fix",
+            output_format="xml",
+            include_git_changes=False,
+            use_relative_paths=True,
+        )
 
-            prompt, count, breakdown = service.build_prompt(
-                file_paths=[rule_file, normal_file],
-                workspace=tmp_path,
-                instructions="fix",
-                output_format="xml",
-                include_git_changes=False,
-                use_relative_paths=True,
-            )
-
-            # Kiem tra generate_prompt duoc goi dung params project_rules
-            called_kwargs = mock_gen_prompt.call_args[1]
-            assert "--- Rule File: .cursorrules ---" in called_kwargs["project_rules"]
-            assert "Rule 1" in called_kwargs["project_rules"]
+        # Kiem tra generate_prompt duoc goi dung params project_rules
+        called_kwargs = mock_gen_prompt.call_args[1]
+        assert "--- Rule File: .cursorrules ---" in called_kwargs["project_rules"]
+        assert "Rule 1" in called_kwargs["project_rules"]

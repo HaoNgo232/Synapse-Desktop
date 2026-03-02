@@ -56,6 +56,7 @@ class ContextViewQt(
     ):
         super().__init__(parent)
         self.get_workspace = get_workspace
+        self.get_workspace_path = get_workspace  # Alias for protocol compatibility
 
         # IgnoreEngine duoc inject tu ServiceContainer
         if ignore_engine is None:
@@ -346,16 +347,35 @@ class ContextViewQt(
         )
 
         if len(parts) > 0:
+            # Format breakdown with line breaks for readability
+            breakdown_lines = []
+            if file_t > 0:
+                breakdown_lines.append(f"• {file_t:,} content")
+            if instr_t > 0:
+                breakdown_lines.append(f"• {instr_t:,} instructions")
+            if tree_t > 0:
+                breakdown_lines.append(f"• {tree_t:,} tree map")
+            if diff_t > 0:
+                breakdown_lines.append(f"• {diff_t:,} diffs")
+            if rule_t > 0:
+                breakdown_lines.append(f"• {rule_t:,} rules")
+            if opx_t > 0:
+                breakdown_lines.append(f"• {opx_t:,} OPX")
+            if structure_t > 0:
+                breakdown_lines.append(f"• {structure_t:,} system prompt")
+
+            breakdown_text = "\n".join(breakdown_lines)
+
             toast_success(
-                message=f"{mode} successful! {token_count:,} tokens\n({breakdown_text})",
-                title=f"{mode} successful! {token_count:,} tokens",
+                message=f"{token_count:,} tokens\n{breakdown_text}",
+                title=f"{mode} successful!",
                 tooltip="\n".join(tooltip_lines),
                 duration=8000,
             )
         else:
             toast_success(
-                message=f"{mode} successful! {token_count:,} tokens",
-                title=f"{mode} successful! {token_count:,} tokens",
+                message=f"{token_count:,} tokens",
+                title=f"{mode} successful!",
                 tooltip="\n".join(tooltip_lines),
                 duration=8000,
             )

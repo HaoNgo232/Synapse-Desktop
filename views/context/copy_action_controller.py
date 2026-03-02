@@ -130,6 +130,7 @@ def _build_fingerprint(
     include_git: bool,
     use_relative_paths: bool,
     include_xml: bool = False,
+    workspace: Optional[Path] = None,
 ) -> str:
     """Build a fingerprint string from all inputs that affect prompt output.
 
@@ -148,10 +149,12 @@ def _build_fingerprint(
     # Instructions
     h.update(f"instr={instructions}\n".encode())
 
-    # Rule file configuration — cache bust khi user thay doi rule file names
-    app_settings = load_app_settings()
-    rule_names = sorted(app_settings.get_rule_filenames_set())
-    h.update(f"rules={','.join(rule_names)}\n".encode())
+    # Workspace rules — cache bust khi user thay doi rule files
+    if workspace:
+        from services.workspace_rules import load_workspace_rules
+
+        rule_files = sorted(load_workspace_rules(workspace))
+        h.update(f"rules={','.join(rule_files)}\n".encode())
 
     # Sorted file paths + mtimes
     for p in sorted(selected_paths):
@@ -252,6 +255,7 @@ class SecurityCheckWorker(QRunnable):
 
 class CopyActionViewProtocol(Protocol):
     def get_workspace(self) -> Optional[Path]: ...
+    def get_workspace_path(self) -> Optional[Path]: ...
     def get_selected_paths(self) -> Set[str]: ...
     def get_instructions_text(self) -> str: ...
     def get_output_style(self) -> OutputStyle: ...
@@ -324,6 +328,7 @@ class CopyActionController(QObject):
         output_style_id = self._view.get_output_style().value
         include_git = load_app_settings().include_git_changes
         use_rel = get_use_relative_paths()
+        workspace = self._view.get_workspace_path()
 
         fingerprint = _build_fingerprint(
             selected_paths=selected_paths,
@@ -333,6 +338,7 @@ class CopyActionController(QObject):
             include_git=include_git,
             use_relative_paths=use_rel,
             include_xml=include_xml,
+            workspace=workspace,
         )
 
         cached = self._prompt_cache.get(copy_mode, fingerprint)
@@ -354,6 +360,7 @@ class CopyActionController(QObject):
         output_style_id = self._view.get_output_style().value
         include_git = load_app_settings().include_git_changes
         use_rel = get_use_relative_paths()
+        workspace = self._view.get_workspace_path()
 
         fingerprint = _build_fingerprint(
             selected_paths=selected_paths,
@@ -363,6 +370,7 @@ class CopyActionController(QObject):
             include_git=include_git,
             use_relative_paths=use_rel,
             include_xml=include_xml,
+            workspace=workspace,
         )
         self._prompt_cache.put(copy_mode, fingerprint, prompt, token_count, breakdown)
 

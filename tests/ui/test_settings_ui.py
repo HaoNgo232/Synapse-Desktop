@@ -47,7 +47,7 @@ def test_settings_view_initial_load(settings_view):
     assert view._git_toggle.isChecked() is True
     assert view._relative_toggle.isChecked() is False
     assert view._tag_chips.get_patterns() == ["node_modules", ".git"]
-    assert view._rule_chips.get_patterns() == [".cursorrules"]
+    # _rule_chips removed - no longer testing it
 
 
 def test_settings_view_initial_load_invalid_rules(qtbot):
@@ -66,7 +66,7 @@ def test_settings_view_initial_load_invalid_rules(qtbot):
     ):
         view = SettingsViewQt()
         qtbot.addWidget(view)
-    assert view._rule_chips.get_patterns() == []
+    # _rule_chips removed - no longer testing it
 
 
 def test_settings_view_toggle_change(settings_view):
@@ -377,7 +377,7 @@ def test_import_settings_non_list_rules(settings_view):
         patch("views.settings_view_qt.toast_success"),
     ):
         view._import_settings()
-        assert view._rule_chips.get_patterns() == []
+        # _rule_chips removed - no longer testing it
 
 
 def test_has_unsaved_changes(settings_view):

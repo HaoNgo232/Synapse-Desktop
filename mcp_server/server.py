@@ -30,33 +30,110 @@ logger = logging.getLogger("synapse.mcp")
 mcp = FastMCP(
     "Synapse Desktop",
     instructions=(
-        "You have access to Synapse Desktop — a powerful codebase exploration toolkit. "
-        "Use these tools EARLY and OFTEN to ground your responses in real code:\n"
+        "You have access to Synapse Desktop — a powerful codebase exploration toolkit.\n"
         "\n"
-        "DISCOVERY (start here):\n"
-        "  • get_project_structure → Quick overview: file counts, frameworks, project size.\n"
-        "  • list_directories → Understand folder layout (like `tree`).\n"
-        "  • list_files → Full file listing, filterable by extension.\n"
+        "🚨 CRITICAL WORKFLOW - ALWAYS START WITH:\n"
+        "  1. start_session → Auto-discover project structure, folders, and technical debt\n"
+        "     OR manually run: get_project_structure → list_directories → find_todos\n"
+        "  2. Use get_codemap to understand file structure before reading full content\n"
+        "  3. Use read_file only when you need implementation details\n"
+        "\n"
+        "⚠️  NEVER guess code structure. ALWAYS read actual files first.\n"
+        "\n"
+        "DISCOVERY:\n"
+        "  • start_session → One-click project onboarding (structure + tree + todos)\n"
+        "  • get_project_structure → File counts, frameworks, project size\n"
+        "  • list_directories → Folder layout (tree format)\n"
+        "  • list_files → Full file listing, filterable by extension\n"
         "\n"
         "READING:\n"
-        "  • read_file → Read file contents. Supports line ranges for large files.\n"
-        "  • get_codemap → Extract function/class signatures WITHOUT implementation (saves tokens).\n"
+        "  • read_file → Read file contents (supports line ranges)\n"
+        "  • get_codemap → Extract function/class signatures WITHOUT implementation (saves tokens)\n"
+        "  • get_symbols → Structured JSON list of all symbols (for programmatic analysis)\n"
+        "\n"
+        "ANALYSIS:\n"
+        "  • get_file_metrics → LOC, functions/classes count, TODO/FIXME/HACK, complexity\n"
+        "  • find_references → Find all usages of a symbol (refactoring impact)\n"
+        "  • find_todos → Scan entire project for TODO/FIXME/HACK comments\n"
+        "  • get_imports_graph → Dependency graph (JSON) to understand coupling\n"
+        "  • estimate_tokens → Check token count before building context\n"
+        "  • diff_summary → Smart git changes summary (functions added/modified/deleted)\n"
         "\n"
         "BUILDING:\n"
-        "  • build_prompt → Generate a complete AI-ready prompt with file contents, tree map, and rules.\n"
-        "  • manage_selection → Track which files are selected for context.\n"
+        "  • build_prompt → Generate complete AI-ready prompt\n"
+        "  • manage_selection → Track selected files for context\n"
         "\n"
         "BEST PRACTICES:\n"
-        "  1. Always start with get_project_structure to understand the codebase.\n"
-        "  2. Use get_codemap before read_file — only read full files when you need implementation details.\n"
-        "  3. Use list_directories to navigate unfamiliar projects.\n"
-        "  4. When asked to analyze code, read the actual files — don't guess."
+        "  • Use estimate_tokens to avoid context window overruns\n"
+        "  • Use find_references before refactoring to see impact radius\n"
+        "  • Use get_imports_graph to understand module coupling\n"
+        "  • Use diff_summary before code review to understand changes\n"
+        "  • When analyzing code, read actual files — don't guess"
     ),
 )
 
 
 # ===========================================================================
-# Tool 1: list_files - Liet ke tat ca files trong workspace
+# Tool 1: start_session - Auto project onboarding
+# ===========================================================================
+@mcp.tool()
+def start_session(workspace_path: str) -> str:
+    """Start a new session by auto-discovering project structure, organization, and technical debt.
+
+    This is a convenience tool that runs the essential discovery sequence:
+    1. get_project_structure - Understand scale, languages, frameworks
+    2. list_directories - See folder organization
+    3. find_todos - Check technical debt
+
+    Call this FIRST when starting work on a new codebase or task.
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        # 1. Project structure
+        structure = get_project_structure(workspace_path)
+
+        # 2. Directory tree (depth 2 for quick overview)
+        tree = list_directories(workspace_path, max_depth=2)
+
+        # 3. Technical debt scan
+        todos_result = find_todos(workspace_path, include_hack=True)
+        # Truncate if too long
+        todos_preview = (
+            todos_result
+            if len(todos_result) < 800
+            else todos_result[:800] + "\n... (truncated)"
+        )
+
+        return (
+            f"{'=' * 60}\n"
+            f"SESSION INITIALIZED ✅\n"
+            f"{'=' * 60}\n\n"
+            f"{structure}\n\n"
+            f"{'=' * 60}\n"
+            f"DIRECTORY STRUCTURE\n"
+            f"{'=' * 60}\n"
+            f"{tree}\n\n"
+            f"{'=' * 60}\n"
+            f"TECHNICAL DEBT\n"
+            f"{'=' * 60}\n"
+            f"{todos_preview}\n\n"
+            f"{'=' * 60}\n"
+            f"💡 Next steps:\n"
+            f"  • Use get_codemap to explore specific files\n"
+            f"  • Use read_file when you need implementation details\n"
+            f"  • Use get_imports_graph to understand module coupling\n"
+            f"{'=' * 60}"
+        )
+    except Exception as e:
+        logger.error("start_session error: %s", e)
+        return f"Error initializing session: {e}"
+
+
+# ===========================================================================
+# Tool 2: list_files - Liet ke tat ca files trong workspace
 # ===========================================================================
 @mcp.tool()
 def list_files(
@@ -764,7 +841,570 @@ def _force_all_logging_to_stderr() -> None:
     # va AI client se timeout. Handler patching o tren da du de chan log pollution.
 
 
+# ===========================================================================
+# Tool 8: estimate_tokens - Uoc tinh token cua tap file
+# ===========================================================================
+@mcp.tool()
+def estimate_tokens(
+    workspace_path: str,
+    file_paths: List[str],
+) -> str:
+    """Estimate token count for a set of files before adding them to context."""
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    abs_paths: list[Path] = []
+    for rp in file_paths:
+        fp = (ws / rp).resolve()
+        if not fp.is_relative_to(ws):
+            return f"Error: Path traversal detected for: {rp}"
+        if not fp.is_file():
+            return f"Error: File not found: {rp}"
+        abs_paths.append(fp)
+
+    if not abs_paths:
+        return "Error: No valid files provided."
+
+    try:
+        from services.tokenization_service import TokenizationService
+
+        service = TokenizationService()
+        results = service.count_tokens_batch_parallel(
+            abs_paths, max_workers=4, update_cache=True
+        )
+
+        total = sum(results.values())
+        breakdown = []
+        for fp in abs_paths:
+            count = results.get(str(fp), 0)
+            rel = os.path.relpath(fp, ws)
+            breakdown.append(f"  {rel}: {count:,} tokens")
+
+        return f"Total: {total:,} tokens\nFiles: {len(abs_paths)}\n\n" + "\n".join(
+            breakdown
+        )
+    except Exception as e:
+        logger.error("estimate_tokens error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 9: get_file_metrics - LOC, functions, classes, TODO/FIXME/HACK
+# ===========================================================================
+@mcp.tool()
+def get_file_metrics(
+    workspace_path: str,
+    file_path: str,
+) -> str:
+    """Get code metrics: LOC, number of functions/classes, TODO/FIXME/HACK comments."""
+    ws = Path(workspace_path).resolve()
+    fp = (ws / file_path).resolve()
+
+    if not fp.is_relative_to(ws):
+        return "Error: Path traversal detected."
+    if not fp.is_file():
+        return f"Error: File not found: {file_path}"
+
+    try:
+        content = fp.read_text(encoding="utf-8", errors="replace")
+        lines = content.splitlines()
+
+        total_lines = len(lines)
+        blank_lines = sum(1 for line in lines if not line.strip())
+        comment_lines = sum(
+            1 for line in lines if line.strip().startswith(("#", "//", "/*", "*", "*/"))
+        )
+        code_lines = total_lines - blank_lines - comment_lines
+
+        # Count functions and classes using simple heuristics
+        num_functions = content.count("\ndef ") + content.count("\nfunction ")
+        num_classes = content.count("\nclass ")
+
+        # TODO/FIXME/HACK count
+        todo_count = content.upper().count("TODO")
+        fixme_count = content.upper().count("FIXME")
+        hack_count = content.upper().count("HACK")
+
+        # Cyclomatic complexity heuristic
+        complexity = 1
+        for kw in [
+            "if",
+            "elif",
+            "else",
+            "for",
+            "while",
+            "case",
+            "catch",
+            "&&",
+            "||",
+            "?",
+        ]:
+            complexity += content.count(f" {kw} ") + content.count(f" {kw}(")
+
+        return (
+            f"File: {file_path}\n"
+            f"Total lines: {total_lines:,}\n"
+            f"Code lines: {code_lines:,}\n"
+            f"Blank: {blank_lines:,} | Comments: {comment_lines:,}\n"
+            f"Functions: {num_functions} | Classes: {num_classes}\n"
+            f"TODO: {todo_count} | FIXME: {fixme_count} | HACK: {hack_count}\n"
+            f"Complexity: {complexity} (1-10: Simple, 11-20: Moderate, 21+: Complex)"
+        )
+    except Exception as e:
+        logger.error("get_file_metrics error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 10: find_references - Tim symbol usage (AST-based)
+# ===========================================================================
+@mcp.tool()
+def find_references(
+    workspace_path: str,
+    symbol_name: str,
+    file_extensions: Optional[List[str]] = None,
+) -> str:
+    """Find all locations where a function/class/variable is used (AST + regex)."""
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+        import re
+
+        all_files = collect_files_from_disk(ws, workspace_path=ws)
+        if file_extensions:
+            ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
+            all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
+
+        references: list[tuple[str, int, str]] = []
+        pattern = rf"\b{re.escape(symbol_name)}\b"
+
+        for file_path in all_files:
+            try:
+                fp = Path(file_path)
+                content = fp.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+
+                for i, line in enumerate(lines, start=1):
+                    stripped = line.strip()
+                    if stripped.startswith(("#", "//")):
+                        continue
+                    if re.search(pattern, line):
+                        rel_path = os.path.relpath(file_path, ws)
+                        snippet = line.strip()[:80]
+                        references.append((rel_path, i, snippet))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        if not references:
+            return f"No references found for: {symbol_name}"
+
+        by_file: dict[str, list[tuple[int, str]]] = {}
+        for file, line, snippet in references:
+            if file not in by_file:
+                by_file[file] = []
+            by_file[file].append((line, snippet))
+
+        result = [f"Found {len(references)} references in {len(by_file)} files:\n"]
+        for file in sorted(by_file.keys()):
+            result.append(f"\n{file}:")
+            for line, snippet in by_file[file][:5]:
+                result.append(f"  Line {line}: {snippet}")
+            if len(by_file[file]) > 5:
+                result.append(f"  ... +{len(by_file[file]) - 5} more")
+
+        return "\n".join(result)
+    except Exception as e:
+        logger.error("find_references error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 11: find_todos - Scan toan project tim TODO/FIXME/HACK
+# ===========================================================================
+@mcp.tool()
+def find_todos(
+    workspace_path: str,
+    include_hack: bool = True,
+) -> str:
+    """Scan entire project for TODO/FIXME/HACK comments with file path and line number."""
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+
+        all_files = collect_files_from_disk(ws, workspace_path=ws)
+
+        # Filter to code files only
+        code_exts = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".go",
+            ".rs",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+        }
+        all_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
+
+        todos: list[tuple[str, int, str, str]] = []  # (file, line, type, content)
+
+        for file_path in all_files:
+            try:
+                fp = Path(file_path)
+                content = fp.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+
+                for i, line in enumerate(lines, start=1):
+                    upper_line = line.upper()
+                    comment_type = None
+
+                    if "TODO" in upper_line:
+                        comment_type = "TODO"
+                    elif "FIXME" in upper_line:
+                        comment_type = "FIXME"
+                    elif include_hack and "HACK" in upper_line:
+                        comment_type = "HACK"
+
+                    if comment_type:
+                        rel_path = os.path.relpath(file_path, ws)
+                        snippet = line.strip()[:100]
+                        todos.append((rel_path, i, comment_type, snippet))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        if not todos:
+            return "No TODO/FIXME/HACK comments found in project."
+
+        # Group by type
+        by_type: dict[str, list[tuple[str, int, str]]] = {
+            "TODO": [],
+            "FIXME": [],
+            "HACK": [],
+        }
+        for file, line, ctype, snippet in todos:
+            by_type[ctype].append((file, line, snippet))
+
+        result = [f"Found {len(todos)} comments:\n"]
+
+        for ctype in ["FIXME", "TODO", "HACK"]:
+            items = by_type[ctype]
+            if not items:
+                continue
+            result.append(f"\n{ctype} ({len(items)}):")
+            for file, line, snippet in items[:20]:  # Limit to 20 per type
+                result.append(f"  {file}:{line} - {snippet}")
+            if len(items) > 20:
+                result.append(f"  ... +{len(items) - 20} more")
+
+        return "\n".join(result)
+    except Exception as e:
+        logger.error("find_todos error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 12: get_imports_graph - Dependency graph JSON
+# ===========================================================================
+@mcp.tool()
+def get_imports_graph(
+    workspace_path: str,
+    file_paths: Optional[List[str]] = None,
+    max_depth: int = 1,
+) -> str:
+    """Get dependency graph between files as JSON adjacency list."""
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        from core.dependency_resolver import DependencyResolver
+        from services.workspace_index import collect_files_from_disk
+        import json
+
+        resolver = DependencyResolver(ws)
+
+        # Build file index (needed for resolution)
+        resolver.build_file_index(None)
+
+        # Determine which files to analyze
+        if file_paths:
+            target_files = []
+            for rp in file_paths:
+                fp = (ws / rp).resolve()
+                if not fp.is_relative_to(ws):
+                    return f"Error: Path traversal detected for: {rp}"
+                if not fp.is_file():
+                    return f"Error: File not found: {rp}"
+                target_files.append(fp)
+        else:
+            # Analyze all code files
+            all_files = collect_files_from_disk(ws, workspace_path=ws)
+            code_exts = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs"}
+            target_files = [
+                Path(f) for f in all_files if Path(f).suffix.lower() in code_exts
+            ]
+
+        # Build adjacency list
+        graph: dict[str, list[str]] = {}
+
+        for file_path in target_files:
+            rel_path = os.path.relpath(file_path, ws)
+            imports = resolver.get_related_files(file_path, max_depth=max_depth)
+
+            # Convert to relative paths
+            import_rels = [os.path.relpath(imp, ws) for imp in imports]
+            graph[rel_path] = sorted(import_rels)
+
+        # Generate summary
+        total_files = len(graph)
+        total_edges = sum(len(imports) for imports in graph.values())
+
+        # Find most coupled files (most imports)
+        most_coupled = sorted(graph.items(), key=lambda x: len(x[1]), reverse=True)[:5]
+
+        result = [
+            "Dependency Graph Summary:",
+            f"Files analyzed: {total_files}",
+            f"Total import edges: {total_edges}",
+            f"Average imports per file: {total_edges / total_files:.1f}"
+            if total_files > 0
+            else "N/A",
+            "\nMost coupled files:",
+        ]
+
+        for file, imports in most_coupled:
+            result.append(f"  {file}: {len(imports)} imports")
+
+        result.append("\nFull graph (JSON):")
+        result.append(json.dumps(graph, indent=2))
+
+        return "\n".join(result)
+    except Exception as e:
+        logger.error("get_imports_graph error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 14: get_symbols - Structured symbol list (JSON)
+# ===========================================================================
+@mcp.tool()
+def get_symbols(
+    workspace_path: str,
+    file_path: str,
+) -> str:
+    """Get structured list of all symbols (functions, classes, methods) in a file as JSON.
+
+    Returns detailed symbol information including:
+    - name: Symbol name
+    - kind: function/class/method/variable
+    - line_start, line_end: Location in file
+    - signature: Function/method signature
+    - parent: Parent class (for methods)
+
+    Useful for programmatic analysis by AI agents (filtering, counting, etc.)
+    """
+    ws = Path(workspace_path).resolve()
+    fp = (ws / file_path).resolve()
+
+    if not fp.is_relative_to(ws):
+        return "Error: Path traversal detected."
+    if not fp.is_file():
+        return f"Error: File not found: {file_path}"
+
+    try:
+        from core.codemaps.symbol_extractor import extract_symbols
+        import json
+
+        content = fp.read_text(encoding="utf-8", errors="replace")
+        symbols = extract_symbols(str(fp), content)
+
+        if not symbols:
+            return f"No symbols found in {file_path}"
+
+        # Convert to JSON-serializable format
+        symbols_data = []
+        for sym in symbols:
+            symbols_data.append(
+                {
+                    "name": sym.name,
+                    "kind": sym.kind.value,
+                    "line_start": sym.line_start,
+                    "line_end": sym.line_end,
+                    "signature": sym.signature,
+                    "parent": sym.parent,
+                }
+            )
+
+        # Summary
+        by_kind = {}
+        for sym in symbols:
+            kind = sym.kind.value
+            by_kind[kind] = by_kind.get(kind, 0) + 1
+
+        summary = f"Found {len(symbols)} symbols in {file_path}:\n"
+        for kind, count in sorted(by_kind.items()):
+            summary += f"  {kind}: {count}\n"
+
+        return summary + "\n" + json.dumps(symbols_data, indent=2)
+
+    except Exception as e:
+        logger.error("get_symbols error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 15: diff_summary - Smart git changes summary
+# ===========================================================================
+@mcp.tool()
+def diff_summary(
+    workspace_path: str,
+    target: str = "HEAD",
+) -> str:
+    """Get smart summary of git changes: files changed, functions added/modified/deleted.
+
+    Args:
+        workspace_path: Workspace root
+        target: Git target to compare against (default: HEAD = uncommitted changes)
+                Can be: HEAD, branch name, commit hash
+
+    Returns summary like:
+    - 5 files changed
+    - 3 functions modified
+    - 1 function added
+    - 2 functions deleted
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        import subprocess
+        from core.codemaps.symbol_extractor import extract_symbols
+
+        # Check if git repo
+        git_check = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=ws,
+            capture_output=True,
+            text=True,
+        )
+        if git_check.returncode != 0:
+            return "Error: Not a git repository"
+
+        # Get changed files
+        diff_cmd = ["git", "diff", "--name-only", target]
+        result = subprocess.run(
+            diff_cmd,
+            cwd=ws,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            return f"Error running git diff: {result.stderr}"
+
+        changed_files = [f.strip() for f in result.stdout.splitlines() if f.strip()]
+
+        if not changed_files:
+            return f"No changes detected compared to {target}"
+
+        # Filter to code files only
+        code_exts = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java"}
+        code_files = [f for f in changed_files if Path(f).suffix.lower() in code_exts]
+
+        # Analyze function-level changes
+        total_added = 0
+        total_modified = 0
+        total_deleted = 0
+        details = []
+
+        for rel_path in code_files[:10]:  # Limit to 10 files to avoid slowness
+            file_path = ws / rel_path
+            if not file_path.exists():
+                # File deleted
+                continue
+
+            try:
+                # Get current symbols
+                current_content = file_path.read_text(
+                    encoding="utf-8", errors="replace"
+                )
+                current_symbols = extract_symbols(str(file_path), current_content)
+                current_names = {
+                    s.name
+                    for s in current_symbols
+                    if s.kind.value in ["function", "class", "method"]
+                }
+
+                # Get old symbols (from git)
+                old_content_result = subprocess.run(
+                    ["git", "show", f"{target}:{rel_path}"],
+                    cwd=ws,
+                    capture_output=True,
+                    text=True,
+                )
+
+                if old_content_result.returncode == 0:
+                    old_content = old_content_result.stdout
+                    old_symbols = extract_symbols(str(file_path), old_content)
+                    old_names = {
+                        s.name
+                        for s in old_symbols
+                        if s.kind.value in ["function", "class", "method"]
+                    }
+
+                    added = current_names - old_names
+                    deleted = old_names - current_names
+                    modified = len(current_names & old_names)  # Rough estimate
+
+                    total_added += len(added)
+                    total_deleted += len(deleted)
+                    total_modified += modified
+
+                    if added or deleted:
+                        details.append(f"\n{rel_path}:")
+                        if added:
+                            details.append(f"  + Added: {', '.join(sorted(added))}")
+                        if deleted:
+                            details.append(f"  - Deleted: {', '.join(sorted(deleted))}")
+                else:
+                    # New file
+                    total_added += len(current_names)
+                    details.append(
+                        f"\n{rel_path}: (new file, {len(current_names)} symbols)"
+                    )
+
+            except Exception:
+                continue
+
+        summary = (
+            f"Git diff summary (vs {target}):\n"
+            f"Files changed: {len(changed_files)} ({len(code_files)} code files)\n"
+            f"Functions/classes added: {total_added}\n"
+            f"Functions/classes deleted: {total_deleted}\n"
+            f"Functions/classes potentially modified: {total_modified}\n"
+        )
+
+        if details:
+            summary += "\nDetails:" + "".join(details[:20])  # Limit details
+
+        return summary
+
+    except Exception as e:
+        logger.error("diff_summary error: %s", e)
+        return f"Error: {e}"
+
+
 if __name__ == "__main__":
-    # Cho phep chay truc tiep: python mcp_server/server.py [workspace_path]
     ws = sys.argv[1] if len(sys.argv) > 1 else None
     run_mcp_server(ws)

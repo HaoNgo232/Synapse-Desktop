@@ -16,10 +16,12 @@ Encoder duoc truyen tu caller (TokenizationService).
 
 import mmap
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.tokenization.cache import TokenCache
 
 from core.encoders import _estimate_tokens
-from core.tokenization.cache import token_cache
 
 # Guardrail: skip files > 5MB
 MAX_BYTES = 5 * 1024 * 1024
@@ -88,6 +90,7 @@ def _count_tokens_for_file_no_cache(
     file_path: Path,
     encoder: Optional[Any] = None,
     encoder_type: str = "",
+    cache: Optional["TokenCache"] = None,
 ) -> int:
     """
     Dem token cho file KHONG update cache.
@@ -99,6 +102,7 @@ def _count_tokens_for_file_no_cache(
         file_path: Duong dan file
         encoder: Encoder instance
         encoder_type: Loai encoder
+        cache: TokenCache instance tuy chon (neu None, bo qua cache)
 
     Returns:
         So token hoac 0 neu khong dem duoc
@@ -113,10 +117,11 @@ def _count_tokens_for_file_no_cache(
 
         path_str = str(file_path)
 
-        # Check cache truoc (read-only, khong move LRU)
-        cached = token_cache.get_no_move(path_str, stat.st_mtime)
-        if cached is not None:
-            return cached
+        # Check cache truoc neu co (read-only, khong move LRU)
+        if cache is not None:
+            cached = cache.get_no_move(path_str, stat.st_mtime)
+            if cached is not None:
+                return cached
 
         from core.utils.file_utils import is_binary_file
 
@@ -137,19 +142,21 @@ def count_tokens_for_file(
     file_path: Path,
     encoder: Optional[Any] = None,
     encoder_type: str = "",
+    cache: Optional["TokenCache"] = None,
 ) -> int:
     """
-    Dem so token trong mot file voi cache.
+    Dem so token trong mot file voi cache tuy chon.
 
     - Skip files qua lon (> 5MB)
     - Skip binary files
     - Return 0 neu khong doc duoc
-    - Uses LRU mtime-based caching
+    - Dung LRU mtime-based caching neu cache duoc truyen vao
 
     Args:
         file_path: Duong dan den file
         encoder: Encoder instance
         encoder_type: Loai encoder
+        cache: TokenCache instance tuy chon (neu None, dem ma khong cache)
 
     Returns:
         So luong tokens, hoac 0 neu skip/error
@@ -164,10 +171,11 @@ def count_tokens_for_file(
 
         path_str = str(file_path)
 
-        # Check cache voi LRU management
-        cached = token_cache.get(path_str, stat.st_mtime)
-        if cached is not None:
-            return cached
+        # Check cache neu co (LRU management)
+        if cache is not None:
+            cached = cache.get(path_str, stat.st_mtime)
+            if cached is not None:
+                return cached
 
         from core.utils.file_utils import is_binary_file
 
@@ -177,7 +185,10 @@ def count_tokens_for_file(
         content = file_path.read_text(encoding="utf-8", errors="replace")
         token_count = count_tokens(content, encoder=encoder, encoder_type=encoder_type)
 
-        token_cache.put(path_str, stat.st_mtime, token_count)
+        # Luu vao cache neu co
+        if cache is not None:
+            cache.put(path_str, stat.st_mtime, token_count)
+
         return token_count
 
     except (OSError, IOError):

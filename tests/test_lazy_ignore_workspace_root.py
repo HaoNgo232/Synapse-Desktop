@@ -5,6 +5,7 @@ Regression tests for lazy loading ignore behavior with workspace-root matching.
 from pathlib import Path
 
 from core.utils.file_utils import TreeItem, load_folder_children, scan_directory_shallow
+from core.ignore_engine import IgnoreEngine
 
 
 def _collect_file_labels(item: TreeItem) -> list[str]:
@@ -37,6 +38,7 @@ def test_lazy_load_children_respects_workspace_relative_pattern(tmp_path: Path) 
         excluded_patterns=["a/b/c/deep.py"],
         use_gitignore=False,
         use_default_ignores=False,
+        ignore_engine=IgnoreEngine(),
     )
 
     folder_a = next(child for child in tree.children if child.label == "a")
@@ -46,6 +48,7 @@ def test_lazy_load_children_respects_workspace_relative_pattern(tmp_path: Path) 
         use_gitignore=False,
         use_default_ignores=False,
         workspace_root=workspace,
+        ignore_engine=IgnoreEngine(),
     )
 
     folder_b = next(child for child in folder_a.children if child.label == "b")
@@ -55,6 +58,7 @@ def test_lazy_load_children_respects_workspace_relative_pattern(tmp_path: Path) 
         use_gitignore=False,
         use_default_ignores=False,
         workspace_root=workspace,
+        ignore_engine=IgnoreEngine(),
     )
 
     folder_c = next(child for child in folder_b.children if child.label == "c")
@@ -64,6 +68,7 @@ def test_lazy_load_children_respects_workspace_relative_pattern(tmp_path: Path) 
         use_gitignore=False,
         use_default_ignores=False,
         workspace_root=workspace,
+        ignore_engine=IgnoreEngine(),
     )
 
     labels = _collect_file_labels(tree)
@@ -92,6 +97,7 @@ def test_lazy_load_matches_full_scan_with_same_config(tmp_path: Path) -> None:
         excluded_patterns=patterns,
         use_gitignore=False,
         use_default_ignores=False,
+        ignore_engine=IgnoreEngine(),
     )
 
     lazy_tree = scan_directory_shallow(
@@ -100,6 +106,7 @@ def test_lazy_load_matches_full_scan_with_same_config(tmp_path: Path) -> None:
         excluded_patterns=patterns,
         use_gitignore=False,
         use_default_ignores=False,
+        ignore_engine=IgnoreEngine(),
     )
 
     for child in lazy_tree.children:
@@ -110,6 +117,7 @@ def test_lazy_load_matches_full_scan_with_same_config(tmp_path: Path) -> None:
                 use_gitignore=False,
                 use_default_ignores=False,
                 workspace_root=workspace,
+                ignore_engine=IgnoreEngine(),
             )
             for nested in child.children:
                 if nested.is_dir:
@@ -119,6 +127,7 @@ def test_lazy_load_matches_full_scan_with_same_config(tmp_path: Path) -> None:
                         use_gitignore=False,
                         use_default_ignores=False,
                         workspace_root=workspace,
+                        ignore_engine=IgnoreEngine(),
                     )
 
     full_labels = sorted(_collect_file_labels(deep_scan_tree))
@@ -140,6 +149,7 @@ def test_load_folder_children_raises_without_workspace_root(tmp_path: Path) -> N
         depth=1,
         use_gitignore=False,
         use_default_ignores=False,
+        ignore_engine=IgnoreEngine(),
     )
     folder = next(c for c in tree.children if c.is_dir)
 
@@ -152,4 +162,5 @@ def test_load_folder_children_raises_without_workspace_root(tmp_path: Path) -> N
             folder,
             use_gitignore=False,
             use_default_ignores=False,
+            ignore_engine=IgnoreEngine(),
         )

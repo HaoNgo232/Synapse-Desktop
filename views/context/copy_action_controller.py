@@ -256,6 +256,8 @@ class CopyActionViewProtocol(Protocol):
     def get_prompt_builder(self) -> Any: ...
     def scan_full_tree(self, workspace: Path) -> Any: ...
     def parent_widget(self) -> Any: ...
+    def get_tokenization_service(self) -> Any: ...
+    def get_ignore_engine(self) -> Any: ...
 
 
 class CopyActionController(QObject):
@@ -961,6 +963,7 @@ class CopyActionController(QObject):
         """Scan full workspace tree with current exclude settings."""
         return scan_directory(
             workspace,
+            ignore_engine=self._view.get_ignore_engine(),
             excluded_patterns=get_excluded_patterns(),
             use_gitignore=get_use_gitignore(),
         )
@@ -1001,6 +1004,7 @@ class CopyActionController(QObject):
                 workspace=workspace,
                 parent=self._view.parent_widget(),
                 build_prompt_callback=_build_diff_prompt,
+                tokenization_service=self._view.get_tokenization_service(),
                 instructions=instructions,
                 on_success=lambda msg: self._view.show_status(msg),
             )

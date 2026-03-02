@@ -27,6 +27,7 @@ from services.cache_registry import CacheRegistry
 from services.tokenization_service import TokenizationService
 from services.service_interfaces import IPromptBuilder, IClipboardService
 from services.interfaces.tokenization_service import ITokenizationService
+from core.ignore_engine import IgnoreEngine
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class ServiceContainer:
     """
     Composition root - single point of control cho service lifecycle.
 
-    So huu: PromptBuildService, QtClipboardService, TokenizationService, CacheRegistry
+    So huu: PromptBuildService, QtClipboardService, TokenizationService, CacheRegistry, IgnoreEngine
     Khong con dung module-level singletons (encoder_registry, cache_registry).
 
     Thread Safety: Khoi tao PHAI thuc hien tren main thread.
@@ -44,9 +45,9 @@ class ServiceContainer:
 
     def __init__(self) -> None:
         """Khoi tao tat ca services tai composition root."""
-        # Services do container so huu truc tiep
-        self.prompt_builder: IPromptBuilder = PromptBuildService()
-        self.clipboard: IClipboardService = QtClipboardService()
+        # IgnoreEngine - quan ly tat ca logic ignore/gitignore
+        # Khoi tao tai day de tranh module-level state
+        self.ignore_engine: IgnoreEngine = IgnoreEngine()
 
         # TokenizationService - khoi tao noi bo thay vi dung global singleton
         # Lay tokenizer_repo tu settings hien tai
@@ -56,6 +57,12 @@ class ServiceContainer:
         self._tokenization_service: TokenizationService = TokenizationService(
             tokenizer_repo=_repo
         )
+
+        # Services do container so huu truc tiep (inject dependencies)
+        self.prompt_builder: IPromptBuilder = PromptBuildService(
+            tokenization_service=self._tokenization_service
+        )
+        self.clipboard: IClipboardService = QtClipboardService()
 
         # CacheRegistry - tam thoi giu lai module singleton o day cho den khi Phase 2 migration
         from services.cache_registry import cache_registry as _module_registry

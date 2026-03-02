@@ -11,7 +11,10 @@ Composite widget bao gồm:
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Set, List, Dict
+from typing import Optional, Set, List, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.interfaces.tokenization_service import ITokenizationService
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -29,6 +32,7 @@ from PySide6.QtGui import QIcon
 
 from core.theme import ThemeColors
 from core.utils.qt_utils import DebouncedTimer
+from core.ignore_engine import IgnoreEngine
 from components.file_tree_model import FileTreeModel, TokenCountWorker, FileTreeRoles
 from components.file_tree_delegate import FileTreeDelegate
 from components.file_tree_filter import FileTreeFilterProxy
@@ -51,11 +55,17 @@ class FileTreeWidget(QWidget):
     token_counting_done = Signal()  # Emitted khi batch token counting hoàn thành
     search_results_changed = Signal(int)  # Emitted với số kết quả search
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        ignore_engine: IgnoreEngine,
+        tokenization_service: "ITokenizationService",
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
+        self._tokenization_service = tokenization_service
 
         # Model & delegate
-        self._model = FileTreeModel(self)
+        self._model = FileTreeModel(ignore_engine=ignore_engine, parent=self)
         self._filter_proxy = FileTreeFilterProxy(self)
         self._filter_proxy.setSourceModel(self._model)
         self._delegate = FileTreeDelegate(self)
@@ -591,7 +601,11 @@ class FileTreeWidget(QWidget):
 
         # Create and start worker with current generation
         current_gen = self._model.generation
-        worker = TokenCountWorker(uncached, generation=current_gen)
+        worker = TokenCountWorker(
+            uncached,
+            tokenization_service=self._tokenization_service,
+            generation=current_gen,
+        )
         worker.signals.token_counts_batch.connect(self._on_token_counts_batch)
         worker.signals.finished.connect(self._on_token_counting_finished)
         self._current_token_worker = worker

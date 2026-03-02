@@ -13,7 +13,10 @@ Features:
 """
 
 from pathlib import Path
-from typing import Dict, Set, Optional, List
+from typing import Dict, Set, Optional, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.interfaces.tokenization_service import ITokenizationService
 from collections import OrderedDict
 import threading
 import time
@@ -21,7 +24,6 @@ import time
 from PySide6.QtCore import QObject, Signal
 
 from core.utils.file_utils import TreeItem
-from services.encoder_registry import get_tokenization_service
 
 # Cancellation flag - import tu core layer (fix circular dependency)
 # Re-export de backward compat (main_window.py, tests import tu day)
@@ -63,14 +65,24 @@ class TokenDisplayService(QObject):
     SMALL_FILE_THRESHOLD = 10000  # bytes - count immediately
     LARGE_FILE_THRESHOLD = 100000  # bytes - defer to background
 
-    def __init__(self, parent: Optional[QObject] = None):
+    def __init__(
+        self,
+        tokenization_service: Optional["ITokenizationService"] = None,
+        parent: Optional[QObject] = None,
+    ):
         """
         Khoi tao TokenDisplayService.
 
         Args:
+            tokenization_service: ITokenizationService
             parent: QObject parent (tuy chon, de quan ly lifecycle)
         """
         super().__init__(parent)
+        if tokenization_service is None:
+            from services.encoder_registry import get_tokenization_service
+
+            tokenization_service = get_tokenization_service()
+        self._tokenization_service = tokenization_service
 
         # Cache: path -> token count
         self._cache: Dict[str, int] = {}
@@ -224,7 +236,7 @@ class TokenDisplayService(QObject):
             return
 
         try:
-            tokens = get_tokenization_service().count_tokens_for_file(Path(path))
+            tokens = self._tokenization_service.count_tokens_for_file(Path(path))
             with self._lock:
                 self._cache[path] = tokens
             with self._update_lock:
@@ -333,7 +345,7 @@ class TokenDisplayService(QObject):
             immediate_paths = [Path(p) for p in immediate_files]
 
             # Parallel counting - nhanh hon 3-4x
-            service = get_tokenization_service()
+            service = self._tokenization_service
             results = service.count_tokens_batch_parallel(
                 immediate_paths, max_workers=4
             )
@@ -406,7 +418,7 @@ class TokenDisplayService(QObject):
                         continue
 
                 try:
-                    tokens = get_tokenization_service().count_tokens_for_file(
+                    tokens = self._tokenization_service.count_tokens_for_file(
                         Path(path)
                     )
                     with self._lock:

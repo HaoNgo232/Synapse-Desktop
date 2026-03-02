@@ -12,7 +12,10 @@ dung signatures cua chung.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.interfaces.tokenization_service import ITokenizationService
 
 from core.prompt_generator import (
     generate_file_map,
@@ -26,7 +29,6 @@ from core.prompt_generator import (
 )
 from core.utils.file_utils import TreeItem
 from core.utils.git_utils import get_git_diffs, get_git_logs
-from services.encoder_registry import get_tokenization_service
 
 
 # Mapping output_format string -> OutputStyle enum
@@ -51,6 +53,16 @@ class PromptBuildService:
     Khong co state internal - moi call doc lap.
     Thread-safe vi khong mutate state.
     """
+
+    def __init__(
+        self,
+        tokenization_service: Optional["ITokenizationService"] = None,
+    ):
+        if tokenization_service is None:
+            from services.encoder_registry import get_tokenization_service
+
+            tokenization_service = get_tokenization_service()
+        self._tokenization_service = tokenization_service
 
     def build_prompt(
         self,
@@ -143,8 +155,7 @@ class PromptBuildService:
                 workspace_root=workspace,
             )
 
-        tokenizer = get_tokenization_service()
-        token_count = tokenizer.count_tokens(prompt)
+        token_count = self._tokenization_service.count_tokens(prompt)
         return prompt, token_count
 
     def count_tokens(self, text: str) -> int:
@@ -159,7 +170,7 @@ class PromptBuildService:
         Returns:
             So luong tokens
         """
-        return get_tokenization_service().count_tokens(text)
+        return self._tokenization_service.count_tokens(text)
 
     def build_file_map(
         self,

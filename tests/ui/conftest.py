@@ -21,6 +21,10 @@ class FakeFileTreeWidget(QWidget):
     file_preview_requested = Signal(str)
     token_counting_done = Signal()
 
+    def __init__(self, *args, **kwargs):
+        # Allow any arguments like ignore_engine, tokenization_service when mocked
+        super().__init__()
+
     def get_model(self):
         mock_model = MagicMock()
         mock_model.get_selected_file_count.return_value = 0
@@ -56,6 +60,9 @@ class FakeTokenStatsPanel(QWidget):
     """Fake TokenStatsPanelQt cho testing."""
 
     model_changed = Signal(str)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
     def update_stats(self, **kwargs):
         pass

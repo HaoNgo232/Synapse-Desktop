@@ -11,6 +11,7 @@ import pytest
 
 from core.dependency_resolver import DependencyResolver, get_related_files_for_selection
 from core.utils.file_utils import scan_directory_shallow
+from core.ignore_engine import IgnoreEngine
 
 
 @pytest.fixture
@@ -73,7 +74,7 @@ def test_dependency_resolver_basic(temp_project):
     resolver = DependencyResolver(temp_project)
 
     # Build index
-    tree = scan_directory_shallow(temp_project, depth=3)
+    tree = scan_directory_shallow(temp_project, depth=3, ignore_engine=IgnoreEngine())
     resolver.build_file_index(tree)
 
     # Verify index built
@@ -83,7 +84,7 @@ def test_dependency_resolver_basic(temp_project):
 def test_extract_imports_from_main(temp_project):
     """Test extracting imports from main.py."""
     resolver = DependencyResolver(temp_project)
-    tree = scan_directory_shallow(temp_project, depth=3)
+    tree = scan_directory_shallow(temp_project, depth=3, ignore_engine=IgnoreEngine())
     resolver.build_file_index(tree)
 
     main_file = temp_project / "main.py"
@@ -102,7 +103,7 @@ def test_extract_imports_from_main(temp_project):
 def test_transitive_dependencies(temp_project):
     """Test finding transitive dependencies with max_depth > 1."""
     resolver = DependencyResolver(temp_project)
-    tree = scan_directory_shallow(temp_project, depth=3)
+    tree = scan_directory_shallow(temp_project, depth=3, ignore_engine=IgnoreEngine())
     resolver.build_file_index(tree)
 
     # core/processor.py imports utils.helpers
@@ -123,7 +124,7 @@ def test_no_imports_file():
         (project / "simple.py").write_text("print('hello')")
 
         resolver = DependencyResolver(project)
-        tree = scan_directory_shallow(project, depth=2)
+        tree = scan_directory_shallow(project, depth=2, ignore_engine=IgnoreEngine())
         resolver.build_file_index(tree)
 
         related = resolver.get_related_files(project / "simple.py")
@@ -139,7 +140,7 @@ def test_get_related_files_for_selection():
         (project / "main.py").write_text("from helper import foo")
         (project / "helper.py").write_text("def foo(): pass")
 
-        tree = scan_directory_shallow(project, depth=2)
+        tree = scan_directory_shallow(project, depth=2, ignore_engine=IgnoreEngine())
         related = get_related_files_for_selection(
             workspace_root=project, tree=tree, selected_file=project / "main.py"
         )

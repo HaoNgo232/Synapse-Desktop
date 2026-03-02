@@ -173,15 +173,23 @@ class SynapseMainWindow(QMainWindow):
         from views.settings_view_qt import SettingsViewQt
 
         # Tao ServiceContainer tai composition root de quan ly lifecycle cua tat ca services
-        from services.service_container import ServiceContainer
+        # Reuse boot container from QApplication instance (created in main())
+        app = QApplication.instance()
+        if hasattr(app, "_service_container"):
+            self._services = app._service_container
+        else:
+            # Fallback if not set (shouldn't happen in normal flow)
+            from services.service_container import ServiceContainer
 
-        self._services = ServiceContainer()
+            self._services = ServiceContainer()
 
         # Create views voi explicit DI tu container
         self.context_view = ContextViewQt(
             self._get_workspace_path,
             prompt_builder=self._services.prompt_builder,
             clipboard_service=self._services.clipboard,
+            ignore_engine=self._services.ignore_engine,
+            tokenization_service=self._services.tokenization,
         )
         self.apply_view = ApplyViewQt(self._get_workspace_path)
         self.history_view = HistoryViewQt(self._on_reapply_from_history)
@@ -809,13 +817,23 @@ def main() -> None:
 
     # Register all cache adapters into CacheRegistry
     # NOTE: Sau khi Phase 2 hoan tat, cac adapters se dang ky vao container.cache_registry
+    # Tao ServiceContainer truoc de co ignore_engine
+    # (container se duoc dung lai khi tao views ben duoi)
+    from services.service_container import ServiceContainer as _SC
     from services.cache_adapters import register_all_caches
 
-    register_all_caches()
+    _boot_container = _SC()
+    register_all_caches(
+        ignore_engine=_boot_container.ignore_engine,
+        tokenization_service=_boot_container.tokenization,
+    )
 
     app = QApplication(sys.argv)
     app.setApplicationName("Synapse Desktop")
     app.setOrganizationName("Synapse")
+
+    # Store boot container on app instance for reuse
+    app._service_container = _boot_container
 
     # Set application icon (de hien thi icon tren taskbar)
     # Tim icon file: uu tien .ico, sau do .png

@@ -186,26 +186,43 @@ class TestCacheRegistry:
 
 
 class TestTokenCacheAdapter:
-    """Test TokenCacheAdapter wraps token_cache correctly."""
+    """Test TokenCacheAdapter wraps TokenizationService cache correctly."""
+
+    def _make_adapter(self):
+        """Helper tao adapter voi TokenizationService fresh."""
+        from services.tokenization_service import TokenizationService
+
+        return TokenCacheAdapter(TokenizationService())
 
     def test_implements_protocol(self):
-        adapter = TokenCacheAdapter()
+        adapter = self._make_adapter()
         assert isinstance(adapter, ICacheable)
 
-    def test_invalidate_path_calls_clear_file(self):
-        adapter = TokenCacheAdapter()
-        with patch.object(adapter._cache, "clear_file") as mock:
+    def test_invalidate_path_clears_file(self, tmp_path):
+        """invalidate_path goi clear_file_from_cache tren service."""
+        from unittest.mock import patch
+        from services.tokenization_service import TokenizationService
+
+        svc = TokenizationService()
+        adapter = TokenCacheAdapter(svc)
+        with patch.object(svc, "clear_file_from_cache") as mock:
             adapter.invalidate_path("/test/file.py")
             mock.assert_called_once_with("/test/file.py")
 
     def test_invalidate_all_calls_clear(self):
-        adapter = TokenCacheAdapter()
-        with patch.object(adapter._cache, "clear") as mock:
+        """invalidate_all goi clear_cache tren service."""
+        from unittest.mock import patch
+        from services.tokenization_service import TokenizationService
+
+        svc = TokenizationService()
+        adapter = TokenCacheAdapter(svc)
+        with patch.object(svc, "clear_cache") as mock:
             adapter.invalidate_all()
             mock.assert_called_once()
 
-    def test_size_returns_len(self):
-        adapter = TokenCacheAdapter()
+    def test_size_returns_int(self):
+        """size() tra ve int."""
+        adapter = self._make_adapter()
         result = adapter.size()
         assert isinstance(result, int)
 
@@ -230,23 +247,43 @@ class TestSecurityCacheAdapter:
 class TestIgnoreCacheAdapter:
     """Test IgnoreCacheAdapter wraps ignore engine caches."""
 
+    def _make_adapter(self):
+        from core.ignore_engine import IgnoreEngine
+
+        return IgnoreCacheAdapter(IgnoreEngine())
+
     def test_implements_protocol(self):
-        assert isinstance(IgnoreCacheAdapter(), ICacheable)
+        assert isinstance(self._make_adapter(), ICacheable)
 
-    @patch("core.ignore_engine.clear_cache")
-    def test_invalidate_path_gitignore_triggers_clear(self, mock_clear):
-        IgnoreCacheAdapter().invalidate_path("/project/.gitignore")
-        mock_clear.assert_called_once()
+    def test_invalidate_path_gitignore_triggers_clear(self):
+        from core.ignore_engine import IgnoreEngine
 
-    @patch("core.ignore_engine.clear_cache")
-    def test_invalidate_path_normal_file_no_clear(self, mock_clear):
-        IgnoreCacheAdapter().invalidate_path("/project/src/main.py")
-        mock_clear.assert_not_called()
+        engine = IgnoreEngine()
+        adapter = IgnoreCacheAdapter(engine)
+        # Ghi fake data vao cache truoc
+        engine._gitignore_cache["dummy"] = (0.0, [])
+        adapter.invalidate_path("/project/.gitignore")
+        # Sau invalidate cache phai trong
+        assert len(engine._gitignore_cache) == 0
 
-    @patch("core.ignore_engine.clear_cache")
-    def test_invalidate_all(self, mock_clear):
-        IgnoreCacheAdapter().invalidate_all()
-        mock_clear.assert_called_once()
+    def test_invalidate_path_normal_file_no_clear(self):
+        from core.ignore_engine import IgnoreEngine
+
+        engine = IgnoreEngine()
+        engine._gitignore_cache["dummy"] = (0.0, [])
+        adapter = IgnoreCacheAdapter(engine)
+        adapter.invalidate_path("/project/src/main.py")
+        # Normal file: cache khong bi clear
+        assert len(engine._gitignore_cache) == 1
+
+    def test_invalidate_all(self):
+        from core.ignore_engine import IgnoreEngine
+
+        engine = IgnoreEngine()
+        engine._gitignore_cache["dummy"] = (0.0, [])
+        adapter = IgnoreCacheAdapter(engine)
+        adapter.invalidate_all()
+        assert len(engine._gitignore_cache) == 0
 
 
 class TestRelationshipCacheAdapter:
@@ -271,7 +308,13 @@ class TestRegisterAllCaches:
         cache_registry._reset_for_testing()
 
     def test_registers_all_four_caches(self):
-        register_all_caches()
+        from core.ignore_engine import IgnoreEngine
+        from services.tokenization_service import TokenizationService
+
+        register_all_caches(
+            ignore_engine=IgnoreEngine(),
+            tokenization_service=TokenizationService(),
+        )
         names = cache_registry.get_registered_names()
         assert "token_cache" in names
         assert "security_cache" in names
@@ -279,8 +322,15 @@ class TestRegisterAllCaches:
         assert "relationship_cache" in names
 
     def test_idempotent(self):
-        register_all_caches()
-        register_all_caches()  # Goi lai khong loi
+        from core.ignore_engine import IgnoreEngine
+        from services.tokenization_service import TokenizationService
+
+        kwargs = dict(
+            ignore_engine=IgnoreEngine(),
+            tokenization_service=TokenizationService(),
+        )
+        register_all_caches(**kwargs)
+        register_all_caches(**kwargs)  # Goi lai khong loi
         assert len(cache_registry.get_registered_names()) == 4
 
 

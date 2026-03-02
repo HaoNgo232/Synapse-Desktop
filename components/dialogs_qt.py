@@ -9,6 +9,7 @@ from typing import Optional, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.utils.repo_manager import RepoManager
+    from services.interfaces.tokenization_service import ITokenizationService
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -230,12 +231,14 @@ class DiffOnlyDialogQt(BaseDialogQt):
         parent: QWidget,
         workspace: Path,
         build_prompt_callback: Callable,
+        tokenization_service: "ITokenizationService",
         instructions: str = "",
         on_success: Optional[Callable[[str], None]] = None,
     ):
         super().__init__(parent, "Copy Diff Only")
         self.workspace = workspace
         self.build_prompt_callback = build_prompt_callback
+        self._tokenization_service = tokenization_service
         self.instructions = instructions
         self.on_success = on_success
         self._build_ui()
@@ -326,7 +329,6 @@ class DiffOnlyDialogQt(BaseDialogQt):
     @Slot()
     def _do_copy(self) -> None:
         from core.utils.git_utils import get_diff_only
-        from services.encoder_registry import get_tokenization_service
 
         commits = self._get_num_commits()
 
@@ -360,7 +362,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         success, message = copy_to_clipboard(prompt)
         if success:
             self.accept()
-            token_count = get_tokenization_service().count_tokens(prompt)
+            token_count = self._tokenization_service.count_tokens(prompt)
             if self.on_success:
                 self.on_success(
                     f"Diff copied! ({token_count:,} tokens, "

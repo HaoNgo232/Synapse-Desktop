@@ -133,7 +133,3 @@ class TokenCache:
         """Tra ve so luong entries trong cache."""
         with self._lock:
             return len(self._store)
-
-
-# Singleton instance - dung chung boi counter.py va batch.py
-token_cache = TokenCache()

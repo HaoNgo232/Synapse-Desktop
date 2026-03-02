@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Optional, Set, List, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    pass
+    from core.ignore_engine import IgnoreEngine
+    from services.interfaces.tokenization_service import ITokenizationService
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer
@@ -50,9 +51,24 @@ class ContextViewQt(
         parent: Optional[QWidget] = None,
         prompt_builder=None,
         clipboard_service=None,
+        ignore_engine: Optional["IgnoreEngine"] = None,
+        tokenization_service: Optional["ITokenizationService"] = None,
     ):
         super().__init__(parent)
         self.get_workspace = get_workspace
+
+        # IgnoreEngine duoc inject tu ServiceContainer
+        if ignore_engine is None:
+            from core.ignore_engine import IgnoreEngine as _IE
+
+            ignore_engine = _IE()
+        self._ignore_engine: "IgnoreEngine" = ignore_engine
+
+        if tokenization_service is None:
+            from services.encoder_registry import get_tokenization_service
+
+            tokenization_service = get_tokenization_service()
+        self._tokenization_service: "ITokenizationService" = tokenization_service
 
         # State
         self.tree: Optional[TreeItem] = None
@@ -235,6 +251,12 @@ class ContextViewQt(
 
     def get_prompt_builder(self):
         return self._prompt_builder
+
+    def get_tokenization_service(self):
+        return self._tokenization_service
+
+    def get_ignore_engine(self):
+        return self._ignore_engine
 
     def parent_widget(self):
         return self
@@ -690,9 +712,10 @@ class ContextViewQt(
         Resets encoder and clears cache to trigger recount with the new tokenizer.
         """
         # Reset encoder va reinitialize voi model moi qua TokenizationService
-        from services.encoder_registry import initialize_encoder
+        from services.encoder_registry import get_tokenizer_repo
 
-        initialize_encoder()  # Re-inject new config vao TokenizationService
+        repo = get_tokenizer_repo()
+        self._tokenization_service.set_model_config(tokenizer_repo=repo)
 
         # Invalidate prompt cache (token counts will differ with new tokenizer)
         if self._copy_controller:

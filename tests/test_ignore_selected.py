@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 from core.utils.file_utils import scan_directory_shallow
+from core.ignore_engine import IgnoreEngine
 from services.workspace_config import (
     add_excluded_patterns,
     remove_excluded_patterns,
@@ -66,6 +67,7 @@ class TestIgnoreSelectedPatternFormat:
                 excluded_patterns=patterns,
                 use_gitignore=False,
                 use_default_ignores=False,
+                ignore_engine=IgnoreEngine(),
             )
 
             # Collect all file paths
@@ -126,6 +128,7 @@ class TestIgnoreSelectedIntegration:
                 excluded_patterns=saved,
                 use_gitignore=False,
                 use_default_ignores=False,
+                ignore_engine=IgnoreEngine(),
             )
 
             # Collect files
@@ -180,6 +183,7 @@ class TestIgnoreSelectedIntegration:
                 excluded_patterns=patterns,
                 use_gitignore=False,
                 use_default_ignores=False,
+                ignore_engine=IgnoreEngine(),
             )
 
             def collect_paths(item, paths):
@@ -219,6 +223,7 @@ class TestIgnoreSelectedEdgeCases:
                 excluded_patterns=patterns,
                 use_gitignore=False,
                 use_default_ignores=False,
+                ignore_engine=IgnoreEngine(),
             )
 
             def collect_names(item, names):
@@ -255,6 +260,7 @@ class TestIgnoreSelectedEdgeCases:
                 excluded_patterns=patterns,
                 use_gitignore=False,
                 use_default_ignores=False,
+                ignore_engine=IgnoreEngine(),
             )
 
             def collect_files(item, files):

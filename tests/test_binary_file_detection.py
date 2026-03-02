@@ -111,6 +111,7 @@ class TestTokenCountWorkerSkipsBinary:
     def test_skip_binary_without_extension(self, tmp_path):
         """TokenCountWorker phải skip binary files KHÔNG có extension"""
         from components.file_tree_model import TokenCountWorker
+        from services.tokenization_service import TokenizationService
 
         # Create binary file without extension (giả lập ELF)
         binary_file = tmp_path / "my-binary-x86_64-linux"
@@ -120,7 +121,10 @@ class TestTokenCountWorkerSkipsBinary:
         text_file = tmp_path / "hello.py"
         text_file.write_text("print('hello')")
 
-        worker = TokenCountWorker([str(binary_file), str(text_file)])
+        worker = TokenCountWorker(
+            [str(binary_file), str(text_file)],
+            tokenization_service=TokenizationService(),
+        )
 
         results = {}
 
@@ -138,12 +142,16 @@ class TestTokenCountWorkerSkipsBinary:
     def test_skip_large_file(self, tmp_path):
         """TokenCountWorker phải skip files > 5MB"""
         from components.file_tree_model import TokenCountWorker
+        from services.tokenization_service import TokenizationService
 
         # Create large text file (> 5MB)
         large_file = tmp_path / "huge.txt"
         large_file.write_text("x" * (6 * 1024 * 1024))  # 6MB
 
-        worker = TokenCountWorker([str(large_file)])
+        worker = TokenCountWorker(
+            [str(large_file)],
+            tokenization_service=TokenizationService(),
+        )
 
         results = {}
 
@@ -171,7 +179,9 @@ class TestGetSelectedPathsSkipsBinary:
         text_file = tmp_path / "code.py"
         text_file.write_text("x = 1")
 
-        model = FileTreeModel()
+        from core.ignore_engine import IgnoreEngine
+
+        model = FileTreeModel(ignore_engine=IgnoreEngine())
         model._workspace_path = tmp_path  # Required for get_selected_paths()
 
         # Simulate: add nodes to model
@@ -338,11 +348,15 @@ class TestRealWorldProxypalBinaries:
     def test_token_worker_skips_proxypal_binaries(self):
         """TokenCountWorker phải skip tất cả proxypal binaries, KHÔNG đọc file"""
         from components.file_tree_model import TokenCountWorker
+        from services.tokenization_service import TokenizationService
 
         binary_paths = [str(f) for f in self.BINARIES_DIR.iterdir() if f.is_file()]
         assert len(binary_paths) > 0, "No binary files found"
 
-        worker = TokenCountWorker(binary_paths)
+        worker = TokenCountWorker(
+            binary_paths,
+            tokenization_service=TokenizationService(),
+        )
 
         results = {}
 

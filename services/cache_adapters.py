@@ -7,28 +7,42 @@ de CacheRegistry co the invalidate tat ca mot cach thong nhat.
 Adapters duoc tu dong register vao cache_registry khi module nay duoc import.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.ignore_engine import IgnoreEngine
+    from services.interfaces.tokenization_service import ITokenizationService
+
 from services.cache_registry import cache_registry
 
 
 class TokenCacheAdapter:
-    """Adapter cho core.tokenization.cache.TokenCache."""
+    """
+    Adapter cho TokenizationService cache.
 
-    def __init__(self) -> None:
-        from core.tokenization.cache import token_cache
+    Nhan ITokenizationService qua dependency injection thay vi dung singleton.
+    Goi clear_cache() / clear_file_from_cache() tren instance.
+    """
 
-        self._cache = token_cache
+    def __init__(self, tokenization_service: "ITokenizationService") -> None:
+        self._service = tokenization_service
 
     def invalidate_path(self, path: str) -> None:
         """Xoa token count cho file cu the."""
-        self._cache.clear_file(path)
+        self._service.clear_file_from_cache(path)
 
     def invalidate_all(self) -> None:
         """Xoa toan bo token cache."""
-        self._cache.clear()
+        self._service.clear_cache()
 
     def size(self) -> int:
-        """Tra ve so entries hien co."""
-        return len(self._cache)
+        """Tra ve so entries hien co (dung internal cache neu co)."""
+        svc = self._service
+        if hasattr(svc, "_cache"):
+            return len(svc._cache)
+        return 0
 
 
 class SecurityCacheAdapter:
@@ -55,7 +69,12 @@ class SecurityCacheAdapter:
 
 
 class IgnoreCacheAdapter:
-    """Adapter cho core.ignore_engine (_gitignore_cache + _pathspec_cache)."""
+    """Adapter cho core.ignore_engine (IgnoreEngine instance tu ServiceContainer)."""
+
+    def __init__(self, ignore_engine: "IgnoreEngine") -> None:
+        from core.ignore_engine import IgnoreEngine as _IgnoreEngine
+
+        self._engine: _IgnoreEngine = ignore_engine
 
     def invalidate_path(self, path: str) -> None:
         """
@@ -65,21 +84,15 @@ class IgnoreCacheAdapter:
         khong the invalidate tung file rieng le.
         """
         if ".gitignore" in path or ".git/info/exclude" in path:
-            from core.ignore_engine import clear_cache
-
-            clear_cache()
+            self._engine.clear_cache()
 
     def invalidate_all(self) -> None:
         """Xoa toan bo ignore cache."""
-        from core.ignore_engine import clear_cache
-
-        clear_cache()
+        self._engine.clear_cache()
 
     def size(self) -> int:
         """Tra ve tong so entries cua ca 2 caches."""
-        from core.ignore_engine import _gitignore_cache, _pathspec_cache
-
-        return len(_gitignore_cache) + len(_pathspec_cache)
+        return len(self._engine._gitignore_cache) + len(self._engine._pathspec_cache)
 
 
 class RelationshipCacheAdapter:
@@ -147,14 +160,21 @@ class RelationshipCacheAdapter:
         return len(_RELATIONSHIPS_CACHE)
 
 
-def register_all_caches() -> None:
+def register_all_caches(
+    ignore_engine: "IgnoreEngine",
+    tokenization_service: "ITokenizationService",
+) -> None:
     """
     Dang ky tat ca cache adapters vao CacheRegistry.
 
     Goi ham nay 1 lan tai thoi diem app khoi dong.
     An toan khi goi nhieu lan (overwrite registrations cu).
+
+    Args:
+        ignore_engine: IgnoreEngine instance tu ServiceContainer.
+        tokenization_service: ITokenizationService instance tu ServiceContainer.
     """
-    cache_registry.register("token_cache", TokenCacheAdapter())
+    cache_registry.register("token_cache", TokenCacheAdapter(tokenization_service))
     cache_registry.register("security_cache", SecurityCacheAdapter())
-    cache_registry.register("ignore_cache", IgnoreCacheAdapter())
+    cache_registry.register("ignore_cache", IgnoreCacheAdapter(ignore_engine))
     cache_registry.register("relationship_cache", RelationshipCacheAdapter())

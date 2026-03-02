@@ -349,10 +349,16 @@ def test_on_model_changed(context_view):
     mock_model._token_cache = {}
     view.file_tree_widget._start_token_counting = MagicMock()
 
-    with patch("services.encoder_registry.initialize_encoder") as mock_init:
-        view._on_model_changed("claude-3")
+    with patch(
+        "services.encoder_registry.get_tokenizer_repo", return_value="test/repo"
+    ) as mock_repo:
+        with patch.object(
+            view._tokenization_service, "set_model_config"
+        ) as mock_set_conf:
+            view._on_model_changed("claude-3")
 
-    mock_init.assert_called_once()
+    mock_repo.assert_called_once()
+    mock_set_conf.assert_called_once_with(tokenizer_repo="test/repo")
     view.file_tree_widget._start_token_counting.assert_called_once()
 
 

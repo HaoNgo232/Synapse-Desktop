@@ -16,24 +16,12 @@ from core.constants import (
     DIRECTORY_QUICK_SKIP,
 )
 
-# Delegate tat ca ignore logic cho ignore_engine
-from core.ignore_engine import (
-    build_pathspec,
-    read_gitignore,
-    find_git_root,
-    clear_cache as _clear_ignore_cache,
-)
-
-# === Backward-compatible re-exports ===
-# Cac module khac (file_scanner, file_tree_model) import truc tiep tu file_utils.
-# Giu lai re-exports de khong break import paths.
-_read_gitignore = read_gitignore
+from core.ignore_engine import IgnoreEngine
 
 # Pre-compile regex for is_system_path (module-level optimization)
 _WINDOWS_RESERVED_PATTERN = re.compile(
     r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", re.IGNORECASE
 )
-_find_git_root = find_git_root
 
 
 @dataclass
@@ -135,6 +123,7 @@ def is_system_path(file_path: Path) -> bool:
 
 def scan_directory(
     root_path: Path,
+    ignore_engine: IgnoreEngine,
     excluded_patterns: Optional[list[str]] = None,
     use_gitignore: bool = True,
     use_default_ignores: bool = True,
@@ -160,7 +149,7 @@ def scan_directory(
     root_path = root_path.resolve()
 
     # Delegate cho ignore_engine (single source of truth)
-    spec = build_pathspec(
+    spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=use_default_ignores,
         excluded_patterns=excluded_patterns,
@@ -173,6 +162,7 @@ def scan_directory(
 
 def scan_directory_shallow(
     root_path: Path,
+    ignore_engine: IgnoreEngine,
     depth: int = 1,
     excluded_patterns: Optional[list[str]] = None,
     use_gitignore: bool = True,
@@ -198,7 +188,7 @@ def scan_directory_shallow(
     root_path = root_path.resolve()
 
     # Delegate cho ignore_engine (single source of truth)
-    spec = build_pathspec(
+    spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=use_default_ignores,
         excluded_patterns=excluded_patterns,
@@ -345,9 +335,9 @@ def _build_tree(
 # Giu lai wrappers de khong break existing imports.
 
 
-def clear_gitignore_cache():
+def clear_gitignore_cache(ignore_engine: IgnoreEngine):
     """Clear the gitignore pattern cache. Delegate cho ignore_engine."""
-    _clear_ignore_cache()
+    ignore_engine.clear_cache()
 
 
 def flatten_tree_files(tree: TreeItem) -> list[Path]:
@@ -404,6 +394,7 @@ def get_selected_file_paths(tree: TreeItem, selected_paths: set[str]) -> list[Pa
 
 def load_folder_children(
     folder_item: TreeItem,
+    ignore_engine: IgnoreEngine,
     excluded_patterns: Optional[list[str]] = None,
     use_gitignore: bool = True,
     use_default_ignores: bool = True,
@@ -442,7 +433,7 @@ def load_folder_children(
     root_path = workspace_root.resolve()
 
     # Delegate cho ignore_engine (single source of truth)
-    spec = build_pathspec(
+    spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=use_default_ignores,
         excluded_patterns=excluded_patterns,

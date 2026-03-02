@@ -21,7 +21,7 @@ from core.tokenization.cancellation import (
     start_token_counting,
     stop_token_counting,
 )
-from core.tokenization.cache import TokenCache, token_cache
+from core.tokenization.cache import TokenCache
 from core.tokenization.counter import (
     count_tokens,
     count_tokens_for_file,
@@ -298,24 +298,28 @@ class TestTokenCache:
         assert len(errors) == 0, f"Thread errors: {errors}"
 
 
-class TestTokenCacheSingleton:
-    """Test module-level token_cache singleton."""
+class TestTokenCacheInstance:
+    """Test TokenCache class (singleton da bi xoa - dung instance truc tiep)."""
 
     def setup_method(self):
-        """Clear singleton cache truoc moi test."""
-        token_cache.clear()
+        """Tao instance moi cho moi test."""
+        self._cache = TokenCache()
 
-    def test_singleton_is_token_cache(self):
-        """Singleton la instance cua TokenCache."""
-        assert isinstance(token_cache, TokenCache)
+    def test_is_token_cache(self):
+        """Instance la TokenCache."""
+        assert isinstance(self._cache, TokenCache)
 
-    def test_singleton_persistent(self):
-        """Singleton giu state giua cac lan truy cap."""
-        token_cache.put("/test.py", 1.0, 42)
-        # Import lai va kiem tra
-        from core.tokenization.cache import token_cache as same_cache
+    def test_put_and_get(self):
+        """Put value va get lai duoc."""
+        self._cache.put("/test.py", 1.0, 42)
+        assert self._cache.get("/test.py", 1.0) == 42
 
-        assert same_cache.get("/test.py", 1.0) == 42
+    def test_two_instances_are_independent(self):
+        """Hai instance doc lap nhau (khong con shared state)."""
+        cache_a = TokenCache()
+        cache_b = TokenCache()
+        cache_a.put("/test.py", 1.0, 42)
+        assert cache_b.get("/test.py", 1.0) is None
 
 
 # ============================================================================
@@ -416,8 +420,8 @@ class TestCountTokensForFileNoCache:
     """Test _count_tokens_for_file_no_cache() parallel-safe counting."""
 
     def setup_method(self):
-        """Clear cache truoc moi test."""
-        token_cache.clear()
+        """Khong can clear cache - ham nay khong dung shared state."""
+        pass
 
     def test_nonexistent_file(self):
         """File khong ton tai tra ve 0."""
@@ -459,8 +463,8 @@ class TestCountTokensForFile:
     """Test count_tokens_for_file() voi cache."""
 
     def setup_method(self):
-        """Clear cache truoc moi test."""
-        token_cache.clear()
+        """Tao cache moi cho moi test."""
+        self._cache = TokenCache()
 
     def test_nonexistent_file(self):
         """File khong ton tai tra ve 0."""
@@ -470,7 +474,7 @@ class TestCountTokensForFile:
         """Text file tra ve positive count."""
         f = tmp_path / "test.py"
         f.write_text("print('hello world')")
-        result = count_tokens_for_file(f)
+        result = count_tokens_for_file(f, cache=self._cache)
         assert result > 0
 
     def test_caching_mtime_hit(self, tmp_path):
@@ -478,8 +482,8 @@ class TestCountTokensForFile:
         f = tmp_path / "cached.py"
         f.write_text("x = 1")
 
-        result1 = count_tokens_for_file(f)
-        result2 = count_tokens_for_file(f)
+        result1 = count_tokens_for_file(f, cache=self._cache)
+        result2 = count_tokens_for_file(f, cache=self._cache)
 
         assert result1 == result2
         assert result1 > 0
@@ -489,7 +493,7 @@ class TestCountTokensForFile:
         f = tmp_path / "changing.py"
         f.write_text("x = 1")
 
-        count_tokens_for_file(f)
+        count_tokens_for_file(f, cache=self._cache)
 
         # Thay doi file noi dung (mtime thay doi)
         import time
@@ -498,26 +502,26 @@ class TestCountTokensForFile:
         f.write_text("x = 1\n" * 100)
 
         # Ket qua moi phai khac
-        new_result = count_tokens_for_file(f)
+        new_result = count_tokens_for_file(f, cache=self._cache)
         assert new_result > 5  # Noi dung dai hon
 
     def test_empty_file_returns_zero(self, tmp_path):
         """Empty file tra ve 0."""
         f = tmp_path / "empty.py"
         f.write_text("")
-        assert count_tokens_for_file(f) == 0
+        assert count_tokens_for_file(f, cache=self._cache) == 0
 
     def test_binary_file_returns_zero(self, tmp_path):
         """Binary file (JPEG magic) tra ve 0."""
         f = tmp_path / "img.jpg"
         f.write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0]) + b"\x00" * 100)
-        assert count_tokens_for_file(f) == 0
+        assert count_tokens_for_file(f, cache=self._cache) == 0
 
     def test_large_file_returns_zero(self, tmp_path):
         """File > 5MB tra ve 0."""
         f = tmp_path / "huge.txt"
         f.write_text("a" * (MAX_BYTES + 1))
-        assert count_tokens_for_file(f) == 0
+        assert count_tokens_for_file(f, cache=self._cache) == 0
 
 
 # ============================================================================
@@ -556,7 +560,6 @@ class TestCountTokensBatch:
 
     def setup_method(self):
         """Tao service moi va set counting flag."""
-        token_cache.clear()
         self.service = TokenizationService()
 
     def teardown_method(self):
@@ -618,7 +621,6 @@ class TestCountTokensBatchParallel:
 
     def setup_method(self):
         """Tao service moi."""
-        token_cache.clear()
         self.service = TokenizationService()
 
     def teardown_method(self):

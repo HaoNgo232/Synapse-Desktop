@@ -12,7 +12,10 @@ KEY OPTIMIZATIONS:
 import logging
 import threading
 from pathlib import Path
-from typing import Optional, Set, Dict, List, Any
+from typing import Optional, Set, Dict, List, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.interfaces.tokenization_service import ITokenizationService
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -26,6 +29,7 @@ from PySide6.QtCore import (
 )
 
 from core.utils.file_utils import TreeItem, scan_directory_shallow
+from core.ignore_engine import IgnoreEngine
 from services.selection_manager import SelectionManager
 
 logger = logging.getLogger(__name__)
@@ -174,8 +178,11 @@ class FileTreeModel(QAbstractItemModel):
     selection_changed = Signal(set)  # Set[str] - selected file paths
     token_count_updated = Signal(str, int)  # (path, count)
 
-    def __init__(self, parent: Optional[QObject] = None):
+    def __init__(self, ignore_engine: IgnoreEngine, parent: Optional[QObject] = None):
         super().__init__(parent)
+
+        # IgnoreEngine duoc inject tu ServiceContainer
+        self._ignore_engine = ignore_engine
 
         self._root_node: Optional[TreeNode] = None
         self._invisible_root = TreeNode("", "", is_dir=True, is_loaded=True)
@@ -486,6 +493,7 @@ class FileTreeModel(QAbstractItemModel):
             )
             load_folder_children(
                 temp_item,
+                ignore_engine=self._ignore_engine,
                 excluded_patterns=get_excluded_patterns(),
                 use_gitignore=get_use_gitignore(),
                 workspace_root=self._workspace_path,
@@ -574,6 +582,7 @@ class FileTreeModel(QAbstractItemModel):
 
             tree_item = scan_directory_shallow(
                 workspace_path,
+                ignore_engine=self._ignore_engine,
                 depth=1,
                 excluded_patterns=excluded if excluded else None,
             )
@@ -642,7 +651,11 @@ class FileTreeModel(QAbstractItemModel):
                     seen.add(p)
                 elif path_obj.is_dir():
                     # Delegate cho workspace_index scan disk (giong _collect_files_deep)
-                    disk_files = collect_files_from_disk(path_obj, self._workspace_path)
+                    disk_files = collect_files_from_disk(
+                        path_obj,
+                        self._workspace_path,
+                        ignore_engine=self._ignore_engine,
+                    )
                     for f in disk_files:
                         if f not in seen:
                             result.append(f)
@@ -687,7 +700,9 @@ class FileTreeModel(QAbstractItemModel):
                 else:
                     # Chua loaded — delegate cho workspace_index scan disk
                     disk_files = collect_files_from_disk(
-                        Path(child.path), self._workspace_path
+                        Path(child.path),
+                        self._workspace_path,
+                        ignore_engine=self._ignore_engine,
                     )
                     for f in disk_files:
                         if f not in seen:
@@ -696,7 +711,11 @@ class FileTreeModel(QAbstractItemModel):
 
         # Neu folder chua loaded va ko co children
         if node.is_dir and not node.is_loaded and not node.children:
-            disk_files = collect_files_from_disk(Path(node.path), self._workspace_path)
+            disk_files = collect_files_from_disk(
+                Path(node.path),
+                self._workspace_path,
+                ignore_engine=self._ignore_engine,
+            )
             for f in disk_files:
                 if f not in seen:
                     result.append(f)
@@ -892,7 +911,11 @@ class FileTreeModel(QAbstractItemModel):
             def _is_fresh() -> bool:
                 return self.generation == generation
 
-            index = build_search_index(workspace_path, generation_check=_is_fresh)
+            index = build_search_index(
+                workspace_path,
+                generation_check=_is_fresh,
+                ignore_engine=self._ignore_engine,
+            )
 
             # Atomic check + write de tranh race condition
             with self._generation_lock:
@@ -1133,9 +1156,15 @@ class TokenCountWorker(QRunnable):
         finished = Signal()
         error = Signal(str)
 
-    def __init__(self, file_paths: List[str], generation: int = 0):
+    def __init__(
+        self,
+        file_paths: List[str],
+        tokenization_service: "ITokenizationService",
+        generation: int = 0,
+    ):
         super().__init__()
         self.file_paths = file_paths
+        self._tokenization = tokenization_service
         self.signals = self.Signals()
         self.setAutoDelete(True)
         self._cancelled = False
@@ -1154,7 +1183,6 @@ class TokenCountWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         """Đếm tokens cho tất cả files. Skip binary/image files."""
-        from services.encoder_registry import get_tokenization_service
         from core.utils.file_utils import is_binary_file
 
         # Max file size for token counting (5MB) - prevents OOM on large binaries
@@ -1185,7 +1213,7 @@ class TokenCountWorker(QRunnable):
                         continue
 
                     content = path.read_text(encoding="utf-8", errors="replace")
-                    tokens = get_tokenization_service().count_tokens(content)
+                    tokens = self._tokenization.count_tokens(content)
                     batch[file_path] = tokens
 
                     if len(batch) >= self._batch_size:

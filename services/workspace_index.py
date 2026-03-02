@@ -15,7 +15,10 @@ KHONG import bat ky module Qt nao.
 import os
 import logging
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set
+
+if TYPE_CHECKING:
+    from core.ignore_engine import IgnoreEngine
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,7 @@ logger = logging.getLogger(__name__)
 def build_search_index(
     workspace_path: Path,
     generation_check: Optional[Callable[[], bool]] = None,
+    ignore_engine: Optional["IgnoreEngine"] = None,
 ) -> Dict[str, List[str]]:
     """
     Build flat search index tu workspace bang os.walk.
@@ -33,6 +37,8 @@ def build_search_index(
 
     Args:
         workspace_path: Duong dan workspace root.
+        generation_check: Optional callback to check if scan should abort.
+        ignore_engine: Optional IgnoreEngine instance (for cache reuse).
         generation_check: Optional callback tra ve False neu index da stale
                           (vi du: user doi workspace giua luc build).
                           Neu None, khong check.
@@ -43,7 +49,7 @@ def build_search_index(
     """
     from core.constants import DIRECTORY_QUICK_SKIP
     from core.utils.file_utils import is_binary_file, is_system_path
-    from core.ignore_engine import build_pathspec
+    from core.ignore_engine import IgnoreEngine
     from services.workspace_config import (
         get_excluded_patterns,
         get_use_gitignore,
@@ -53,8 +59,10 @@ def build_search_index(
     root_path = workspace_path.resolve()
     excluded = get_excluded_patterns()
 
-    # Delegate cho ignore_engine (single source of truth)
-    spec = build_pathspec(
+    # Dung IgnoreEngine instance (inject hoac tao moi)
+    if ignore_engine is None:
+        ignore_engine = IgnoreEngine()
+    spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=True,
         excluded_patterns=excluded if excluded else None,
@@ -133,6 +141,7 @@ def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[s
 def collect_files_from_disk(
     folder: Path,
     workspace_path: Optional[Path] = None,
+    ignore_engine: Optional["IgnoreEngine"] = None,
 ) -> List[str]:
     """
     Scan filesystem truc tiep de tim tat ca files trong folder.
@@ -145,12 +154,13 @@ def collect_files_from_disk(
         workspace_path: Workspace root (bat buoc de ignore patterns
                         match dung relative path o moi level).
                         Raise ValueError neu None.
+        ignore_engine: Optional IgnoreEngine instance (for cache reuse).
 
     Returns:
         List cac full paths (khong trung lap, da loc binary/ignored).
     """
     from core.utils.file_utils import is_binary_file, is_system_path
-    from core.ignore_engine import build_pathspec
+    from core.ignore_engine import IgnoreEngine
     from services.workspace_config import get_excluded_patterns, get_use_gitignore
     from core.constants import DIRECTORY_QUICK_SKIP
 
@@ -164,8 +174,10 @@ def collect_files_from_disk(
 
     excluded = get_excluded_patterns()
 
-    # Delegate cho ignore_engine (single source of truth)
-    spec = build_pathspec(
+    # Dung IgnoreEngine instance (inject hoac tao moi)
+    if ignore_engine is None:
+        ignore_engine = IgnoreEngine()
+    spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=True,
         excluded_patterns=excluded if excluded else None,

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import pathspec
 
-from core.ignore_engine import build_ignore_patterns
+from core.ignore_engine import IgnoreEngine
 from core.utils.file_utils import (
     TreeItem,
     is_system_path,
@@ -134,7 +134,8 @@ class FileScanner:
     # Lazy scan config
     LAZY_SCAN_THRESHOLD = 1000  # Files threshold to suggest lazy mode
 
-    def __init__(self):
+    def __init__(self, ignore_engine: "IgnoreEngine"):
+        self.ignore_engine = ignore_engine
         self._last_progress_time: float = 0
         self._progress: ScanProgress = ScanProgress()
 
@@ -323,7 +324,7 @@ class FileScanner:
 
     def _build_ignore_patterns(self, root_path: Path, config: ScanConfig) -> List[str]:
         """Build list cac ignore patterns tu config. Delegate cho ignore_engine."""
-        return build_ignore_patterns(
+        return self.ignore_engine.build_ignore_patterns(
             root_path,
             use_default_ignores=config.use_default_ignores,
             excluded_patterns=config.excluded_patterns,
@@ -590,7 +591,9 @@ def scan_directory_lazy(
         use_default_ignores=use_default_ignores,
     )
 
-    scanner = FileScanner()
+    scanner = FileScanner(
+        ignore_engine=IgnoreEngine()
+    )  # NOTE: Should pass in ignore_engine instance from caller
 
     # Build ignore spec
     ignore_patterns = scanner._build_ignore_patterns(root_path, config)
@@ -606,6 +609,7 @@ def scan_directory_lazy(
 # Convenience function
 def scan_directory(
     root_path: Path,
+    ignore_engine: IgnoreEngine,
     excluded_patterns: Optional[List[str]] = None,
     use_gitignore: bool = True,
     use_default_ignores: bool = True,
@@ -632,7 +636,7 @@ def scan_directory(
         use_default_ignores=use_default_ignores,
     )
 
-    scanner = FileScanner()
+    scanner = FileScanner(ignore_engine=ignore_engine)
     return scanner.scan(
         root_path,
         config=config,

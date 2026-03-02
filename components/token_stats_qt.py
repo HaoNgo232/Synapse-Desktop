@@ -14,6 +14,10 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 from PySide6.QtCore import Signal, Slot
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.interfaces.tokenization_service import ITokenizationService
 
 from core.theme import ThemeColors
 from config.model_config import (
@@ -39,8 +43,13 @@ class TokenStatsPanelQt(QWidget):
 
     model_changed = Signal(str)
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(
+        self,
+        tokenization_service: "ITokenizationService",
+        parent: QWidget | None = None,
+    ):
         super().__init__(parent)
+        self._tokenization_service = tokenization_service
 
         # State
         self._file_count = 0
@@ -251,9 +260,7 @@ class TokenStatsPanelQt(QWidget):
                 update_app_setting(model_id=model_id)
 
                 # Reset tokenizer de reload voi model moi qua TokenizationService
-                from services.encoder_registry import get_tokenization_service
-
-                get_tokenization_service().reset_encoder()
+                self._tokenization_service.reset_encoder()
 
                 # Re-render
                 self.update_stats(

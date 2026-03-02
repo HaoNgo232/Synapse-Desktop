@@ -359,7 +359,23 @@ class UIBuilderMixin:
         layout.addLayout(header)
 
         # File tree widget (da co san search bar, select/deselect all)
-        self.file_tree_widget = FileTreeWidget()
+        # Nhan ignore_engine tu ContextViewQt (hoac fallback sang instance moi)
+        _ignore_engine = getattr(self, "_ignore_engine", None)
+        if _ignore_engine is None:
+            from core.ignore_engine import IgnoreEngine as _IE
+
+            _ignore_engine = _IE()
+
+        _tokenization_service = getattr(self, "_tokenization_service", None)
+        if _tokenization_service is None:
+            from services.encoder_registry import get_tokenization_service
+
+            _tokenization_service = get_tokenization_service()
+
+        self.file_tree_widget = FileTreeWidget(
+            ignore_engine=_ignore_engine,
+            tokenization_service=_tokenization_service,
+        )
         self.file_tree_widget.selection_changed.connect(self._on_selection_changed)
         self.file_tree_widget.file_preview_requested.connect(self._preview_file)
         self.file_tree_widget.token_counting_done.connect(self._update_token_display)
@@ -631,7 +647,15 @@ class UIBuilderMixin:
         layout.setSpacing(8)
 
         # Token stats panel (model selector + budget bar) o tren cung
-        self._token_stats = TokenStatsPanelQt()
+        _tokenization_service = getattr(self, "_tokenization_service", None)
+        if _tokenization_service is None:
+            from services.encoder_registry import get_tokenization_service
+
+            _tokenization_service = get_tokenization_service()
+
+        self._token_stats = TokenStatsPanelQt(
+            tokenization_service=_tokenization_service
+        )
         self._token_stats.model_changed.connect(self._on_model_changed)
         layout.addWidget(self._token_stats)
 

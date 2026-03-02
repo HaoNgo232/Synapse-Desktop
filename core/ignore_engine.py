@@ -115,7 +115,7 @@ class IgnoreEngine:
                     return cached_spec
 
         # Build outside lock (expensive operation)
-        spec = pathspec.PathSpec.from_lines("gitignore", patterns)
+        spec = pathspec.PathSpec.from_lines("gitignore", patterns)  # type: ignore[arg-type]
 
         # Store with lock
         with self._lock:

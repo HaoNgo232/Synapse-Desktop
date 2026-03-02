@@ -26,21 +26,27 @@ def test_try_cache_hit_hit(context_view):
     view = context_view
     # Store something first
     view._copy_controller._store_in_cache(
-        "copy_context", set(["a.py"]), "test", "prompt text", 100, False
+        "copy_context",
+        set(["a.py"]),
+        "test",
+        "prompt text",
+        100,
+        {"mode": "test"},
+        False,
     )
     # The hit depends on fingerprint matching
     result = view._copy_controller._try_cache_hit(
         "copy_context", set(["a.py"]), "test", False
     )
     if result is not None:
-        assert result == ("prompt text", 100)
+        assert result == ("prompt text", 100, {"mode": "test"})
 
 
 def test_store_in_cache(context_view):
     """Kiem tra _store_in_cache (line 298-321)."""
     view = context_view
     view._copy_controller._store_in_cache(
-        "copy_smart", {"b.py"}, "instr", "prompt", 200, False
+        "copy_smart", {"b.py"}, "instr", "prompt", 200, {"mode": "smart"}, False
     )
     # Verify through prompt cache
     assert "copy_smart" in view._copy_controller._prompt_cache._entries
@@ -168,9 +174,13 @@ def test_copy_context_cache_hit(context_view, tmp_path):
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
     with patch.object(
-        view._copy_controller, "_try_cache_hit", return_value=("cached prompt", 500)
+        view._copy_controller,
+        "_try_cache_hit",
+        return_value=("cached prompt", 500, {"copy_mode": "Copy Context"}),
     ):
-        view._clipboard_service.copy_to_clipboard = MagicMock(return_value=(True, None))
+        view._clipboard_service.copy_to_clipboard = MagicMock(
+            return_value=(True, "Copied")
+        )
         with patch.object(view, "show_copy_breakdown"):
             view._copy_controller._copy_context()
             view._clipboard_service.copy_to_clipboard.assert_called_with(
@@ -186,7 +196,9 @@ def test_copy_context_cache_hit_copy_fail(context_view, tmp_path):
 
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
     with patch.object(
-        view._copy_controller, "_try_cache_hit", return_value=("cached prompt", 500)
+        view._copy_controller,
+        "_try_cache_hit",
+        return_value=("cached prompt", 500, {"copy_mode": "Copy Context"}),
     ):
         view._clipboard_service.copy_to_clipboard = MagicMock(
             return_value=(False, "clipboard error")
@@ -278,9 +290,13 @@ def test_copy_smart_cache_hit(context_view, tmp_path):
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[str(py_file)])
 
     with patch.object(
-        view._copy_controller, "_try_cache_hit", return_value=("smart prompt", 300)
+        view._copy_controller,
+        "_try_cache_hit",
+        return_value=("smart prompt", 300, {"copy_mode": "Copy Smart"}),
     ):
-        view._clipboard_service.copy_to_clipboard = MagicMock(return_value=(True, None))
+        view._clipboard_service.copy_to_clipboard = MagicMock(
+            return_value=(True, "Copied")
+        )
         with (
             patch.object(view, "show_copy_breakdown"),
             patch("services.settings_manager.add_instruction_history"),
@@ -328,9 +344,13 @@ def test_copy_tree_map_cache_hit(context_view, tmp_path):
     view = context_view
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[])
     with patch.object(
-        view._copy_controller, "_try_cache_hit", return_value=("treemap prompt", 50)
+        view._copy_controller,
+        "_try_cache_hit",
+        return_value=("treemap prompt", 50, {"copy_mode": "Copy Tree"}),
     ):
-        view._clipboard_service.copy_to_clipboard = MagicMock(return_value=(True, None))
+        view._clipboard_service.copy_to_clipboard = MagicMock(
+            return_value=(True, "Copied")
+        )
         with (
             patch.object(view, "show_copy_breakdown"),
             patch("services.settings_manager.add_instruction_history"),

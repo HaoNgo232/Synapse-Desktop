@@ -431,9 +431,8 @@ def _find_enclosing_function_fast(
         return None
 
     # bisect_right: tìm index sao cho tất cả entries trước nó có start_line <= target_line
-    # Dùng tuple comparison: (target_line + 1,) > (target_line, ...) luôn đúng
-    # nên bisect_right cho ta vị trí ngay sau entry cuối cùng có start_line <= target_line
-    idx = bisect_right(boundaries_map, (target_line,))
+    # Dùng key function để chỉ so sánh start_line (phần tử đầu của tuple)
+    idx = bisect_right(boundaries_map, target_line, key=lambda x: x[0])
 
     # Scan ngược từ idx-1 để tìm innermost enclosing function
     # Innermost = function có start_line lớn nhất mà vẫn chứa target_line

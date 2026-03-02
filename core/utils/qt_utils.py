@@ -73,9 +73,23 @@ def get_signal_bridge() -> SignalBridge:
     """
     Lấy global SignalBridge instance.
 
-    Tạo mới nếu chưa có. Instance này tồn tại suốt app lifetime.
+    Tạo mới nếu chưa có hoặc nếu instance cũ không còn hợp lệ (vd: trong tests).
+    Instance này tồn tại suốt app lifetime.
     """
     global _global_bridge
+
+    # Kiểm tra xem bridge cũ còn sống không (trong môi trường test có thể bị xóa)
+    try:
+        if _global_bridge is not None:
+            # Truy cập attribute bất kỳ để check RuntimeError (object deleted)
+            _global_bridge.objectName()
+
+            # Nếu có app mà bridge không có parent hoặc parent khác app,
+            # trong môi trường test có thể gây lỗi.
+            # Tuy nhiên quan trọng nhất là bridge phải thuộc về đúng thread.
+    except RuntimeError:
+        _global_bridge = None
+
     if _global_bridge is None:
         _global_bridge = SignalBridge()
     return _global_bridge

@@ -279,3 +279,19 @@ class HistoryViewQt(QWidget):
             font-size: 11px;
         """
         )
+
+    # ─────────────────────────────────────────────────────────
+    # PRIVATE - LEGACY DELEGATION (for backward compatibility / tests)
+    # ─────────────────────────────────────────────────────────
+
+    def _confirm_delete_entry(self, entry_id: str) -> None:
+        """Proxy cho DetailPanel._confirm_delete_entry (dung cho tests)."""
+        self._detail_panel._confirm_delete_entry(entry_id)
+
+    def _copy_opx(self, entry) -> None:
+        """Proxy cho DetailPanel._copy_opx (dung cho tests)."""
+        self._detail_panel._copy_opx(entry)
+
+    def _reapply_opx(self, entry) -> None:
+        """Proxy cho DetailPanel._reapply_opx (dung cho tests)."""
+        self._detail_panel._reapply_opx(entry)

@@ -44,7 +44,7 @@ class IPromptBuilder(Protocol):
         tree_item: Optional["TreeItem"] = None,
         selected_paths: Optional[Set[str]] = None,
         include_xml_formatting: bool = False,
-    ) -> Tuple[str, int]:
+    ) -> Tuple[str, int, dict]:
         """
         Generate prompt tu danh sach file paths va settings.
 
@@ -60,7 +60,7 @@ class IPromptBuilder(Protocol):
             include_xml_formatting: Co bao gom OPX instructions khong
 
         Returns:
-            Tuple (prompt_text, token_count)
+            Tuple (prompt_text, token_count, breakdown_dict)
         """
         ...
 

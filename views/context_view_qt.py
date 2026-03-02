@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 class ContextViewQt(
-    UIBuilderMixin,
     QWidget,
+    UIBuilderMixin,
 ):
     """View cho Context tab - PySide6 version."""
 
@@ -271,38 +271,51 @@ class ContextViewQt(
         ):
             btn.setEnabled(enabled)
 
-    def show_copy_breakdown(self, token_count: int, pre_snapshot: dict) -> None:
+    def show_copy_breakdown(self, token_count: int, breakdown: dict) -> None:
+        """
+        Hiển thị chi tiết token consumption sau khi copy thành công.
+        breakdown chứa các keys: content_tokens, instruction_tokens, opx_tokens,
+        tree_tokens, diff_tokens, rule_tokens, structure_tokens (overhead).
+        """
         from components.toast_qt import toast_success
 
-        file_t = pre_snapshot.get("file_tokens", 0)
-        instr_t = pre_snapshot.get("instruction_tokens", 0)
-        include_opx = pre_snapshot.get("include_opx", False)
-        mode = pre_snapshot.get("copy_mode", "Copy")
+        file_t = breakdown.get("content_tokens", 0)
+        instr_t = breakdown.get("instruction_tokens", 0)
+        opx_t = breakdown.get("opx_tokens", 0)
+        tree_t = breakdown.get("tree_tokens", 0)
+        diff_t = breakdown.get("diff_tokens", 0)
+        rule_t = breakdown.get("rule_tokens", 0)
+        structure_t = breakdown.get("structure_tokens", 0)
+        mode = breakdown.get("copy_mode", "Copy")
 
-        opx_t = 0
-        if include_opx:
-            try:
-                from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-
-                opx_t = self._prompt_builder.count_tokens(XML_FORMATTING_INSTRUCTIONS)
-            except ImportError:
-                opx_t = 0
-
-        sum_parts = file_t + instr_t + opx_t
+        # Fallback logic cho cac mode cu hoac neu sum_parts tiep tuc lon hon token_count
+        # (thuong do overhead XML tags neu PromptBuildService chua tinh het)
+        sum_parts = file_t + instr_t + opx_t + tree_t + diff_t + rule_t
         if sum_parts > token_count:
+            # Re-scale de khong bi am structure_tokens
             ratio = token_count / sum_parts if sum_parts > 0 else 1.0
             file_t = int(file_t * ratio)
             instr_t = int(instr_t * ratio)
             opx_t = int(opx_t * ratio)
+            tree_t = int(tree_t * ratio)
+            diff_t = int(diff_t * ratio)
+            rule_t = int(rule_t * ratio)
             structure_t = 0
-        else:
-            structure_t = max(0, token_count - file_t - instr_t - opx_t)
+        elif structure_t == 0 and token_count > sum_parts:
+            # Neu structure_t chua duoc tinh nhung con du, gan cho no
+            structure_t = token_count - sum_parts
 
         parts = []
         if file_t > 0:
             parts.append(f"{file_t:,} content")
         if instr_t > 0:
             parts.append(f"{instr_t:,} instructions")
+        if tree_t > 0:
+            parts.append(f"{tree_t:,} tree map")
+        if diff_t > 0:
+            parts.append(f"{diff_t:,} diffs")
+        if rule_t > 0:
+            parts.append(f"{rule_t:,} rules")
         if opx_t > 0:
             parts.append(f"{opx_t:,} OPX")
         if structure_t > 0:
@@ -318,10 +331,17 @@ class ContextViewQt(
         ]
         if opx_t > 0:
             tooltip_lines.append(f"OPX instructions: {opx_t:,} tokens")
+        if tree_t > 0:
+            tooltip_lines.append(f"Tree map: {tree_t:,} tokens")
+        if diff_t > 0:
+            tooltip_lines.append(f"Git diffs/logs: {diff_t:,} tokens")
+        if rule_t > 0:
+            tooltip_lines.append(f"Project rules: {rule_t:,} tokens")
+
         tooltip_lines.extend(
             [
                 f"Prompt structure: {structure_t:,} tokens",
-                "  (includes: tree map, git diff/log, XML tags)",
+                "  (includes: XML tags, assembly overhead)",
             ]
         )
 

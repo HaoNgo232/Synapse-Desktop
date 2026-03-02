@@ -14,7 +14,15 @@ De import HistoryViewQt:
   from views.history_view_qt import HistoryViewQt  (van hoat dong)
 """
 
-# Re-export tat ca public symbols tu package moi
+from PySide6.QtWidgets import QMessageBox
+from services.clipboard_utils import copy_to_clipboard
+from services.history_service import (
+    get_history_entries,
+    get_entry_by_id,
+    clear_history,
+    get_history_stats,
+    delete_entry,
+)
 from views.history._widgets import (
     create_status_dot_icon,
     create_search_icon,
@@ -37,4 +45,11 @@ __all__ = [
     "create_search_icon",
     "format_date_group",
     "group_entries_by_date",
+    "get_history_entries",
+    "get_entry_by_id",
+    "clear_history",
+    "get_history_stats",
+    "delete_entry",
+    "copy_to_clipboard",
+    "QMessageBox",
 ]

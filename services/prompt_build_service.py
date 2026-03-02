@@ -12,7 +12,7 @@ dung signatures cua chung.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import List, Optional, Set, Tuple, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from services.interfaces.tokenization_service import ITokenizationService
@@ -75,7 +75,7 @@ class PromptBuildService:
         tree_item: Optional[TreeItem] = None,
         selected_paths: Optional[Set[str]] = None,
         include_xml_formatting: bool = False,
-    ) -> Tuple[str, int]:
+    ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt theo output format.
 
@@ -92,6 +92,13 @@ class PromptBuildService:
         Returns:
             Tuple (prompt_text, token_count)
         """
+        # Initialize variables to avoid uninitialized errors in breakdown calculation
+        file_map = ""
+        project_rules = ""
+        git_diffs = None
+        git_logs = None
+        file_contents = ""
+
         if output_format == "smart":
             prompt = self._build_smart(
                 file_paths,
@@ -104,14 +111,11 @@ class PromptBuildService:
             )
         else:
             # 0. Fetch git data neu can
-            git_diffs = None
-            git_logs = None
             if include_git_changes:
                 git_diffs = get_git_diffs(workspace)
                 git_logs = get_git_logs(workspace, max_commits=5)
 
             # 1. Generate file map (with all paths including rules)
-            file_map = ""
             if tree_item and selected_paths:
                 file_map = generate_file_map(
                     tree_item,
@@ -156,7 +160,59 @@ class PromptBuildService:
             )
 
         token_count = self._tokenization_service.count_tokens(prompt)
-        return prompt, token_count
+
+        # Build breakdown dict
+        breakdown = {
+            "instruction_tokens": self._tokenization_service.count_tokens(instructions)
+            if instructions
+            else 0,
+            "tree_tokens": self._tokenization_service.count_tokens(file_map)
+            if file_map
+            else 0,
+            "rule_tokens": self._tokenization_service.count_tokens(project_rules)
+            if project_rules
+            else 0,
+            "diff_tokens": (
+                self._tokenization_service.count_tokens(
+                    (git_diffs.work_tree_diff + git_diffs.staged_diff)
+                    if git_diffs
+                    else ""
+                )
+                + self._tokenization_service.count_tokens(
+                    git_logs.log_content if git_logs else ""
+                )
+            )
+            if include_git_changes
+            else 0,
+        }
+
+        if output_format == "smart":
+            # Smart context uses build_smart_prompt which doesn't have OPX
+            breakdown["content_tokens"] = self._tokenization_service.count_tokens(
+                getattr(self, "_last_smart_contents", "")
+            )
+            breakdown["opx_tokens"] = 0
+        else:
+            breakdown["content_tokens"] = self._tokenization_service.count_tokens(
+                file_contents
+            )
+            opx_t = 0
+            if include_xml_formatting:
+                try:
+                    from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+
+                    opx_t = self._tokenization_service.count_tokens(
+                        XML_FORMATTING_INSTRUCTIONS
+                    )
+                except ImportError:
+                    opx_t = 0
+            breakdown["opx_tokens"] = opx_t
+
+        # Calculate structure tokens (overhead of tags and assembly)
+        sum_parts = sum(breakdown.values())
+        breakdown["structure_tokens"] = max(0, token_count - sum_parts)
+
+        return prompt, token_count, breakdown
 
     def count_tokens(self, text: str) -> int:
         """Dem so luong tokens trong text.
@@ -240,6 +296,8 @@ class PromptBuildService:
             workspace_root=workspace,
             use_relative_paths=use_relative_paths,
         )
+        # Store for breakdown calculation
+        self._last_smart_contents = smart_contents
 
         # Generate file map
         file_map = ""

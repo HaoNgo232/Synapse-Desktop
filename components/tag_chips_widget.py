@@ -291,8 +291,10 @@ class TagChipsWidget(QWidget):
         # Remove old chips
         while self._flow_layout.count():
             item = self._flow_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
+            if item:
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
 
         for pattern in self._patterns:
             chip = ChipWidget(pattern)

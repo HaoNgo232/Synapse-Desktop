@@ -108,6 +108,7 @@ class TestCollectFilesSize:
         result = collect_files({str(f)}, max_file_size=1024)
         assert len(result) == 1
         assert result[0].content is None
+        assert result[0].error is not None
         assert "File too large" in result[0].error
         assert "2KB" in result[0].error or "1KB" in result[0].error
 
@@ -169,6 +170,7 @@ class TestCollectFilesErrorHandling:
 
         assert len(result) == 1
         assert result[0].content is None
+        assert result[0].error is not None
         assert "Error reading file" in result[0].error
 
 
@@ -185,7 +187,7 @@ class TestFileEntryDataclass:
             language="python",
         )
         with pytest.raises(AttributeError):
-            entry.content = "modified"
+            entry.content = "modified"  # type: ignore[misc]
 
     def test_equality(self):
         """FileEntry equality dua tren gia tri."""

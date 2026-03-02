@@ -28,7 +28,7 @@ from typing import Any
 # Pre-compute the flag once at import time.
 # subprocess.CREATE_NO_WINDOW = 0x08000000 (Windows only).
 _IS_WINDOWS = platform.system() == "Windows"
-_NO_WINDOW_FLAGS = subprocess.CREATE_NO_WINDOW if _IS_WINDOWS else 0
+_NO_WINDOW_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if _IS_WINDOWS else 0
 
 
 def run_subprocess(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess:

@@ -89,19 +89,26 @@ class PromptCache:
     """
 
     def __init__(self) -> None:
-        # mode_key -> (fingerprint, prompt, token_count)
-        self._entries: Dict[str, Tuple[str, str, int]] = {}
+        # mode_key -> (fingerprint, prompt, token_count, breakdown)
+        self._entries: Dict[str, Tuple[str, str, int, dict]] = {}
 
-    def get(self, mode: str, fingerprint: str) -> Optional[Tuple[str, int]]:
-        """Return (prompt, token_count) if fingerprint matches, else None."""
+    def get(self, mode: str, fingerprint: str) -> Optional[Tuple[str, int, dict]]:
+        """Return (prompt, token_count, breakdown) if fingerprint matches, else None."""
         entry = self._entries.get(mode)
         if entry is not None and entry[0] == fingerprint:
-            return (entry[1], entry[2])
+            return (entry[1], entry[2], entry[3])
         return None
 
-    def put(self, mode: str, fingerprint: str, prompt: str, token_count: int) -> None:
+    def put(
+        self,
+        mode: str,
+        fingerprint: str,
+        prompt: str,
+        token_count: int,
+        breakdown: dict,
+    ) -> None:
         """Store result for a copy mode."""
-        self._entries[mode] = (fingerprint, prompt, token_count)
+        self._entries[mode] = (fingerprint, prompt, token_count, breakdown)
 
     def invalidate(self, mode: Optional[str] = None) -> None:
         """Invalidate one mode or all modes."""
@@ -160,7 +167,7 @@ def _build_fingerprint(
 class CopyTaskSignals(QObject):
     """Signals for CopyTaskWorker — must outlive the QRunnable."""
 
-    finished = Signal(str, int)  # (prompt_text, token_count)
+    finished = Signal(str, int, dict)  # (prompt_text, token_count, breakdown_dict)
     error = Signal(str)
     progress = Signal(str, int)  # (step_description, percentage)
 
@@ -183,7 +190,7 @@ class CopyTaskWorker(QRunnable):
 
     def __init__(
         self,
-        task_fn: Callable[[], Tuple[str, int]],
+        task_fn: Callable[[], Tuple[str, int, dict]],
         signals: CopyTaskSignals,
         generation: int,
     ):
@@ -201,9 +208,9 @@ class CopyTaskWorker(QRunnable):
         Caller dua vao guarantee nay de cleanup va re-enable buttons.
         """
         try:
-            prompt, token_count = self.task_fn()
+            prompt, token_count, breakdown = self.task_fn()
             try:
-                self.signals.finished.emit(prompt, token_count)
+                self.signals.finished.emit(prompt, token_count, breakdown)
             except RuntimeError:
                 pass  # Signals da bi delete (app shutting down)
         except Exception as e:
@@ -249,7 +256,7 @@ class CopyActionViewProtocol(Protocol):
     def get_instructions_text(self) -> str: ...
     def get_output_style(self) -> OutputStyle: ...
     def show_status(self, message: str, is_error: bool = False) -> None: ...
-    def show_copy_breakdown(self, token_count: int, pre_snapshot: dict) -> None: ...
+    def show_copy_breakdown(self, token_count: int, breakdown: dict) -> None: ...
     def get_total_tokens(self) -> int: ...
     def set_copy_buttons_enabled(self, enabled: bool) -> None: ...
     def get_clipboard_service(self) -> Any: ...
@@ -308,8 +315,8 @@ class CopyActionController(QObject):
         selected_paths: Set[str],
         instructions: str,
         include_xml: bool = False,
-    ) -> Optional[Tuple[str, int]]:
-        """Check prompt cache for a hit. Returns (prompt, token_count) or None.
+    ) -> Optional[Tuple[str, int, dict]]:
+        """Check prompt cache for a hit. Returns (prompt, token_count, breakdown) or None.
 
         This is called on the main thread BEFORE starting any background work.
         If cache hits, we skip all heavy work entirely.
@@ -340,6 +347,7 @@ class CopyActionController(QObject):
         instructions: str,
         prompt: str,
         token_count: int,
+        breakdown: dict,
         include_xml: bool = False,
     ) -> None:
         """Store generated prompt in cache for future hits."""
@@ -356,7 +364,7 @@ class CopyActionController(QObject):
             use_relative_paths=use_rel,
             include_xml=include_xml,
         )
-        self._prompt_cache.put(copy_mode, fingerprint, prompt, token_count)
+        self._prompt_cache.put(copy_mode, fingerprint, prompt, token_count, breakdown)
 
     def _begin_copy_operation(self) -> int:
         """Prepare for a new copy operation.
@@ -485,22 +493,13 @@ class CopyActionController(QObject):
             copy_mode, selected_path_strs, instructions, include_xml
         )
         if cached is not None:
-            prompt, token_count = cached
+            prompt, token_count, breakdown = cached
             success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
                 prompt
             )
             if success:
-                pre_snapshot = {
-                    "file_tokens": self._view.get_total_tokens(),
-                    "instruction_tokens": self._view.get_prompt_builder().count_tokens(
-                        instructions
-                    )
-                    if instructions
-                    else 0,
-                    "include_opx": include_xml,
-                    "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
-                }
-                self._view.show_copy_breakdown(token_count, pre_snapshot)
+                breakdown["copy_mode"] = "Copy + OPX" if include_xml else "Copy Context"
+                self._view.show_copy_breakdown(token_count, breakdown)
             else:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
             return
@@ -616,7 +615,7 @@ class CopyActionController(QObject):
     def _run_copy_in_background(
         self,
         gen: int,
-        task_fn: Callable[[], Tuple[str, int]],
+        task_fn: Callable[[], Tuple[str, int, dict]],
         success_template: str = "Copied! ({token_count:,} tokens)",
         pre_snapshot: Optional[dict] = None,
         cache_key: Optional[tuple] = None,
@@ -637,7 +636,7 @@ class CopyActionController(QObject):
             gen: Generation number cho operation nay.
             task_fn: Callable tra ve prompt string (chay tren background thread).
             success_template: Template cho status message, co {token_count}.
-            pre_snapshot: Dict snapshot cac gia tri token truoc khi copy.
+            pre_snapshot: Dict snapshot cac gia tri token truoc khi copy (Legacy, replaced by breakdown).
             cache_key: Optional (mode, selected_paths, instructions, include_xml)
                        for storing result in prompt cache.
         """
@@ -658,7 +657,7 @@ class CopyActionController(QObject):
                 return
             self._view.show_status(f"{step} ({progress}%)")
 
-        def on_finished(prompt: str, token_count: int) -> None:
+        def on_finished(prompt: str, token_count: int, breakdown: dict) -> None:
             """Callback khi worker hoan thanh."""
             self._cleanup_stale_refs(gen)
 
@@ -676,7 +675,7 @@ class CopyActionController(QObject):
                 try:
                     mode, paths, instr, incl_xml = cache_key
                     self._store_in_cache(
-                        mode, paths, instr, prompt, token_count, incl_xml
+                        mode, paths, instr, prompt, token_count, breakdown, incl_xml
                     )
                 except Exception:
                     pass  # Cache storage failure is non-critical
@@ -690,10 +689,22 @@ class CopyActionController(QObject):
                 self._view.set_copy_buttons_enabled(True)
                 return
 
+            # Merge pre_snapshot if still used (legacy support)
             if pre_snapshot:
-                self._view.show_copy_breakdown(token_count, pre_snapshot)
+                final_breakdown = {**pre_snapshot, **breakdown}
             else:
-                self._view.show_status(success_template.format(token_count=token_count))
+                final_breakdown = breakdown
+
+            # Ensure copy_mode is set for show_copy_breakdown
+            if "copy_mode" not in final_breakdown:
+                if "treemap" in (cache_key[0] if cache_key else ""):
+                    final_breakdown["copy_mode"] = "Copy Tree Map"
+                elif "smart" in (cache_key[0] if cache_key else ""):
+                    final_breakdown["copy_mode"] = "Copy Smart"
+                else:
+                    final_breakdown["copy_mode"] = "Copy"
+
+            self._view.show_copy_breakdown(token_count, final_breakdown)
 
             self._view.set_copy_buttons_enabled(True)
 
@@ -741,7 +752,7 @@ class CopyActionController(QObject):
             _cache_include_xml = include_xml
             _cache_mode = copy_mode
 
-            def task() -> Tuple[str, int]:
+            def task() -> Tuple[str, int, dict]:
                 """Heavy work - chay tren background thread."""
                 tree_item = self._view.scan_full_tree(workspace)
                 format_str = "xml"
@@ -762,22 +773,13 @@ class CopyActionController(QObject):
                     include_xml_formatting=include_xml,
                 )
 
-            pre_snapshot = {
-                "file_tokens": self._view.get_total_tokens(),
-                "instruction_tokens": self._view.get_prompt_builder().count_tokens(
-                    instructions
-                )
-                if instructions
-                else 0,
-                "include_opx": include_xml,
-                "copy_mode": "Copy + OPX" if include_xml else "Copy Context",
-            }
+            snapshot = {"copy_mode": "Copy + OPX" if include_xml else "Copy Context"}
 
             self._run_copy_in_background(
                 gen,
                 task,
                 "Copied! ({token_count:,} tokens)",
-                pre_snapshot=pre_snapshot,
+                pre_snapshot=snapshot,
                 cache_key=(
                     _cache_mode,
                     _cache_selected,
@@ -810,22 +812,13 @@ class CopyActionController(QObject):
         # === Cache fast path ===
         cached = self._try_cache_hit("copy_smart", selected_path_strs, instructions)
         if cached is not None:
-            prompt, token_count = cached
+            prompt, token_count, breakdown = cached
             success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
                 prompt
             )
             if success:
-                pre_snapshot = {
-                    "file_tokens": self._view.get_total_tokens(),
-                    "instruction_tokens": self._view.get_prompt_builder().count_tokens(
-                        instructions
-                    )
-                    if instructions
-                    else 0,
-                    "include_opx": False,
-                    "copy_mode": "Copy Smart",
-                }
-                self._view.show_copy_breakdown(token_count, pre_snapshot)
+                breakdown["copy_mode"] = "Copy Smart"
+                self._view.show_copy_breakdown(token_count, breakdown)
             else:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
             return
@@ -834,7 +827,7 @@ class CopyActionController(QObject):
         use_rel = get_use_relative_paths()
         include_git = load_app_settings().include_git_changes
 
-        def task() -> Tuple[str, int]:
+        def task() -> Tuple[str, int, dict]:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._view.scan_full_tree(workspace)
@@ -849,22 +842,13 @@ class CopyActionController(QObject):
                 selected_paths=selected_path_strs,
             )
 
-        pre_snapshot = {
-            "file_tokens": self._view.get_total_tokens(),
-            "instruction_tokens": self._view.get_prompt_builder().count_tokens(
-                instructions
-            )
-            if instructions
-            else 0,
-            "include_opx": False,
-            "copy_mode": "Copy Smart",
-        }
+        # snapshot is now passed directly as pre_snapshot argument in run_copy
 
         self._run_copy_in_background(
             gen,
             task,
             "Smart context copied! ({token_count:,} tokens)",
-            pre_snapshot=pre_snapshot,
+            pre_snapshot={"copy_mode": "Copy Smart"},
             cache_key=("copy_smart", selected_path_strs, instructions, False),
         )
 
@@ -883,22 +867,13 @@ class CopyActionController(QObject):
         # === Cache fast path ===
         cached = self._try_cache_hit("copy_treemap", selected_strs, instructions)
         if cached is not None:
-            prompt, token_count = cached
+            prompt, token_count, breakdown = cached
             success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
                 prompt
             )
             if success:
-                pre_snapshot = {
-                    "file_tokens": 0,
-                    "instruction_tokens": self._view.get_prompt_builder().count_tokens(
-                        instructions
-                    )
-                    if instructions
-                    else 0,
-                    "include_opx": False,
-                    "copy_mode": "Copy Tree Map",
-                }
-                self._view.show_copy_breakdown(token_count, pre_snapshot)
+                breakdown["copy_mode"] = "Copy Tree Map"
+                self._view.show_copy_breakdown(token_count, breakdown)
             else:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
             return
@@ -906,7 +881,7 @@ class CopyActionController(QObject):
         gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
 
-        def task() -> Tuple[str, int]:
+        def task() -> Tuple[str, int, dict]:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._view.scan_full_tree(workspace)
@@ -926,24 +901,32 @@ class CopyActionController(QObject):
             # Thong nhat token counting path qua PromptBuildService
             # de dam bao cung tokenizer instance nhu cac copy operations khac
             count = self._view.get_prompt_builder().count_tokens(prompt)
-            return prompt, count
 
-        pre_snapshot = {
-            "file_tokens": 0,
-            "instruction_tokens": self._view.get_prompt_builder().count_tokens(
-                instructions
+            # Manual breakdown for tree map only
+            tree_tokens = self._view.get_prompt_builder().count_tokens(
+                generate_tree_map_only(tree_item, paths, "", workspace, use_rel)
             )
-            if instructions
-            else 0,
-            "include_opx": False,
-            "copy_mode": "Copy Tree Map",
-        }
+            instr_tokens = (
+                self._view.get_prompt_builder().count_tokens(instructions)
+                if instructions
+                else 0
+            )
+
+            breakdown = {
+                "tree_tokens": tree_tokens,
+                "instruction_tokens": instr_tokens,
+                "structure_tokens": max(0, count - tree_tokens - instr_tokens),
+            }
+
+            return prompt, count, breakdown
+
+        # snapshot is handled in run_copy call
 
         self._run_copy_in_background(
             gen,
             task,
             "Tree map copied! ({token_count:,} tokens)",
-            pre_snapshot=pre_snapshot,
+            pre_snapshot={"copy_mode": "Copy Tree Map"},
             cache_key=("copy_treemap", selected_strs, instructions, False),
         )
 

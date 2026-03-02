@@ -60,6 +60,7 @@ class TestBug2And3SingleServiceContainer:
             ignore_engine=container.ignore_engine,
             tokenization_service=container.tokenization,
         )
+        qtbot.addWidget(view)
 
         # Should use injected services, not create fallback instances
         assert view._ignore_engine is container.ignore_engine
@@ -229,8 +230,12 @@ class TestPromptBuilderUsesContainerTokenization:
     def test_prompt_builder_receives_tokenization_service(self):
         """PromptBuildService should receive tokenization_service from container"""
         from services.service_container import ServiceContainer
+        from services.prompt_build_service import PromptBuildService
 
         container = ServiceContainer()
 
         # PromptBuilder should use the same tokenization service as container
-        assert container.prompt_builder._tokenization_service is container.tokenization
+        # Use instance check and cast to access internal attribute for testing
+        builder = container.prompt_builder
+        assert isinstance(builder, PromptBuildService)
+        assert builder._tokenization_service is container.tokenization

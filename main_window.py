@@ -833,7 +833,7 @@ def main() -> None:
     app.setOrganizationName("Synapse")
 
     # Store boot container on app instance for reuse
-    app._service_container = _boot_container
+    app._service_container = _boot_container  # type: ignore[attr-defined]
 
     # Set application icon (de hien thi icon tren taskbar)
     # Tim icon file: uu tien .ico, sau do .png

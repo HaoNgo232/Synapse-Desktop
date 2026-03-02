@@ -29,7 +29,7 @@ def set_app_user_model_id(app_id: str) -> bool:
     try:
         # Import ctypes CHỈ KHI đã confirm là Windows
         # Điều này đảm bảo không có ImportError trên Linux
-        from ctypes import windll
+        from ctypes import windll  # type: ignore[attr-defined]
 
         # Set AppUserModelID - Windows API để taskbar hiển thị icon đúng
         # windll chỉ có trên Windows, nhưng đã check platform ở trên

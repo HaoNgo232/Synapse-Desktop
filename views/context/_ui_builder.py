@@ -177,11 +177,19 @@ class UIBuilderMixin:
         remote_menu = QMenu(remote_btn)
         remote_menu.addAction(
             "Clone Repository",
-            lambda: self._tree_controller.open_remote_repo_dialog(self),
+            lambda: (
+                self._tree_controller.open_remote_repo_dialog(self)
+                if self._tree_controller
+                else None
+            ),
         )
         remote_menu.addAction(
             "Manage Cache",
-            lambda: self._tree_controller.open_cache_management_dialog(self),
+            lambda: (
+                self._tree_controller.open_cache_management_dialog(self)
+                if self._tree_controller
+                else None
+            ),
         )
         remote_btn.setMenu(remote_menu)
         layout.addWidget(remote_btn)
@@ -259,22 +267,46 @@ class UIBuilderMixin:
 
         # Connect actions
         off_action.triggered.connect(
-            lambda: self._related_controller.set_mode(False, 0)
+            lambda: (
+                self._related_controller.set_mode(False, 0)
+                if self._related_controller
+                else None
+            )
         )
         direct_action.triggered.connect(
-            lambda: self._related_controller.set_mode(True, 1)
+            lambda: (
+                self._related_controller.set_mode(True, 1)
+                if self._related_controller
+                else None
+            )
         )
         nearby_action.triggered.connect(
-            lambda: self._related_controller.set_mode(True, 2)
+            lambda: (
+                self._related_controller.set_mode(True, 2)
+                if self._related_controller
+                else None
+            )
         )
         deep_action.triggered.connect(
-            lambda: self._related_controller.set_mode(True, 3)
+            lambda: (
+                self._related_controller.set_mode(True, 3)
+                if self._related_controller
+                else None
+            )
         )
         deeper_action.triggered.connect(
-            lambda: self._related_controller.set_mode(True, 4)
+            lambda: (
+                self._related_controller.set_mode(True, 4)
+                if self._related_controller
+                else None
+            )
         )
         deepest_action.triggered.connect(
-            lambda: self._related_controller.set_mode(True, 5)
+            lambda: (
+                self._related_controller.set_mode(True, 5)
+                if self._related_controller
+                else None
+            )
         )
 
         self._related_menu_btn.setMenu(related_menu)
@@ -677,7 +709,11 @@ class UIBuilderMixin:
         self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
         self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._opx_btn.clicked.connect(
-            lambda: self._copy_controller._copy_context(include_xml=True)
+            lambda: (
+                self._copy_controller._copy_context(include_xml=True)
+                if self._copy_controller
+                else None
+            )
         )
         layout.addWidget(self._opx_btn)
 
@@ -687,7 +723,11 @@ class UIBuilderMixin:
         self._copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_btn.clicked.connect(
-            lambda: self._copy_controller._copy_context(include_xml=False)
+            lambda: (
+                self._copy_controller._copy_context(include_xml=False)
+                if self._copy_controller
+                else None
+            )
         )
         layout.addWidget(self._copy_btn)
 

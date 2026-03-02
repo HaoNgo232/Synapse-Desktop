@@ -422,7 +422,11 @@ class TokenDisplayService(QObject):
 
             # Emit signal sau khi batch hoan thanh
             if not self._is_disposed and is_counting_tokens():
-                self.cache_updated.emit()
+                from core.utils.qt_utils import run_on_main_thread
+
+                run_on_main_thread(
+                    lambda: self.cache_updated.emit() if not self._is_disposed else None
+                )
 
         # Clear old deferred timers before scheduling new ones
         self._cancel_all_deferred_timers()

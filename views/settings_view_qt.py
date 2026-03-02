@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QComboBox,
     QLineEdit,
+    QDialog,
+    QPlainTextEdit,
 )
 from PySide6.QtCore import Qt, Slot, QTimer, Signal
 
@@ -245,6 +247,8 @@ class SettingsViewQt(QWidget):
         super().__init__(parent)
         self.on_settings_changed = on_settings_changed
         self._has_unsaved = False
+        # Luu lai cac status label MCP theo target de co the cap nhat sau khi install
+        self._mcp_status_labels: dict[str, QLabel] = {}
         self._fetch_worker = None  # Optional background worker cho fetch models
 
         # Debounced auto-save timer (800ms)
@@ -654,6 +658,69 @@ class SettingsViewQt(QWidget):
         col2_layout.addStretch()
 
         # ─────────────────────────────
+        # CARD 6: MCP Server Integration
+        # ─────────────────────────────
+        card6 = _make_card()
+        card6_layout = QVBoxLayout(card6)
+        card6_layout.setContentsMargins(22, 22, 22, 22)
+        card6_layout.setSpacing(0)
+
+        card6_layout.addWidget(_AccentDotLabel("MCP Server Integration"))
+        card6_layout.addSpacing(8)
+
+        mcp_desc = QLabel(
+            "Expose Synapse context directly to AI clients (Cursor, Copilot, etc.) via Model Context Protocol."
+        )
+        mcp_desc.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
+        mcp_desc.setWordWrap(True)
+        card6_layout.addWidget(mcp_desc)
+        card6_layout.addSpacing(14)
+
+        # Buttons cho tung AI client
+        from mcp_server.config_installer import MCP_TARGETS, check_installed
+
+        for target_name in MCP_TARGETS:
+            btn_row = QHBoxLayout()
+            btn_row.setSpacing(8)
+
+            install_btn = _make_ghost_btn(f"Install to {target_name}")
+            install_btn.setToolTip(f"Auto-install MCP config for {target_name}")
+            install_btn.clicked.connect(
+                lambda checked=False, t=target_name: self._install_mcp_for(t)
+            )
+
+            # Hien thi trang thai da cai hay chua
+            if check_installed(target_name):
+                status_label = QLabel("Installed")
+                status_label.setStyleSheet(
+                    f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"
+                )
+            else:
+                status_label = QLabel("Not installed")
+                status_label.setStyleSheet(
+                    f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};"
+                )
+
+            # Luu lai de co the cap nhat sau khi user bam Install
+            self._mcp_status_labels[target_name] = status_label
+
+            btn_row.addWidget(install_btn)
+            btn_row.addWidget(status_label)
+            btn_row.addStretch()
+
+            card6_layout.addLayout(btn_row)
+            card6_layout.addSpacing(6)
+
+        # Copy raw JSON config
+        card6_layout.addSpacing(6)
+        copy_mcp_btn = _make_ghost_btn("Copy Raw Config JSON")
+        copy_mcp_btn.setToolTip("Copy JSON config to clipboard (for manual setup)")
+        copy_mcp_btn.clicked.connect(self._copy_mcp_config)
+        card6_layout.addWidget(copy_mcp_btn)
+
+        col3_layout.addWidget(card6)
+
+        # ─────────────────────────────
         # CARD 5: Data & Session
         # ─────────────────────────────
         card5 = _make_card()
@@ -890,6 +957,150 @@ class SettingsViewQt(QWidget):
         success, _ = copy_to_clipboard(json.dumps(data, indent=2, ensure_ascii=False))
         self._show_status(
             "Settings exported to clipboard" if success else "Export failed",
+            is_error=not success,
+        )
+
+    def _get_mcp_command(self) -> list[str]:
+        """Tự động phát hiện lệnh khởi chạy MCP server."""
+        from mcp_server.config_installer import get_mcp_command
+
+        return get_mcp_command()
+
+    @Slot()
+    def _copy_mcp_config(self) -> None:
+        """Sinh và copy chuẩn MCP JSON Config vào clipboard."""
+        cmd = self._get_mcp_command()
+        config = {
+            "mcpServers": {
+                "synapse": {
+                    "command": cmd[0],
+                    "args": cmd[1:],
+                }
+            }
+        }
+        success, _ = copy_to_clipboard(json.dumps(config, indent=2))
+        self._show_status(
+            "MCP Config copied!" if success else "Failed to copy",
+            is_error=not success,
+        )
+
+    def _install_mcp_for(self, target_name: str) -> None:
+        """Hien thi preview JSON day du va ghi config vao file neu user dong y."""
+        from mcp_server.config_installer import (
+            get_config_path,
+            preview_json,
+            install_config,
+            check_installed,
+        )
+
+        config_path = get_config_path(target_name)
+        preview_text = preview_json(target_name)
+
+        # Tao custom dialog rong rai de hien thi preview JSON cho de doc
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Install MCP to {target_name}")
+        dlg.setMinimumSize(560, 380)
+        dlg.setStyleSheet(f"QDialog {{ background: {ThemeColors.BG_SURFACE}; }}")
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
+        # Thong tin file se ghi
+        path_label = QLabel("Config will be written to:")
+        path_label.setStyleSheet(
+            f"font-size: 13px; color: {ThemeColors.TEXT_SECONDARY};"
+        )
+        layout.addWidget(path_label)
+
+        path_value = QLabel(str(config_path))
+        path_value.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {ThemeColors.PRIMARY};"
+            f" font-family: monospace;"
+        )
+        path_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(path_value)
+
+        layout.addSpacing(4)
+
+        # Preview JSON trong text editor lon
+        preview_label = QLabel("Preview JSON:")
+        preview_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 600; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        layout.addWidget(preview_label)
+
+        editor = QPlainTextEdit()
+        editor.setPlainText(preview_text)
+        editor.setReadOnly(True)
+        editor.setStyleSheet(
+            f"""
+            QPlainTextEdit {{
+                background: {ThemeColors.BG_PAGE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 12px;
+                font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+                font-size: 13px;
+            }}
+        """
+        )
+        layout.addWidget(editor, stretch=1)
+
+        # Buttons row
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = _make_ghost_btn("Cancel")
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        install_btn = QPushButton("Install")
+        install_btn.setFixedHeight(36)
+        install_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        install_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 24px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: {ThemeColors.PRIMARY_HOVER};
+            }}
+        """
+        )
+        install_btn.clicked.connect(dlg.accept)
+        btn_layout.addWidget(install_btn)
+
+        layout.addLayout(btn_layout)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        success, msg = install_config(target_name)
+
+        if success:
+            # Cap nhat trang thai label ngay lap tuc, khong can restart app
+            try:
+                if check_installed(target_name):
+                    label = self._mcp_status_labels.get(target_name)
+                    if label is not None:
+                        label.setText("Installed")
+                        label.setStyleSheet(
+                            f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"
+                        )
+            except Exception:
+                # Neu viec cap nhat trang thai that bai thi chi log toast, khong chan luong chinh
+                pass
+
+        self._show_status(
+            f"MCP installed to {target_name}!" if success else msg,
             is_error=not success,
         )
 

@@ -795,6 +795,18 @@ def main() -> None:
 
     multiprocessing.freeze_support()
 
+    # ===== MCP Server Mode =====
+    # Neu co co --run-mcp, khoi dong MCP Server thay vi giao dien PySide6.
+    # Cho phep AI clients (Cursor, Copilot, Antigravity) giao tiep qua stdio.
+    # Cach su dung: python main_window.py --run-mcp [workspace_path]
+    if "--run-mcp" in sys.argv:
+        idx = sys.argv.index("--run-mcp")
+        workspace = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else None
+        from mcp_server.server import run_mcp_server
+
+        run_mcp_server(workspace)
+        return
+
     # CRITICAL for Windows taskbar icon: Set AppUserModelID TRƯỚC KHI tạo QApplication
     # Windows nhóm app theo AppUserModelID - nếu không set, Windows sẽ dùng icon của Python
     from core.utils.windows_utils import (

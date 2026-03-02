@@ -711,10 +711,12 @@ class SettingsViewQt(QWidget):
             card6_layout.addLayout(btn_row)
             card6_layout.addSpacing(6)
 
-        # Copy raw JSON config
+        # Copy VS Code workspace (.vscode/mcp.json) snippet
         card6_layout.addSpacing(6)
-        copy_mcp_btn = _make_ghost_btn("Copy Raw Config JSON")
-        copy_mcp_btn.setToolTip("Copy JSON config to clipboard (for manual setup)")
+        copy_mcp_btn = _make_ghost_btn("VS Code .vscode/mcp.json Snippet")
+        copy_mcp_btn.setToolTip(
+            "Generate VS Code workspace .vscode/mcp.json (servers) with preview for manual copy/paste"
+        )
         copy_mcp_btn.clicked.connect(self._copy_mcp_config)
         card6_layout.addWidget(copy_mcp_btn)
 
@@ -968,21 +970,121 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _copy_mcp_config(self) -> None:
-        """Sinh và copy chuẩn MCP JSON Config vào clipboard."""
+        """
+        Sinh nội dung file VS Code workspace `.vscode/mcp.json` với UI preview.
+
+        IDE như VS Code / Cursor buộc user phải mở `.vscode/mcp.json` ở mức project root
+        và tự copy/paste, nên ở đây sinh ra JSON đầy đủ dạng:
+
+        {
+          "servers": {
+            "synapse": {
+              "type": "stdio",
+              "command": "...",
+              "args": ["--run-mcp"]
+            }
+          }
+        }
+        """
         cmd = self._get_mcp_command()
-        config = {
-            "mcpServers": {
-                "synapse": {
-                    "command": cmd[0],
-                    "args": cmd[1:],
-                }
+        entry = {
+            # VS Code MCP server dùng stdio cho Synapse Desktop
+            "type": "stdio",
+            "command": cmd[0],
+            "args": cmd[1:],
+        }
+        config_obj = {
+            "servers": {
+                "synapse": entry,
             }
         }
-        success, _ = copy_to_clipboard(json.dumps(config, indent=2))
-        self._show_status(
-            "MCP Config copied!" if success else "Failed to copy",
-            is_error=not success,
+
+        # Nội dung hoàn chỉnh cho .vscode/mcp.json
+        snippet = json.dumps(config_obj, indent=2, ensure_ascii=False)
+
+        # Dialog preview để user dễ nhìn và có thể chỉnh tay nếu cần
+        dlg = QDialog(self)
+        dlg.setWindowTitle("VS Code settings.json MCP snippet")
+        dlg.setMinimumSize(720, 440)
+        dlg.setStyleSheet(f"QDialog {{ background: {ThemeColors.BG_SURFACE}; }}")
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
+        info_label = QLabel(
+            ".vscode/mcp.json — Tạo file này ở project root và dán toàn bộ nội dung bên dưới."
         )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet(
+            f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};"
+        )
+        layout.addWidget(info_label)
+
+        layout.addSpacing(4)
+
+        editor = QPlainTextEdit()
+        editor.setPlainText(snippet)
+        editor.setReadOnly(True)
+        editor.setStyleSheet(
+            f"""
+            QPlainTextEdit {{
+                background: {ThemeColors.BG_PAGE};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 8px;
+                padding: 12px;
+                font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+                font-size: 13px;
+            }}
+        """
+        )
+        layout.addWidget(editor, stretch=1)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = _make_ghost_btn("Close")
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        copy_btn = QPushButton("Copy snippet")
+        copy_btn.setFixedHeight(36)
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {ThemeColors.PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 24px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: {ThemeColors.PRIMARY_HOVER};
+            }}
+        """
+        )
+
+        def _do_copy() -> None:
+            success, _ = copy_to_clipboard(snippet)
+            self._show_status(
+                "VS Code .vscode/mcp.json snippet copied!"
+                if success
+                else "Failed to copy",
+                is_error=not success,
+            )
+            if success:
+                dlg.accept()
+
+        copy_btn.clicked.connect(_do_copy)
+        btn_layout.addWidget(copy_btn)
+
+        layout.addLayout(btn_layout)
+
+        dlg.exec()
 
     def _install_mcp_for(self, target_name: str) -> None:
         """Hien thi preview JSON day du va ghi config vao file neu user dong y."""
@@ -999,7 +1101,7 @@ class SettingsViewQt(QWidget):
         # Tao custom dialog rong rai de hien thi preview JSON cho de doc
         dlg = QDialog(self)
         dlg.setWindowTitle(f"Install MCP to {target_name}")
-        dlg.setMinimumSize(560, 380)
+        dlg.setMinimumSize(720, 440)
         dlg.setStyleSheet(f"QDialog {{ background: {ThemeColors.BG_SURFACE}; }}")
 
         layout = QVBoxLayout(dlg)

@@ -35,6 +35,23 @@ MCP_TARGETS: dict[str, dict] = {
         "root_key": "mcpServers",
         "extra_fields": {},
     },
+    "Claude Code": {
+        "config_path": "~/.claude.json",
+        "root_key": "mcpServers",
+        "extra_fields": {},
+    },
+    "Kiro CLI": {
+        "config_path": "~/.kiro/settings/mcp.json",
+        "root_key": "mcpServers",
+        "extra_fields": {},
+    },
+    "OpenCode": {
+        "config_path": "~/.config/opencode/opencode.json",
+        "root_key": "mcp",
+        "extra_fields": {},
+        # OpenCode dung format khac: "type":"local", "command" la array thay vi tach command/args
+        "format": "opencode",
+    },
 }
 
 SERVER_NAME = "synapse"
@@ -82,12 +99,21 @@ def build_synapse_entry(target_name: str) -> dict:
     """Tao entry config cho Synapse MCP Server theo target cu the."""
     target = MCP_TARGETS[target_name]
     cmd = get_mcp_command()
+    fmt = target.get("format", "standard")
 
     entry: dict = {}
     # Them cac truong dac thu cua target (vi du: "type":"stdio" cho Copilot)
     entry.update(target["extra_fields"])
-    entry["command"] = cmd[0]
-    entry["args"] = cmd[1:]
+
+    if fmt == "opencode":
+        # OpenCode format: "type":"local", "command" la array gom ca executable + args
+        entry["type"] = "local"
+        entry["command"] = cmd
+    else:
+        # Standard format (Cursor, Claude Code, Kiro, Antigravity, ...):
+        # "command" la executable, "args" la list cac tham so
+        entry["command"] = cmd[0]
+        entry["args"] = cmd[1:]
 
     return entry
 
@@ -210,10 +236,17 @@ def _needs_update(target_name: str) -> bool:
     current_entry = servers[SERVER_NAME]
     new_entry = build_synapse_entry(target_name)
 
-    # So sanh command va args — neu khac thi can update
-    return current_entry.get("command") != new_entry.get(
-        "command"
-    ) or current_entry.get("args") != new_entry.get("args")
+    fmt = target.get("format", "standard")
+    if fmt == "opencode":
+        # OpenCode: so sanh "command" (array) va "type"
+        return current_entry.get("command") != new_entry.get(
+            "command"
+        ) or current_entry.get("type") != new_entry.get("type")
+    else:
+        # Standard: so sanh command (str) va args (list)
+        return current_entry.get("command") != new_entry.get(
+            "command"
+        ) or current_entry.get("args") != new_entry.get("args")
 
 
 def auto_update_installed_configs() -> list[str]:

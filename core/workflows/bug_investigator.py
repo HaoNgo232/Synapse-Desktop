@@ -232,27 +232,42 @@ def _trace_execution_bfs(
     token_budget_remaining: int,
     tokenization_service: TokenizationService,
 ) -> List[TraceStep]:
-    """
-    BFS trace từ entry points, mở rộng theo callers/callees.
+    """BFS trace tu entry points, mo rong theo callers/callees.
+
+    Su dung 'queued' set de tranh duplicate entries trong queue,
+    va iteration limit de dam bao khong bi resource exhaustion.
 
     Args:
         workspace_path: Workspace root
         entry_points: Parsed entry points
-        max_depth: Độ sâu tối đa
-        token_budget_remaining: Tokens còn lại
-        tokenization_service: Service đếm token
+        max_depth: Do sau toi da
+        token_budget_remaining: Tokens con lai
+        tokenization_service: Service dem token
 
     Returns:
-        List[TraceStep] theo thứ tự BFS
+        List[TraceStep] theo thu tu BFS
     """
     trace_steps = []
     visited = set()
+    # Track files da queued de tranh duplicate entries
+    queued: set = set()
     queue = list(entry_points)
+
+    # Khoi tao queued set tu entry_points
+    for ep in entry_points:
+        file_path = str(ep.get("file", ""))
+        if file_path:
+            queued.add(file_path)
 
     resolver = DependencyResolver(workspace_path)
     resolver.build_file_index_from_disk(workspace_path)
 
-    while queue and token_budget_remaining > 0:
+    # Safety net: gioi han so iterations de tranh resource exhaustion
+    max_iterations = 1000
+    iteration_count = 0
+
+    while queue and token_budget_remaining > 0 and iteration_count < max_iterations:
+        iteration_count += 1
         current = queue.pop(0)
         file_path_obj = current.get("file", "")
         line_num_obj = current.get("line", 1)
@@ -270,13 +285,13 @@ def _trace_execution_bfs(
 
         visited.add(file_path)
 
-        # Read file content
+        # Doc file content
         full_path = (workspace_path / file_path).resolve()
         if not full_path.exists():
             continue
 
         try:
-            # Slice around error line
+            # Slice quanh error line
             slice_result = slice_file_by_line_range(
                 full_path,
                 start_line=max(1, line_num - 10),
@@ -305,16 +320,25 @@ def _trace_execution_bfs(
                 )
             )
 
-            # Expand: add dependencies
+            # Mo rong: them dependencies vao queue
             if depth < max_depth:
-                related = resolver.get_related_files(full_path, max_depth=1)
+                try:
+                    related = resolver.get_related_files(full_path, max_depth=1)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to resolve dependencies for %s: %s", file_path, e
+                    )
+                    continue
+
                 for dep_path in related:
                     try:
                         dep_rel = dep_path.relative_to(workspace_path).as_posix()
-                        if dep_rel not in visited:
+                        # Check ca visited VA queued de tranh duplicate
+                        if dep_rel not in visited and dep_rel not in queued:
                             queue.append(
                                 {"file": dep_rel, "line": 1, "depth": depth + 1}
                             )
+                            queued.add(dep_rel)
                     except ValueError:
                         pass
 

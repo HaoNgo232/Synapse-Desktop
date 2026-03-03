@@ -41,11 +41,20 @@ class FileSlice:
 
 
 @lru_cache(maxsize=128)
-def _get_file_symbols_cached(file_path: str, content_hash: int) -> List[Symbol]:
-    """Cache symbol extraction để tránh re-parse cùng file."""
-    # Read file again (cache key chỉ dùng hash)
+def _get_file_symbols_cached(
+    file_path: str, content_hash: int, content: str
+) -> List[Symbol]:
+    """Cache symbol extraction de tranh re-parse cung file.
+
+    Nhan content truc tiep thay vi re-read tu disk de tranh TOCTOU race condition.
+    Cache key dung content_hash de tiet kiem memory (lru_cache hash key).
+
+    Args:
+        file_path: Duong dan file (dung cho parser detect ngon ngu)
+        content_hash: Hash cua content (dung lam cache key)
+        content: Noi dung file da doc san
+    """
     try:
-        content = Path(file_path).read_text(encoding="utf-8", errors="ignore")
         return extract_symbols(file_path, content)
     except Exception:
         return []
@@ -74,9 +83,9 @@ def slice_file_by_symbols(
         lines = content.splitlines()
         total_lines = len(lines)
 
-        # Extract symbols
+        # Extract symbols - truyen content truc tiep, khong re-read tu disk
         content_hash = hash(content)
-        symbols = _get_file_symbols_cached(str(file_path), content_hash)
+        symbols = _get_file_symbols_cached(str(file_path), content_hash, content)
 
         # Tìm symbols matching target
         matching_symbols = [s for s in symbols if s.name in target_symbols]

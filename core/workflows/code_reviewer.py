@@ -87,13 +87,14 @@ def run_code_review(
         # Parse diff to get changed files
         diffs = []
         # Simple parsing: extract file paths from diff headers
-        import re
 
         for line in (diff_result.work_tree_diff + diff_result.staged_diff).splitlines():
             if line.startswith("diff --git"):
-                match = re.search(r"b/(.+)$", line)
-                if match:
-                    diffs.append({"file": match.group(1)})
+                # Parse filename tu git diff header: "diff --git a/X b/Y"
+                # Tim vi tri cuoi cung cua " b/" de handle paths chua "b/"
+                filename = _extract_filename_from_diff_header(line)
+                if filename:
+                    diffs.append({"file": filename})
 
         if not diffs:
             return ReviewResult(
@@ -246,24 +247,39 @@ def _find_test_files(
     return test_files
 
 
-def _build_diff_summary(diff_result: "GitDiffResult") -> str:
-    """Build human-readable diff summary from GitDiffResult."""
-    # Count changed files from diff content
-    import re
+def _extract_filename_from_diff_header(line: str) -> Optional[str]:
+    """Trich xuat filename tu git diff header.
 
+    Handle cac edge case:
+    - Normal: 'diff --git a/src/main.py b/src/main.py'
+    - Path chua 'b/': 'diff --git a/sub/b/test.py b/sub/b/test.py'
+    - Rename: 'diff --git a/old.py b/new.py'
+
+    Su dung " b/" (co space phia truoc) de tim boundary chinh xac.
+    """
+    # Tim vi tri cuoi cung cua " b/" de handle paths chua "b/"
+    marker = " b/"
+    idx = line.rfind(marker)
+    if idx >= 0:
+        return line[idx + len(marker) :]
+    return None
+
+
+def _build_diff_summary(diff_result: "GitDiffResult") -> str:
+    """Build human-readable diff summary tu GitDiffResult."""
     changed_files = set()
     for line in (diff_result.work_tree_diff + diff_result.staged_diff).splitlines():
         if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                changed_files.add(match.group(1))
+            filename = _extract_filename_from_diff_header(line)
+            if filename:
+                changed_files.add(filename)
 
     if not changed_files:
         return "No changes"
 
     lines = ["Git Diff Summary:", ""]
     for file_path in sorted(changed_files)[:10]:  # Limit to 10 files
-        lines.append(f"• {file_path}")
+        lines.append(f"  {file_path}")
 
     if len(changed_files) > 10:
         lines.append(f"... and {len(changed_files) - 10} more files")

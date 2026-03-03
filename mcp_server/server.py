@@ -43,36 +43,39 @@ _STRING_LITERAL_RE: re.Pattern[str] = re.compile(
 mcp = FastMCP(
     "Synapse Desktop",
     instructions=(
-        "Synapse Desktop — AI-powered codebase exploration toolkit with 15 tools.\n"
+        "Synapse Desktop - AI-powered codebase exploration toolkit with 15 tools.\n"
         "\n"
-        "🚨 CRITICAL WORKFLOW:\n"
-        "  1. ALWAYS start with: start_session (auto-discover) OR get_project_structure\n"
-        "  2. Use get_codemap BEFORE reading files (saves 90% tokens)\n"
-        "  3. Verify code structure by reading files — don't assume from names\n"
+        "USE YOUR BUILT-IN TOOLS FOR BASIC OPERATIONS:\n"
+        "  - Reading files -> use your native read_file, unless files are too large\n"
+        "  - Listing directories -> use your native list_dir / ls\n"
+        "  - Searching text -> use your native grep / search\n"
+        "  - Running commands -> use your native terminal / bash\n"
         "\n"
-        "COMMON PATTERNS:\n"
-        "  • New codebase: start_session → get_codemap → read files\n"
-        "  • Find code: find_references / find_todos → read files\n"
-        "  • Code review: diff_summary → get_codemap → read files\n"
-        "  • Refactoring: find_references → get_imports_graph → estimate_tokens\n"
-        "  • Build context: manage_selection → estimate_tokens → build_prompt\n"
+        "USE SYNAPSE TOOLS FOR ADVANCED TASKS YOUR BUILT-IN TOOLS DON'T HAVE:\n"
+        "  - get_codemap / get_symbols - Tree-sitter AST extraction (signatures without bodies)\n"
+        "  - estimate_tokens - accurate LLM token counting\n"
+        "  - get_imports_graph - cross-file dependency resolution\n"
+        "  - diff_summary - function-level git change analysis\n"
+        "  - build_prompt - structured prompt packaging\n"
+        "  - get_project_structure - detect frameworks and codebase scale\n"
         "\n"
-        "TOKEN MANAGEMENT:\n"
-        "  • Always estimate_tokens before build_prompt\n"
-        "  • Use read_file_range for large files (line range support)\n"
-        "  • Prefer get_codemap (signatures only) over full file reads\n"
+        "[CRITICAL] WORKFLOW:\n"
+        "  1. Start with get_project_structure to understand the codebase\n"
+        "  2. Use get_codemap BEFORE reading files to save tokens\n"
+        "  3. Use estimate_tokens before generating a context package\n"
         "\n"
-        "All tools have detailed docstrings — check them for specific usage."
+        "All tools have detailed docstrings explaining when to use them over your native tools."
     ),
 )
 
 
-# ===========================================================================
-# Tool 1: start_session - Auto project onboarding
-# ===========================================================================
+# Ham start_session giup tu dong discover cau truc du an, cac framework va technical debt
 @mcp.tool()
 def start_session(workspace_path: str) -> str:
     """Start a new session by auto-discovering project structure, organization, and technical debt.
+
+    WHY USE THIS OVER BUILT-IN: Combines 3 calls into one to give you an immediate high-level summary.
+    However, you can also use your built-in tools recursively if you prefer.
 
     This is a convenience tool that runs the essential discovery sequence:
     1. get_project_structure - Understand scale, languages, frameworks
@@ -103,7 +106,7 @@ def start_session(workspace_path: str) -> str:
 
         return (
             f"{'=' * 60}\n"
-            f"SESSION INITIALIZED ✅\n"
+            f"SESSION INITIALIZED [OK]\n"
             f"{'=' * 60}\n\n"
             f"{structure}\n\n"
             f"{'=' * 60}\n"
@@ -115,10 +118,10 @@ def start_session(workspace_path: str) -> str:
             f"{'=' * 60}\n"
             f"{todos_preview}\n\n"
             f"{'=' * 60}\n"
-            f"💡 Next steps:\n"
-            f"  • Use get_codemap to explore specific files\n"
-            f"  • Use read_file when you need implementation details\n"
-            f"  • Use get_imports_graph to understand module coupling\n"
+            f"Next steps:\n"
+            f"  - Use get_codemap to explore specific files\n"
+            f"  - Use read_file when you need implementation details\n"
+            f"  - Use get_imports_graph to understand module coupling\n"
             f"{'=' * 60}"
         )
     except Exception as e:
@@ -129,12 +132,17 @@ def start_session(workspace_path: str) -> str:
 # ===========================================================================
 # Tool 2: list_files - Liet ke tat ca files trong workspace
 # ===========================================================================
+# Ham list_files liet ke tat ca file trong workspace, co ho tro filter theo extension
 @mcp.tool()
 def list_files(
     workspace_path: str,
     extensions: Optional[List[str]] = None,
 ) -> str:
     """List all files in the workspace, automatically respecting .gitignore and skipping hidden files.
+
+    WHY USE THIS OVER BUILT-IN: Use YOUR BUILT-IN list_dir/ls for simple directories.
+    Use this to get a flat list of ALL files recursively in the project, automatically
+    respecting .gitignore, which is useful to feed into other tools.
 
     Returns one relative path per line. Use the `extensions` filter to narrow results
     (e.g., [".py", ".ts"] to find only Python and TypeScript files).
@@ -181,9 +189,7 @@ def list_files(
         return f"Error listing files: {e}"
 
 
-# ===========================================================================
-# Tool 2: list_directories - Hien thi cay thu muc (giong lenh `tree`)
-# ===========================================================================
+# Ham list_directories hien thi cau truc thu muc duoi dang cay (nhu lenh tree)
 @mcp.tool()
 def list_directories(
     workspace_path: str,
@@ -191,8 +197,11 @@ def list_directories(
 ) -> str:
     """Show the directory tree structure of the workspace (similar to the `tree` command).
 
-    Quickly understand how a project is organized — folder hierarchy, module boundaries,
-    and naming conventions — without listing every file.
+    WHY USE THIS OVER BUILT-IN: Use YOUR BUILT-IN list_dir/ls for simple exploration.
+    Use this to see the overall shape of the project recursively up to max_depth.
+
+    Quickly understand how a project is organized - folder hierarchy, module boundaries,
+    and naming conventions - without listing every file.
 
     When to use: First step when exploring an unfamiliar codebase, or when you need to
     understand where specific modules/packages live before reading files.
@@ -266,6 +275,7 @@ def list_directories(
 # ===========================================================================
 # Tool 3: read_file_range - Doc noi dung file voi line range support
 # ===========================================================================
+# Ham read_file_range doc noi dung file theo khoang dong tu chon
 @mcp.tool()
 def read_file_range(
     workspace_path: str,
@@ -274,6 +284,10 @@ def read_file_range(
     end_line: Optional[int] = None,
 ) -> str:
     """Read file contents with optional line range support (enhanced version).
+
+    WHY USE THIS OVER BUILT-IN: Use YOUR BUILT-IN read_file for full files.
+    Use this when you specifically need to read a small segment of a massive file
+    to save token bandwidth, since some AI clients don't support line ranges natively.
 
     This is Synapse's enhanced file reader with line range support.
     Use this when you need to read specific sections of large files to save tokens.
@@ -325,9 +339,7 @@ def read_file_range(
         return f"Error reading file: {e}"
 
 
-# ===========================================================================
-# Tool 4: get_codemap - Trich xuat code structure (tiet kiem token)
-# ===========================================================================
+# Ham get_codemap dung Tree-sitter de trich xuat skeleton cua code (signatures, class defs) giup tiet kiem token
 @mcp.tool()
 def get_codemap(
     workspace_path: str,
@@ -335,14 +347,19 @@ def get_codemap(
 ) -> str:
     """Extract code structure (function signatures, class definitions, imports) from files.
 
-    Uses Tree-sitter to parse source code and return only the skeleton — function
-    signatures, class declarations, and type information — WITHOUT implementation
+    WHY USE THIS OVER BUILT-IN: Your built-in read_file returns the ENTIRE file.
+    get_codemap uses Tree-sitter AST parsing to extract only the API skeleton -
+    function signatures, class declarations, type annotations - saving 70-90% tokens.
+    No built-in tool can do this.
+
+    Uses Tree-sitter to parse source code and return only the skeleton - function
+    signatures, class declarations, and type information - WITHOUT implementation
     bodies. This gives you a complete understanding of module APIs while using
     a fraction of the tokens compared to reading full files.
 
     When to use: ALWAYS use this before read_file when exploring code. It lets you
     understand the shape of modules, find the right function to dig into, and map
-    out dependencies — all at minimal token cost. Only use read_file after this
+    out dependencies - all at minimal token cost. Only use read_file after this
     when you need the actual implementation.
 
     Args:
@@ -388,11 +405,16 @@ def get_codemap(
 # ===========================================================================
 # Tool 5: get_project_structure - Tom tat tong quan du an
 # ===========================================================================
+# Ham get_project_structure phan tich tong quan du an nhu so luong file, kich thuoc va framework
 @mcp.tool()
 def get_project_structure(
     workspace_path: str,
 ) -> str:
     """Get a high-level summary of the project: total files, breakdown by file type, detected frameworks, and estimated token count.
+
+    WHY USE THIS OVER BUILT-IN: Your built-in list_dir shows file names but can't
+    detect frameworks (Django, Next.js, Rust, etc.), count total tokens, or give
+    you a statistical breakdown. This gives you the big picture in one call.
 
     This is the fastest way to understand what kind of project you're working with,
     its scale, and which technologies are in use (Python/Django, Node.js/Next.js, Rust, etc.).
@@ -492,9 +514,7 @@ def _detect_frameworks(ws: Path) -> list[str]:
     return frameworks
 
 
-# ===========================================================================
-# Tool 6: manage_selection - Doc/ghi danh sach file dang duoc chon
-# ===========================================================================
+# Ham manage_selection dung de quan ly danh sach cac file dang duoc chon de build prompt
 @mcp.tool()
 def manage_selection(
     workspace_path: str,
@@ -503,14 +523,18 @@ def manage_selection(
 ) -> str:
     """Manage the list of currently selected (ticked) files in the Synapse session.
 
+    WHY USE THIS OVER BUILT-IN: When building prompts across multiple tool calls, this lets you
+    incrementally add/remove files to a selection, then pass them all to build_prompt
+    at once. Useful for complex multi-step context curation.
+
     This controls which files are included when building prompts. Use it to
     curate the exact set of files that should be part of the AI context.
 
     Actions:
-      "get"   — Return the current selection list.
-      "set"   — Replace the entire selection with the provided paths.
-      "add"   — Add paths to the existing selection (skips duplicates).
-      "clear" — Remove all files from the selection.
+      "get"   - Return the current selection list.
+      "set"   - Replace the entire selection with the provided paths.
+      "add"   - Add paths to the existing selection (skips duplicates).
+      "clear" - Remove all files from the selection.
 
     When to use: Before calling build_prompt, use "set" or "add" to choose the
     right files. Use "get" to check what's currently selected. Use "clear" to
@@ -518,7 +542,7 @@ def manage_selection(
 
     Args:
         workspace_path: Absolute path to the workspace root directory.
-        action: Action to perform — "get", "set", "add", or "clear".
+        action: Action to perform - "get", "set", "add", or "clear".
         paths: List of relative file paths (required for "set" and "add" actions).
     """
     ws = Path(workspace_path).resolve()
@@ -643,9 +667,7 @@ def _selection_clear(session_file: Path) -> str:
     return "Selection cleared."
 
 
-# ===========================================================================
-# Tool 7: build_prompt - Tao prompt hoan chinh va ghi ra file
-# ===========================================================================
+# Ham build_prompt ket hop noi dung file, cau truc thu muc va git diffs de tao prompt cho AI
 @mcp.tool()
 def build_prompt(
     workspace_path: str,
@@ -657,7 +679,11 @@ def build_prompt(
 ) -> str:
     """Build a complete, AI-ready prompt combining file contents, directory tree, project rules, and optionally git diffs.
 
-    This is the full-power prompt generation tool — equivalent to Synapse Desktop's
+    WHY USE THIS OVER BUILT-IN: No built-in tool can package files into Synapse's
+    structured prompt format with directory tree, project rules, git context,
+    and token breakdown. This is equivalent to Synapse Desktop's "Copy Context" button.
+
+    This is the full-power prompt generation tool - equivalent to Synapse Desktop's
     "Copy" button. It assembles everything an AI needs to understand and work with
     the selected code into a single structured prompt.
 
@@ -669,7 +695,7 @@ def build_prompt(
         workspace_path: Absolute path to the workspace root directory.
         file_paths: List of relative file paths to include in the prompt.
         instructions: Optional user instructions to embed in the prompt header.
-        output_format: Output structure — "xml" (default, best for AI), "json", "plain", or "smart" (codemap + full content).
+        output_format: Output structure - "xml" (default, best for AI), "json", "plain", or "smart" (codemap + full content).
         output_file: Relative or absolute path to write output to. None returns the prompt directly (warning: can be very large).
         include_git_changes: Whether to include recent git diffs and log in the prompt (default: False).
     """
@@ -834,12 +860,18 @@ def _force_all_logging_to_stderr() -> None:
 # ===========================================================================
 # Tool 8: estimate_tokens - Uoc tinh token cua tap file
 # ===========================================================================
+# Ham estimate_tokens uoc tinh so luong token cua mot danh sach file
 @mcp.tool()
 def estimate_tokens(
     workspace_path: str,
     file_paths: List[str],
 ) -> str:
-    """Estimate token count for a set of files before adding them to context."""
+    """Estimate token count for a set of files before adding them to context.
+
+    WHY USE THIS OVER BUILT-IN: No built-in tool counts tokens. This uses the actual
+    tokenizer (tiktoken/HuggingFace) matching the target LLM model, not rough byte
+    estimates. Essential for managing context window budgets.
+    """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
@@ -882,12 +914,17 @@ def estimate_tokens(
 # ===========================================================================
 # Tool 9: get_file_metrics - LOC, functions, classes, TODO/FIXME/HACK
 # ===========================================================================
+# Ham get_file_metrics tinh toan cac thong so code nhu LOC, so luong ham, lop va complexity
 @mcp.tool()
 def get_file_metrics(
     workspace_path: str,
     file_path: str,
 ) -> str:
-    """Get code metrics: LOC, number of functions/classes, TODO/FIXME/HACK comments."""
+    """Get code metrics: LOC, number of functions/classes, TODO/FIXME/HACK comments.
+
+    WHY USE THIS OVER BUILT-IN: Combines LOC counting, complexity estimation, and comment
+    scanning into one quick call instead of having to run multiple bash commands (like wc).
+    """
     ws = Path(workspace_path).resolve()
     fp = (ws / file_path).resolve()
 
@@ -949,13 +986,20 @@ def get_file_metrics(
 # ===========================================================================
 # Tool 10: find_references - Tim symbol usage (AST-based)
 # ===========================================================================
+# Ham find_references tim tat ca cac vi tri su dung cua mot symbol (function/class/variable)
 @mcp.tool()
 def find_references(
     workspace_path: str,
     symbol_name: str,
     file_extensions: Optional[List[str]] = None,
 ) -> str:
-    """Find all locations where a function/class/variable is used (AST + regex)."""
+    """Find all locations where a function/class/variable is used (AST + regex).
+
+    WHY USE THIS OVER BUILT-IN: Your built-in grep/search finds ALL text matches
+    including strings ("Cannot find myFunc"), comments (# rename myFunc), and docs.
+    This tool strips string literals and comments before matching, giving you only
+    actual CODE references. Reduces false positives significantly for refactoring.
+    """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
@@ -1020,12 +1064,17 @@ def find_references(
 # ===========================================================================
 # Tool 11: find_todos - Scan toan project tim TODO/FIXME/HACK
 # ===========================================================================
+# Ham find_todos quet toan bo project de tim cac comment kieu TODO, FIXME hoac HACK
 @mcp.tool()
 def find_todos(
     workspace_path: str,
     include_hack: bool = True,
 ) -> str:
-    """Scan entire project for TODO/FIXME/HACK comments with file path and line number."""
+    """Scan entire project for TODO/FIXME/HACK comments with file path and line number.
+
+    WHY USE THIS OVER BUILT-IN: Uses smarter boundaries (word boundaries) than standard
+    grep, and automatically ignores non-code files to reduce noise.
+    """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
@@ -1111,13 +1160,20 @@ def find_todos(
 # ===========================================================================
 # Tool 12: get_imports_graph - Dependency graph JSON
 # ===========================================================================
+# Ham get_imports_graph tao do thi phu thuoc giua cac file duoi dang JSON
 @mcp.tool()
 def get_imports_graph(
     workspace_path: str,
     file_paths: Optional[List[str]] = None,
     max_depth: int = 1,
 ) -> str:
-    """Get dependency graph between files as JSON adjacency list."""
+    """Get dependency graph between files as JSON adjacency list.
+
+    WHY USE THIS OVER BUILT-IN: Your built-in grep can find import statements, but
+    can't RESOLVE them to actual file paths (e.g., "from services.auth import login"
+    -> "services/auth.py"). This tool uses Synapse's dependency resolver to build
+    a proper file-to-file dependency graph.
+    """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
@@ -1193,12 +1249,17 @@ def get_imports_graph(
 # ===========================================================================
 # Tool 14: get_symbols - Structured symbol list (JSON)
 # ===========================================================================
+# Ham get_symbols liet ke chi tiet cac symbol trong file (signatures, line range, parent class)
 @mcp.tool()
 def get_symbols(
     workspace_path: str,
     file_path: str,
 ) -> str:
     """Get structured list of all symbols (functions, classes, methods) in a file as JSON.
+
+    WHY USE THIS OVER BUILT-IN: No built-in tool gives you structured, machine-readable
+    symbol data with line ranges, signatures, and parent class info. Use this when you
+    need to programmatically filter/count/compare symbols.
 
     Returns detailed symbol information including:
     - name: Symbol name
@@ -1261,12 +1322,17 @@ def get_symbols(
 # ===========================================================================
 # Tool 15: diff_summary - Smart git changes summary
 # ===========================================================================
+# Ham diff_summary tom tat cac thay doi trong git (files, functions added/modified/deleted)
 @mcp.tool()
 def diff_summary(
     workspace_path: str,
     target: str = "HEAD",
 ) -> str:
     """Get smart summary of git changes: files changed, functions added/modified/deleted.
+
+    WHY USE THIS OVER BUILT-IN: Your built-in git diff shows line-level changes.
+    This tool uses Tree-sitter to compare symbol-level changes - telling you which
+    FUNCTIONS and CLASSES were added, deleted, or modified, not just which lines changed.
 
     Args:
         workspace_path: Workspace root

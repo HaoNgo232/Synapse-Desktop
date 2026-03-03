@@ -60,6 +60,7 @@ MCP_TARGETS: dict[str, dict] = {
 SERVER_NAME = "synapse"
 
 
+# Ham _get_vscode_mcp_json_path tra ve duong dan file cau hinh MCP cua VS Code theo tung OS
 def _get_vscode_mcp_json_path() -> Path:
     """Tra ve duong dan toi VS Code User mcp.json theo OS.
 
@@ -82,6 +83,7 @@ def _get_vscode_mcp_json_path() -> Path:
     return home / ".config" / "Code" / "User" / "mcp.json"
 
 
+# Ham get_mcp_command tu dong xac dinh lenh khoi chay mcp server dua tren moi truong (AppImage hoac script)
 def get_mcp_command() -> list[str]:
     """Tu dong phat hien lenh khoi chay MCP Server."""
     if getattr(sys, "frozen", False):
@@ -98,6 +100,7 @@ def get_mcp_command() -> list[str]:
     return [sys.executable, str(main_script), "--run-mcp"]
 
 
+# Ham build_synapse_entry tao mot entry dictionary cho Synapse mcp server phu hop voi format cua tung client
 def build_synapse_entry(target_name: str) -> dict:
     """Tao entry config cho Synapse MCP Server theo target cu the."""
     target = MCP_TARGETS[target_name]
@@ -121,6 +124,7 @@ def build_synapse_entry(target_name: str) -> dict:
     return entry
 
 
+# Ham get_config_path tra ve Path tuyet doi den file cau hinh cua target
 def get_config_path(target_name: str) -> Path:
     """Lay duong dan tuyet doi cua file config cho target."""
     raw = MCP_TARGETS[target_name]["config_path"]
@@ -129,6 +133,7 @@ def get_config_path(target_name: str) -> Path:
     return Path(raw).expanduser()
 
 
+# Ham read_existing_config doc file cau hinh JSON hien tai cua AI client
 def read_existing_config(target_name: str) -> dict:
     """Doc file config hien tai. Tra ve dict rong neu file chua ton tai."""
     config_path = get_config_path(target_name)
@@ -140,6 +145,7 @@ def read_existing_config(target_name: str) -> dict:
         return {}
 
 
+# Ham merge_config ho tro merge cau hinh Synapse vao file config co san ma khong lam mat cac server khac
 def merge_config(target_name: str) -> dict:
     """Doc config hien tai va merge entry Synapse vao, giu nguyen cac server khac."""
     target = MCP_TARGETS[target_name]
@@ -173,12 +179,14 @@ def merge_config(target_name: str) -> dict:
     return existing
 
 
+# Ham preview_json tao chuoi JSON da merge de hien thi cho nguoi dung kiem tra truoc khi cai dat
 def preview_json(target_name: str) -> str:
     """Tra ve JSON da merge de hien thi preview cho nguoi dung."""
     merged = merge_config(target_name)
     return json.dumps(merged, indent=2, ensure_ascii=False)
 
 
+# Ham install_config thuc hien ghi de file cau hinh sau khi da merge
 def install_config(target_name: str) -> tuple[bool, str]:
     """Ghi config da merge vao file. Tra ve (success, message)."""
     config_path = get_config_path(target_name)
@@ -195,6 +203,7 @@ def install_config(target_name: str) -> tuple[bool, str]:
         return False, f"Failed to write config: {e}"
 
 
+# Ham check_installed kiem tra xem Synapse mcp da duoc cau hinh trong client hay chua
 def check_installed(target_name: str) -> bool:
     """Kiem tra Synapse da duoc cai trong config cua target chua."""
     target = MCP_TARGETS[target_name]
@@ -213,6 +222,7 @@ def check_installed(target_name: str) -> bool:
     return isinstance(root, dict) and SERVER_NAME in root
 
 
+# Ham _needs_update kiem tra xem command trong config da cai co khac voi command hien tai khong
 def _needs_update(target_name: str) -> bool:
     """Kiem tra config da cai co dang tro den command hien tai khong.
 
@@ -252,6 +262,7 @@ def _needs_update(target_name: str) -> bool:
         ) or current_entry.get("args") != new_entry.get("args")
 
 
+# Ham auto_update_installed_configs tu dong cap nhat lai command trong cac config mcp neu app bi di chuyen
 def auto_update_installed_configs() -> list[str]:
     """Tu dong cap nhat command trong tat ca config MCP da cai dat.
 
@@ -261,7 +272,7 @@ def auto_update_installed_configs() -> list[str]:
 
     Tra ve danh sach ten target da duoc cap nhat.
 
-    An toan de goi moi lan app khoi dong — neu command khong doi thi
+    An toan de goi moi lan app khoi dong - neu command khong doi thi
     khong ghi file nao ca.
     """
     if not getattr(sys, "frozen", False):

@@ -99,16 +99,16 @@ class DependencyResolver:
 
     def build_file_index(self, tree: Optional[TreeItem]) -> None:
         """
-        Build index từ TreeItem để hỗ trợ resolve imports.
+        Build index tu TreeItem de ho tro resolve imports.
 
-        Index bao gồm:
+        Index bao gom:
         - filename -> full_path mapping
         - module_name -> file_path mapping (cho Python modules)
 
         Args:
-            tree: TreeItem root của file tree
+            tree: TreeItem root cua file tree
         """
-        # Load tsconfig/jsconfig for alias support (luôn load, không phụ thuộc tree)
+        # Load tsconfig/jsconfig for alias support (luon load, khong phu thuoc tree)
         self._load_ts_config()
 
         if not tree:
@@ -117,6 +117,44 @@ class DependencyResolver:
         self._file_index.clear()
         self._module_index.clear()
         self._index_recursive(tree)
+
+    def build_file_index_from_disk(self, workspace_root: Path) -> None:
+        """
+        Build file index truc tiep tu disk ma khong can TreeItem.
+
+        Day la phuong thuc MCP-friendly: MCP khong co UI tree nen can
+        scan filesystem truc tiep. Su dung collect_files_from_disk()
+        de lay danh sach files roi build _file_index va _module_index.
+
+        Args:
+            workspace_root: Thu muc goc cua workspace
+        """
+        from services.workspace_index import collect_files_from_disk
+
+        # Load tsconfig/jsconfig for alias support
+        self._load_ts_config()
+
+        self._file_index.clear()
+        self._module_index.clear()
+
+        all_files = collect_files_from_disk(
+            workspace_root, workspace_path=workspace_root
+        )
+
+        for file_path_str in all_files:
+            file_path = Path(file_path_str)
+
+            # Index by filename (cho fallback search)
+            self._file_index[file_path.name] = file_path
+
+            # Index by module path (cho Python imports)
+            try:
+                rel_path = file_path.relative_to(self.workspace_root)
+                if file_path.suffix == ".py":
+                    module_name = str(rel_path.with_suffix("")).replace(os.sep, ".")
+                    self._module_index[module_name] = file_path
+            except ValueError:
+                pass
 
     def _load_ts_config(self) -> None:
         """

@@ -8,6 +8,9 @@ nhung wrap lai trong mot API don gian va testable.
 Note: build_prompt() la high-level API nhan file_paths va settings,
 noi bo se goi cac functions cu the tu core.prompt_generator theo
 dung signatures cua chung.
+
+build_prompt_full() la API mo rong tra ve BuildResult voi metadata day du
+(per-file token counts, trim notes, dependency graph) phuc vu multi-agent workflow.
 """
 
 import logging
@@ -27,8 +30,10 @@ from core.prompt_generator import (
     build_smart_prompt,
     OutputStyle,
 )
+from core.prompting.file_collector import collect_files
 from core.utils.file_utils import TreeItem
 from core.utils.git_utils import get_git_diffs, get_git_logs
+from services.prompt_types import BuildResult, FileTokenInfo
 
 
 # Mapping output_format string -> OutputStyle enum
@@ -77,7 +82,10 @@ class PromptBuildService:
         include_xml_formatting: bool = False,
     ) -> Tuple[str, int, Dict[str, int]]:
         """
-        Generate prompt theo output format.
+        Generate prompt theo output format (backward-compatible API).
+
+        Goi noi bo build_prompt_full() va chuyen doi ket qua
+        ve tuple 3 phan tu de tuong thich voi code cu.
 
         Args:
             file_paths: Danh sach file paths da resolve
@@ -90,9 +98,70 @@ class PromptBuildService:
             selected_paths: Set paths da chon cho file map (optional)
 
         Returns:
-            Tuple (prompt_text, token_count)
+            Tuple (prompt_text, token_count, breakdown)
         """
-        # Initialize variables to avoid uninitialized errors in breakdown calculation
+        result = self.build_prompt_full(
+            file_paths=file_paths,
+            workspace=workspace,
+            instructions=instructions,
+            output_format=output_format,
+            include_git_changes=include_git_changes,
+            use_relative_paths=use_relative_paths,
+            tree_item=tree_item,
+            selected_paths=selected_paths,
+            include_xml_formatting=include_xml_formatting,
+        )
+        return result.to_legacy_tuple()
+
+    def build_prompt_full(
+        self,
+        file_paths: List[Path],
+        workspace: Path,
+        instructions: str,
+        output_format: str,
+        include_git_changes: bool,
+        use_relative_paths: bool,
+        tree_item: Optional[TreeItem] = None,
+        selected_paths: Optional[Set[str]] = None,
+        include_xml_formatting: bool = False,
+        dependency_files: Optional[List[Path]] = None,
+        profile: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+    ) -> BuildResult:
+        """
+        Generate prompt va tra ve BuildResult day du voi metadata.
+
+        Day la API chinh cho multi-agent workflow. Tra ve BuildResult
+        bao gom per-file token counts, breakdown, trim notes, va
+        dependency graph metadata.
+
+        Args:
+            file_paths: Danh sach primary file paths da resolve
+            workspace: Workspace root path
+            instructions: User instructions text
+            output_format: "xml", "json", "plain", hoac "smart"
+            include_git_changes: Co include git diff khong
+            use_relative_paths: Co dung relative paths khong
+            tree_item: Root TreeItem cho file map (optional)
+            selected_paths: Set paths da chon cho file map (optional)
+            include_xml_formatting: Co bao gom OPX khong
+            dependency_files: Danh sach dependency file paths (Feature 3)
+            profile: Ten profile da ap dung (Feature 1, chi de luu metadata)
+            max_tokens: Gioi han token toi da (None = khong gioi han)
+
+        Returns:
+            BuildResult voi tat ca metadata can thiet
+        """
+        # Gop tat ca files: primary + dependencies
+        all_file_paths = list(file_paths)
+        dep_path_set: set[str] = set()
+        if dependency_files:
+            for dp in dependency_files:
+                if dp not in all_file_paths:
+                    all_file_paths.append(dp)
+                dep_path_set.add(str(dp))
+
+        # Initialize variables de tranh loi uninitialized trong breakdown
         file_map = ""
         project_rules = ""
         git_diffs = None
@@ -101,7 +170,7 @@ class PromptBuildService:
 
         if output_format == "smart":
             prompt = self._build_smart(
-                file_paths,
+                all_file_paths,
                 workspace,
                 instructions,
                 include_git_changes,
@@ -134,12 +203,12 @@ class PromptBuildService:
                 output_format, generate_file_contents_xml
             )
             file_contents = content_gen(
-                selected_paths={str(p) for p in file_paths},
+                selected_paths={str(p) for p in all_file_paths},
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
             )
 
-            # 3. Assemble prompt voi git data va xml formatting
+            # 4. Assemble prompt voi git data va xml formatting
             output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
             prompt = generate_prompt(
                 file_map=file_map,
@@ -181,7 +250,7 @@ class PromptBuildService:
         }
 
         if output_format == "smart":
-            # Smart context uses build_smart_prompt which doesn't have OPX
+            # Smart context dung build_smart_prompt, khong co OPX
             breakdown["content_tokens"] = self._tokenization_service.count_tokens(
                 getattr(self, "_last_smart_contents", "")
             )
@@ -202,11 +271,203 @@ class PromptBuildService:
                     opx_t = 0
             breakdown["opx_tokens"] = opx_t
 
-        # Calculate structure tokens (overhead of tags and assembly)
+        # Tinh structure tokens (overhead cua tags va assembly)
         sum_parts = sum(breakdown.values())
         breakdown["structure_tokens"] = max(0, token_count - sum_parts)
 
-        return prompt, token_count, breakdown
+        # ====================================================================
+        # Per-file token counting - dem token cho tung file rieng le
+        # ====================================================================
+        per_file_tokens = self._count_per_file_tokens(
+            all_file_paths, workspace, use_relative_paths, dep_path_set
+        )
+
+        # ====================================================================
+        # Auto-trim: cat giam context khi vuot max_tokens budget
+        # ====================================================================
+        trimmed = False
+        trimmed_notes: list[str] = []
+
+        if max_tokens is not None and token_count > max_tokens:
+            from core.prompting.context_trimmer import (
+                ContextTrimmer,
+                PromptComponents,
+            )
+
+            # Thu thap per-file contents de trimmer xu ly
+            file_content_dict: Dict[str, str] = {}
+            dep_display_paths: set[str] = set()
+            entries = collect_files(
+                selected_paths={str(p) for p in all_file_paths},
+                workspace_root=workspace,
+                use_relative_paths=use_relative_paths,
+            )
+            for entry in entries:
+                if entry.content is not None:
+                    file_content_dict[entry.display_path] = entry.content
+                    if str(entry.path) in dep_path_set:
+                        dep_display_paths.add(entry.display_path)
+
+            git_diffs_text = ""
+            git_logs_text = ""
+            if git_diffs:
+                git_diffs_text = (git_diffs.work_tree_diff or "") + (
+                    git_diffs.staged_diff or ""
+                )
+            if git_logs:
+                git_logs_text = git_logs.log_content or ""
+
+            components = PromptComponents(
+                instructions=instructions,
+                project_rules=project_rules,
+                file_map=file_map,
+                file_contents=file_content_dict,
+                git_diffs_text=git_diffs_text,
+                git_logs_text=git_logs_text,
+                structure_overhead=breakdown.get("structure_tokens", 0)
+                + breakdown.get("opx_tokens", 0),
+                dependency_paths=dep_display_paths,
+            )
+
+            trimmer = ContextTrimmer(self._tokenization_service, max_tokens)
+            trim_result = trimmer.trim(components)
+
+            if trim_result.levels_applied > 0:
+                trimmed = True
+                trimmed_notes = trim_result.notes
+
+                # Re-assemble prompt tu trimmed components
+                trimmed_comp = trim_result.components
+                if output_format == "smart":
+                    prompt = self._build_smart(
+                        all_file_paths,
+                        workspace,
+                        trimmed_comp.instructions,
+                        bool(trimmed_comp.git_diffs_text),
+                        use_relative_paths,
+                        tree_item,
+                        selected_paths,
+                    )
+                else:
+                    output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
+                    # Re-format trimmed in-memory data
+                    file_contents = self._reconstruct_file_contents(
+                        trimmed_comp.file_contents, output_format
+                    )
+
+                    prompt = generate_prompt(
+                        file_map=trimmed_comp.file_map,
+                        file_contents=file_contents,
+                        user_instructions=trimmed_comp.instructions,
+                        output_style=output_style,
+                        include_xml_formatting=include_xml_formatting,
+                        git_diffs=git_diffs if trimmed_comp.git_diffs_text else None,
+                        git_logs=git_logs if trimmed_comp.git_logs_text else None,
+                        project_rules=trimmed_comp.project_rules,
+                        workspace_root=workspace,
+                    )
+
+                # Append trimmed notes section vao prompt
+                if trimmed_notes:
+                    notes_section = "\n<trimmed_context_notes>\n"
+                    for note in trimmed_notes:
+                        notes_section += f"- {note}\n"
+                    notes_section += "</trimmed_context_notes>\n"
+                    prompt += notes_section
+
+                token_count = self._tokenization_service.count_tokens(prompt)
+
+                # Re-count per-file tokens
+                per_file_tokens = self._count_per_file_tokens(
+                    all_file_paths, workspace, use_relative_paths, dep_path_set
+                )
+
+        # Tao BuildResult day du
+        return BuildResult(
+            prompt_text=prompt,
+            total_tokens=token_count,
+            file_count=len(all_file_paths),
+            format=output_format,
+            profile=profile,
+            trimmed=trimmed,
+            trimmed_notes=trimmed_notes,
+            breakdown=breakdown,
+            files=per_file_tokens,
+            dependency_graph=None,  # Feature 3 se cap nhat tu MCP layer
+        )
+
+    def _reconstruct_file_contents(
+        self, trimmed_contents: Dict[str, str], output_format: str
+    ) -> str:
+        """
+        Re-format trimmed dictionary content vao string theo output_format.
+        (Thay vi doc lai tu disk).
+        """
+        if not trimmed_contents:
+            return ""
+
+        parts = []
+        if output_format == "xml":
+            for path, content in trimmed_contents.items():
+                parts.append(f'<file path="{path}">\n{content}\n</file>')
+            return "\n\n".join(parts)
+        elif output_format == "json":
+            import json as _json
+
+            arr = []
+            for path, content in trimmed_contents.items():
+                arr.append({"path": path, "content": content})
+            return _json.dumps(arr, indent=2)
+        else:
+            # plain
+            for path, content in trimmed_contents.items():
+                parts.append(f"{path}\n" + "-" * len(path) + f"\n{content}")
+            return "\n\n".join(parts)
+
+    def _count_per_file_tokens(
+        self,
+        file_paths: List[Path],
+        workspace: Path,
+        use_relative_paths: bool,
+        dep_path_set: set[str],
+    ) -> List[FileTokenInfo]:
+        """
+        Dem token cho tung file rieng le de cung cap metadata chi tiet.
+
+        Doc content tung file va count tokens. Su dung collect_files
+        da co san de lay content (tranh doc file 2 lan neu can toi uu).
+
+        Args:
+            file_paths: Tat ca file paths (primary + dependency)
+            workspace: Workspace root path
+            use_relative_paths: Co dung relative paths khong
+            dep_path_set: Set cac dependency file paths (str) de danh dau is_dependency
+
+        Returns:
+            List[FileTokenInfo] voi token count per file
+        """
+        entries = collect_files(
+            selected_paths={str(p) for p in file_paths},
+            workspace_root=workspace,
+            use_relative_paths=use_relative_paths,
+        )
+
+        result: list[FileTokenInfo] = []
+        for entry in entries:
+            tokens = 0
+            if entry.content:
+                tokens = self._tokenization_service.count_tokens(entry.content)
+
+            result.append(
+                FileTokenInfo(
+                    path=entry.display_path,
+                    tokens=tokens,
+                    is_dependency=str(entry.path) in dep_path_set,
+                    was_trimmed=False,
+                )
+            )
+
+        return result
 
     def count_tokens(self, text: str) -> int:
         """Dem so luong tokens trong text.

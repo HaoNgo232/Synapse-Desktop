@@ -59,7 +59,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
   - `estimate_tokens` — Accurate LLM token counting using proper tokenizers.
   - `get_imports_graph` — Cross-file dependency graph resolution.
   - `diff_summary` — Function-level git change analysis.
-  - `build_prompt` — Package files into structured prompt format.
+  - `build_prompt` — Package files into a structured prompt format (Ideal for Cross-Agent Delegation).
   - `find_references` — Find symbol usages (filters out comments and strings).
   - `manage_selection` — Track selected files for context building.
 
@@ -88,6 +88,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 1. **Setup MCP Integration** (Settings → MCP Server Integration). Click **Install to Cursor** (or your preferred AI client).
 2. **Use AI Client**: Open your AI client. Synapse tools are now available directly in AI conversations. Example: *"Use `get_project_structure` to analyze this codebase."*
 3. **AI Explores Autonomously**: The AI client spawns Synapse in headless mode (`--run-mcp`). No manual copy/paste—the AI uses Synapse's advanced AST and dependency parsing natively.
+4. **Cross-Agent Delegation (Pro Tip)**: Ask your Planning Agent to use the `build_prompt` tool to generate a `spec.xml` file containing the full project architecture. Then, tell your Coding Agent to read that file. This transfers massive context between AI agents efficiently without crashing the chat window!
 
 *(Manual MCP Server Launch: `python main_window.py --run-mcp /path/to/workspace`)*
 

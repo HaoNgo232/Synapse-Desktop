@@ -683,13 +683,21 @@ def build_prompt(
     structured prompt format with directory tree, project rules, git context,
     and token breakdown. This is equivalent to Synapse Desktop's "Copy Context" button.
 
-    This is the full-power prompt generation tool - equivalent to Synapse Desktop's
-    "Copy" button. It assembles everything an AI needs to understand and work with
-    the selected code into a single structured prompt.
+    This is a "Super Context Bundle" generator. It assembles everything an AI needs
+    to understand and work with the selected code into a single structured prompt.
 
-    When to use: When you need to create a comprehensive context package for analysis,
-    code review, or to pass to another AI. Use output_file to write large prompts to
-    disk instead of returning them inline (saves token bandwidth).
+    When to use:
+    1. Cross-Agent Delegation: A planning agent runs this with `output_file="spec.xml"`.
+       A coding sub-agent then uses its native `read_file` tool to read "spec.xml" and
+       instantly understands the entire project architecture without needing to explore manually.
+    2. Deep Code Review: Use `include_git_changes=True` to get full files + latest git diffs
+       in one package to understand how changes impact the global scope.
+    3. Large Refactors/Features: When working across multiple modules (e.g., UI, DB, API),
+       gather all relevant files into one prompt so you don't lose the global architecture context.
+
+    Note: Use `output_file` to write large prompts to disk instead of returning them inline
+    to save token bandwidth and avoid crashing the chat interface. You don't need a special
+    tool to read the prompt back; just use your built-in file reading tool on the output file.
 
     Args:
         workspace_path: Absolute path to the workspace root directory.

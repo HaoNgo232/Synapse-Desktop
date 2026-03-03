@@ -276,38 +276,52 @@ class TestDependencyInjection:
 
     def test_context_view_accepts_injected_services(self):
         """ContextViewQt nhan prompt_builder va clipboard_service qua constructor."""
+        from views.context_view_qt import ContextViewQt
+
         mock_builder = Mock()
         mock_clipboard = Mock()
 
-        # Mock QWidget.__init__ de tranh Qt runtime
-        with patch("views.context_view_qt.QWidget.__init__"):
+        # Dung __new__ de tranh side-effects cua QWidget.__init__ va UI building
+        view = ContextViewQt.__new__(ContextViewQt)
+
+        # Inject mocks truc tiep vao private fields (vi __init__ khong duoc goi)
+        # Test nay verify rang logic DI trong __init__ hoat dong,
+        # nhung vi __init__ ton kem va gay loi khi bi mock, ta test gian tiep
+        # hoac giả lập logic gán.
+
+        # Thuc te test case nay nen duoc viet lai de goi __init__ nhung patch it hon.
+        # Fix: Su dung patch duy nhat QWidget.__init__ nhung dam bao super() van chay duoc
+        # phan nao do hoac don gian la tranh loi call base class.
+
+        with patch("views.context_view_qt.QWidget.__init__", return_value=None):
             with patch("views.context_view_qt.UIBuilderMixin._build_ui"):
                 with patch("views.context_view_qt.FileWatcher"):
-                    from views.context_view_qt import ContextViewQt
-
-                    view = ContextViewQt(
-                        get_workspace=lambda: Path("/test"),
-                        prompt_builder=mock_builder,
-                        clipboard_service=mock_clipboard,
-                    )
+                    with patch("PySide6.QtGui.QShortcut"):
+                        # Goi __init__ thuc su nhung QWidget.__init__ da bi neutralised
+                        view.__init__(
+                            get_workspace=lambda: Path("/test"),
+                            prompt_builder=mock_builder,
+                            clipboard_service=mock_clipboard,
+                        )
 
                     assert view._prompt_builder is mock_builder
                     assert view._clipboard_service is mock_clipboard
 
     def test_context_view_creates_defaults_when_none(self):
         """ContextViewQt tao default services khi khong truyen vao."""
-        with patch("views.context_view_qt.QWidget.__init__"):
+        from views.context_view_qt import ContextViewQt
+        from services.prompt_build_service import (
+            PromptBuildService,
+            QtClipboardService,
+        )
+
+        with patch("views.context_view_qt.QWidget.__init__", return_value=None):
             with patch("views.context_view_qt.UIBuilderMixin._build_ui"):
                 with patch("views.context_view_qt.FileWatcher"):
-                    from views.context_view_qt import ContextViewQt
-                    from services.prompt_build_service import (
-                        PromptBuildService,
-                        QtClipboardService,
-                    )
-
-                    view = ContextViewQt(
-                        get_workspace=lambda: Path("/test"),
-                    )
+                    with patch("PySide6.QtGui.QShortcut"):
+                        view = ContextViewQt(
+                            get_workspace=lambda: Path("/test"),
+                        )
 
                     assert isinstance(view._prompt_builder, PromptBuildService)
                     assert isinstance(view._clipboard_service, QtClipboardService)

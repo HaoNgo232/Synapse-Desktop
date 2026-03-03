@@ -151,18 +151,18 @@ def test_copy_context_no_workspace(context_view):
     """Kiem tra _copy_context no workspace (line 441-444)."""
     view = context_view
     view.get_workspace = lambda: None
-    with patch("components.toast_qt.toast_error") as mock_error:
+    with patch.object(view, "show_status") as mock_status:
         view._copy_controller._copy_context()
-        mock_error.assert_called_with("No workspace selected")
+        mock_status.assert_called_with("No workspace selected", is_error=True)
 
 
 def test_copy_context_no_files(context_view):
     """Kiem tra _copy_context no files (line 447-449)."""
     view = context_view
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[])
-    with patch("components.toast_qt.toast_error") as mock_error:
+    with patch.object(view, "show_status") as mock_status:
         view._copy_controller._copy_context()
-        mock_error.assert_called_with("No files selected")
+        mock_status.assert_called_with("No files selected", is_error=True)
 
 
 def test_copy_context_cache_hit(context_view, tmp_path):
@@ -203,9 +203,11 @@ def test_copy_context_cache_hit_copy_fail(context_view, tmp_path):
         view._clipboard_service.copy_to_clipboard = MagicMock(
             return_value=(False, "clipboard error")
         )
-        with patch("components.toast_qt.toast_error") as mock_error:
+        with patch.object(view, "show_status") as mock_status:
             view._copy_controller._copy_context()
-            mock_error.assert_called()
+            # It should call show_status with error
+            assert mock_status.called
+            assert "Copy failed" in mock_status.call_args[0][0]
 
 
 def test_copy_context_background_no_security(context_view, tmp_path):
@@ -268,18 +270,18 @@ def test_copy_smart_no_workspace(context_view):
     """Kiem tra _copy_smart_context no workspace (line 762-765)."""
     view = context_view
     view.get_workspace = lambda: None
-    with patch("components.toast_qt.toast_error") as mock_error:
+    with patch.object(view, "show_status") as mock_status:
         view._copy_controller._copy_smart_context()
-        mock_error.assert_called_with("No workspace selected")
+        mock_status.assert_called_with("No workspace selected", is_error=True)
 
 
 def test_copy_smart_no_files(context_view):
     """Kiem tra _copy_smart_context no files (line 768-770)."""
     view = context_view
     view.file_tree_widget.get_selected_paths = MagicMock(return_value=[])
-    with patch("components.toast_qt.toast_error") as mock_error:
+    with patch.object(view, "show_status") as mock_status:
         view._copy_controller._copy_smart_context()
-        mock_error.assert_called_with("No files selected")
+        mock_status.assert_called_with("No files selected", is_error=True)
 
 
 def test_copy_smart_cache_hit(context_view, tmp_path):
@@ -334,9 +336,9 @@ def test_copy_tree_map_no_workspace(context_view):
     """Kiem tra _copy_tree_map_only no workspace (line 836-839)."""
     view = context_view
     view.get_workspace = lambda: None
-    with patch("components.toast_qt.toast_error") as mock_error:
+    with patch.object(view, "show_status") as mock_status:
         view._copy_controller._copy_tree_map_only()
-        mock_error.assert_called_with("No workspace selected")
+        mock_status.assert_called_with("No workspace selected", is_error=True)
 
 
 def test_copy_tree_map_cache_hit(context_view, tmp_path):
@@ -411,9 +413,9 @@ def test_show_diff_only_dialog_no_workspace(context_view):
     """Kiem tra _show_diff_only_dialog no workspace (line 935-938)."""
     view = context_view
     view.get_workspace = lambda: None
-    with patch("components.toast_qt.toast_error") as mock_error:
+    with patch.object(view, "show_status") as mock_status:
         view._copy_controller._show_diff_only_dialog()
-        mock_error.assert_called_with("No workspace selected")
+        mock_status.assert_called_with("No workspace selected", is_error=True)
 
 
 def test_show_diff_only_dialog(context_view):
@@ -436,10 +438,11 @@ def test_show_diff_only_dialog_exception(context_view):
     with (
         patch("components.dialogs_qt.DiffOnlyDialogQt", side_effect=Exception("Fail")),
         patch("services.settings_manager.add_instruction_history"),
-        patch("components.toast_qt.toast_error") as mock_error,
+        patch.object(view, "show_status") as mock_status,
     ):
         view._copy_controller._show_diff_only_dialog()
-        assert "Error" in mock_error.call_args[0][0]
+        assert mock_status.called
+        assert "Error" in mock_status.call_args[0][0]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -557,10 +560,11 @@ def test_do_copy_context_exception(context_view, tmp_path):
             "views.context.copy_action_controller.load_app_settings",
             side_effect=Exception("Fail"),
         ),
-        patch("components.toast_qt.toast_error") as mock_error,
+        patch.object(view, "show_status") as mock_status,
     ):
         view._copy_controller._do_copy_context(gen, tmp_path, [], "instr", False)
-        assert "Error" in mock_error.call_args[0][0]
+        assert mock_status.called
+        assert "Error" in mock_status.call_args[0][0]
 
 
 # ═══════════════════════════════════════════════════════════════

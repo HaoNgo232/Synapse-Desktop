@@ -35,6 +35,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
   - `Context`: Full content of the files.
   - `Smart`: Only signatures/structures (reduces tokens by 70–80%).
   - `Diff Only`: Only git changes (for code review).
+- **Context Presets**: Save and restore file selections with instructions for recurring tasks. Quick access via dropdown or `Ctrl+Shift+S` shortcut. [Learn more](docs/PRESETS.md)
 - **AI Suggest Select**: Write your instructions, and a connected LLM automatically selects the most relevant files from the tree.
 - **Prompt Templates**: Built-in and custom templates for common tasks (bug hunting, refactoring, security audit, etc.).
 - **Related Files**: Automatically discover and include files that import or are imported by your selection.

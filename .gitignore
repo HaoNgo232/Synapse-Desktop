@@ -12,3 +12,7 @@ stubs/
 lint_output.json
 .synapse
 build-win/
+
+# Optional: Uncomment to keep presets personal (or commit to share with team)
+# .synapse_presets.json
+.synapse_presets.json

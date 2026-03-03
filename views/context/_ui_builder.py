@@ -339,7 +339,7 @@ class UIBuilderMixin:
         return toolbar
 
     def _build_left_panel(self: Any) -> QFrame:
-        """Build left panel chi chua header + file tree (controls da len toolbar)."""
+        """Build left panel chi chua header + preset widget + file tree."""
         panel = QFrame()
         panel.setProperty("class", "surface")
         layout = QVBoxLayout(panel)
@@ -357,6 +357,31 @@ class UIBuilderMixin:
         header.addWidget(files_label)
         header.addStretch()
         layout.addLayout(header)
+
+        # === CLEANUP OLD PRESET WIDGET FIRST ===
+        if hasattr(self, "_preset_widget") and self._preset_widget:
+            # Disconnect OLD widget before losing reference
+            try:
+                if hasattr(self, "file_tree_widget") and self.file_tree_widget:
+                    self.file_tree_widget.selection_changed.disconnect(
+                        self._preset_widget._on_selection_changed_external
+                    )
+            except (RuntimeError, TypeError):
+                pass
+
+            # Clean up old widget
+            self._preset_widget.deleteLater()
+            self._preset_widget = None
+
+        # === CREATE NEW PRESET WIDGET ===
+        from components.preset_widget import PresetWidget
+
+        _preset_controller = getattr(self, "_preset_controller", None)
+        if _preset_controller is not None:
+            self._preset_widget = PresetWidget(
+                controller=_preset_controller,
+            )
+            layout.addWidget(self._preset_widget)
 
         # File tree widget (da co san search bar, select/deselect all)
         # Nhan ignore_engine tu ContextViewQt (hoac fallback sang instance moi)
@@ -379,6 +404,13 @@ class UIBuilderMixin:
         self.file_tree_widget.selection_changed.connect(self._on_selection_changed)
         self.file_tree_widget.file_preview_requested.connect(self._preview_file)
         self.file_tree_widget.token_counting_done.connect(self._update_token_display)
+
+        # Connect NEW preset widget to selection changes
+        if hasattr(self, "_preset_widget") and self._preset_widget:
+            self._preset_widget.connect_selection_changed(
+                self.file_tree_widget.selection_changed
+            )
+
         layout.addWidget(self.file_tree_widget, stretch=1)
 
         return panel

@@ -109,10 +109,70 @@ class ContextViewQt(
             self, parent=None
         )
 
+        # PresetController: quan ly context presets
+        from views.context.preset_controller import PresetController
+
+        self._preset_controller: PresetController = PresetController(self, parent=None)
+
         # Build UI (from UIBuilderMixin)
         self._build_ui()
 
+        # Setup keyboard shortcuts
+        self._setup_shortcuts()
+
     # ===== Public API =====
+
+    def _setup_shortcuts(self) -> None:
+        """Setup keyboard shortcuts."""
+        from PySide6.QtGui import QShortcut, QKeySequence
+
+        # Ctrl+Shift+S: Quick save preset
+        save_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        save_shortcut.activated.connect(self._quick_save_preset)
+
+        # Ctrl+Shift+L: Focus preset combo
+        focus_shortcut = QShortcut(QKeySequence("Ctrl+Shift+L"), self)
+        focus_shortcut.activated.connect(self._focus_preset_combo)
+
+    def _quick_save_preset(self) -> None:
+        """Quick save with proper confirmation dialogs."""
+        if not hasattr(self, "_preset_controller") or self._preset_controller is None:
+            return
+
+        if not self.get_selected_paths():
+            from components.toast_qt import ToastManager, ToastType
+
+            manager = ToastManager.instance()
+            if manager:
+                manager.show(
+                    ToastType.ERROR,
+                    "No files selected. Select files before saving preset.",
+                )
+            return
+
+        try:
+            # Always delegate to widget to ensure consistent UI behavior
+            if hasattr(self, "_preset_widget") and self._preset_widget:
+                self._preset_widget.trigger_save_action()
+            else:
+                # Fallback: create new preset if widget unavailable
+                from PySide6.QtWidgets import QInputDialog
+
+                name, ok = QInputDialog.getText(self, "New Preset", "Preset name:")
+                if ok and name.strip():
+                    self._preset_controller.create_preset(name.strip())
+        except (RuntimeError, AttributeError) as e:
+            logger.error(f"Failed to save preset: {e}")
+
+    def _focus_preset_combo(self) -> None:
+        """Focus preset combo box."""
+        if not hasattr(self, "_preset_widget") or self._preset_widget is None:
+            return
+        try:
+            if self._preset_widget.isVisible():
+                self._preset_widget.focus_selector()
+        except (RuntimeError, AttributeError):
+            pass
 
     def on_workspace_changed(self, workspace_path: Path) -> None:
         """Handle workspace change."""
@@ -151,17 +211,21 @@ class ContextViewQt(
         cache_registry.invalidate_for_workspace()
         self._copy_controller._prompt_cache.invalidate_all()
 
-        # 4. Load new tree (this increments generation counter, cancels old workers)
+        # 4. Reset preset controller BEFORE loading tree to avoid race condition
+        if self._preset_controller:
+            self._preset_controller.on_workspace_changed(workspace_path)
+
+        # 5. Load new tree (this increments generation counter, cancels old workers)
         self.file_tree_widget.load_tree(workspace_path)
         self.tree = self.file_tree_widget.get_model()._root_node  # type: ignore
 
-        # 5. Reset token display
+        # 6. Reset token display
         self._token_count_label.setText("0 tokens")
         self._token_stats.update_stats(
             file_count=0, file_tokens=0, instruction_tokens=0
         )
 
-        # 6. Start file watcher for new workspace
+        # 7. Start file watcher for new workspace
         if self._file_watcher and workspace_path.exists():
             self._file_watcher.start(
                 path=workspace_path,
@@ -199,6 +263,23 @@ class ContextViewQt(
     def get_expanded_paths(self) -> List[str]:
         return self.file_tree_widget.get_expanded_paths()
 
+    def set_selected_paths_from_preset(self, paths: Set[str]) -> None:
+        """Adapter: Apply preset selection (replace toàn bộ)."""
+        self.file_tree_widget.set_selected_paths(paths)
+
+    def get_output_style(self) -> OutputStyle:
+        """Adapter: Get current output style."""
+        return self._selected_output_style
+
+    def show_status(self, message: str, is_error: bool = False) -> None:
+        """Adapter: Show status message via toast."""
+        from components.toast_qt import ToastManager, ToastType
+
+        manager = ToastManager.instance()
+        if manager and message:
+            toast_type = ToastType.ERROR if is_error else ToastType.SUCCESS
+            manager.show(toast_type, message)
+
     # ===== Protocol Adapter Methods (cho Controllers) =====
     # Cac methods nay implement Protocol interfaces can thiet boi controllers
     # Ma khong expose chi tiet noi tai cua ContextViewQt.
@@ -223,14 +304,6 @@ class ContextViewQt(
         """Adapter: reload file tree widget."""
         self.file_tree_widget.load_tree(workspace)
 
-    def show_status(self, message: str, is_error: bool = False) -> None:
-        """
-        Adapter cho controller protocol (public version cua _show_status).
-
-        Delegate sang _show_status (private method cua mixin).
-        """
-        self._show_status(message, is_error=is_error)
-
     def scan_full_tree(self, workspace: Path):
         """
         Adapter: Scan full workspace tree de build file index day du.
@@ -240,9 +313,6 @@ class ContextViewQt(
         if not self._copy_controller:
             return None
         return self._copy_controller._scan_full_tree(workspace)
-
-    def get_output_style(self):
-        return self._selected_output_style
 
     def get_total_tokens(self) -> int:
         return self.file_tree_widget.get_total_tokens()
@@ -433,6 +503,19 @@ class ContextViewQt(
         self._ai_suggest_generation += 1
         self._cancel_ai_suggest_worker()
 
+        # Cleanup preset widget connections to prevent leaks
+        if hasattr(self, "_preset_widget") and self._preset_widget:
+            try:
+                # Disconnect from file tree selection signal
+                if hasattr(self, "file_tree_widget") and self.file_tree_widget:
+                    self.file_tree_widget.selection_changed.disconnect(
+                        self._preset_widget._on_selection_changed_external
+                    )
+            except (RuntimeError, TypeError, AttributeError):
+                pass
+            self._preset_widget.deleteLater()
+            self._preset_widget = None  # type: ignore
+
         # Detach and destroy controllers manually since they use parent=None
         if self._related_controller:
             self._related_controller.deleteLater()
@@ -443,6 +526,10 @@ class ContextViewQt(
         if self._copy_controller:
             self._copy_controller.deleteLater()
             self._copy_controller = None  # type: ignore
+        if self._preset_controller:
+            self._preset_controller.cleanup()
+            self._preset_controller.deleteLater()
+            self._preset_controller = None  # type: ignore
 
         # Dismiss all toasts
         try:

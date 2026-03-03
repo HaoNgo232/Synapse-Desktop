@@ -1,28 +1,99 @@
-<!-- README.md — Updated 2026-03-02 -->
-<!-- Sections marked with [UPDATED] or [NEW] indicate changes from the original README -->
-
 # Synapse Desktop
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Linux%20(Stable)%20%7C%20Windows%20(Beta)-orange)
 ![Qt](https://img.shields.io/badge/GUI-PySide6%20(Qt6)-41cd52)
-![MCP](https://img.shields.io/badge/MCP-Server%20Ready-blueviolet) <!-- [NEW] -->
-![Version](https://img.shields.io/badge/version-1.1.0-purple) <!-- [UPDATED] -->
+![MCP](https://img.shields.io/badge/MCP-Server%20Ready-blueviolet)
+![Version](https://img.shields.io/badge/version-1.1.0-purple)
 
-<!-- [UPDATED] Expanded project description with MCP integration -->
 A desktop application that bridges your codebase and AI assistants (ChatGPT, Claude, Gemini, or any OpenAI-compatible API). Synapse Desktop lets you select files from a project tree, package them into structured prompts with accurate token counts, and then apply AI-generated code changes back to your codebase — all with visual diffs, auto-backup, and continuous memory across sessions.
 
-**<!-- [NEW] --> Now supports Model Context Protocol (MCP):** Run Synapse as a headless server to expose your workspace directly to AI clients (Cursor, GitHub Copilot, Antigravity) via standardized tools, enabling seamless AI-codebase integration without manual copy/paste workflows.
+**Now supports Model Context Protocol (MCP):** Run Synapse as a headless server to expose your workspace directly to AI clients (Cursor, GitHub Copilot, Claude Code, Antigravity) via standardized tools, enabling seamless AI-codebase integration without manual copy/paste workflows.
 
 > ⚠️ **Platform Status:** Currently stable on **Linux**. The **Windows** version is in experimental/beta phase. **macOS** is currently unsupported/untested due to lack of testing environments.
 
-- **Send Context**: Select files in your project → copy structured prompt → paste into ChatGPT / Claude / Gemini
-- **Apply Changes**: Paste XML response from AI → view visual diff → apply to codebase with auto-backup
-- **AI Suggest Select**: Let an LLM automatically pick the relevant files based on your instructions
-- **<!-- [NEW] --> MCP Server Mode**: Expose Synapse tools directly to AI clients for autonomous workspace exploration
+---
 
-## Application Interface
+## 🌟 Why Use Synapse? (Value Proposition)
+
+When working with LLMs for coding, managing context is a massive pain. Copy-pasting multiple files is tedious, and guessing token counts leads to truncated responses. Applying the AI's response back to your codebase is equally risky. 
+
+**Synapse solves this by providing:**
+- **Smart Context Packaging:** Select files in your project → copy a structured prompt with exact token counts → paste into ChatGPT / Claude.
+- **AST Optimization:** Use "Smart Copy" to extract only function signatures and class definitions from code, saving 70-80% of your token budget while giving the AI the big picture.
+- **Safe Code Application:** Paste XML responses (OPX format) from the AI → view visual diffs → apply to codebase with seamless auto-backup.
+- **Autonomous Exploration (MCP Mode):** Let your AI Editors (Cursor, Copilot, etc.) use Synapse's advanced AST tools, token counting, and dependency graphs natively.
+
+---
+
+## ✨ Key Features
+
+### Context Management
+- **Tree selection**: Browse the directory tree and select files/folders to send.
+- **Copy modes**:
+  - `Context`: Full content of the files.
+  - `Smart`: Only signatures/structures (reduces tokens by 70–80%).
+  - `Diff Only`: Only git changes (for code review).
+- **AI Suggest Select**: Write your instructions, and a connected LLM automatically selects the most relevant files from the tree.
+- **Prompt Templates**: Built-in and custom templates for common tasks (bug hunting, refactoring, security audit, etc.).
+- **Related Files**: Automatically discover and include files that import or are imported by your selection.
+- **Content Search**: Search file contents directly from the tree search bar using `code:` prefix (e.g., `code:def main`).
+
+### Apply AI Changes
+- **OPX format**: AI returns changes in structured XML format.
+- **Visual diff**: Preview changes before applying.
+- **Auto-backup**: Automatically backs up files before overwriting, allowing undo operations.
+- **Continuous Memory**: AI summarizes its actions; Synapse saves this to `.synapse/memory.xml` and injects it into future prompts for multi-session continuity.
+- **Error Context**: One-click "Copy Error Context" provides the AI with detailed diagnostics (file content, search pattern, OPX instruction) for self-repair.
+
+### MCP Server Integration (IDE Backend for AI Agents)
+- **Direct AI Access**: Run Synapse as an MCP server to expose specialized workspace analysis tools directly to AI clients.
+- **15 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
+
+  **Advanced Tools**
+  *Tools providing capabilities like AST parsing and accurate token counting:*
+  - `get_project_structure` — Project summary with frameworks and file stats.
+  - `get_codemap` — Extract AST code structure (function/class signatures only).
+  - `get_symbols` — Structured JSON symbol list for programmatic analysis.
+  - `estimate_tokens` — Accurate LLM token counting using proper tokenizers.
+  - `get_imports_graph` — Cross-file dependency graph resolution.
+  - `diff_summary` — Function-level git change analysis.
+  - `build_prompt` — Package files into structured prompt format.
+  - `find_references` — Find symbol usages (filters out comments and strings).
+  - `manage_selection` — Track selected files for context building.
+
+  **Basic Operations**
+  *Standard filesystem operations. AI clients (like Cursor or Copilot) with native file-reading tools should prioritize their built-in tools over these to reduce MCP overhead:*
+  - `start_session` — Project discovery (structure + tree + todos).
+  - `list_files` — List all workspace files respecting `.gitignore`.
+  - `list_directories` — Show directory tree structure.
+  - `read_file_range` — Read file contents with line range support.
+  - `get_file_metrics` — LOC, functions/classes count, TODO/FIXME/HACK, complexity.
+  - `find_todos` — Scan entire project for TODO/FIXME/HACK comments.
+
+- **Auto-Configuration**: One-click installation of MCP config files via Settings tab (supports Cursor, VS Code, Claude Code).
+- **Headless Operation**: No GUI overhead when running in MCP mode — pure stdio transport for maximum efficiency.
+
+---
+
+## 🚀 Usage Workflow
+
+### 1. Standard GUI Workflow (Copy-Paste)
+1. **Select Context**: Open your project folder. Check the required files in the tree. Token counts update in real time.
+2. **Copy to AI**: Click **Copy Context**, **Copy Smart**, or **Copy Diff Only**. Paste into the AI chat and request the OPX format in return.
+3. **Apply Changes**: Copy the XML response from the AI. Paste into the Apply tab → **Preview** → review diffs → **Apply Changes**.
+
+### 2. MCP Server Workflow (Autonomous)
+1. **Setup MCP Integration** (Settings → MCP Server Integration). Click **Install to Cursor** (or your preferred AI client).
+2. **Use AI Client**: Open your AI client. Synapse tools are now available directly in AI conversations. Example: *"Use `get_project_structure` to analyze this codebase."*
+3. **AI Explores Autonomously**: The AI client spawns Synapse in headless mode (`--run-mcp`). No manual copy/paste—the AI uses Synapse's advanced AST and dependency parsing natively.
+
+*(Manual MCP Server Launch: `python main_window.py --run-mcp /path/to/workspace`)*
+
+---
+
+## 🖥️ Application Interface
 
 **1. Context Management (Main Interface)**
 ![Select files and folders to send to AI](assets/image.png)
@@ -38,310 +109,48 @@ A desktop application that bridges your codebase and AI assistants (ChatGPT, Cla
 
 **4. Settings (Settings Tab)**
 ![Settings interface](assets/image-3.png)
-*Configure file rules, access permissions, privacy options, and <!-- [NEW] --> MCP Server Integration.*
+*Configure file rules, access permissions, privacy options, and MCP Server Integration.*
 
 ---
 
-**Key design decisions:**
+## ⚙️ Installation & Configuration
 
-- **PySide6 (Qt 6)** — Cross-platform native UI with full control over the rendering pipeline. Chosen over Electron for lower memory footprint and faster startup.
-- **Mixin pattern** — `ContextViewQt` composes behavior from `UIBuilderMixin`, `CopyActionsMixin`, `RelatedFilesMixin`, and `TreeManagementMixin` to keep each concern in a focused module.
-- **Service Container** — `ServiceContainer` (`services/service_container.py`) acts as the composition root; services are injected into views rather than imported globally. Existing module-level singletons (`cache_registry`, `encoder_registry`) remain accessible for backward compatibility.
-- **Thread-safe by design** — Global cancellation flags (`_is_scanning`, `is_counting_tokens`) with `threading.Lock`, `SignalBridge` for scheduling callbacks on the main thread, and `SafeTimer` to avoid race conditions during folder switches.
-- **OPX (Overwrite Patch XML)** — A structured XML format for describing file changes (`new`, `patch`, `replace`, `remove`, `move`), enabling reliable round-trip between the AI and the filesystem.
-- **Rust-accelerated scanning** — Optional `scandir-rs` integration for 3–70× faster directory traversal; transparent fallback to Python `os.scandir`.
-- **<!-- [NEW] --> MCP Protocol** — Headless server mode exposing workspace tools via stdio transport, allowing AI clients direct access to project structure and content.
+### Prerequisites
+Python 3.10+, Git (optional, for branch detection and diff context).
 
----
-
-<!-- [UPDATED] Tech stack section with MCP -->
-## Tech Stack & Dependencies
-
-| Layer | Technology | Purpose |
-|---|---|---|
-| GUI Framework | **PySide6** (Qt 6) | Cross-platform native widgets, signals/slots |
-| Language | **Python 3.10+** | Type hints, `match` statements, `pathlib` |
-| Tokenization | **tiktoken / HuggingFace tokenizers** | Accurate token counting per model |
-| **<!-- [NEW] --> AI Protocol** | **MCP (Model Context Protocol)** | Standard interface for AI agents to access local resources |
-| Fast I/O | **scandir-rs** *(optional)* | Rust-based directory walker (3–70× faster) |
-| Ignore patterns | **pathspec** | Gitignore-compatible pattern matching |
-| Memory monitoring | **psutil** | RSS tracking and cache pressure alerts |
-| Version control | **Git** *(optional)* | Branch detection, diff context, change log |
-
-All Python dependencies are listed in `requirements.txt`.
-
----
-
-<!-- [UPDATED] Key modules section with MCP server -->
-## Key Modules & Components
-
-### Entry Point
-
-| File | Description |
-|---|---|
-| `main_window.py` | `SynapseMainWindow` — top bar, tab widget, status bar, session restore, memory monitor. The `main()` function bootstraps the app: ensures directories, initializes encoders, registers caches, applies the theme, and shows the window. **<!-- [NEW] -->** Also handles `--run-mcp` flag to launch headless MCP server mode. |
-
-### Views (`views/`)
-
-| File | Description |
-|---|---|
-| `context_view_qt.py` | File tree browser, token counting display, copy actions (Context / Smart / Diff Only), related-file resolution, AI Suggest Select, prompt template management. **<!-- [NEW] -->** Now supports content search with `code:` prefix. Uses mixin pattern for separation. |
-| `apply_view_qt.py` | OPX input editor (left panel) and preview/results viewer (right panel, 40:60 splitter). Parses OPX, shows visual diffs via `DiffViewerWidget`, applies changes with auto-backup, and saves continuous AI memory. |
-| `history_view_qt.py` | 35:65 master–detail layout. Entries grouped by date, searchable. Detail panel shows progress bar, file change rows, error cards, and action buttons (Copy OPX / Re-apply / Delete). |
-| `logs_view_qt.py` | Log viewer with level filtering, auto-scroll, colored formatting, debug mode toggle, and copy-to-clipboard. Reads from rotating log files in `~/.config/synapse-desktop/logs/`. |
-| `settings_view_qt.py` | Three-column card layout. Manages excluded patterns (tag chips), gitignore toggle, security scan, AI Context Builder (API key, base URL, model picker with server fetch), **<!-- [NEW] -->** MCP Server Integration with auto-install for Cursor/Copilot/Antigravity, repository rules, session management, import/export. Auto-saves with 800 ms debounce. |
-
-### Services (`services/`)
-
-| File | Description |
-|---|---|
-| `service_container.py` | Composition root. Owns `PromptBuildService` and `QtClipboardService`; references `cache_registry` and `encoder_registry` singletons. |
-| `token_display.py` | `TokenDisplayService` — caches per-file token counts, batches parallel counting, supports folder aggregation with a dedicated folder cache, and schedules deferred counting for large projects. |
-| `encoder_registry.py` | Singleton accessor for `TokenizationService`. Reads the active model from settings and resolves the HuggingFace tokenizer repo. |
-| `cache_adapters.py` | Adapter classes (`TokenCacheAdapter`, `SecurityCacheAdapter`, `IgnoreCacheAdapter`, `RelationshipCacheAdapter`) wrapping internal caches behind a unified `ICacheable` protocol for bulk invalidation. |
-| `memory_monitor.py` | `MemoryMonitor` — periodic RSS tracking via `psutil`, warning thresholds (500 MB / 1 GB), callback-based updates to the top bar. |
-| `session_state.py` | Persists workspace path, selected files, expanded folders, instructions text, window geometry to `session.json`. Clean session mode: only workspace + instructions are restored on launch. |
-| `recent_folders.py` | Manages a JSON list of the 10 most recently opened folders with existence validation. |
-| **<!-- [NEW] -->** `workspace_rules.py` | Manages workspace-specific project rules (e.g., `.cursorrules`, `prompt.md`). Files listed here are treated as instruction files in prompts. |
-| **<!-- [NEW] -->** `workspace_index.py` | Workspace file indexing with content search support (prefix `code:` in search bar). Uses lazy scanning and caches results. |
-
-### Core (`core/`)
-
-| File | Description |
-|---|---|
-| `core/theme.py` | Centralized dark theme: `ThemeColors`, `ThemeFonts`, `ThemeSpacing`, `ThemeRadius`. All views reference these tokens. `apply_theme()` generates and sets the global QSS. |
-| `core/logging_config.py` | Rotating file handler (5 × 2 MB), memory-buffered writes, runtime debug toggle, log cleanup. Convenience functions: `log_info`, `log_error`, `log_warning`, `log_debug`. |
-| `core/utils/file_scanner.py` | `FileScanner` with global cancellation flag, throttled progress callbacks (200 ms), gitignore + default ignore support, and optional Rust (`scandir-rs`) backend. Also provides `scan_directory_lazy` for on-demand subtree loading. |
-| `core/utils/qt_utils.py` | `SignalBridge` (thread-safe main-thread callback scheduling), `DebouncedTimer`, `BackgroundWorker` / `schedule_background` helpers. |
-| `core/utils/threading_utils.py` | `TaskManager` with per-view cancellation, global stop event for graceful shutdown, active-view tracking. |
-
-### Components (`components/`)
-
-| File | Description |
-|---|---|
-| `components/toast_qt.py` | Global toast notification system. `ToastManager` (singleton) stacks up to 5 toasts top-center with glassmorphism, slide + fade animation, and auto-dismiss. Convenience API: `toast_success`, `toast_error`, `toast_warning`, `toast_info`. |
-
-### Configuration (`config/`)
-
-| File | Description |
-|---|---|
-| `config/paths.py` | Centralized path definitions. App data lives at `$XDG_CONFIG_HOME/synapse-desktop/` (Linux), with automatic migration from the legacy `~/.synapse-desktop/` location. Exports: `APP_DIR`, `BACKUP_DIR`, `LOG_DIR`, `SETTINGS_FILE`, `SESSION_FILE`, `HISTORY_FILE`, `RECENT_FOLDERS_FILE`. |
-
-### **<!-- [NEW] --> MCP Server (`mcp_server/`)**
-
-| File | Description |
-|---|---|
-| `mcp_server/server.py` | MCP Server implementation using `FastMCP`. **Exposes 15 tools** to AI clients for comprehensive codebase exploration. Runs headless via stdio transport with proper logging redirection to stderr. |
-| `mcp_server/config_installer.py` | Auto-installer for MCP configuration files. Supports Cursor (`~/.cursor/mcp.json`), GitHub Copilot (`~/.vscode/mcp.json`), and Antigravity (`~/.gemini/antigravity/mcp_config.json`). Merges Synapse entry without affecting existing MCP servers. |
-
----
-
-## Key Features
-
-### Context Management
-- **Tree selection**: Browse the directory tree and select files/folders to send.
-- **Copy modes**:
-  - `Context`: Full content of the files.
-  - `Smart`: Only signatures/structures (reduces tokens by 70–80%).
-  - `Diff Only`: Only git changes (for code review).
-- **AI Suggest Select**: Write your instructions, and a connected LLM automatically selects the most relevant files from the tree.
-- **Prompt Templates**: Built-in and custom templates for common tasks (bug hunting, refactoring, security audit, etc.).
-- **Related Files**: Automatically discover and include files that import or are imported by your selection.
-- **<!-- [NEW] --> Content Search**: Search file contents directly from the tree search bar using `code:` prefix (e.g., `code:def main`).
-
-### Apply AI Changes
-- **OPX format**: AI returns changes in structured XML format.
-- **Visual diff**: Preview changes before applying.
-- **Auto-backup**: Automatically backs up files before overwriting, allowing undo operations.
-- **Continuous Memory**: AI summarizes its actions; Synapse saves this to `.synapse/memory.xml` and injects it into future prompts for multi-session continuity.
-- **Error Context**: One-click "Copy Error Context" provides the AI with detailed diagnostics (file content, search pattern, OPX instruction) for self-repair.
-
-### **<!-- [UPDATED] --> MCP Server Integration**
-- **Direct AI Access**: Run Synapse as an MCP server to expose workspace tools directly to AI clients (Cursor, GitHub Copilot, Antigravity).
-- **15 Comprehensive Tools**:
-  
-  **Onboarding (1)**
-  - `start_session` — One-click project discovery (structure + tree + todos)
-  
-  **Discovery (4)**
-  - `list_files` — List all workspace files respecting `.gitignore`
-  - `list_directories` — Show directory tree structure
-  - `get_project_structure` — Project summary with frameworks and file stats
-  - `find_todos` — Scan entire project for TODO/FIXME/HACK comments
-  
-  **Reading (3)**
-  - `read_file_range` — Read file contents with line range support
-  - `get_codemap` — Extract code structure without implementation (human-readable)
-  - `get_symbols` — Structured JSON symbol list (for programmatic analysis)
-  
-  **Analysis (5)**
-  - `get_file_metrics` — LOC, functions/classes count, TODO/FIXME/HACK, complexity
-  - `find_references` — Find all usages of a symbol (refactoring impact)
-  - `get_imports_graph` — Dependency graph (JSON adjacency list)
-  - `estimate_tokens` — Check token count before building context
-  - `diff_summary` — Smart git changes summary (functions added/modified/deleted)
-  
-  **Building (2)**
-  - `manage_selection` — Track selected files for context building
-  - `build_prompt` — Generate complete AI-ready prompts
-
-- **Auto-Configuration**: One-click installation of MCP config files via Settings tab.
-- **Headless Operation**: No GUI overhead when running in MCP mode — pure stdio transport for maximum efficiency.
-
----
-
-## Usage Workflow
-
-### 1. Standard GUI Workflow
-
-1. **Select Context** (Context tab)
-   - Open your project folder via **Open Folder** or the **Recent** dropdown.
-   - Check the required files in the tree. Token counts update in real time.
-
-2. **Copy to AI**
-   - Click **Copy Context**, **Copy Smart**, or **Copy Diff Only**.
-   - Paste into the AI chat and request the OPX format in return.
-
-3. **Apply Changes** (Apply tab)
-   - Copy the XML response from the AI.
-   - Paste into the Apply tab → **Preview** → review diffs → **Apply Changes**.
-   - If errors occur, click **Copy Error Context** and paste it back to the AI.
-
-### **<!-- [NEW] --> 2. MCP Server Workflow**
-
-1. **Setup MCP Integration** (Settings → MCP Server Integration)
-   - Click **Install to Cursor** (or GitHub Copilot/Antigravity).
-   - Review the preview JSON configuration and confirm installation.
-
-2. **Use AI Client**
-   - Open your AI client (Cursor/GitHub Copilot/Antigravity).
-   - Synapse tools are now available directly in AI conversations.
-   - Example: Ask the AI to "Use `get_project_structure` to analyze this codebase."
-
-3. **AI Explores Autonomously**
-   - The AI client spawns Synapse in headless mode (`--run-mcp`).
-   - AI calls tools like `list_files`, `read_file_range`, `get_codemap` as needed.
-   - No manual copy/paste — the AI has direct workspace access.
-
-**Manual MCP Server Launch:**
-~~~bash
-python main_window.py --run-mcp /path/to/workspace
-~~~
-
-For detailed MCP setup instructions, see the included `MCP_SETUP.md`.
-
----
-
-## Installation
-
-**Requirements**: Python 3.10+, Git (optional, for branch detection and diff context)
-
-### Quick Start (Windows - Experimental)
-
-Double-click `start.bat`.
-
-### Quick Start (Linux - Stable)
-
-Use `start.sh`:
-
-~~~bash
+### Quick Start
+**Linux (Stable)**
+```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
 chmod +x start.sh
 ./start.sh
-~~~
+```
+
+**Windows (Experimental)**
+Double-click `start.bat`, or use `.\build-windows.ps1` to compile into a `.exe`.
 
 ### Manual Installation
-
-~~~bash
-# 1. Clone the repository
+```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
-
-# 2. Create a virtual environment
 python -m venv .venv
-
-# 3. Activate the venv
-source .venv/bin/activate          # Linux/macOS
-.\.venv\Scripts\Activate.ps1       # Windows
-
-# 4. Install dependencies and run
+source .venv/bin/activate  # Or .\.venv\Scripts\Activate.ps1 on Windows
 pip install -r requirements.txt
 python main_window.py
-~~~
+```
+
+### Configuration Data
+Synapse stores all data locally at `~/.config/synapse-desktop/` (Linux) or `~/.synapse-desktop/` (Windows). No telemetry is collected.
+Contains: `settings.json`, `session.json`, `history.json`, `recent_folders.json`, `logs/`, and `backups/`.
 
 ---
 
-## Building Windows EXE
+## 🔧 OPX Format & Continuous Memory
 
-To create a Windows `.exe` file, simply run:
-
-~~~powershell
-.\build-windows.ps1
-~~~
-
-### Requirements
-
-- Python 3.10+ with virtual environment set up
-- PyInstaller (will be automatically installed if missing)
-
-### Output
-
-After a successful build, the EXE file will be located at:
-`build/dist/Synapse-Desktop/Synapse-Desktop.exe`
-
----
-
-## Configuration
-
-### App Data Location
-
-Synapse stores all data locally. The directory is resolved in this order:
-
-1. `$XDG_CONFIG_HOME/synapse-desktop/` (if `XDG_CONFIG_HOME` is set)
-2. `~/.config/synapse-desktop/` (Linux standard)
-3. `~/.synapse-desktop/` (legacy fallback — auto-migrated on first run)
-
-| File / Directory | Purpose |
-|---|---|
-| `settings.json` | Excluded patterns, toggles, AI provider config |
-| `session.json` | Last workspace, instructions text, window size |
-| `history.json` | Apply operation history |
-| `recent_folders.json` | Last 10 opened folders |
-| `logs/app.log` | Rotating log files (5 × 2 MB) |
-| `backups/` | Auto-backups before file modifications |
-
-### Environment Variables
-
-| Variable | Description |
-|---|---|
-| `SYNAPSE_DEBUG` | Set to `1`, `true`, or `yes` to enable DEBUG-level logging to both console and file. **<!-- [NEW] -->** In MCP mode, all logging is automatically redirected to stderr to prevent protocol interference. |
-
-### AI Context Builder (Settings Tab)
-
-To use the **AI Suggest Select** feature, configure an OpenAI-compatible provider in the Settings tab:
-
-| Field | Example |
-|---|---|
-| API Key | `sk-...` |
-| Base URL | `https://api.openai.com/v1` (OpenAI), `https://openrouter.ai/api/v1` (OpenRouter), `http://localhost:1234/v1` (local LLM) |
-| Model | `gpt-4o`, `claude-sonnet-4-20250514`, or any model returned by **Fetch Models** |
-
-### Repository Rules
-
-Files listed in the **Repository Rules** setting (e.g., `.cursorrules`, `prompt.md`) are treated as instruction files. When selected, their content is grouped separately from source code in the generated prompt.
-
-**<!-- [NEW] -->** Repository rules can now be managed directly from the file tree context menu:
-- Right-click any file → **Add to Repository Rules** / **Remove from Repository Rules**
-- Changes are saved workspace-specific in `.synapse/workspace_rules.json`
-
----
-
-## OPX Format
-
-Synapse uses OPX (Overwrite Patch XML) to describe file changes:
-
-~~~xml
+**OPX (Overwrite Patch XML)**
+Synapse expects AI to return changes in this structured XML format:
+```xml
 <edit file="src/app.py" op="patch">
   <find occurrence="first">
 <<<
@@ -354,120 +163,65 @@ print("hello world")
 >>>
   </put>
 </edit>
-~~~
+```
+Operations supported: `new`, `patch`, `replace`, `remove`, `move`.
 
-Operations: `new` (create file), `patch` (find & replace), `replace` (overwrite completely), `remove` (delete), `move` (rename).
-
-### Continuous Memory
-
-When **Enable AI Continuous Memory** is on (Settings → Security card), the AI is instructed to include a `<synapse_memory>` block summarizing its actions and next steps. Synapse saves the last 5 memory blocks to `.synapse/memory.xml` in your workspace and injects them into subsequent prompts.
+**AI Continuous Memory**
+When enabled in Settings, the AI is instructed to include a `<synapse_memory>` block summarizing its actions. Synapse saves the last 5 memory blocks to `.synapse/memory.xml` in your workspace and automatically injects them into subsequent prompts, giving the AI long-term memory across sessions.
 
 ---
 
-## Security and Privacy
+## 🛡️ Security and Privacy
 
-- **Paths**: Prompts may contain absolute paths. Enable **Use Relative Paths** in Settings to protect your privacy.
-- **Storage**: All data is stored locally (see [Configuration](#configuration) above). No telemetry is collected.
-- **Security scan**: Before copying, Synapse scans selected files for API keys and passwords. This can be toggled on/off in Settings.
-- **AI API Key**: Stored locally in `settings.json`. It is excluded from the **Export Settings** payload (the `to_safe_dict()` method strips it).
-- **<!-- [NEW] --> MCP Security**: When running as an MCP server, Synapse validates all file paths using `Path.is_relative_to()` to prevent directory traversal attacks. AI clients can only access files within the specified workspace.
-
----
-
-## Development Guidelines
-
-### Project Structure
-
-~~~
-Synapse-Desktop/
-├── main_window.py          # App entry point
-├── config/                 # Paths, model config
-├── core/                   # Infrastructure (theme, logging, scanning, tokenization)
-│   └── utils/              # Qt helpers, threading, file utilities
-├── services/               # Business logic (session, cache, tokens, AI worker)
-├── views/                  # Tab views (Context, Apply, History, Logs, Settings)
-│   └── context/            # ContextView mixins (_ui_builder, _copy_actions, etc.)
-├── components/             # Reusable Qt widgets (toast, diff viewer, toggle switch)
-├── mcp_server/             # MCP Server implementation (NEW)
-├── assets/                 # Fonts, icons, images
-└── tests/                  # Unit and UI tests
-~~~
-
-### Code Style
-
-- **Type hints** on all public function signatures.
-- **Docstrings** in Vietnamese comments are acceptable (legacy); new code should prefer English.
-- **Thread safety**: Always use `threading.Lock` or `SignalBridge` when updating shared state. Never call Qt widget methods from background threads directly.
-- **Imports**: Use lazy imports inside functions when needed to avoid circular dependencies (see `main_window.py` for examples).
-
-### Running Tests
-
-~~~bash
-python -m pytest tests/ -v
-~~~
-
-### Commit Conventions
-
-The project uses conventional commits:
-
-- `feat:` — New feature
-- `fix:` — Bug fix
-- `refactor:` — Code restructuring without behavior change
-- `docs:` — Documentation only
-- `test:` — Adding or updating tests
+- **Local Only**: All settings and context data are processed locally. No external telemetry.
+- **Relative Paths**: Enable **Use Relative Paths** in Settings to obfuscate your local machine directory names structure.
+- **Secret Scanning**: Synapse pre-scans selected files for API keys and passwords before copying context.
+- **MCP Security**: Runs via local `stdio` UNIX sockets. Validates all file paths strictly to prevent directory traversal attacks.
 
 ---
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
-**"Module not found"**: Ensure your venv is activated and dependencies are installed.
-~~~bash
-source .venv/bin/activate
-pip install -r requirements.txt
-~~~
+- **"Module not found"**: Ensure your venv is activated (`source .venv/bin/activate`) and run `pip install -r requirements.txt`.
+- **Apply failed "pattern not found"**: Ask the AI to provide a longer, more unique code block within the `<find>` tag.
+- **Cascade failures during Apply**: If multiple edits target the exact same file, block 1 might change the text that block 2 is trying to `<find>`. Use **Copy Error Context** to give the AI context so it can rewrite the OPX.
+- **Slow directory scanning**: Install `scandir-rs` (`pip install scandir-rs`) for 3–70x faster scanning.
+- **MCP Connection Timeout**: If Cursor/Copilot report "context deadline exceeded", test manually with `python main_window.py --run-mcp /path/to/workspace` to ensure no Python dependency errors are blocking startup.
 
-**No data in Diff Only mode**: Ensure the project is a git repository with uncommitted changes.
-~~~bash
-git status
-git diff
-~~~
+---
 
-**Apply failed "pattern not found"**: Ask the AI to provide a longer, more unique code block within the `<find>` tag. The search pattern must exactly match the current file content (after any prior patches in the same session).
+## 🏗️ Architecture & Contributing (Under the Hood)
 
-**Cascade failures during Apply**: When multiple `<edit>` blocks target the same file, a successful early patch changes the file content, causing later patches to fail because their `<find>` patterns no longer match. Use **Copy Error Context** to send detailed diagnostics back to the AI.
+This section is intended for developers who wish to understand or contribute to the Synapse Codebase.
 
-**High memory usage warning**: Click the 🧹 button in the top bar to clear token caches and trigger garbage collection. For very large projects (50k+ files), consider using `.gitignore` or excluded patterns to reduce the scanned tree.
+### Tech Stack
+- **GUI**: PySide6 (Qt 6)
+- **Tokenization**: tiktoken / HuggingFace tokenizers
+- **Protocol**: MCP (Model Context Protocol) via `FastMCP`
+- **Fast I/O**: scandir-rs (optional)
 
-**Token counts seem wrong after changing model**: The token cache is model-specific. Switch models in Settings and the cache will be automatically cleared and recounted.
+### Key Design Decisions
+- **PySide6 over Electron**: Much lower memory footprint and faster startup.
+- **Mixin UI Pattern**: `ContextViewQt` composes behavior from focused Mixin modules (`UIBuilderMixin`, `CopyActionsMixin`, etc.).
+- **Service Container**: Pure dependency injection via `ServiceContainer` instead of massive global singletons.
+- **Thread-safe**: Aggressive use of global cancellation flags, `threading.Lock`, and `SignalBridge` for pushing background updates to the main thread securely.
 
-**Slow directory scanning**: Install `scandir-rs` (`pip install scandir-rs`) for significantly faster scanning, especially on Windows.
+### Key Modules
+- `main_window.py`: Entry point for GUI and MCP mode.
+- `views/`: Qt UI modules (`context_view_qt`, `apply_view_qt`, `history_view_qt`, etc).
+- `services/`: Core logic (`token_display`, `prompt_build_service`, `workspace_index`).
+- `core/`: Base infrastructure (`theme`, `file_scanner`, `threading_utils`).
+- `mcp_server/`: FastMCP implementation (`server.py`, `config_installer.py`).
 
-**Logs not appearing**: Check that the log directory exists and is writable: `~/.config/synapse-desktop/logs/`. Enable **Debug Mode** in the Logs tab for verbose output.
-
-**<!-- [NEW] --> MCP Server Issues:**
-
-- **Connection timeout**: If the AI client reports "context deadline exceeded":
-  1. Verify the executable path in MCP config is correct
-  2. Ensure Python virtual environment is properly activated
-  3. Check `~/.config/synapse-desktop/logs/` for startup errors
-  4. Test manually: `python main_window.py --run-mcp /path/to/workspace`
-
-- **Protocol errors**: Ensure nothing writes to stdout except JSON-RPC:
-  - Synapse automatically redirects all logging to stderr in MCP mode
-  - Avoid `print()` statements; use `logging` or `print(..., file=sys.stderr)`
-
-- **Config installation fails**: Use **Copy Raw Config JSON** in Settings and manually paste into your AI client's config file if auto-install doesn't work.
+### Development
+- Code Style: Type hints everywhere.
+- Thread Safety: Never call Qt widget methods from a background thread directly. Use `SignalBridge`.
+- Running Tests: `python -m pytest tests/ -v`
 
 ---
 
 ## Acknowledgements
-
-Inspired by:
-
-- **[Repomix](https://github.com/yamadashy/repomix)**
-- **[Overwrite](https://github.com/mnismt/overwrite)**
-- **[PasteMax](https://github.com/kleneway/pastemax)**
+Inspired by [Repomix](https://github.com/yamadashy/repomix), [Overwrite](https://github.com/mnismt/overwrite), and [PasteMax](https://github.com/kleneway/pastemax).
 
 ## License
-
 MIT © HaoNgo232

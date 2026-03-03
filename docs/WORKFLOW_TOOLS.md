@@ -6,7 +6,7 @@ Synapse Desktop provides 4 advanced workflow tools designed for AI agent handoff
 
 ## Tools
 
-### 1. `/rp-build` — Context Builder
+### 1. `rp_build` — Context Builder
 
 **Purpose:** Automatically prepare optimized context for implementing a new feature or task.
 
@@ -36,7 +36,7 @@ rp_build(
 
 ---
 
-### 2. `/rp-review` — Code Review Workflow
+### 2. `rp_review` — Code Review Workflow
 
 **Purpose:** Deep code review with full surrounding context.
 
@@ -65,7 +65,7 @@ rp_review(
 
 ---
 
-### 3. `/rp-refactor` — Two-Pass Refactor Workflow
+### 3. `rp_refactor` — Two-Pass Refactor Workflow
 
 **Purpose:** Safe refactoring with analysis-first approach.
 
@@ -108,7 +108,7 @@ rp_refactor(
 
 ---
 
-### 4. `/rp-investigate` — Bug Investigation Workflow
+### 4. `rp_investigate` — Bug Investigation Workflow
 
 **Purpose:** Automated bug investigation by tracing execution path.
 

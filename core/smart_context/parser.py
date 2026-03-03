@@ -7,6 +7,7 @@ Sử dụng Tree-sitter để phân tích code theo ngôn ngữ.
 Refactored to use modular config and loader.
 """
 
+import logging
 import os
 import threading
 from typing import Optional
@@ -14,6 +15,8 @@ from tree_sitter import Parser, Node, Language, Tree  # type: ignore
 
 from core.smart_context.config import is_supported, get_config_by_extension
 from core.smart_context.loader import get_language, get_query
+
+logger = logging.getLogger(__name__)
 
 # Chunk separator giống Repomix
 CHUNK_SEPARATOR = "⋮----"
@@ -234,11 +237,11 @@ def _build_relationships_section(
         return result
 
     except Exception as e:
-        # Debug: log exception để biết tại sao relationships không được append
+        # Log exception ra stderr (KHONG dung print vì stdout la MCP JSON-RPC channel)
         import traceback
 
-        print(f"[DEBUG] _build_relationships_section failed: {e}")
-        traceback.print_exc()
+        logger.debug("_build_relationships_section failed: %s", e)
+        logger.debug(traceback.format_exc())
         return None
 
 

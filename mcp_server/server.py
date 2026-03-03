@@ -830,6 +830,16 @@ def _force_all_logging_to_stderr() -> None:
     MCP stdio transport su dung stdout de giao tiep JSON-RPC.
     Bat ky log message nao roi vao stdout se lam hong protocol.
     """
+    # 0. Set MCP flag trong logging_config de bat ky get_logger() call nao
+    #    trong tuong lai (lazy import) cung se dung stderr thay vi stdout.
+    import core.logging_config as _lc
+
+    _lc._MCP_MODE = True
+
+    # Neu logger singleton da duoc tao truoc, reset no de re-create voi stderr
+    if _lc._logger is not None:
+        _lc._logger = None
+
     # 1. Cau hinh root logger
     root = logging.getLogger()
     root.setLevel(logging.INFO)
@@ -897,23 +907,31 @@ def estimate_tokens(
         return "Error: No valid files provided."
 
     try:
+        from core.tokenization.cancellation import (
+            start_token_counting,
+            stop_token_counting,
+        )
         from services.tokenization_service import TokenizationService
 
-        service = TokenizationService()
-        results = service.count_tokens_batch_parallel(
-            abs_paths, max_workers=4, update_cache=True
-        )
+        start_token_counting()
+        try:
+            service = TokenizationService()
+            results = service.count_tokens_batch_parallel(
+                abs_paths, max_workers=4, update_cache=True
+            )
 
-        total = sum(results.values())
-        breakdown = []
-        for fp in abs_paths:
-            count = results.get(str(fp), 0)
-            rel = os.path.relpath(fp, ws)
-            breakdown.append(f"  {rel}: {count:,} tokens")
+            total = sum(results.values())
+            breakdown = []
+            for fp in abs_paths:
+                count = results.get(str(fp), 0)
+                rel = os.path.relpath(fp, ws)
+                breakdown.append(f"  {rel}: {count:,} tokens")
 
-        return f"Total: {total:,} tokens\nFiles: {len(abs_paths)}\n\n" + "\n".join(
-            breakdown
-        )
+            return f"Total: {total:,} tokens\nFiles: {len(abs_paths)}\n\n" + "\n".join(
+                breakdown
+            )
+        finally:
+            stop_token_counting()
     except Exception as e:
         logger.error("estimate_tokens error: %s", e)
         return f"Error: {e}"

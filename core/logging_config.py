@@ -20,6 +20,11 @@ from config.paths import LOG_DIR, DEBUG_MODE
 # Logger singleton
 _logger: Optional[logging.Logger] = None
 
+# Flag chi dinh MCP mode: khi True, console handler ghi ra stderr thay vi stdout.
+# Duoc set boi _force_all_logging_to_stderr() trong mcp_server/server.py
+# de tranh stdout pollution lam hong MCP stdio JSON-RPC protocol.
+_MCP_MODE: bool = False
+
 # Log rotation config
 MAX_LOG_SIZE = 2 * 1024 * 1024  # 2MB per file
 MAX_LOG_FILES = 5  # Keep 5 backup files
@@ -45,8 +50,9 @@ def get_logger() -> logging.Logger:
     if _logger.handlers:
         return _logger
 
-    # Console handler (INFO level, or DEBUG if debug mode)
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler: dung stderr khi MCP mode de tranh lam hong stdio transport
+    console_stream = sys.stderr if _MCP_MODE else sys.stdout
+    console_handler = logging.StreamHandler(console_stream)
     console_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
     console_format = logging.Formatter("[%(levelname)s] %(message)s")
     console_handler.setFormatter(console_format)

@@ -50,7 +50,16 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 
 ### MCP Server Integration (IDE Backend for AI Agents)
 - **Direct AI Access**: Run Synapse as an MCP server to expose specialized workspace analysis tools directly to AI clients.
-- **15 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
+- **19 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
+
+  **Workflow Tools (NEW)**
+  *Advanced multi-step workflows for AI agent handoff:*
+  - `rp_build` — Context Builder: Auto-detect scope, optimize token budget, generate handoff prompt
+  - `rp_review` — Code Review: Deep review with surrounding context (imports, callers, tests)
+  - `rp_refactor` — Two-Pass Refactor: Analyze first (discover), then plan (safe refactoring)
+  - `rp_investigate` — Bug Investigation: Trace execution path from error traces
+  
+  [📖 Workflow Tools Documentation](docs/WORKFLOW_TOOLS.md)
 
   **Advanced Tools**
   *Tools providing capabilities like AST parsing and accurate token counting:*

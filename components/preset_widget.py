@@ -208,7 +208,12 @@ class PresetWidget(QWidget):
         self._update_button_states()
 
         if preset_id:
-            self._controller.load_preset(preset_id)
+            if not self._controller.load_preset(preset_id):
+                # Revert to "Select preset" state if loading fails
+                self._is_refreshing = True
+                self._combo.setCurrentIndex(0)
+                self._is_refreshing = False
+                self._update_button_states()
 
     @Slot(str)
     def _on_preset_loaded(self, preset_id: str) -> None:

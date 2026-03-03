@@ -195,36 +195,37 @@ class PresetStore:
 
     def to_absolute_paths(self, relative_paths: List[str]) -> List[str]:
         """Convert relative paths to absolute paths with security validation."""
-        result = []
-        try:
-            workspace_resolved = self._workspace_root.resolve()
-        except OSError:
-            logger.error("Cannot resolve workspace root path")
-            return result
-
-        for p in relative_paths:
+        with self._lock:
+            result = []
             try:
-                # Resolve the full path to handle .. and . components
-                candidate_path = (self._workspace_root / p).resolve()
+                workspace_resolved = self._workspace_root.resolve()
+            except OSError:
+                logger.error("Cannot resolve workspace root path")
+                return result
 
-                # Security check: ensure path is within workspace boundary
+            for p in relative_paths:
                 try:
-                    candidate_path.relative_to(workspace_resolved)
-                except ValueError:
-                    logger.warning(f"Security: Blocked path traversal attempt: {p}")
+                    # Resolve the full path to handle .. and . components
+                    candidate_path = (self._workspace_root / p).resolve()
+
+                    # Security check: ensure path is within workspace boundary
+                    try:
+                        candidate_path.relative_to(workspace_resolved)
+                    except ValueError:
+                        logger.warning(f"Security: Blocked path traversal attempt: {p}")
+                        continue
+
+                    # Check existence only after security validation
+                    if candidate_path.exists():
+                        result.append(str(candidate_path))
+                    else:
+                        logger.debug(f"Preset path no longer exists: {p}")
+
+                except (OSError, ValueError) as e:
+                    logger.warning(f"Invalid path in preset: {p} - {e}")
                     continue
 
-                # Check existence only after security validation
-                if candidate_path.exists():
-                    result.append(str(candidate_path))
-                else:
-                    logger.debug(f"Preset path no longer exists: {p}")
-
-            except (OSError, ValueError) as e:
-                logger.warning(f"Invalid path in preset: {p} - {e}")
-                continue
-
-        return result
+            return result
 
     def _load_unlocked(self) -> Dict[str, PresetEntry]:
         """Load presets từ file. PHẢI gọi trong _lock context."""
@@ -292,11 +293,13 @@ class PresetStore:
         )
 
     def _backup_corrupt_file(self) -> None:
-        """Backup corrupt preset file."""
+        """Backup corrupt preset file with Windows compatibility."""
+        import os
+
         try:
             if self._file_path.exists():
                 backup = self._file_path.with_suffix(".json.bak")
-                self._file_path.rename(backup)
+                os.replace(str(self._file_path), str(backup))
                 logger.info(f"Backed up corrupt preset file to {backup}")
         except OSError as e:
             logger.error(f"Failed to backup corrupt file: {e}")

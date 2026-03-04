@@ -38,6 +38,7 @@ class HandoffContext:
     relationships: str = ""
     action_instructions: str = ""
     metadata: Dict[str, object] = field(default_factory=dict)
+    extra_sections: Dict[str, str] = field(default_factory=dict)
 
 
 def format_handoff_xml(context: HandoffContext) -> str:
@@ -82,6 +83,14 @@ def format_handoff_xml(context: HandoffContext) -> str:
         sections.append("<relationships>")
         sections.append(html.escape(context.relationships))
         sections.append("</relationships>")
+        sections.append("")
+
+    # Extra sections (test_analysis, review_checklist, etc.)
+    # Noi dung da duoc format san (XML) nen khong can escape
+    for section_name, section_content in context.extra_sections.items():
+        sections.append(f"<{section_name}>")
+        sections.append(section_content)
+        sections.append(f"</{section_name}>")
         sections.append("")
 
     # Files

@@ -1,7 +1,7 @@
 """
 Preset Store — Quản lý lưu trữ context presets tại workspace root.
 
-File format: .synapse_presets.json
+File format: .synapse/presets.json
 {
   "version": 1,
   "presets": {
@@ -33,7 +33,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-PRESET_FILENAME = ".synapse_presets.json"
+PRESET_FILENAME = ".synapse/presets.json"
 CURRENT_VERSION = 1
 
 
@@ -74,13 +74,14 @@ class PresetEntry:
 
 class PresetStore:
     """
-    Quản lý CRUD cho presets, lưu tại workspace_root/.synapse_presets.json.
+    Quản lý CRUD cho presets, lưu tại workspace_root/.synapse/presets.json.
     Thread-safe với _lock cho mọi read/write operation.
     """
 
     def __init__(self, workspace_root: Path) -> None:
         self._workspace_root = workspace_root
         self._file_path = workspace_root / PRESET_FILENAME
+        self._file_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._cache: Optional[Dict[str, PresetEntry]] = None
 
@@ -93,6 +94,7 @@ class PresetStore:
         with self._lock:
             self._workspace_root = workspace_root
             self._file_path = workspace_root / PRESET_FILENAME
+            self._file_path.parent.mkdir(parents=True, exist_ok=True)
             self._cache = None
 
     def list_presets(self) -> List[PresetEntry]:

@@ -6,6 +6,7 @@ Public API:
 - run_code_review: Tool 2 - Code Review
 - run_refactor_discovery, run_refactor_planning: Tool 3 - Refactor (2-phase)
 - run_bug_investigation: Tool 4 - Bug Investigation
+- run_test_builder: Tool 5 - Test Generation Context Builder
 """
 
 from core.workflows.context_builder import run_context_builder, BuildResult
@@ -17,6 +18,7 @@ from core.workflows.refactor_workflow import (
     RefactorPlan,
 )
 from core.workflows.bug_investigator import run_bug_investigation, InvestigationResult
+from core.workflows.test_builder import run_test_builder, BuildTestResult
 
 __all__ = [
     "run_context_builder",
@@ -29,4 +31,6 @@ __all__ = [
     "RefactorPlan",
     "run_bug_investigation",
     "InvestigationResult",
+    "run_test_builder",
+    "BuildTestResult",
 ]

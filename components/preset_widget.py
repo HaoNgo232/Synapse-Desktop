@@ -177,7 +177,8 @@ class PresetWidget(QWidget):
         if not presets:
             # Empty state message
             self._combo.addItem("(No presets saved yet)", "")
-            self._combo.model().item(1).setEnabled(False)
+            # type: ignore[missing-attribute]
+            self._combo.model().item(1).setEnabled(False)  # type: ignore
 
         for entry in presets:
             file_count = len(entry.selected_paths)

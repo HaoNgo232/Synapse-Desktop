@@ -43,7 +43,7 @@ _STRING_LITERAL_RE: re.Pattern[str] = re.compile(
 mcp = FastMCP(
     "Synapse Desktop",
     instructions=(
-        "Synapse Desktop - AI-powered codebase exploration toolkit with 15 tools.\n"
+        "Synapse Desktop - AI-powered codebase exploration toolkit with 19 tools.\n"
         "\n"
         "USE YOUR BUILT-IN TOOLS FOR BASIC OPERATIONS:\n"
         "  - Reading files -> use your native read_file, unless files are too large\n"
@@ -53,16 +53,22 @@ mcp = FastMCP(
         "\n"
         "USE SYNAPSE TOOLS FOR ADVANCED TASKS YOUR BUILT-IN TOOLS DON'T HAVE:\n"
         "  - get_codemap / get_symbols - Tree-sitter AST extraction (signatures without bodies)\n"
+        "  - batch_codemap - codemap for entire directories in one call\n"
         "  - estimate_tokens - accurate LLM token counting\n"
         "  - get_imports_graph - cross-file dependency resolution\n"
+        "  - get_callers - find which functions call a given symbol (function-level)\n"
+        "  - get_related_tests - find test files for source files\n"
         "  - diff_summary - function-level git change analysis\n"
+        "  - explain_architecture - auto-generate codebase architecture summary\n"
         "  - build_prompt - structured prompt packaging\n"
         "  - get_project_structure - detect frameworks and codebase scale\n"
         "\n"
         "[CRITICAL] WORKFLOW:\n"
-        "  1. Start with get_project_structure to understand the codebase\n"
-        "  2. Use get_codemap BEFORE reading files to save tokens\n"
-        "  3. Use estimate_tokens before generating a context package\n"
+        "  1. Start with explain_architecture or get_project_structure to understand the codebase\n"
+        "  2. Use batch_codemap on key modules to understand their APIs\n"
+        "  3. Use get_callers before modifying any function to check impact\n"
+        "  4. Use get_related_tests to find tests to verify your changes\n"
+        "  5. Use estimate_tokens before generating a context package\n"
         "\n"
         "All tools have detailed docstrings explaining when to use them over your native tools."
     ),
@@ -549,7 +555,8 @@ def manage_selection(
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
 
-    session_file = ws / ".synapse_selection.json"
+    session_file = ws / ".synapse" / "selection.json"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
 
     if action == "get":
         return _selection_get(session_file, ws)
@@ -808,7 +815,7 @@ def build_prompt(
         include_git_changes: Whether to include recent git diffs and log in the prompt (default: False).
         profile: Preset configuration name ("review", "bugfix", "refactor", "doc"). Explicit params always override profile defaults.
         metadata_format: Response format when output_file is set - "text" (default, human-readable) or "json" (structured metadata for multi-agent).
-        use_selection: When True, read file list from current selection (.synapse_selection.json) and merge with file_paths.
+        use_selection: When True, read file list from current selection (.synapse/selection.json) and merge with file_paths.
         auto_expand_dependencies: When True, automatically include files imported by the selected files.
         dependency_depth: Depth for dependency resolution (1-3, default 1). Only used when auto_expand_dependencies=True.
         max_tokens: Maximum token count for prompt output. When set, context will be automatically trimmed to fit budget.
@@ -861,7 +868,7 @@ def build_prompt(
     if use_selection:
         import json as _json
 
-        session_file = ws / ".synapse_selection.json"
+        session_file = ws / ".synapse" / "selection.json"
         if not session_file.exists():
             if not abs_paths:
                 return "Error: use_selection=True but no selection found and no file_paths provided."
@@ -2011,6 +2018,640 @@ def rp_investigate(
 
     except Exception as e:
         logger.error("rp_investigate error: %s", e)
+        return f"Error: {e}"
+
+
+# Tool rp_test phan tich code, tim test coverage gaps,
+# va chuan bi context toi uu cho AI viet tests chat luong cao
+@mcp.tool()
+def rp_test(
+    workspace_path: str,
+    task_description: str = "Write tests for the specified files",
+    file_paths: Optional[List[str]] = None,
+    max_tokens: int = 100_000,
+    test_framework: Optional[str] = None,
+    include_existing_tests: bool = True,
+    output_file: Optional[str] = None,
+) -> str:
+    """Analyze code, find test coverage gaps, and prepare optimized
+    context for AI to write high-quality tests.
+
+    WHY USE THIS: Combines scope detection, test coverage gap analysis,
+    and token budget optimization into a single workflow. Instead of manually
+    finding untested functions and gathering context, this tool automatically:
+    1. Detects which source files need tests
+    2. Finds existing test files and analyzes coverage gaps
+    3. Identifies untested symbols with priority ranking
+    4. Auto-detects test framework (pytest, jest, vitest, etc.)
+    5. Packages everything into an optimized prompt for test generation
+
+    BEST FOR: Writing tests for new or existing code. The output includes
+    coverage analysis, untested symbol list, and existing test patterns.
+
+    Args:
+        workspace_path: Absolute path to the workspace root directory.
+        task_description: Description of what tests to write.
+        file_paths: Optional list of source files to generate tests for.
+        max_tokens: Maximum token budget for the output (default: 100,000).
+        test_framework: Test framework ("pytest", "jest", "vitest"). None = auto-detect.
+        include_existing_tests: Include existing test files as reference (default: True).
+        output_file: Optional path to write the prompt (for cross-agent handoff).
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    if output_file:
+        out_path = (ws / output_file).resolve()
+        if not out_path.is_relative_to(ws):
+            return "Error: output_file path traversal detected."
+
+    from core.workflows.test_builder import run_test_builder
+
+    try:
+        result = run_test_builder(
+            workspace_path=workspace_path,
+            task_description=task_description,
+            file_paths=file_paths,
+            max_tokens=max_tokens,
+            test_framework=test_framework,
+            include_existing_tests=include_existing_tests,
+            output_file=output_file,
+        )
+
+        summary = (
+            f"Test Builder Complete\n"
+            f"{'=' * 40}\n"
+            f"Files included: {result.files_included}\n"
+            f"Files sliced: {result.files_sliced}\n"
+            f"Files smart-only: {result.files_smart_only}\n"
+            f"Total tokens: {result.total_tokens:,}\n"
+            f"Scope: {result.scope_summary}\n"
+            f"Coverage: {result.coverage_summary}\n"
+            f"Untested symbols: {result.untested_symbols}\n"
+        )
+
+        if result.suggested_test_files:
+            summary += (
+                f"Suggested test files: {', '.join(result.suggested_test_files)}\n"
+            )
+
+        if result.optimizations:
+            summary += f"Optimizations: {', '.join(result.optimizations)}\n"
+
+        if output_file:
+            summary += f"\nPrompt written to: {output_file}\n"
+        else:
+            summary += f"\n{'=' * 40}\n{result.prompt}"
+
+        return summary
+
+    except Exception as e:
+        logger.error("rp_test error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 16: get_callers - Function-level reverse dependency lookup
+# ===========================================================================
+@mcp.tool()
+def get_callers(
+    workspace_path: str,
+    symbol_name: str,
+    file_extensions: Optional[List[str]] = None,
+    max_results: int = 30,
+) -> str:
+    """Find all functions/methods that CALL a given symbol, with caller context.
+
+    WHY USE THIS OVER BUILT-IN: Your built-in grep finds text occurrences but can't
+    tell you WHICH FUNCTION contains the call. This tool returns caller_function -> callee
+    mappings with file and line info, essential for understanding impact before refactoring.
+
+    Example output:
+      UserService.create_user (services/user.py:45) calls validate_email
+      test_registration (tests/test_user.py:23) calls validate_email
+
+    When to use: Before modifying a function's signature or behavior, check who calls it
+    to understand the blast radius of your change.
+
+    Args:
+        workspace_path: Absolute path to the workspace root directory.
+        symbol_name: Function/method/class name to find callers of.
+        file_extensions: Optional filter (e.g., [".py", ".ts"]). None searches all code files.
+        max_results: Maximum number of caller entries to return (default: 30).
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+        from core.codemaps.symbol_extractor import extract_symbols
+        from core.codemaps.types import SymbolKind
+
+        all_files = collect_files_from_disk(ws, workspace_path=ws)
+
+        # Filter by extension
+        if file_extensions:
+            ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
+            all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
+        else:
+            code_exts = {
+                ".py",
+                ".js",
+                ".ts",
+                ".jsx",
+                ".tsx",
+                ".go",
+                ".rs",
+                ".java",
+                ".c",
+                ".cpp",
+                ".h",
+            }
+            all_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
+
+        callers: list[
+            tuple[str, str, int, str]
+        ] = []  # (caller_name, file, line, snippet)
+        pattern = re.compile(rf"\b{re.escape(symbol_name)}\s*[\(.]")
+
+        for file_path_str in all_files:
+            try:
+                fp = Path(file_path_str)
+                content = fp.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+
+                # Extract symbols to know which function/method each line belongs to
+                symbols = extract_symbols(file_path_str, content)
+                func_symbols = [
+                    s
+                    for s in symbols
+                    if s.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD)
+                ]
+
+                for i, line in enumerate(lines, start=1):
+                    # Skip definitions of the symbol itself
+                    stripped = line.strip()
+                    if stripped.startswith(("def ", "function ", "func ", "class ")):
+                        if symbol_name in stripped.split("(")[0]:
+                            continue
+                    # Skip comments
+                    if stripped.startswith(("#", "//", "/*", "*")):
+                        continue
+
+                    # Clean strings and inline comments
+                    cleaned = _STRING_LITERAL_RE.sub("", line)
+                    cleaned = _INLINE_COMMENT_RE.sub("", cleaned)
+
+                    if pattern.search(cleaned):
+                        # Find enclosing function
+                        caller_name = "(top-level)"
+                        for sym in func_symbols:
+                            if sym.line_start <= i <= sym.line_end:
+                                caller_name = f"{sym.parent + '.' if sym.parent else ''}{sym.name}"
+                                break
+
+                        rel_path = os.path.relpath(file_path_str, ws)
+                        snippet = stripped[:80]
+                        callers.append((caller_name, rel_path, i, snippet))
+
+                        if len(callers) >= max_results:
+                            break
+            except (OSError, UnicodeDecodeError):
+                continue
+
+            if len(callers) >= max_results:
+                break
+
+        if not callers:
+            return f"No callers found for: {symbol_name}"
+
+        # Group by file
+        result_lines = [f"Found {len(callers)} callers of `{symbol_name}`:\n"]
+        current_file = ""
+        for caller_name, rel_path, line_num, snippet in callers:
+            if rel_path != current_file:
+                current_file = rel_path
+                result_lines.append(f"\n{rel_path}:")
+            result_lines.append(f"  L{line_num} {caller_name}: {snippet}")
+
+        return "\n".join(result_lines)
+
+    except Exception as e:
+        logger.error("get_callers error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 17: get_related_tests - Find test files for source files
+# ===========================================================================
+@mcp.tool()
+def get_related_tests(
+    workspace_path: str,
+    file_paths: List[str],
+) -> str:
+    """Find test files corresponding to given source files.
+
+    WHY USE THIS OVER BUILT-IN: Automatically handles multiple naming conventions
+    across languages (test_X.py, X_test.py, X.test.ts, X.spec.ts, __tests__/X.js)
+    and searches the entire project. Your built-in grep would need multiple patterns
+    and still miss co-located test directories.
+
+    When to use: Before modifying code, find existing tests that verify its behavior.
+    After modifying code, find tests to run.
+
+    Args:
+        workspace_path: Absolute path to the workspace root directory.
+        file_paths: List of relative source file paths to find tests for.
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+
+        all_files = collect_files_from_disk(ws, workspace_path=ws)
+        # Build filename index for fast lookup
+        file_index: dict[str, list[str]] = {}
+        for f in all_files:
+            name = Path(f).name.lower()
+            if name not in file_index:
+                file_index[name] = []
+            file_index[name].append(f)
+
+        results: dict[str, list[str]] = {}
+
+        for source_rel in file_paths:
+            source_path = Path(source_rel)
+            stem = source_path.stem
+            ext = source_path.suffix.lower()
+
+            # Generate candidate test file names based on language conventions
+            candidates: list[str] = []
+
+            if ext == ".py":
+                candidates = [
+                    f"test_{stem}.py",
+                    f"{stem}_test.py",
+                ]
+            elif ext in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"):
+                for test_ext in [ext, ".ts", ".tsx", ".js", ".jsx"]:
+                    candidates.extend(
+                        [
+                            f"{stem}.test{test_ext}",
+                            f"{stem}.spec{test_ext}",
+                        ]
+                    )
+            elif ext == ".go":
+                candidates = [f"{stem}_test.go"]
+            elif ext == ".rs":
+                # Rust tests are usually inline, but integration tests exist
+                candidates = [f"{stem}_test.rs", f"{stem}.rs"]
+            elif ext == ".java":
+                candidates = [
+                    f"{stem}Test.java",
+                    f"{stem}Tests.java",
+                    f"Test{stem}.java",
+                ]
+            elif ext in (".c", ".cpp", ".h", ".hpp"):
+                candidates = [
+                    f"test_{stem}.cpp",
+                    f"{stem}_test.cpp",
+                    f"test_{stem}.c",
+                ]
+
+            found_tests = []
+            for candidate in candidates:
+                candidate_lower = candidate.lower()
+                if candidate_lower in file_index:
+                    for match_path in file_index[candidate_lower]:
+                        rel = os.path.relpath(match_path, ws)
+                        if rel not in found_tests:
+                            found_tests.append(rel)
+
+            # Also search for files in __tests__ or tests/ directories containing the stem
+            stem_lower = stem.lower()
+            for fname, fpaths in file_index.items():
+                if stem_lower in fname and ("test" in fname or "spec" in fname):
+                    for match_path in fpaths:
+                        rel = os.path.relpath(match_path, ws)
+                        if rel not in found_tests:
+                            # Verify it's actually in a test-like directory or has test-like name
+                            if any(
+                                part in rel.lower()
+                                for part in ["test", "spec", "__test"]
+                            ):
+                                found_tests.append(rel)
+
+            if found_tests:
+                results[source_rel] = sorted(found_tests)
+
+        if not results:
+            return "No related test files found for the given source files."
+
+        lines = [f"Found tests for {len(results)}/{len(file_paths)} source files:\n"]
+        for source, tests in results.items():
+            lines.append(f"{source}:")
+            for t in tests[:5]:
+                lines.append(f"  → {t}")
+            if len(tests) > 5:
+                lines.append(f"  ... +{len(tests) - 5} more")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error("get_related_tests error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 18: batch_codemap - Codemap for entire directories
+# ===========================================================================
+@mcp.tool()
+def batch_codemap(
+    workspace_path: str,
+    directory: str = ".",
+    extensions: Optional[List[str]] = None,
+    max_files: int = 50,
+) -> str:
+    """Extract code structure (signatures, classes, imports) for ALL files in a directory.
+
+    WHY USE THIS OVER BUILT-IN: Eliminates the list_files → filter → get_codemap
+    round-trip pattern. One call gives you the API skeleton of an entire module/package.
+    Essential for understanding a new module before diving into implementation.
+
+    When to use: When exploring a new package/module and you want to understand all
+    its public APIs at once. Much faster than calling get_codemap file-by-file.
+
+    Args:
+        workspace_path: Absolute path to the workspace root directory.
+        directory: Relative directory to scan (default: "." = entire workspace).
+        extensions: Optional file extensions to include (e.g., [".py"]). Default: all supported.
+        max_files: Maximum files to process (default: 50, to prevent timeouts).
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    target_dir = (ws / directory).resolve()
+    if not target_dir.is_relative_to(ws):
+        return "Error: Path traversal detected."
+    if not target_dir.is_dir():
+        return f"Error: Directory not found: {directory}"
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+        from core.smart_context import is_supported
+
+        all_files = collect_files_from_disk(target_dir, workspace_path=ws)
+
+        # Filter by extension
+        if extensions:
+            ext_set = {
+                e.lower() if e.startswith(".") else f".{e.lower()}" for e in extensions
+            }
+            all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
+        else:
+            # Only include files with supported Smart Context extensions
+            all_files = [
+                f for f in all_files if is_supported(Path(f).suffix.lstrip("."))
+            ]
+
+        # Sort by path for deterministic output
+        all_files = sorted(all_files)[:max_files]
+
+        if not all_files:
+            return f"No supported code files found in {directory}/"
+
+        # Convert to absolute path strings for generate_smart_context
+        abs_paths = set(all_files)
+
+        from core.prompt_generator import generate_smart_context
+
+        result = generate_smart_context(
+            selected_paths=abs_paths,
+            include_relationships=False,  # Keep it focused on structure
+            workspace_root=ws,
+            use_relative_paths=True,
+        )
+
+        if not result or not result.strip():
+            return f"No code structure could be extracted from {len(all_files)} files in {directory}/"
+
+        header = (
+            f"Codemap for {directory}/ ({len(all_files)} files"
+            f"{f', filtered to {extensions}' if extensions else ''})\n"
+            f"{'=' * 60}\n"
+        )
+        return header + result
+
+    except Exception as e:
+        logger.error("batch_codemap error: %s", e)
+        return f"Error: {e}"
+
+
+# ===========================================================================
+# Tool 19: explain_architecture - Auto-generate architecture summary
+# ===========================================================================
+@mcp.tool()
+def explain_architecture(
+    workspace_path: str,
+    focus_directory: Optional[str] = None,
+) -> str:
+    """Auto-generate a high-level architecture summary of the codebase.
+
+    WHY USE THIS OVER BUILT-IN: No built-in tool can synthesize project structure,
+    module boundaries, entry points, dependency graph density, and framework detection
+    into a single architectural overview. Agents typically need 5-10 tool calls to
+    piece this together manually.
+
+    Analyzes:
+    - Module/package boundaries and their responsibilities (based on directory names + file count)
+    - Entry points (main files, CLI scripts, server files)
+    - Cross-module dependency density (which modules are tightly coupled)
+    - Framework and infrastructure patterns
+
+    When to use: At the start of a complex task that spans multiple modules. Gives you
+    the mental model of how the codebase is organized before you start reading files.
+
+    Args:
+        workspace_path: Absolute path to the workspace root directory.
+        focus_directory: Optional subdirectory to focus analysis on (e.g., "src").
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    scan_root = ws
+    if focus_directory:
+        scan_root = (ws / focus_directory).resolve()
+        if not scan_root.is_relative_to(ws) or not scan_root.is_dir():
+            return f"Error: Invalid focus directory: {focus_directory}"
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+        from core.dependency_resolver import DependencyResolver
+        from collections import Counter, defaultdict
+
+        all_files = collect_files_from_disk(scan_root, workspace_path=ws)
+        if not all_files:
+            return "No files found to analyze."
+
+        # 1. Module analysis - group files by top-level directory
+        module_stats: dict[str, dict] = defaultdict(
+            lambda: {"files": 0, "extensions": Counter()}
+        )
+        entry_points: list[str] = []
+        config_files: list[str] = []
+
+        entry_names = {
+            "main.py",
+            "app.py",
+            "server.py",
+            "index.js",
+            "index.ts",
+            "main.go",
+            "main.rs",
+            "Main.java",
+            "Program.cs",
+            "manage.py",
+            "wsgi.py",
+            "asgi.py",
+            "cli.py",
+        }
+        config_names = {
+            "package.json",
+            "pyproject.toml",
+            "Cargo.toml",
+            "go.mod",
+            "pom.xml",
+            "build.gradle",
+            "Gemfile",
+            "composer.json",
+            "tsconfig.json",
+            "webpack.config.js",
+            "vite.config.ts",
+            "docker-compose.yml",
+            "Dockerfile",
+        }
+
+        for f in all_files:
+            fp = Path(f)
+            try:
+                rel = fp.relative_to(ws)
+            except ValueError:
+                continue
+
+            parts = rel.parts
+            # Top-level module = first directory, or "(root)" for root files
+            module = parts[0] if len(parts) > 1 else "(root)"
+            module_stats[module]["files"] += 1
+            module_stats[module]["extensions"][fp.suffix.lower()] += 1
+
+            # Detect entry points
+            if fp.name in entry_names:
+                entry_points.append(str(rel))
+
+            # Detect config files
+            if fp.name in config_names:
+                config_files.append(str(rel))
+
+        # 2. Dependency analysis (sample top modules)
+        code_exts = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs"}
+        code_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
+
+        coupling_matrix: dict[str, Counter] = defaultdict(Counter)
+        resolver = DependencyResolver(ws)
+        resolver.build_file_index_from_disk(ws)
+
+        # Sample up to 100 files for dependency analysis
+        sample_files = sorted(code_files)[:100]
+        for f in sample_files:
+            fp = Path(f)
+            try:
+                rel = fp.relative_to(ws)
+                source_module = rel.parts[0] if len(rel.parts) > 1 else "(root)"
+                related = resolver.get_related_files(fp, max_depth=1)
+                for dep in related:
+                    try:
+                        dep_rel = dep.relative_to(ws)
+                        dep_module = (
+                            dep_rel.parts[0] if len(dep_rel.parts) > 1 else "(root)"
+                        )
+                        if dep_module != source_module:
+                            coupling_matrix[source_module][dep_module] += 1
+                    except ValueError:
+                        pass
+            except Exception:
+                pass
+
+        # 3. Format output
+        sections = []
+        title = f"Architecture: {ws.name}"
+        if focus_directory:
+            title += f" (focus: {focus_directory}/)"
+        sections.append(f"{title}\n{'=' * len(title)}\n")
+
+        # Overview
+        sections.append(
+            f"Total: {len(all_files)} files, {len(module_stats)} top-level modules\n"
+        )
+
+        # Entry points
+        if entry_points:
+            sections.append("Entry Points:")
+            for ep in entry_points[:10]:
+                sections.append(f"  → {ep}")
+            sections.append("")
+
+        # Config/infra
+        if config_files:
+            sections.append("Configuration:")
+            for cf in config_files[:10]:
+                sections.append(f"  • {cf}")
+            sections.append("")
+
+        # Module breakdown
+        sections.append("Modules (by file count):")
+        sorted_modules = sorted(
+            module_stats.items(), key=lambda x: x[1]["files"], reverse=True
+        )
+        for module, stats in sorted_modules[:15]:
+            file_count = stats["files"]
+            top_exts = stats["extensions"].most_common(3)
+            ext_str = ", ".join(f"{ext}({c})" for ext, c in top_exts)
+            sections.append(f"  {module + '/':.<30} {file_count:>4} files  [{ext_str}]")
+        sections.append("")
+
+        # Cross-module coupling
+        if coupling_matrix:
+            sections.append("Cross-Module Dependencies (strongest links):")
+            all_links = []
+            for src, targets in coupling_matrix.items():
+                for tgt, count in targets.items():
+                    all_links.append((src, tgt, count))
+            all_links.sort(key=lambda x: x[2], reverse=True)
+            for src, tgt, count in all_links[:10]:
+                sections.append(f"  {src} → {tgt} ({count} imports)")
+            sections.append("")
+
+        # Recommendations for agent
+        sections.append("Suggested exploration order:")
+        if entry_points:
+            sections.append(
+                f"  1. Start with entry points: {', '.join(entry_points[:3])}"
+            )
+        sections.append(
+            f"  2. Use batch_codemap on key modules: {', '.join(m for m, _ in sorted_modules[:3])}"
+        )
+        sections.append("  3. Use get_imports_graph for detailed dependency analysis")
+
+        return "\n".join(sections)
+
+    except Exception as e:
+        logger.error("explain_architecture error: %s", e)
         return f"Error: {e}"
 
 

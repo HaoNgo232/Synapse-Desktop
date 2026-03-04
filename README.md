@@ -58,6 +58,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
   - `rp_review` — Code Review: Deep review with surrounding context (imports, callers, tests)
   - `rp_refactor` — Two-Pass Refactor: Analyze first (discover), then plan (safe refactoring)
   - `rp_investigate` — Bug Investigation: Trace execution path from error traces
+  - `rp_test` — Test Generation: Analyze code to identify coverage gaps and prepare context for writing missing tests
   
   [📖 Workflow Tools Documentation](docs/WORKFLOW_TOOLS.md)
 
@@ -72,6 +73,10 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
   - `build_prompt` — Package files into a structured prompt format (Ideal for Cross-Agent Delegation).
   - `find_references` — Find symbol usages (filters out comments and strings).
   - `manage_selection` — Track selected files for context building.
+  - `get_callers` — Function-level reverse dependency lookup (find functions that call a symbol).
+  - `get_related_tests` — Discovery of test files corresponding to source files.
+  - `batch_codemap` — Mass extract code structures for all code files in a directory.
+  - `explain_architecture` — High-level architecture summary based on file and module analysis.
 
   **Basic Operations**
   *Standard filesystem operations. AI clients (like Cursor or Copilot) with native file-reading tools should prioritize their built-in tools over these to reduce MCP overhead:*
@@ -140,6 +145,13 @@ chmod +x start.sh
 
 **Windows (Experimental)**
 Double-click `start.bat`, or use `.\build-windows.ps1` to compile into a `.exe`.
+
+**Building AppImage (Linux)**
+To build a standalone executable AppImage for Linux, run the included script:
+```bash
+chmod +x build-appimage.sh
+./build-appimage.sh
+```
 
 ### Manual Installation
 ```bash

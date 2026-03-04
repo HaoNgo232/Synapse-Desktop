@@ -2,7 +2,7 @@
 
 ## Overview
 
-Synapse Desktop provides 4 advanced workflow tools designed for AI agent handoff and complex coding tasks. These tools automate context gathering, scope detection, and prompt generation.
+Synapse Desktop provides 5 advanced workflow tools designed for AI agent handoff and complex coding tasks. These tools automate context gathering, scope detection, and prompt generation.
 
 ## Tools
 
@@ -152,6 +152,45 @@ rp_investigate(
 
 ---
 
+### 5. `rp_test` — Test Generation Workflow
+
+**Purpose:** Automate writing tests by finding coverage gaps and preparing the optimal prompt.
+
+**What it does:**
+- Finds all source files and their corresponding test files
+- Extracts functions/methods/classes dynamically
+- Maps tested code to test functions (via fuzzy heuristics)
+- Identifies missing coverage directly from static analysis
+- Recommends which untested targets to prioritize (HIGH/MEDIUM/LOW)
+- Auto-detects testing frameworks (pytest, jest, vitest)
+- Suggests new test file paths if missing
+- Formats analysis into an AI agent-ready plan
+
+**Usage:**
+```python
+# To generate tests for new changes
+rp_test(
+    workspace_path="/path/to/project",
+    task_description="Implement tests for the new login functionality",
+    file_paths=["auth/login.py"],
+    max_tokens=60_000
+)
+
+# Using Git Diff (staged/unstaged) context
+rp_test(
+    workspace_path="/path/to/project",
+    task_description="Cover changes in the recent PR",
+    include_git_changes=True
+)
+```
+
+**When to use:**
+- Building unit/integration tests for untested code
+- Fixing or improving existing test files
+- Want AI to focus exclusively on covering untested methods
+
+---
+
 ## Architecture
 
 ### Shared Infrastructure
@@ -215,6 +254,7 @@ Tools appear in AI client's tool list as:
 - `rp_review`
 - `rp_refactor`
 - `rp_investigate`
+- `rp_test`
 
 ---
 
@@ -229,6 +269,7 @@ Tools appear in AI client's tool list as:
 | `rp_refactor` (discover) | Codemap + dependency graph | 20K-60K |
 | `rp_refactor` (plan) | Discovery + full files | 40K-70K |
 | `rp_investigate` | Trace steps + sliced files | 30K-80K |
+| `rp_test` | Coverage result + source/test context | 20K-80K |
 
 **Optimization applied:**
 - Smart Context reduces tokens by 70-80% for dependency files
@@ -243,4 +284,4 @@ Tools appear in AI client's tool list as:
 - [ ] Cross-language call graph (Python → JS via REST API)
 - [ ] Incremental context updates (only send changed files)
 - [ ] Visual diff rendering in XML output
-- [ ] Test coverage analysis integration
+- [x] Test coverage analysis integration

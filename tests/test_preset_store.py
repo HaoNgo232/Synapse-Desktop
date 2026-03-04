@@ -150,19 +150,20 @@ class TestPresetStore:
         paths = [str(temp_workspace / "src" / "main.py")]
         store.create_preset("Test", paths)
 
-        tmp_file = temp_workspace / ".synapse_presets.tmp"
+        tmp_file = temp_workspace / ".synapse" / "presets.tmp"
         assert not tmp_file.exists()
 
     def test_corrupt_file_recovery(self, temp_workspace):
         """Test recovery from corrupt preset file."""
         preset_file = temp_workspace / PRESET_FILENAME
+        preset_file.parent.mkdir(parents=True, exist_ok=True)
         preset_file.write_text("invalid json {{{")
 
         store = PresetStore(temp_workspace)
         presets = store.list_presets()
 
         assert len(presets) == 0  # Graceful fallback
-        assert (temp_workspace / ".synapse_presets.json.bak").exists()
+        assert (temp_workspace / ".synapse" / "presets.json.bak").exists()
 
     def test_set_workspace(self, store, temp_workspace, tmp_path):
         """Test changing workspace invalidates cache."""

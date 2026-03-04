@@ -11,6 +11,7 @@ when workspace_path is not explicitly provided.
 from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote, urlparse
+import logging
 
 
 class WorkspaceManager:
@@ -40,7 +41,15 @@ class WorkspaceManager:
             ValueError: Khi workspace khong ton tai, khong phai thu muc,
                         hoac khong the detect duoc.
         """
-        ws_str = workspace_path
+        if workspace_path is not None:
+            ws_str = str(workspace_path).strip()
+            if not ws_str:
+                raise ValueError(
+                    "workspace_path is empty. Provide a valid path or omit the parameter "
+                    "for auto-detection."
+                )
+        else:
+            ws_str = None
 
         # Auto-detect from MCP Context roots if workspace_path not provided
         if not ws_str and ctx is not None:
@@ -116,8 +125,13 @@ class WorkspaceManager:
             # Parse file:// URI to filesystem path
             return WorkspaceManager._uri_to_path(uri)
 
-        except Exception:
-            # Auto-detection is best-effort; never crash
+        except (AttributeError, TypeError, KeyError, IndexError, ValueError):
+            # Auto-detection is best-effort; never crash on expected issues
+            return None
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                "Unexpected error during workspace auto-detection: %s", e
+            )
             return None
 
     @staticmethod

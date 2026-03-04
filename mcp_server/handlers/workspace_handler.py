@@ -12,6 +12,7 @@ from mcp.server.fastmcp import Context
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
+import asyncio
 
 
 def _list_directories_impl(workspace_path: str, max_depth: int = 3) -> str:
@@ -96,9 +97,9 @@ def register_tools(mcp_instance) -> None:
             from mcp_server.handlers.analysis_handler import _find_todos
 
             ws_str = str(ws)
-            structure = _get_project_structure(ws_str)
-            tree = _list_directories_impl(ws_str, max_depth=2)
-            todos_result = _find_todos(ws_str, include_hack=True)
+            structure = await asyncio.to_thread(_get_project_structure, ws_str)
+            tree = await asyncio.to_thread(_list_directories_impl, ws_str, 2)
+            todos_result = await asyncio.to_thread(_find_todos, ws_str, True)
             todos_preview = (
                 todos_result
                 if len(todos_result) < 800
@@ -141,22 +142,28 @@ def register_tools(mcp_instance) -> None:
         try:
             from services.workspace_index import collect_files_from_disk
 
-            all_files = collect_files_from_disk(ws, workspace_path=ws)
+            def _get_files():
+                all_files = collect_files_from_disk(ws, workspace_path=ws)
 
-            if extensions:
-                ext_set = {
-                    e.lower() if e.startswith(".") else f".{e.lower()}"
-                    for e in extensions
-                }
-                all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
+                if extensions:
+                    ext_set = {
+                        e.lower() if e.startswith(".") else f".{e.lower()}"
+                        for e in extensions
+                    }
+                    all_files = [
+                        f for f in all_files if Path(f).suffix.lower() in ext_set
+                    ]
 
-            result_lines = []
-            for f in sorted(all_files):
-                try:
-                    rel = os.path.relpath(f, ws)
-                    result_lines.append(rel)
-                except ValueError:
-                    result_lines.append(f)
+                result_lines = []
+                for f in sorted(all_files):
+                    try:
+                        rel = os.path.relpath(f, ws)
+                        result_lines.append(rel)
+                    except ValueError:
+                        result_lines.append(f)
+                return result_lines
+
+            result_lines = await asyncio.to_thread(_get_files)
 
             if not result_lines:
                 return "No files found matching the criteria."
@@ -187,4 +194,4 @@ def register_tools(mcp_instance) -> None:
         except ValueError as e:
             return f"Error: {e}"
 
-        return _list_directories_impl(str(ws), max_depth)
+        return await asyncio.to_thread(_list_directories_impl, str(ws), max_depth)

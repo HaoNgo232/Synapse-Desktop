@@ -12,6 +12,7 @@ from mcp.server.fastmcp import Context
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
+from mcp_server.utils.file_utils import atomic_write
 
 # Lock de serialize read-modify-write tren session file,
 # tranh TOCTOU race condition khi concurrent add/set actions
@@ -82,8 +83,8 @@ def register_tools(mcp_instance) -> None:
                 )
 
             elif action == "clear":
-                session_file.write_text(
-                    json.dumps({"selected_files": []}, indent=2), encoding="utf-8"
+                atomic_write(
+                    session_file, json.dumps({"selected_files": []}, indent=2) + "\n"
                 )
                 return "Selection cleared."
 
@@ -107,9 +108,9 @@ def register_tools(mcp_instance) -> None:
                         p for p in paths if p not in existing_set
                     ]
 
-                session_file.write_text(
-                    json.dumps({"selected_files": new_selection}, indent=2),
-                    encoding="utf-8",
+                atomic_write(
+                    session_file,
+                    json.dumps({"selected_files": new_selection}, indent=2) + "\n",
                 )
                 return f"Selection updated: {len(new_selection)} files selected."
 

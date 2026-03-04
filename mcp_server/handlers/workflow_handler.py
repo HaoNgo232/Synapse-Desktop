@@ -4,6 +4,7 @@ Workflow Handler - Xu ly cac workflow tools cho AI agent handoff.
 Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test.
 """
 
+import asyncio
 from typing import List, Optional
 
 from mcp.server.fastmcp import Context
@@ -69,7 +70,8 @@ def register_tools(mcp_instance) -> None:
         )
 
         try:
-            result = run_context_builder(
+            result = await asyncio.to_thread(
+                run_context_builder,
                 workspace_path=str(ws),
                 task_description=task_description,
                 file_paths=file_paths,
@@ -140,7 +142,8 @@ def register_tools(mcp_instance) -> None:
         from core.workflows.code_reviewer import run_code_review
 
         try:
-            result = run_code_review(
+            result = await asyncio.to_thread(
+                run_code_review,
                 workspace_path=str(ws),
                 review_focus=review_focus,
                 include_tests=include_tests,
@@ -207,7 +210,8 @@ def register_tools(mcp_instance) -> None:
 
         try:
             if phase == "discover":
-                result = run_refactor_discovery(
+                result = await asyncio.to_thread(
+                    run_refactor_discovery,
                     workspace_path=str(ws),
                     refactor_scope=refactor_scope,
                     file_paths=file_paths,
@@ -221,7 +225,8 @@ def register_tools(mcp_instance) -> None:
                     f"\n{'=' * 40}\n{result.prompt}"
                 )
             else:
-                result = run_refactor_planning(
+                result = await asyncio.to_thread(
+                    run_refactor_planning,
                     workspace_path=str(ws),
                     refactor_scope=refactor_scope,
                     discovery_report_text=discovery_report,
@@ -277,7 +282,8 @@ def register_tools(mcp_instance) -> None:
         )
 
         try:
-            result = run_bug_investigation(
+            result = await asyncio.to_thread(
+                run_bug_investigation,
                 workspace_path=str(ws),
                 bug_description=bug_description,
                 error_trace=error_trace,
@@ -350,7 +356,8 @@ def register_tools(mcp_instance) -> None:
         from core.workflows.test_builder import run_test_builder
 
         try:
-            result = run_test_builder(
+            result = await asyncio.to_thread(
+                run_test_builder,
                 workspace_path=str(ws),
                 task_description=task_description,
                 file_paths=file_paths,

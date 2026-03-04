@@ -17,6 +17,60 @@ from mcp_server.core.constants import (
     logger,
 )
 from mcp_server.core.workspace_manager import WorkspaceManager
+import asyncio
+
+
+def _find_references(
+    ws: Path, symbol_name: str, file_extensions: Optional[List[str]]
+) -> str:
+    """Internal implementation cho find_references, dung asyncio.to_thread."""
+    from services.workspace_index import collect_files_from_disk
+
+    all_files = collect_files_from_disk(ws, workspace_path=ws)
+    if file_extensions:
+        ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
+        all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
+
+    references: list[tuple[str, int, str]] = []
+    pattern = rf"\b{re.escape(symbol_name)}\b"
+
+    for file_path in all_files:
+        try:
+            fp = Path(file_path)
+            content = fp.read_text(encoding="utf-8", errors="replace")
+            lines = content.splitlines()
+
+            for i, line in enumerate(lines, start=1):
+                stripped = line.strip()
+                if stripped.startswith(("#", "//", "/*", "*")):
+                    continue
+                cleaned = STRING_LITERAL_RE.sub("", line)
+                cleaned = INLINE_COMMENT_RE.sub("", cleaned)
+                if re.search(pattern, cleaned):
+                    rel_path = os.path.relpath(file_path, ws)
+                    snippet = line.strip()[:80]
+                    references.append((rel_path, i, snippet))
+        except (OSError, UnicodeDecodeError):
+            continue
+
+    if not references:
+        return f"No references found for: {symbol_name}"
+
+    by_file: dict[str, list[tuple[int, str]]] = {}
+    for file, line, snippet in references:
+        if file not in by_file:
+            by_file[file] = []
+        by_file[file].append((line, snippet))
+
+    result = [f"Found {len(references)} references in {len(by_file)} files:\n"]
+    for file in sorted(by_file.keys()):
+        result.append(f"\n{file}:")
+        for line, snippet in by_file[file][:5]:
+            result.append(f"  Line {line}: {snippet}")
+        if len(by_file[file]) > 5:
+            result.append(f"  ... +{len(by_file[file]) - 5} more")
+
+    return "\n".join(result)
 
 
 def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
@@ -117,53 +171,9 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         try:
-            from services.workspace_index import collect_files_from_disk
-
-            all_files = collect_files_from_disk(ws, workspace_path=ws)
-            if file_extensions:
-                ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
-                all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
-
-            references: list[tuple[str, int, str]] = []
-            pattern = rf"\b{re.escape(symbol_name)}\b"
-
-            for file_path in all_files:
-                try:
-                    fp = Path(file_path)
-                    content = fp.read_text(encoding="utf-8", errors="replace")
-                    lines = content.splitlines()
-
-                    for i, line in enumerate(lines, start=1):
-                        stripped = line.strip()
-                        if stripped.startswith(("#", "//", "/*", "*")):
-                            continue
-                        cleaned = STRING_LITERAL_RE.sub("", line)
-                        cleaned = INLINE_COMMENT_RE.sub("", cleaned)
-                        if re.search(pattern, cleaned):
-                            rel_path = os.path.relpath(file_path, ws)
-                            snippet = line.strip()[:80]
-                            references.append((rel_path, i, snippet))
-                except (OSError, UnicodeDecodeError):
-                    continue
-
-            if not references:
-                return f"No references found for: {symbol_name}"
-
-            by_file: dict[str, list[tuple[int, str]]] = {}
-            for file, line, snippet in references:
-                if file not in by_file:
-                    by_file[file] = []
-                by_file[file].append((line, snippet))
-
-            result = [f"Found {len(references)} references in {len(by_file)} files:\n"]
-            for file in sorted(by_file.keys()):
-                result.append(f"\n{file}:")
-                for line, snippet in by_file[file][:5]:
-                    result.append(f"  Line {line}: {snippet}")
-                if len(by_file[file]) > 5:
-                    result.append(f"  ... +{len(by_file[file]) - 5} more")
-
-            return "\n".join(result)
+            return await asyncio.to_thread(
+                _find_references, ws, symbol_name, file_extensions
+            )
         except Exception as e:
             logger.error("find_references error: %s", e)
             return f"Error: {e}"
@@ -183,7 +193,7 @@ def register_tools(mcp_instance) -> None:
         except ValueError as e:
             return f"Error: {e}"
 
-        return _find_todos(str(ws), include_hack)
+        return await asyncio.to_thread(_find_todos, str(ws), include_hack)
 
     @mcp_instance.tool()
     async def get_symbols(
@@ -212,8 +222,11 @@ def register_tools(mcp_instance) -> None:
             from core.codemaps.symbol_extractor import extract_symbols
             import json
 
-            content = fp.read_text(encoding="utf-8", errors="replace")
-            symbols = extract_symbols(str(fp), content)
+            def _get_symbols_impl():
+                content = fp.read_text(encoding="utf-8", errors="replace")
+                return extract_symbols(str(fp), content)
+
+            symbols = await asyncio.to_thread(_get_symbols_impl)
 
             if not symbols:
                 return f"No symbols found in {file_path}"

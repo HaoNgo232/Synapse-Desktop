@@ -4,6 +4,7 @@ Git Handler - Xu ly cac tool lien quan den git operations.
 Bao gom: diff_summary.
 """
 
+import asyncio
 import subprocess
 from typing import Optional
 
@@ -40,8 +41,9 @@ def register_tools(mcp_instance) -> None:
             return f"Error: Invalid git ref '{target}'. Use alphanumeric, -, _, /, or HEAD."
 
         try:
-            result = subprocess.run(
-                ["git", "diff", "--name-status", target],
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ["git", "diff", "--name-status", target, "--"],
                 cwd=ws,
                 capture_output=True,
                 text=True,
@@ -58,18 +60,28 @@ def register_tools(mcp_instance) -> None:
             if not lines or not lines[0]:
                 return "No changes detected."
 
-            changes = {"added": [], "modified": [], "deleted": []}
+            changes = {"added": [], "modified": [], "deleted": [], "renamed": []}
             for line in lines:
-                parts = line.split("\t", 1)
-                if len(parts) != 2:
+                parts = line.split("\t")
+                if len(parts) < 2:
                     continue
-                status, filepath = parts[0], parts[1]
+                status = parts[0]
                 if status == "A":
-                    changes["added"].append(filepath)
+                    changes["added"].append(parts[1])
                 elif status == "M":
-                    changes["modified"].append(filepath)
+                    changes["modified"].append(parts[1])
                 elif status == "D":
-                    changes["deleted"].append(filepath)
+                    changes["deleted"].append(parts[1])
+                elif status.startswith("R"):
+                    if len(parts) >= 3:
+                        changes["renamed"].append(f"{parts[1]} -> {parts[2]}")
+                    else:
+                        changes["renamed"].append(parts[1])
+                elif status.startswith("C"):
+                    if len(parts) >= 3:
+                        changes["added"].append(f"{parts[2]} (copied from {parts[1]})")
+                    else:
+                        changes["added"].append(parts[1])
 
             total = sum(len(v) for v in changes.values())
             summary = [
@@ -97,6 +109,13 @@ def register_tools(mcp_instance) -> None:
                     summary.append(f"  - {f}")
                 if len(changes["deleted"]) > 10:
                     summary.append(f"  ... +{len(changes['deleted']) - 10} more")
+
+            if changes["renamed"]:
+                summary.append(f"\nRenamed ({len(changes['renamed'])}):")
+                for f in changes["renamed"][:10]:
+                    summary.append(f"  R {f}")
+                if len(changes["renamed"]) > 10:
+                    summary.append(f"  ... +{len(changes['renamed']) - 10} more")
 
             return "\n".join(summary)
 

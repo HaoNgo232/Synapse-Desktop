@@ -1,13 +1,21 @@
 """
 Selection Handler - Xu ly manage_selection tool.
 
-Delegate logic CRUD cho SessionManager trong core.
+Quan ly danh sach file duoc chon (ticked) trong Synapse session.
 """
 
-from pathlib import Path
+import asyncio
+import json
 from typing import List, Optional
 
-from mcp_server.core.session_manager import SessionManager
+from mcp.server.fastmcp import Context
+
+from mcp_server.core.constants import logger
+from mcp_server.core.workspace_manager import WorkspaceManager
+
+# Lock de serialize read-modify-write tren session file,
+# tranh TOCTOU race condition khi concurrent add/set actions
+_selection_lock = asyncio.Lock()
 
 
 def register_tools(mcp_instance) -> None:
@@ -17,12 +25,12 @@ def register_tools(mcp_instance) -> None:
         mcp_instance: FastMCP server instance.
     """
 
-    # Ham manage_selection dung de quan ly danh sach cac file dang duoc chon de build prompt
     @mcp_instance.tool()
-    def manage_selection(
-        workspace_path: str,
+    async def manage_selection(
         action: str = "get",
         paths: Optional[List[str]] = None,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Manage the list of currently selected (ticked) files in the Synapse session.
 
@@ -44,24 +52,68 @@ def register_tools(mcp_instance) -> None:
         start fresh.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
             action: Action to perform - "get", "set", "add", or "clear".
             paths: List of relative file paths (required for "set" and "add" actions).
+            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
-        session_file = ws / ".synapse" / "selection.json"
-        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file = WorkspaceManager.get_session_file(ws)
 
-        if action == "get":
-            return SessionManager.get_selection(session_file, ws)
-        elif action == "set":
-            return SessionManager.set_selection(session_file, ws, paths or [])
-        elif action == "add":
-            return SessionManager.add_selection(session_file, ws, paths or [])
-        elif action == "clear":
-            return SessionManager.clear_selection(session_file)
-        else:
-            return f"Error: Unknown action '{action}'. Use: get, set, add, clear."
+        # Serialize read-modify-write de tranh TOCTOU race condition
+        async with _selection_lock:
+            # Load current selection
+            current_selection: list[str] = []
+            if session_file.exists():
+                try:
+                    data = json.loads(session_file.read_text(encoding="utf-8"))
+                    current_selection = data.get("selected_files", [])
+                except (OSError, json.JSONDecodeError) as e:
+                    logger.warning("Failed to load selection: %s", e)
+
+            if action == "get":
+                if not current_selection:
+                    return "No files currently selected."
+                return f"Selected files ({len(current_selection)}):\n" + "\n".join(
+                    f"  {p}" for p in current_selection
+                )
+
+            elif action == "clear":
+                session_file.write_text(
+                    json.dumps({"selected_files": []}, indent=2), encoding="utf-8"
+                )
+                return "Selection cleared."
+
+            elif action in ("set", "add"):
+                if not paths:
+                    return f"Error: 'paths' parameter required for action '{action}'."
+
+                # Validate paths
+                for rp in paths:
+                    fp = (ws / rp).resolve()
+                    if not fp.is_relative_to(ws):
+                        return f"Error: Path traversal detected for: {rp}"
+                    if not fp.is_file():
+                        return f"Error: File not found: {rp}"
+
+                if action == "set":
+                    new_selection = paths
+                else:  # add
+                    existing_set = set(current_selection)
+                    new_selection = current_selection + [
+                        p for p in paths if p not in existing_set
+                    ]
+
+                session_file.write_text(
+                    json.dumps({"selected_files": new_selection}, indent=2),
+                    encoding="utf-8",
+                )
+                return f"Selection updated: {len(new_selection)} files selected."
+
+            else:
+                return (
+                    f"Error: Invalid action '{action}'. Use: get, set, add, or clear."
+                )

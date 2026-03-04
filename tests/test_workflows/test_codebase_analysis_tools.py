@@ -21,10 +21,27 @@ def _get_tool_fn(name):
     raise ValueError(f"Tool '{name}' khong tim thay")
 
 
-get_callers = _get_tool_fn("get_callers")
-get_related_tests = _get_tool_fn("get_related_tests")
-batch_codemap = _get_tool_fn("batch_codemap")
-explain_architecture = _get_tool_fn("explain_architecture")
+_get_callers_fn = _get_tool_fn("get_callers")
+_get_related_tests_fn = _get_tool_fn("get_related_tests")
+_batch_codemap_fn = _get_tool_fn("batch_codemap")
+_explain_architecture_fn = _get_tool_fn("explain_architecture")
+
+
+# Async wrappers - pass workspace_path explicitly (no ctx needed for tests)
+async def get_callers(**kwargs):
+    return await _get_callers_fn(**kwargs)
+
+
+async def get_related_tests(**kwargs):
+    return await _get_related_tests_fn(**kwargs)
+
+
+async def batch_codemap(**kwargs):
+    return await _batch_codemap_fn(**kwargs)
+
+
+async def explain_architecture(**kwargs):
+    return await _explain_architecture_fn(**kwargs)
 
 
 # ===================================================================
@@ -237,9 +254,10 @@ def js_workspace(tmp_path):
 class TestGetCallers:
     """Tests cho tool get_callers."""
 
-    def test_find_callers_of_function(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_find_callers_of_function(self, python_workspace):
         """Tim duoc tat ca noi goi validate_token."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="validate_token",
         )
@@ -249,9 +267,10 @@ class TestGetCallers:
         # token.py goi validate_token trong generate_token va refresh_token
         assert "token.py" in result
 
-    def test_find_callers_of_login(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_find_callers_of_login(self, python_workspace):
         """Tim callers cua login function."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="login",
         )
@@ -259,26 +278,29 @@ class TestGetCallers:
         # main.py va test_login.py goi login
         assert "main.py" in result
 
-    def test_no_callers_found(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_no_callers_found(self, python_workspace):
         """Symbol khong ton tai -> thong bao khong tim thay."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="nonexistent_function_xyz",
         )
         assert "No callers found" in result
 
-    def test_filter_by_extension(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_filter_by_extension(self, python_workspace):
         """Chi tim trong files .py, loai bo cac extension khac."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="validate_token",
             file_extensions=[".py"],
         )
         assert "Error" not in result
 
-    def test_max_results_limit(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_max_results_limit(self, python_workspace):
         """Gioi han so ket qua tra ve."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="validate_token",
             max_results=1,
@@ -291,26 +313,29 @@ class TestGetCallers:
         ]
         assert len(lines_with_L) <= 1
 
-    def test_invalid_workspace(self):
+    @pytest.mark.asyncio
+    async def test_invalid_workspace(self):
         """Workspace khong hop le -> tra ve Error."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path="/nonexistent/path",
             symbol_name="foo",
         )
         assert "Error" in result
 
-    def test_caller_includes_enclosing_function(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_caller_includes_enclosing_function(self, python_workspace):
         """Ket qua cho biet ten function chua loi goi (enclosing function)."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="validate_token",
         )
         # generate_token goi validate_token
         assert "generate_token" in result or "refresh_token" in result
 
-    def test_skips_definition_line(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_skips_definition_line(self, python_workspace):
         """Khong tinh dong dinh nghia (def validate_token) la caller."""
-        result = get_callers(
+        result = await get_callers(
             workspace_path=str(python_workspace),
             symbol_name="validate_token",
         )
@@ -328,27 +353,30 @@ class TestGetCallers:
 class TestGetRelatedTests:
     """Tests cho tool get_related_tests."""
 
-    def test_find_python_tests(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_find_python_tests(self, python_workspace):
         """Tim test files cho Python source file."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path=str(python_workspace),
             file_paths=["auth/login.py"],
         )
         assert "test_login" in result
         assert "Found tests for" in result
 
-    def test_find_tests_for_multiple_files(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_find_tests_for_multiple_files(self, python_workspace):
         """Tim tests cho nhieu source files cung luc."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path=str(python_workspace),
             file_paths=["auth/login.py", "services/user.py"],
         )
         assert "test_login" in result
         assert "test_user" in result
 
-    def test_no_tests_found(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_no_tests_found(self, python_workspace):
         """Source file khong co test tuong ung."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path=str(python_workspace),
             file_paths=["auth/token.py"],
         )
@@ -357,33 +385,37 @@ class TestGetRelatedTests:
         # Chi can dam bao khong crash
         assert "Error" not in result
 
-    def test_find_js_tests(self, js_workspace):
+    @pytest.mark.asyncio
+    async def test_find_js_tests(self, js_workspace):
         """Tim test files cho TypeScript source file."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path=str(js_workspace),
             file_paths=["src/utils.ts"],
         )
         assert "utils.test.ts" in result
 
-    def test_find_spec_files(self, js_workspace):
+    @pytest.mark.asyncio
+    async def test_find_spec_files(self, js_workspace):
         """Tim .spec.ts files."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path=str(js_workspace),
             file_paths=["src/api.ts"],
         )
         assert "api.spec.ts" in result
 
-    def test_invalid_workspace(self):
+    @pytest.mark.asyncio
+    async def test_invalid_workspace(self):
         """Workspace khong hop le -> tra ve Error."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path="/nonexistent/path",
             file_paths=["foo.py"],
         )
         assert "Error" in result
 
-    def test_empty_file_paths(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_empty_file_paths(self, python_workspace):
         """Danh sach file_paths rong -> khong tim thay gi."""
-        result = get_related_tests(
+        result = await get_related_tests(
             workspace_path=str(python_workspace),
             file_paths=[],
         )
@@ -398,9 +430,10 @@ class TestGetRelatedTests:
 class TestBatchCodemap:
     """Tests cho tool batch_codemap."""
 
-    def test_codemap_entire_workspace(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_codemap_entire_workspace(self, python_workspace):
         """Tao codemap cho toan bo workspace."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(python_workspace),
             directory=".",
         )
@@ -408,9 +441,10 @@ class TestBatchCodemap:
         # Phai chua thong tin ve cac files
         assert "Codemap" in result
 
-    def test_codemap_subdirectory(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_codemap_subdirectory(self, python_workspace):
         """Tao codemap cho subdirectory cu the."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(python_workspace),
             directory="auth",
         )
@@ -419,9 +453,10 @@ class TestBatchCodemap:
         # Phai chua thong tin ve auth module
         assert "login" in result.lower() or "auth" in result.lower()
 
-    def test_codemap_with_extension_filter(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_codemap_with_extension_filter(self, python_workspace):
         """Filter theo extension chi lay .py files."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(python_workspace),
             directory=".",
             extensions=[".py"],
@@ -429,33 +464,37 @@ class TestBatchCodemap:
         assert "Error" not in result
         assert "Codemap" in result
 
-    def test_codemap_nonexistent_directory(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_codemap_nonexistent_directory(self, python_workspace):
         """Directory khong ton tai -> tra ve Error."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(python_workspace),
             directory="nonexistent",
         )
         assert "Error" in result
         assert "Directory not found" in result
 
-    def test_codemap_path_traversal(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_codemap_path_traversal(self, python_workspace):
         """Path traversal -> bi chan."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(python_workspace),
             directory="../../../etc",
         )
         assert "Error" in result
 
-    def test_codemap_invalid_workspace(self):
+    @pytest.mark.asyncio
+    async def test_codemap_invalid_workspace(self):
         """Workspace khong hop le -> tra ve Error."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path="/nonexistent/path",
         )
         assert "Error" in result
 
-    def test_codemap_max_files_limit(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_codemap_max_files_limit(self, python_workspace):
         """Gioi han so files xu ly."""
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(python_workspace),
             directory=".",
             max_files=2,
@@ -463,7 +502,8 @@ class TestBatchCodemap:
         # Khong crash, van tra ket qua
         assert "Error" not in result
 
-    def test_codemap_empty_directory(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_codemap_empty_directory(self, tmp_path):
         """Directory khong co code files -> thong bao."""
         ws = tmp_path / "no_code"
         ws.mkdir()
@@ -471,7 +511,7 @@ class TestBatchCodemap:
         sub.mkdir()
         (sub / "notes.txt").write_text("just notes")
 
-        result = batch_codemap(
+        result = await batch_codemap(
             workspace_path=str(ws),
             directory="data",
         )
@@ -486,9 +526,10 @@ class TestBatchCodemap:
 class TestExplainArchitecture:
     """Tests cho tool explain_architecture."""
 
-    def test_basic_architecture(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_basic_architecture(self, python_workspace):
         """Tao architecture summary cho Python workspace."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
         )
         assert "Architecture:" in result
@@ -496,9 +537,10 @@ class TestExplainArchitecture:
         # Phai detect entry point main.py
         assert "main.py" in result
 
-    def test_detects_modules(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_detects_modules(self, python_workspace):
         """Nhan dien cac top-level modules."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
         )
         # auth/, services/, tests/ la cac modules
@@ -506,70 +548,79 @@ class TestExplainArchitecture:
         assert "services" in result.lower()
         assert "tests" in result.lower()
 
-    def test_detects_config_files(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_detects_config_files(self, python_workspace):
         """Nhan dien config files (pyproject.toml)."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
         )
         assert "pyproject.toml" in result
 
-    def test_focus_directory(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_focus_directory(self, python_workspace):
         """Focus vao subdirectory cu the."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
             focus_directory="auth",
         )
         assert "Error" not in result
         assert "focus: auth/" in result
 
-    def test_invalid_focus_directory(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_invalid_focus_directory(self, python_workspace):
         """Focus directory khong ton tai -> Error."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
             focus_directory="nonexistent",
         )
         assert "Error" in result
 
-    def test_invalid_workspace(self):
+    @pytest.mark.asyncio
+    async def test_invalid_workspace(self):
         """Workspace khong hop le -> Error."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path="/nonexistent/path",
         )
         assert "Error" in result
 
-    def test_suggested_exploration_order(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_suggested_exploration_order(self, python_workspace):
         """Output chua goi y thu tu kham pha."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
         )
         assert "Suggested exploration order" in result
 
-    def test_detects_entry_points(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_detects_entry_points(self, python_workspace):
         """Phat hien entry points (main.py, server.py, etc.)."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
         )
         assert "Entry Points" in result
         assert "main.py" in result
 
-    def test_shows_file_count(self, python_workspace):
+    @pytest.mark.asyncio
+    async def test_shows_file_count(self, python_workspace):
         """Hien thi tong so files."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(python_workspace),
         )
         assert "Total:" in result
         assert "files" in result
 
-    def test_js_workspace_detects_package_json(self, js_workspace):
+    @pytest.mark.asyncio
+    async def test_js_workspace_detects_package_json(self, js_workspace):
         """Nhan dien package.json la config file."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(js_workspace),
         )
         assert "package.json" in result
 
-    def test_empty_workspace(self, empty_workspace):
+    @pytest.mark.asyncio
+    async def test_empty_workspace(self, empty_workspace):
         """Workspace voi chi README.md -> van chay duoc."""
-        result = explain_architecture(
+        result = await explain_architecture(
             workspace_path=str(empty_workspace),
         )
         # Co the bao khong co files hoac tra ve summary toi gian

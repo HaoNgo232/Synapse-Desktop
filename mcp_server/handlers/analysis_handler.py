@@ -9,23 +9,18 @@ import re
 from pathlib import Path
 from typing import List, Optional
 
+from mcp.server.fastmcp import Context
+
 from mcp_server.core.constants import (
     INLINE_COMMENT_RE,
     STRING_LITERAL_RE,
     logger,
 )
+from mcp_server.core.workspace_manager import WorkspaceManager
 
 
 def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
-    """Internal implementation cho find_todos, co the goi tu start_session.
-
-    Args:
-        workspace_path: Duong dan workspace.
-        include_hack: Co quet them HACK comments hay khong.
-
-    Returns:
-        Ket qua scan TODO/FIXME/HACK.
-    """
+    """Internal implementation cho find_todos, co the goi tu start_session."""
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
@@ -34,8 +29,6 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
         from services.workspace_index import collect_files_from_disk
 
         all_files = collect_files_from_disk(ws, workspace_path=ws)
-
-        # Filter to code files only
         code_exts = {
             ".py",
             ".js",
@@ -51,7 +44,7 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
         }
         all_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
 
-        todos: list[tuple[str, int, str, str]] = []  # (file, line, type, content)
+        todos: list[tuple[str, int, str, str]] = []
 
         for file_path in all_files:
             try:
@@ -61,9 +54,6 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
 
                 for i, line in enumerate(lines, start=1):
                     comment_type = None
-
-                    # Dung word-boundary regex de tranh false positives
-                    # (vi du: "TODOLIST", "AUTOHACK" se KHONG match nua)
                     if re.search(r"\bTODO\b", line, re.IGNORECASE):
                         comment_type = "TODO"
                     elif re.search(r"\bFIXME\b", line, re.IGNORECASE):
@@ -81,7 +71,6 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
         if not todos:
             return "No TODO/FIXME/HACK comments found in project."
 
-        # Group by type
         by_type: dict[str, list[tuple[str, int, str]]] = {
             "TODO": [],
             "FIXME": [],
@@ -91,13 +80,12 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
             by_type[ctype].append((file, line, snippet))
 
         result = [f"Found {len(todos)} comments:\n"]
-
         for ctype in ["FIXME", "TODO", "HACK"]:
             items = by_type[ctype]
             if not items:
                 continue
             result.append(f"\n{ctype} ({len(items)}):")
-            for file, line, snippet in items[:20]:  # Limit to 20 per type
+            for file, line, snippet in items[:20]:
                 result.append(f"  {file}:{line} - {snippet}")
             if len(items) > 20:
                 result.append(f"  ... +{len(items) - 20} more")
@@ -109,29 +97,24 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky analysis tools voi MCP server.
+    """Dang ky analysis tools voi MCP server."""
 
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
-
-    # Ham find_references tim tat ca cac vi tri su dung cua mot symbol (function/class/variable)
     @mcp_instance.tool()
-    def find_references(
-        workspace_path: str,
+    async def find_references(
         symbol_name: str,
         file_extensions: Optional[List[str]] = None,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Find all locations where a function/class/variable is used (AST + regex).
 
         WHY USE THIS OVER BUILT-IN: Your built-in grep/search finds ALL text matches
-        including strings ("Cannot find myFunc"), comments (# rename myFunc), and docs.
-        This tool strips string literals and comments before matching, giving you only
-        actual CODE references. Reduces false positives significantly for refactoring.
+        including strings, comments, and docs. This tool strips those before matching.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         try:
             from services.workspace_index import collect_files_from_disk
@@ -152,11 +135,8 @@ def register_tools(mcp_instance) -> None:
 
                     for i, line in enumerate(lines, start=1):
                         stripped = line.strip()
-                        # Bo qua dong comment hoan toan (bao gom ca block comment markers)
                         if stripped.startswith(("#", "//", "/*", "*")):
                             continue
-                        # Loc string literals va inline comments truoc khi match
-                        # de giam false positives
                         cleaned = STRING_LITERAL_RE.sub("", line)
                         cleaned = INLINE_COMMENT_RE.sub("", cleaned)
                         if re.search(pattern, cleaned):
@@ -188,41 +168,39 @@ def register_tools(mcp_instance) -> None:
             logger.error("find_references error: %s", e)
             return f"Error: {e}"
 
-    # Ham find_todos quet toan bo project de tim cac comment kieu TODO, FIXME hoac HACK
     @mcp_instance.tool()
-    def find_todos(
-        workspace_path: str,
+    async def find_todos(
         include_hack: bool = True,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Scan entire project for TODO/FIXME/HACK comments with file path and line number.
 
-        WHY USE THIS OVER BUILT-IN: Uses smarter boundaries (word boundaries) than standard
-        grep, and automatically ignores non-code files to reduce noise.
+        WHY USE THIS OVER BUILT-IN: Uses smarter boundaries than standard grep.
         """
-        return _find_todos(workspace_path, include_hack)
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
-    # Ham get_symbols liet ke chi tiet cac symbol trong file (signatures, line range, parent class)
+        return _find_todos(str(ws), include_hack)
+
     @mcp_instance.tool()
-    def get_symbols(
-        workspace_path: str,
+    async def get_symbols(
         file_path: str,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Get structured list of all symbols (functions, classes, methods) in a file as JSON.
 
         WHY USE THIS OVER BUILT-IN: No built-in tool gives you structured, machine-readable
-        symbol data with line ranges, signatures, and parent class info. Use this when you
-        need to programmatically filter/count/compare symbols.
-
-        Returns detailed symbol information including:
-        - name: Symbol name
-        - kind: function/class/method/variable
-        - line_start, line_end: Location in file
-        - signature: Function/method signature
-        - parent: Parent class (for methods)
-
-        Useful for programmatic analysis by AI agents (filtering, counting, etc.)
+        symbol data with line ranges, signatures, and parent class info.
         """
-        ws = Path(workspace_path).resolve()
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
         fp = (ws / file_path).resolve()
 
         if not fp.is_relative_to(ws):
@@ -240,7 +218,6 @@ def register_tools(mcp_instance) -> None:
             if not symbols:
                 return f"No symbols found in {file_path}"
 
-            # Convert to JSON-serializable format
             symbols_data = []
             for sym in symbols:
                 symbols_data.append(
@@ -254,7 +231,6 @@ def register_tools(mcp_instance) -> None:
                     }
                 )
 
-            # Summary
             by_kind = {}
             for sym in symbols:
                 kind = sym.kind.value

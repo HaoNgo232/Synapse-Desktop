@@ -4,9 +4,11 @@ Workflow Handler - Xu ly cac workflow tools cho AI agent handoff.
 Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test.
 """
 
-from pathlib import Path
 from typing import List, Optional
 
+from mcp.server.fastmcp import Context
+
+from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import SAFE_GIT_REF, logger
 
 
@@ -19,9 +21,10 @@ def register_tools(mcp_instance) -> None:
 
     # Tool rp_build chuan bi context toi uu cho AI agent implement task
     @mcp_instance.tool()
-    def rp_build(
-        workspace_path: str,
+    async def rp_build(
         task_description: str,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         file_paths: Optional[List[str]] = None,
         max_tokens: int = 100_000,
         include_codemap: bool = True,
@@ -51,9 +54,10 @@ def register_tools(mcp_instance) -> None:
             include_git_changes: Include recent git changes (default: False).
             output_file: Optional path to write the prompt (for cross-agent handoff).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if output_file:
             out_path = (ws / output_file).resolve()
@@ -66,14 +70,14 @@ def register_tools(mcp_instance) -> None:
 
         try:
             result = run_context_builder(
-                workspace_path=workspace_path,
+                workspace_path=str(ws),
                 task_description=task_description,
                 file_paths=file_paths,
                 max_tokens=max_tokens,
                 include_codemap=include_codemap,
                 include_git_changes=include_git_changes,
                 output_file=output_file,
-            )
+            )  # type: ignore
 
             summary = (
                 f"Context Builder Complete\n"
@@ -101,8 +105,9 @@ def register_tools(mcp_instance) -> None:
 
     # Tool rp_review review code voi full context xung quanh
     @mcp_instance.tool()
-    def rp_review(
-        workspace_path: str,
+    async def rp_review(
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         review_focus: str = "",
         include_tests: bool = True,
         include_callers: bool = True,
@@ -124,9 +129,10 @@ def register_tools(mcp_instance) -> None:
             max_tokens: Maximum token budget (default: 120,000).
             base_ref: Optional git ref to diff against.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if base_ref and not SAFE_GIT_REF.match(base_ref):
             return f"Error: Invalid git reference: {base_ref}"
@@ -135,13 +141,13 @@ def register_tools(mcp_instance) -> None:
 
         try:
             result = run_code_review(
-                workspace_path=workspace_path,
+                workspace_path=str(ws),
                 review_focus=review_focus,
                 include_tests=include_tests,
                 include_callers=include_callers,
                 max_tokens=max_tokens,
                 base_ref=base_ref,
-            )
+            )  # type: ignore
 
             summary = (
                 f"Code Review Context Ready\n"
@@ -159,9 +165,10 @@ def register_tools(mcp_instance) -> None:
 
     # Tool rp_refactor phan tich va lap ke hoach refactoring 2 pha
     @mcp_instance.tool()
-    def rp_refactor(
-        workspace_path: str,
+    async def rp_refactor(
         refactor_scope: str,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         phase: str = "discover",
         file_paths: Optional[List[str]] = None,
         discovery_report: str = "",
@@ -182,9 +189,10 @@ def register_tools(mcp_instance) -> None:
             discovery_report: Output from phase="discover" (required for phase="plan").
             max_tokens: Maximum token budget (default: 80,000).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if phase not in ("discover", "plan"):
             return "Error: phase must be 'discover' or 'plan'."
@@ -200,11 +208,11 @@ def register_tools(mcp_instance) -> None:
         try:
             if phase == "discover":
                 result = run_refactor_discovery(
-                    workspace_path=workspace_path,
+                    workspace_path=str(ws),
                     refactor_scope=refactor_scope,
                     file_paths=file_paths,
                     max_tokens=max_tokens,
-                )
+                )  # type: ignore
                 return (
                     f"Refactor Discovery Complete\n"
                     f"{'=' * 40}\n"
@@ -214,12 +222,12 @@ def register_tools(mcp_instance) -> None:
                 )
             else:
                 result = run_refactor_planning(
-                    workspace_path=workspace_path,
+                    workspace_path=str(ws),
                     refactor_scope=refactor_scope,
                     discovery_report_text=discovery_report,
                     file_paths=file_paths,
                     max_tokens=max_tokens,
-                )
+                )  # type: ignore
                 return (
                     f"Refactor Plan Ready\n"
                     f"{'=' * 40}\n"
@@ -234,9 +242,10 @@ def register_tools(mcp_instance) -> None:
 
     # Tool rp_investigate tu dong dieu tra bug bang cach trace execution path
     @mcp_instance.tool()
-    def rp_investigate(
-        workspace_path: str,
+    async def rp_investigate(
         bug_description: str,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         error_trace: str = "",
         entry_files: Optional[List[str]] = None,
         max_depth: int = 4,
@@ -258,9 +267,10 @@ def register_tools(mcp_instance) -> None:
             max_depth: Maximum trace depth (default: 4).
             max_tokens: Maximum token budget (default: 100,000).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         from core.workflows.bug_investigator import (
             run_bug_investigation,
@@ -268,13 +278,13 @@ def register_tools(mcp_instance) -> None:
 
         try:
             result = run_bug_investigation(
-                workspace_path=workspace_path,
+                workspace_path=str(ws),
                 bug_description=bug_description,
                 error_trace=error_trace,
                 entry_files=entry_files,
                 max_depth=max_depth,
                 max_tokens=max_tokens,
-            )
+            )  # type: ignore
 
             summary = (
                 f"Bug Investigation Complete\n"
@@ -293,8 +303,9 @@ def register_tools(mcp_instance) -> None:
     # Tool rp_test phan tich code, tim test coverage gaps,
     # va chuan bi context toi uu cho AI viet tests chat luong cao
     @mcp_instance.tool()
-    def rp_test(
-        workspace_path: str,
+    async def rp_test(
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         task_description: str = "Write tests for the specified files",
         file_paths: Optional[List[str]] = None,
         max_tokens: int = 100_000,
@@ -326,9 +337,10 @@ def register_tools(mcp_instance) -> None:
             include_existing_tests: Include existing test files as reference (default: True).
             output_file: Optional path to write the prompt (for cross-agent handoff).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if output_file:
             out_path = (ws / output_file).resolve()
@@ -339,14 +351,14 @@ def register_tools(mcp_instance) -> None:
 
         try:
             result = run_test_builder(
-                workspace_path=workspace_path,
+                workspace_path=str(ws),
                 task_description=task_description,
                 file_paths=file_paths,
                 max_tokens=max_tokens,
                 test_framework=test_framework,
                 include_existing_tests=include_existing_tests,
                 output_file=output_file,
-            )
+            )  # type: ignore
 
             summary = (
                 f"Test Builder Complete\n"

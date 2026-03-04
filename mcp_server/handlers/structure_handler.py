@@ -9,7 +9,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional
 
+from mcp.server.fastmcp import Context
+
 from mcp_server.core.constants import logger
+from mcp_server.core.workspace_manager import WorkspaceManager
 
 
 def _detect_frameworks(ws: Path) -> list[str]:
@@ -117,64 +120,47 @@ def _get_project_structure(workspace_path: str) -> str:
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky structure tools voi MCP server.
+    """Dang ky structure tools voi MCP server."""
 
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
-
-    # Ham get_project_structure phan tich tong quan du an nhu so luong file, kich thuoc va framework
     @mcp_instance.tool()
-    def get_project_structure(
-        workspace_path: str,
+    async def get_project_structure(
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Get a high-level summary of the project: total files, breakdown by file type, detected frameworks, and estimated token count.
 
         WHY USE THIS OVER BUILT-IN: Your built-in list_dir shows file names but can't
-        detect frameworks (Django, Next.js, Rust, etc.), count total tokens, or give
-        you a statistical breakdown. This gives you the big picture in one call.
-
-        This is the fastest way to understand what kind of project you're working with,
-        its scale, and which technologies are in use (Python/Django, Node.js/Next.js, Rust, etc.).
-
-        When to use: ALWAYS call this first when starting work on a codebase. It takes
-        milliseconds and tells you the project's language, framework, size, and complexity
-        before you dive into any files.
+        detect frameworks. This gives you the big picture in one call.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
+            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
         """
-        return _get_project_structure(workspace_path)
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
-    # Ham explain_architecture tu dong phan tich va tao tom tat kien truc codebase
+        return _get_project_structure(str(ws))
+
     @mcp_instance.tool()
-    def explain_architecture(
-        workspace_path: str,
+    async def explain_architecture(
         focus_directory: Optional[str] = None,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Auto-generate a high-level architecture summary of the codebase.
 
         WHY USE THIS OVER BUILT-IN: No built-in tool can synthesize project structure,
-        module boundaries, entry points, dependency graph density, and framework detection
-        into a single architectural overview. Agents typically need 5-10 tool calls to
-        piece this together manually.
-
-        Analyzes:
-        - Module/package boundaries and their responsibilities (based on directory names + file count)
-        - Entry points (main files, CLI scripts, server files)
-        - Cross-module dependency density (which modules are tightly coupled)
-        - Framework and infrastructure patterns
-
-        When to use: At the start of a complex task that spans multiple modules. Gives you
-        the mental model of how the codebase is organized before you start reading files.
+        module boundaries, entry points into a single architectural overview.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
             focus_directory: Optional subdirectory to focus analysis on (e.g., "src").
+            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         scan_root = ws
         if focus_directory:

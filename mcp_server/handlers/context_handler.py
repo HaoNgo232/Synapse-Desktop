@@ -7,6 +7,9 @@ Bao gom: get_codemap, batch_codemap, build_prompt.
 from pathlib import Path
 from typing import List, Optional
 
+from mcp.server.fastmcp import Context
+
+from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import logger
 from mcp_server.core.profile_resolver import resolve_profile_params
 
@@ -20,9 +23,10 @@ def register_tools(mcp_instance) -> None:
 
     # Ham get_codemap dung Tree-sitter de trich xuat skeleton cua code (signatures, class defs)
     @mcp_instance.tool()
-    def get_codemap(
-        workspace_path: str,
+    async def get_codemap(
         file_paths: List[str],
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Extract code structure (function signatures, class definitions, imports) from files.
 
@@ -45,9 +49,10 @@ def register_tools(mcp_instance) -> None:
             workspace_path: Absolute path to the workspace root directory.
             file_paths: List of relative file paths to analyze (e.g., ["src/auth.py", "src/db.py"]).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         # Chuyen relative paths thanh absolute paths
         abs_paths: set[str] = set()
@@ -82,11 +87,12 @@ def register_tools(mcp_instance) -> None:
 
     # Ham batch_codemap trich xuat codemap cho tat ca file trong thu muc
     @mcp_instance.tool()
-    def batch_codemap(
-        workspace_path: str,
+    async def batch_codemap(
         directory: str = ".",
         extensions: Optional[List[str]] = None,
         max_files: int = 50,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Extract code structure (signatures, classes, imports) for ALL files in a directory.
 
@@ -103,9 +109,10 @@ def register_tools(mcp_instance) -> None:
             extensions: Optional file extensions to include (e.g., [".py"]). Default: all supported.
             max_files: Maximum files to process (default: 50, to prevent timeouts).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         target_dir = (ws / directory).resolve()
         if not target_dir.is_relative_to(ws):
@@ -166,9 +173,10 @@ def register_tools(mcp_instance) -> None:
 
     # Ham build_prompt ket hop noi dung file, cau truc thu muc va git diffs de tao prompt cho AI
     @mcp_instance.tool()
-    def build_prompt(
-        workspace_path: str,
+    async def build_prompt(
         file_paths: List[str],
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         instructions: str = "",
         output_format: str = "xml",
         output_file: Optional[str] = None,
@@ -222,9 +230,10 @@ def register_tools(mcp_instance) -> None:
             dependency_depth: Depth for dependency resolution (1-3, default 1). Only used when auto_expand_dependencies=True.
             max_tokens: Maximum token count for prompt output. When set, context will be automatically trimmed to fit budget.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         # ================================================================
         # Phase 0: Validate metadata_format

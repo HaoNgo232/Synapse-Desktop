@@ -6,9 +6,12 @@ Uoc tinh so luong token cua mot danh sach file dung tokenizer thuc te.
 
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+from mcp.server.fastmcp import Context
 
 from mcp_server.core.constants import logger
+from mcp_server.core.workspace_manager import WorkspaceManager
 
 
 def register_tools(mcp_instance) -> None:
@@ -18,11 +21,11 @@ def register_tools(mcp_instance) -> None:
         mcp_instance: FastMCP server instance.
     """
 
-    # Ham estimate_tokens uoc tinh so luong token cua mot danh sach file
     @mcp_instance.tool()
-    def estimate_tokens(
-        workspace_path: str,
+    async def estimate_tokens(
         file_paths: List[str],
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Estimate token count for a set of files before adding them to context.
 
@@ -30,9 +33,10 @@ def register_tools(mcp_instance) -> None:
         tokenizer (tiktoken/HuggingFace) matching the target LLM model, not rough byte
         estimates. Essential for managing context window budgets.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         abs_paths: list[Path] = []
         for rp in file_paths:

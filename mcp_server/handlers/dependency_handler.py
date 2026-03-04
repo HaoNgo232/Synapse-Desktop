@@ -9,6 +9,9 @@ import re
 from pathlib import Path
 from typing import List, Optional
 
+from mcp.server.fastmcp import Context
+
+from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import (
     INLINE_COMMENT_RE,
     STRING_LITERAL_RE,
@@ -25,8 +28,9 @@ def register_tools(mcp_instance) -> None:
 
     # Ham get_imports_graph tao do thi phu thuoc giua cac file duoi dang JSON
     @mcp_instance.tool()
-    def get_imports_graph(
-        workspace_path: str,
+    async def get_imports_graph(
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         file_paths: Optional[List[str]] = None,
         max_depth: int = 1,
     ) -> str:
@@ -37,9 +41,10 @@ def register_tools(mcp_instance) -> None:
         -> "services/auth.py"). This tool uses Synapse's dependency resolver to build
         a proper file-to-file dependency graph.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         try:
             from core.dependency_resolver import DependencyResolver
@@ -120,9 +125,10 @@ def register_tools(mcp_instance) -> None:
 
     # Ham get_callers tim tat ca functions/methods goi mot symbol cu the
     @mcp_instance.tool()
-    def get_callers(
-        workspace_path: str,
+    async def get_callers(
         symbol_name: str,
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
         file_extensions: Optional[List[str]] = None,
         max_results: int = 30,
     ) -> str:
@@ -145,9 +151,10 @@ def register_tools(mcp_instance) -> None:
             file_extensions: Optional filter (e.g., [".py", ".ts"]). None searches all code files.
             max_results: Maximum number of caller entries to return (default: 30).
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         try:
             from services.workspace_index import collect_files_from_disk
@@ -260,9 +267,10 @@ def register_tools(mcp_instance) -> None:
 
     # Ham get_related_tests tim test files tuong ung voi source files
     @mcp_instance.tool()
-    def get_related_tests(
-        workspace_path: str,
+    async def get_related_tests(
         file_paths: List[str],
+        workspace_path: Optional[str] = None,
+        ctx: Optional[Context] = None,
     ) -> str:
         """Find test files corresponding to given source files.
 
@@ -278,9 +286,10 @@ def register_tools(mcp_instance) -> None:
             workspace_path: Absolute path to the workspace root directory.
             file_paths: List of relative source file paths to find tests for.
         """
-        ws = Path(workspace_path).resolve()
-        if not ws.is_dir():
-            return f"Error: '{workspace_path}' is not a valid directory."
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
 
         try:
             from services.workspace_index import collect_files_from_disk

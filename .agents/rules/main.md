@@ -23,7 +23,7 @@ pip install -r requirements.txt
 # Standard run
 python main_window.py
 # OR
-./start.sh
+./scripts/start.sh
 
 # With debug logging
 SYNAPSE_DEBUG=1 python main_window.py

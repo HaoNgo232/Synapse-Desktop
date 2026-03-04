@@ -138,12 +138,12 @@ Python 3.10+, Git (optional, for branch detection and diff context).
 ```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
-chmod +x start.sh
-./start.sh
+chmod +x scripts/start.sh
+./scripts/start.sh
 ```
 
 **Windows (Experimental)**
-Double-click `start.bat`, or use `.\build-windows.ps1` to compile into a `.exe`.
+Double-click `scripts/start.bat`, or use `scripts/build-windows.ps1` to compile into a `.exe`.
 
 **Building AppImage (Linux)**
 To build a standalone executable AppImage for Linux, run the included script:

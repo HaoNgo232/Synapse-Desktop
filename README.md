@@ -1,7 +1,7 @@
 # Synapse Desktop
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20(Stable)%20%7C%20Windows%20(Beta)-orange)
 ![Qt](https://img.shields.io/badge/GUI-PySide6%20(Qt6)-41cd52)
 ![MCP](https://img.shields.io/badge/MCP-Server%20Ready-blueviolet)
@@ -243,7 +243,11 @@ This section is intended for developers who wish to understand or contribute to 
 ---
 
 ## Acknowledgements
-Inspired by [Repomix](https://github.com/yamadashy/repomix), [Overwrite](https://github.com/mnismt/overwrite), and [PasteMax](https://github.com/kleneway/pastemax).
+Inspired by:
+- [Repomix](https://github.com/yamadashy/repomix) (MIT License) - File packaging and token counting concepts
+- [Overwrite](https://github.com/mnismt/overwrite) (MIT License) - OPX format for structured code changes
+- [PasteMax](https://github.com/kleneway/pastemax) (MIT License) - Context management workflow ideas
+- Workflow tool concepts for AI-assisted code analysis inspired by [RepoPrompt](https://repoprompt.com) and similar patterns in the AI tooling ecosystem
 
 ## License
 MIT © HaoNgo232

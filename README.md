@@ -15,8 +15,7 @@ A desktop application that bridges your codebase and AI assistants (ChatGPT, Cla
 
 ---
 
-## 🌟 Why Use Synapse? (Value Proposition)
-
+## 🌟 Why Use Synapse?
 When working with LLMs for coding, managing context is a massive pain. Copy-pasting multiple files is tedious, and guessing token counts leads to truncated responses. Applying the AI's response back to your codebase is equally risky. 
 
 **Synapse solves this by providing:**

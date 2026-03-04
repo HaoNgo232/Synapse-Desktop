@@ -7,6 +7,7 @@ import sys
 import time
 import threading
 from pathlib import Path
+import pytest
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -125,16 +126,15 @@ def test_app_race_conditions():
         print("   - No more checkbox disappearing issues")
         print("   - No more UI freezing during folder loading")
         print("   - Smoother file selection experience")
-        print("   - Better handling of rapid user interactions")
-
-        return True
+        # Instead of return True, we just finish normally
+        pass
 
     except Exception as e:
         print(f"\n❌ Test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        pytest.fail(f"Test failed: {e}")
 
 
 def simulate_user_stress_test():
@@ -203,13 +203,11 @@ def simulate_user_stress_test():
 
 
 if __name__ == "__main__":
-    success = test_app_race_conditions()
-
-    if success:
-        stress_success = simulate_user_stress_test()
-        if stress_success:
-            print("\n🏆 All tests passed! Race conditions should be resolved.")
-            sys.exit(0)
-
-    print("\n💥 Some tests failed. Check the fixes and try again.")
-    sys.exit(1)
+    try:
+        test_app_race_conditions()
+        simulate_user_stress_test()
+        print("\n🏆 All tests passed! Race conditions should be resolved.")
+        sys.exit(0)
+    except (AssertionError, Exception) as e:
+        print(f"\n💥 Tests failed: {e}")
+        sys.exit(1)

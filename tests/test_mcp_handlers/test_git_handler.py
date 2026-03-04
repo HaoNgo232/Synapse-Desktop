@@ -1,4 +1,5 @@
 """Unit tests for mcp_server/handlers/git_handler.py"""
+
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -31,11 +32,11 @@ async def test_diff_summary_basic(mcp_instance, mock_workspace):
     mock_result.returncode = 0
     mock_result.stdout = "M\ttest.py\nA\tnew.py"
     mock_result.stderr = ""
-    
+
     with patch("subprocess.run", return_value=mock_result):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Modified" in result or "Added" in result or "No changes" in result
 
 
@@ -45,11 +46,11 @@ async def test_diff_summary_not_git_repo(mcp_instance, mock_workspace):
     mock_result = Mock()
     mock_result.returncode = 128
     mock_result.stderr = "not a git repository"
-    
+
     with patch("subprocess.run", return_value=mock_result):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Error" in result and "git repository" in result
 
 
@@ -57,8 +58,10 @@ async def test_diff_summary_not_git_repo(mcp_instance, mock_workspace):
 async def test_diff_summary_invalid_ref(mcp_instance, mock_workspace):
     """Test diff_summary with invalid git ref (injection attempt)"""
     tool = get_tool(mcp_instance, "diff_summary")
-    result = await tool(target="--output=/tmp/pwned", workspace_path=str(mock_workspace))
-    
+    result = await tool(
+        target="--output=/tmp/pwned", workspace_path=str(mock_workspace)
+    )
+
     assert "Error" in result and "Invalid" in result
 
 
@@ -66,11 +69,11 @@ async def test_diff_summary_invalid_ref(mcp_instance, mock_workspace):
 async def test_diff_summary_timeout(mcp_instance, mock_workspace):
     """Test diff_summary handles timeout"""
     import subprocess
-    
+
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("git", 15)):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Error" in result and "timed out" in result
 
 
@@ -81,11 +84,11 @@ async def test_diff_summary_no_changes(mcp_instance, mock_workspace):
     mock_result.returncode = 0
     mock_result.stdout = ""
     mock_result.stderr = ""
-    
+
     with patch("subprocess.run", return_value=mock_result):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "No changes" in result
 
 
@@ -96,11 +99,11 @@ async def test_diff_summary_with_renames(mcp_instance, mock_workspace):
     mock_result.returncode = 0
     mock_result.stdout = "R100\told.py\tnew.py"
     mock_result.stderr = ""
-    
+
     with patch("subprocess.run", return_value=mock_result):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Renamed" in result or "old.py" in result
 
 
@@ -111,11 +114,11 @@ async def test_diff_summary_with_deletions(mcp_instance, mock_workspace):
     mock_result.returncode = 0
     mock_result.stdout = "D\tdeleted.py"
     mock_result.stderr = ""
-    
+
     with patch("subprocess.run", return_value=mock_result):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Deleted" in result or "deleted.py" in result
 
 
@@ -126,9 +129,9 @@ async def test_diff_summary_with_copies(mcp_instance, mock_workspace):
     mock_result.returncode = 0
     mock_result.stdout = "C100\tsrc.py\tdest.py"
     mock_result.stderr = ""
-    
+
     with patch("subprocess.run", return_value=mock_result):
         tool = get_tool(mcp_instance, "diff_summary")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Added" in result or "copied" in result.lower()

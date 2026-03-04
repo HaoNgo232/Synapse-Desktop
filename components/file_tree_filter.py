@@ -77,7 +77,7 @@ class FileTreeFilterProxy(QSortFilterProxyModel):
                         break
                     curr = next_curr
 
-        self.invalidateFilter()
+        self.invalidate()
 
     def filterAcceptsRow(
         self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex

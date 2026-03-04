@@ -1,4 +1,5 @@
 """Unit tests for mcp_server/handlers/workflow_handler.py"""
+
 import pytest
 from pathlib import Path
 from unittest.mock import patch, Mock
@@ -37,14 +38,15 @@ async def test_rp_build_basic(mcp_instance, mock_workspace):
     mock_result.files_smart_only = 0
     mock_result.scope_summary = "1 primary"
     mock_result.optimizations = []
-    
-    with patch("core.workflows.context_builder.run_context_builder", return_value=mock_result):
+
+    with patch(
+        "core.workflows.context_builder.run_context_builder", return_value=mock_result
+    ):
         tool = get_tool(mcp_instance, "rp_build")
         result = await tool(
-            task_description="Test task",
-            workspace_path=str(mock_workspace)
+            task_description="Test task", workspace_path=str(mock_workspace)
         )
-        
+
         assert "Context Builder" in result or "Files included" in result
 
 
@@ -59,15 +61,17 @@ async def test_rp_build_with_output_file(mcp_instance, mock_workspace):
     mock_result.files_smart_only = 0
     mock_result.scope_summary = "1 primary"
     mock_result.optimizations = []
-    
-    with patch("core.workflows.context_builder.run_context_builder", return_value=mock_result):
+
+    with patch(
+        "core.workflows.context_builder.run_context_builder", return_value=mock_result
+    ):
         tool = get_tool(mcp_instance, "rp_build")
         result = await tool(
             task_description="Test",
             output_file="output.xml",
-            workspace_path=str(mock_workspace)
+            workspace_path=str(mock_workspace),
         )
-        
+
         assert "written to" in result or "output.xml" in result
 
 
@@ -78,9 +82,9 @@ async def test_rp_build_path_traversal(mcp_instance, mock_workspace):
     result = await tool(
         task_description="Test",
         output_file="../../../tmp/evil.xml",
-        workspace_path=str(mock_workspace)
+        workspace_path=str(mock_workspace),
     )
-    
+
     assert "Error" in result
 
 
@@ -92,11 +96,13 @@ async def test_rp_review_basic(mcp_instance, mock_workspace):
     mock_result.total_tokens = 100
     mock_result.files_changed = 1
     mock_result.files_context = 0
-    
-    with patch("core.workflows.code_reviewer.run_code_review", return_value=mock_result):
+
+    with patch(
+        "core.workflows.code_reviewer.run_code_review", return_value=mock_result
+    ):
         tool = get_tool(mcp_instance, "rp_review")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Code Review" in result or "Changed files" in result
 
 
@@ -105,10 +111,9 @@ async def test_rp_review_invalid_ref(mcp_instance, mock_workspace):
     """Test rp_review with invalid git ref"""
     tool = get_tool(mcp_instance, "rp_review")
     result = await tool(
-        base_ref="--output=/tmp/pwned",
-        workspace_path=str(mock_workspace)
+        base_ref="--output=/tmp/pwned", workspace_path=str(mock_workspace)
     )
-    
+
     assert "Error" in result and "Invalid" in result
 
 
@@ -119,15 +124,18 @@ async def test_rp_refactor_discover(mcp_instance, mock_workspace):
     mock_result.prompt = "discovery"
     mock_result.total_tokens = 100
     mock_result.scope_files = ["main.py"]
-    
-    with patch("core.workflows.refactor_workflow.run_refactor_discovery", return_value=mock_result):
+
+    with patch(
+        "core.workflows.refactor_workflow.run_refactor_discovery",
+        return_value=mock_result,
+    ):
         tool = get_tool(mcp_instance, "rp_refactor")
         result = await tool(
             refactor_scope="Refactor main",
             phase="discover",
-            workspace_path=str(mock_workspace)
+            workspace_path=str(mock_workspace),
         )
-        
+
         assert "Discovery" in result or "Scope files" in result
 
 
@@ -136,11 +144,9 @@ async def test_rp_refactor_plan_without_discovery(mcp_instance, mock_workspace):
     """Test rp_refactor plan phase without discovery report"""
     tool = get_tool(mcp_instance, "rp_refactor")
     result = await tool(
-        refactor_scope="Refactor",
-        phase="plan",
-        workspace_path=str(mock_workspace)
+        refactor_scope="Refactor", phase="plan", workspace_path=str(mock_workspace)
     )
-    
+
     assert "Error" in result and "discovery_report required" in result
 
 
@@ -149,11 +155,9 @@ async def test_rp_refactor_invalid_phase(mcp_instance, mock_workspace):
     """Test rp_refactor with invalid phase"""
     tool = get_tool(mcp_instance, "rp_refactor")
     result = await tool(
-        refactor_scope="Refactor",
-        phase="invalid",
-        workspace_path=str(mock_workspace)
+        refactor_scope="Refactor", phase="invalid", workspace_path=str(mock_workspace)
     )
-    
+
     assert "Error" in result
 
 
@@ -165,14 +169,16 @@ async def test_rp_investigate_basic(mcp_instance, mock_workspace):
     mock_result.total_tokens = 100
     mock_result.files_investigated = 1
     mock_result.max_depth_reached = 2
-    
-    with patch("core.workflows.bug_investigator.run_bug_investigation", return_value=mock_result):
+
+    with patch(
+        "core.workflows.bug_investigator.run_bug_investigation",
+        return_value=mock_result,
+    ):
         tool = get_tool(mcp_instance, "rp_investigate")
         result = await tool(
-            bug_description="Bug description",
-            workspace_path=str(mock_workspace)
+            bug_description="Bug description", workspace_path=str(mock_workspace)
         )
-        
+
         assert "Investigation" in result or "Files investigated" in result
 
 
@@ -190,11 +196,13 @@ async def test_rp_test_basic(mcp_instance, mock_workspace):
     mock_result.untested_symbols = 5
     mock_result.suggested_test_files = []
     mock_result.optimizations = []
-    
-    with patch("core.workflows.test_builder.run_test_builder", return_value=mock_result):
+
+    with patch(
+        "core.workflows.test_builder.run_test_builder", return_value=mock_result
+    ):
         tool = get_tool(mcp_instance, "rp_test")
         result = await tool(workspace_path=str(mock_workspace))
-        
+
         assert "Test Builder" in result or "Coverage" in result
 
 
@@ -202,11 +210,8 @@ async def test_rp_test_basic(mcp_instance, mock_workspace):
 async def test_rp_build_invalid_workspace(mcp_instance):
     """Test rp_build with invalid workspace"""
     tool = get_tool(mcp_instance, "rp_build")
-    result = await tool(
-        task_description="Test",
-        workspace_path="/nonexistent"
-    )
-    
+    result = await tool(task_description="Test", workspace_path="/nonexistent")
+
     assert "Error" in result
 
 
@@ -218,14 +223,13 @@ async def test_rp_review_with_focus(mcp_instance, mock_workspace):
     mock_result.total_tokens = 100
     mock_result.files_changed = 1
     mock_result.files_context = 0
-    
-    with patch("core.workflows.code_reviewer.run_code_review", return_value=mock_result):
+
+    with patch(
+        "core.workflows.code_reviewer.run_code_review", return_value=mock_result
+    ):
         tool = get_tool(mcp_instance, "rp_review")
-        result = await tool(
-            review_focus="security",
-            workspace_path=str(mock_workspace)
-        )
-        
+        result = await tool(review_focus="security", workspace_path=str(mock_workspace))
+
         assert "Code Review" in result or "Changed files" in result
 
 
@@ -237,16 +241,19 @@ async def test_rp_refactor_plan_with_discovery(mcp_instance, mock_workspace):
     mock_result.total_tokens = 100
     mock_result.files_to_modify = ["main.py"]
     mock_result.migration_needed = False
-    
-    with patch("core.workflows.refactor_workflow.run_refactor_planning", return_value=mock_result):
+
+    with patch(
+        "core.workflows.refactor_workflow.run_refactor_planning",
+        return_value=mock_result,
+    ):
         tool = get_tool(mcp_instance, "rp_refactor")
         result = await tool(
             refactor_scope="Refactor",
             phase="plan",
             discovery_report="Discovery report content",
-            workspace_path=str(mock_workspace)
+            workspace_path=str(mock_workspace),
         )
-        
+
         assert "Plan" in result or "Files to modify" in result
 
 
@@ -258,15 +265,18 @@ async def test_rp_investigate_with_error_trace(mcp_instance, mock_workspace):
     mock_result.total_tokens = 100
     mock_result.files_investigated = 2
     mock_result.max_depth_reached = 3
-    
-    with patch("core.workflows.bug_investigator.run_bug_investigation", return_value=mock_result):
+
+    with patch(
+        "core.workflows.bug_investigator.run_bug_investigation",
+        return_value=mock_result,
+    ):
         tool = get_tool(mcp_instance, "rp_investigate")
         result = await tool(
             bug_description="Bug",
             error_trace='File "main.py", line 10, in main',
-            workspace_path=str(mock_workspace)
+            workspace_path=str(mock_workspace),
         )
-        
+
         assert "Investigation" in result or "Files investigated" in result
 
 
@@ -284,12 +294,11 @@ async def test_rp_test_with_framework(mcp_instance, mock_workspace):
     mock_result.untested_symbols = 5
     mock_result.suggested_test_files = ["test_main.py"]
     mock_result.optimizations = []
-    
-    with patch("core.workflows.test_builder.run_test_builder", return_value=mock_result):
+
+    with patch(
+        "core.workflows.test_builder.run_test_builder", return_value=mock_result
+    ):
         tool = get_tool(mcp_instance, "rp_test")
-        result = await tool(
-            test_framework="pytest",
-            workspace_path=str(mock_workspace)
-        )
-        
+        result = await tool(test_framework="pytest", workspace_path=str(mock_workspace))
+
         assert "Test Builder" in result or "Coverage" in result

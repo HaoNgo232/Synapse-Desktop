@@ -225,8 +225,8 @@ def _explain_architecture_impl(
                             coupling_matrix[source_module][dep_module] += 1
                     except ValueError:
                         pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to analyze dependencies for %s: %s", fp, e)
 
         # 3. Format output
         sections = []

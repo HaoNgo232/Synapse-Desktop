@@ -6,17 +6,46 @@ Quan ly danh sach file duoc chon (ticked) trong Synapse session.
 
 import asyncio
 import json
-from typing import List, Optional
+import fcntl
+from pathlib import Path
+from typing import List, Optional, Callable
 
 from mcp.server.fastmcp import Context
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
-from mcp_server.utils.file_utils import atomic_write
 
-# Lock de serialize read-modify-write tren session file,
-# tranh TOCTOU race condition khi concurrent add/set actions
-_selection_lock = asyncio.Lock()
+
+def _locked_read_modify_write(
+    session_file: Path, modifier_fn: Callable[[list[str]], list[str]]
+) -> list[str]:
+    """Read the selection JSON, pass it to modifier_fn, write back, all under cross-process lock."""
+    # Ensure file exists so we can open it in r+
+    if not session_file.exists():
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(json.dumps({"selected_files": []}))
+
+    with open(session_file, "r+", encoding="utf-8") as f:
+        # Cross-process exclusive lock
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            try:
+                data = json.load(f)
+                current_selection = data.get("selected_files", [])
+            except (json.JSONDecodeError, OSError):
+                current_selection = []
+
+            new_selection = modifier_fn(current_selection)
+
+            # Write back
+            f.seek(0)
+            json.dump({"selected_files": new_selection}, f, indent=2)
+            f.write("\n")
+            f.truncate()
+
+            return new_selection
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def register_tools(mcp_instance) -> None:
@@ -64,57 +93,70 @@ def register_tools(mcp_instance) -> None:
 
         session_file = WorkspaceManager.get_session_file(ws)
 
-        # Serialize read-modify-write de tranh TOCTOU race condition
-        async with _selection_lock:
-            # Load current selection
-            current_selection: list[str] = []
+        # BUG #1 FIX: Offload file read to background thread
+        # BUG #2 FIX: Use cross-process file lock via _locked_read_modify_write
+
+        if action == "get":
+            current_selection = []
             if session_file.exists():
                 try:
-                    data = json.loads(session_file.read_text(encoding="utf-8"))
+                    raw_text = await asyncio.to_thread(
+                        session_file.read_text, encoding="utf-8"
+                    )
+                    data = json.loads(raw_text)
                     current_selection = data.get("selected_files", [])
                 except (OSError, json.JSONDecodeError) as e:
                     logger.warning("Failed to load selection: %s", e)
 
-            if action == "get":
-                if not current_selection:
-                    return "No files currently selected."
-                return f"Selected files ({len(current_selection)}):\n" + "\n".join(
-                    f"  {p}" for p in current_selection
+            if not current_selection:
+                return "No files currently selected."
+            return f"Selected files ({len(current_selection)}):\n" + "\n".join(
+                f"  {p}" for p in current_selection
+            )
+
+        elif action == "clear":
+
+            def clear_modifier(_: list[str]) -> list[str]:
+                return []
+
+            await asyncio.to_thread(
+                _locked_read_modify_write, session_file, clear_modifier
+            )
+            return "Selection cleared."
+
+        elif action in ("set", "add"):
+            if not paths:
+                return f"Error: 'paths' parameter required for action '{action}'."
+
+            # Validate paths
+            for rp in paths:
+                fp = (ws / rp).resolve()
+                if not fp.is_relative_to(ws):
+                    return f"Error: Path traversal detected for: {rp}"
+                if not fp.is_file():
+                    return f"Error: File not found: {rp}"
+
+            if action == "set":
+
+                def set_modifier(_: list[str]) -> list[str]:
+                    # Type hint ensures we satisfy the callable requirement
+                    return paths if paths is not None else []
+
+                new_selection = await asyncio.to_thread(
+                    _locked_read_modify_write, session_file, set_modifier
+                )
+            else:  # add
+
+                def add_modifier(current: list[str]) -> list[str]:
+                    existing_set = set(current)
+                    safe_paths = paths if paths is not None else []
+                    return current + [p for p in safe_paths if p not in existing_set]
+
+                new_selection = await asyncio.to_thread(
+                    _locked_read_modify_write, session_file, add_modifier
                 )
 
-            elif action == "clear":
-                atomic_write(
-                    session_file, json.dumps({"selected_files": []}, indent=2) + "\n"
-                )
-                return "Selection cleared."
+            return f"Selection updated: {len(new_selection)} files selected."
 
-            elif action in ("set", "add"):
-                if not paths:
-                    return f"Error: 'paths' parameter required for action '{action}'."
-
-                # Validate paths
-                for rp in paths:
-                    fp = (ws / rp).resolve()
-                    if not fp.is_relative_to(ws):
-                        return f"Error: Path traversal detected for: {rp}"
-                    if not fp.is_file():
-                        return f"Error: File not found: {rp}"
-
-                if action == "set":
-                    new_selection = paths
-                else:  # add
-                    existing_set = set(current_selection)
-                    new_selection = current_selection + [
-                        p for p in paths if p not in existing_set
-                    ]
-
-                atomic_write(
-                    session_file,
-                    json.dumps({"selected_files": new_selection}, indent=2) + "\n",
-                )
-                return f"Selection updated: {len(new_selection)} files selected."
-
-            else:
-                return (
-                    f"Error: Invalid action '{action}'. Use: get, set, add, or clear."
-                )
+        else:
+            return f"Error: Invalid action '{action}'. Use: get, set, add, or clear."

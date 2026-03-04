@@ -1,0 +1,271 @@
+"""
+Analysis Handler - Xu ly cac tool phan tich code.
+
+Bao gom: find_references, find_todos, get_symbols.
+"""
+
+import os
+import re
+from pathlib import Path
+from typing import List, Optional
+
+from mcp_server.core.constants import (
+    INLINE_COMMENT_RE,
+    STRING_LITERAL_RE,
+    logger,
+)
+
+
+def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
+    """Internal implementation cho find_todos, co the goi tu start_session.
+
+    Args:
+        workspace_path: Duong dan workspace.
+        include_hack: Co quet them HACK comments hay khong.
+
+    Returns:
+        Ket qua scan TODO/FIXME/HACK.
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.is_dir():
+        return f"Error: '{workspace_path}' is not a valid directory."
+
+    try:
+        from services.workspace_index import collect_files_from_disk
+
+        all_files = collect_files_from_disk(ws, workspace_path=ws)
+
+        # Filter to code files only
+        code_exts = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".go",
+            ".rs",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+        }
+        all_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
+
+        todos: list[tuple[str, int, str, str]] = []  # (file, line, type, content)
+
+        for file_path in all_files:
+            try:
+                fp = Path(file_path)
+                content = fp.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+
+                for i, line in enumerate(lines, start=1):
+                    comment_type = None
+
+                    # Dung word-boundary regex de tranh false positives
+                    # (vi du: "TODOLIST", "AUTOHACK" se KHONG match nua)
+                    if re.search(r"\bTODO\b", line, re.IGNORECASE):
+                        comment_type = "TODO"
+                    elif re.search(r"\bFIXME\b", line, re.IGNORECASE):
+                        comment_type = "FIXME"
+                    elif include_hack and re.search(r"\bHACK\b", line, re.IGNORECASE):
+                        comment_type = "HACK"
+
+                    if comment_type:
+                        rel_path = os.path.relpath(file_path, ws)
+                        snippet = line.strip()[:100]
+                        todos.append((rel_path, i, comment_type, snippet))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        if not todos:
+            return "No TODO/FIXME/HACK comments found in project."
+
+        # Group by type
+        by_type: dict[str, list[tuple[str, int, str]]] = {
+            "TODO": [],
+            "FIXME": [],
+            "HACK": [],
+        }
+        for file, line, ctype, snippet in todos:
+            by_type[ctype].append((file, line, snippet))
+
+        result = [f"Found {len(todos)} comments:\n"]
+
+        for ctype in ["FIXME", "TODO", "HACK"]:
+            items = by_type[ctype]
+            if not items:
+                continue
+            result.append(f"\n{ctype} ({len(items)}):")
+            for file, line, snippet in items[:20]:  # Limit to 20 per type
+                result.append(f"  {file}:{line} - {snippet}")
+            if len(items) > 20:
+                result.append(f"  ... +{len(items) - 20} more")
+
+        return "\n".join(result)
+    except Exception as e:
+        logger.error("find_todos error: %s", e)
+        return f"Error: {e}"
+
+
+def register_tools(mcp_instance) -> None:
+    """Dang ky analysis tools voi MCP server.
+
+    Args:
+        mcp_instance: FastMCP server instance.
+    """
+
+    # Ham find_references tim tat ca cac vi tri su dung cua mot symbol (function/class/variable)
+    @mcp_instance.tool()
+    def find_references(
+        workspace_path: str,
+        symbol_name: str,
+        file_extensions: Optional[List[str]] = None,
+    ) -> str:
+        """Find all locations where a function/class/variable is used (AST + regex).
+
+        WHY USE THIS OVER BUILT-IN: Your built-in grep/search finds ALL text matches
+        including strings ("Cannot find myFunc"), comments (# rename myFunc), and docs.
+        This tool strips string literals and comments before matching, giving you only
+        actual CODE references. Reduces false positives significantly for refactoring.
+        """
+        ws = Path(workspace_path).resolve()
+        if not ws.is_dir():
+            return f"Error: '{workspace_path}' is not a valid directory."
+
+        try:
+            from services.workspace_index import collect_files_from_disk
+
+            all_files = collect_files_from_disk(ws, workspace_path=ws)
+            if file_extensions:
+                ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
+                all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
+
+            references: list[tuple[str, int, str]] = []
+            pattern = rf"\b{re.escape(symbol_name)}\b"
+
+            for file_path in all_files:
+                try:
+                    fp = Path(file_path)
+                    content = fp.read_text(encoding="utf-8", errors="replace")
+                    lines = content.splitlines()
+
+                    for i, line in enumerate(lines, start=1):
+                        stripped = line.strip()
+                        # Bo qua dong comment hoan toan (bao gom ca block comment markers)
+                        if stripped.startswith(("#", "//", "/*", "*")):
+                            continue
+                        # Loc string literals va inline comments truoc khi match
+                        # de giam false positives
+                        cleaned = STRING_LITERAL_RE.sub("", line)
+                        cleaned = INLINE_COMMENT_RE.sub("", cleaned)
+                        if re.search(pattern, cleaned):
+                            rel_path = os.path.relpath(file_path, ws)
+                            snippet = line.strip()[:80]
+                            references.append((rel_path, i, snippet))
+                except (OSError, UnicodeDecodeError):
+                    continue
+
+            if not references:
+                return f"No references found for: {symbol_name}"
+
+            by_file: dict[str, list[tuple[int, str]]] = {}
+            for file, line, snippet in references:
+                if file not in by_file:
+                    by_file[file] = []
+                by_file[file].append((line, snippet))
+
+            result = [f"Found {len(references)} references in {len(by_file)} files:\n"]
+            for file in sorted(by_file.keys()):
+                result.append(f"\n{file}:")
+                for line, snippet in by_file[file][:5]:
+                    result.append(f"  Line {line}: {snippet}")
+                if len(by_file[file]) > 5:
+                    result.append(f"  ... +{len(by_file[file]) - 5} more")
+
+            return "\n".join(result)
+        except Exception as e:
+            logger.error("find_references error: %s", e)
+            return f"Error: {e}"
+
+    # Ham find_todos quet toan bo project de tim cac comment kieu TODO, FIXME hoac HACK
+    @mcp_instance.tool()
+    def find_todos(
+        workspace_path: str,
+        include_hack: bool = True,
+    ) -> str:
+        """Scan entire project for TODO/FIXME/HACK comments with file path and line number.
+
+        WHY USE THIS OVER BUILT-IN: Uses smarter boundaries (word boundaries) than standard
+        grep, and automatically ignores non-code files to reduce noise.
+        """
+        return _find_todos(workspace_path, include_hack)
+
+    # Ham get_symbols liet ke chi tiet cac symbol trong file (signatures, line range, parent class)
+    @mcp_instance.tool()
+    def get_symbols(
+        workspace_path: str,
+        file_path: str,
+    ) -> str:
+        """Get structured list of all symbols (functions, classes, methods) in a file as JSON.
+
+        WHY USE THIS OVER BUILT-IN: No built-in tool gives you structured, machine-readable
+        symbol data with line ranges, signatures, and parent class info. Use this when you
+        need to programmatically filter/count/compare symbols.
+
+        Returns detailed symbol information including:
+        - name: Symbol name
+        - kind: function/class/method/variable
+        - line_start, line_end: Location in file
+        - signature: Function/method signature
+        - parent: Parent class (for methods)
+
+        Useful for programmatic analysis by AI agents (filtering, counting, etc.)
+        """
+        ws = Path(workspace_path).resolve()
+        fp = (ws / file_path).resolve()
+
+        if not fp.is_relative_to(ws):
+            return "Error: Path traversal detected."
+        if not fp.is_file():
+            return f"Error: File not found: {file_path}"
+
+        try:
+            from core.codemaps.symbol_extractor import extract_symbols
+            import json
+
+            content = fp.read_text(encoding="utf-8", errors="replace")
+            symbols = extract_symbols(str(fp), content)
+
+            if not symbols:
+                return f"No symbols found in {file_path}"
+
+            # Convert to JSON-serializable format
+            symbols_data = []
+            for sym in symbols:
+                symbols_data.append(
+                    {
+                        "name": sym.name,
+                        "kind": sym.kind.value,
+                        "line_start": sym.line_start,
+                        "line_end": sym.line_end,
+                        "signature": sym.signature,
+                        "parent": sym.parent,
+                    }
+                )
+
+            # Summary
+            by_kind = {}
+            for sym in symbols:
+                kind = sym.kind.value
+                by_kind[kind] = by_kind.get(kind, 0) + 1
+
+            summary = f"Found {len(symbols)} symbols in {file_path}:\n"
+            for kind, count in sorted(by_kind.items()):
+                summary += f"  {kind}: {count}\n"
+
+            return summary + "\n" + json.dumps(symbols_data, indent=2)
+
+        except Exception as e:
+            logger.error("get_symbols error: %s", e)
+            return f"Error: {e}"

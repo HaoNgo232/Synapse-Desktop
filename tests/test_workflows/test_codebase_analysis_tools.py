@@ -1,20 +1,30 @@
-"""
-Tests cho 4 MCP tools moi: get_callers, get_related_tests, batch_codemap, explain_architecture.
-
-Cac tests goi truc tiep ham tool (khong qua MCP protocol)
-de kiem tra logic chinh xac tren workspace gia lap.
-"""
-
 import pytest
+from mcp.server.fastmcp import FastMCP
 
-# Import truc tiep cac tool functions tu server module
-# Cac ham nay la module-level functions, co the goi truc tiep
-from mcp_server.server import (
-    get_callers,
-    get_related_tests,
-    batch_codemap,
-    explain_architecture,
-)
+from mcp_server.handlers.context_handler import register_tools as _reg_ctx
+from mcp_server.handlers.dependency_handler import register_tools as _reg_dep
+from mcp_server.handlers.structure_handler import register_tools as _reg_struct
+
+# Tao mot MCP instance gia lap de dang ky va lay cac tool functions
+_test_mcp = FastMCP("test")
+
+_reg_dep(_test_mcp)
+_reg_ctx(_test_mcp)
+_reg_struct(_test_mcp)
+
+
+def _get_tool_fn(name):
+    """Lay function cua tool da dang ky theo ten."""
+    for tool in _test_mcp._tool_manager.list_tools():
+        if tool.name == name:
+            return _test_mcp._tool_manager._tools[name].fn
+    raise ValueError(f"Tool '{name}' khong tim thay")
+
+
+get_callers = _get_tool_fn("get_callers")
+get_related_tests = _get_tool_fn("get_related_tests")
+batch_codemap = _get_tool_fn("batch_codemap")
+explain_architecture = _get_tool_fn("explain_architecture")
 
 
 # ===================================================================

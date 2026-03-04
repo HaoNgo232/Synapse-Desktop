@@ -108,6 +108,9 @@ def test_on_workspace_changed(context_view):
     mock_watcher = MagicMock()
     view._file_watcher = mock_watcher
 
+    # Mock preset controller de tranh PresetStore tao .synapse/ tai fake path
+    view._preset_controller = MagicMock()
+
     new_path = Path("/new/workspace")
     with (
         patch("services.cache_registry.cache_registry") as mock_registry,

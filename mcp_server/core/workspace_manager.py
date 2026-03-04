@@ -29,9 +29,9 @@ class WorkspaceManager:
         ws = Path(workspace_path).resolve()
 
         if not ws.exists():
-            raise ValueError(f"Workspace khong ton tai: {ws}")
+            raise ValueError(f"Workspace does not exist: {ws}")
         if not ws.is_dir():
-            raise ValueError(f"Workspace phai la thu muc: {ws}")
+            raise ValueError(f"Workspace is not a directory: {ws}")
 
         return ws
 
@@ -52,7 +52,7 @@ class WorkspaceManager:
         fp = (workspace / relative_path).resolve()
 
         if not fp.is_relative_to(workspace):
-            raise ValueError(f"Path traversal detected: {relative_path}")
+            raise ValueError(f"Path outside workspace: {relative_path}")
 
         return fp
 

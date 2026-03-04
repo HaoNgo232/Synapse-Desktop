@@ -29,9 +29,16 @@ class WorkspaceManager:
         ws = Path(workspace_path).resolve()
 
         if not ws.exists():
-            raise ValueError(f"Workspace does not exist: {ws}")
+            raise ValueError(
+                f"Workspace does not exist: {ws}. "
+                f"You must provide the valid absolute path to the root "
+                f"directory of the target project you are working on."
+            )
         if not ws.is_dir():
-            raise ValueError(f"Workspace is not a directory: {ws}")
+            raise ValueError(
+                f"Workspace is not a directory: {ws}. "
+                f"The workspace_path must be a directory, not a file."
+            )
 
         return ws
 

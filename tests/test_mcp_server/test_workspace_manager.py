@@ -25,7 +25,7 @@ class TestWorkspaceManagerResolve:
 
     def test_resolve_nonexistent_path(self):
         """Path khong ton tai -> ValueError."""
-        with pytest.raises(ValueError, match="does not exist"):
+        with pytest.raises(ValueError, match="Workspace does not exist"):
             WorkspaceManager.resolve("/this/path/does/not/exist/xyz")
 
     def test_resolve_file_not_directory(self, tmp_path):
@@ -33,7 +33,7 @@ class TestWorkspaceManagerResolve:
         file_path = tmp_path / "not_a_dir.txt"
         file_path.write_text("hello")
 
-        with pytest.raises(ValueError, match="not a directory"):
+        with pytest.raises(ValueError, match="Workspace is not a directory"):
             WorkspaceManager.resolve(str(file_path))
 
     def test_resolve_returns_absolute_path(self, tmp_path, monkeypatch):

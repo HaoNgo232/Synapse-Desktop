@@ -131,5 +131,5 @@ verify_phase_completion(
 - **Be the Architect.** Don't just gather files; design the implementation sequence.
 - **Split complex tasks.** 15 files in one prompt = confusion. 5 files in 3 prompts = precision.
 - **Sequential execution.** Each phase must be verified before proceeding to the next.
-- **Always estimate_tokens** before build_prompt to avoid context overflow.
+- **Always estimate_tokens** before build_prompt to avoid context overflow. If user provides a `max_tokens` limit, treat it as a hard ceiling, not a target. Lower is always better.
 - **Use batch_codemap** for module-level scanning, not get_codemap per file.

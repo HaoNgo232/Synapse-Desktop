@@ -90,4 +90,4 @@ Export Summary:
 - **Manual export only**: This generates files for human copy-paste, NOT automated delegation.
 - **No implementation plans**: Leave planning to the external AI that receives the context.
 - **Export to file mandatory**: Never print massive prompts in chat. Use `output_file="oracle_prompt.xml"`.
-- **Always estimate_tokens** to avoid overwhelming external AI.
+- **Always estimate_tokens** to avoid overwhelming external AI. If user provides a `max_tokens` limit, treat it as a hard ceiling, not a target. Lower is always better.

@@ -151,4 +151,4 @@ build_prompt(
 - **Parallel testing for independent modules.** Don't wait for auth tests to finish before starting API tests.
 - **Coverage verification mandatory.** Each sub-agent must report coverage metrics.
 - **Use get_symbols** on both source and test files to precisely identify gaps.
-- **Always estimate_tokens** before build_prompt to avoid context overflow.
+- **Always estimate_tokens** before build_prompt to avoid context overflow. If user provides a `max_tokens` limit, treat it as a hard ceiling, not a target. Lower is always better.

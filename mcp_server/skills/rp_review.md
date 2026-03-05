@@ -141,4 +141,4 @@ build_prompt(
 - **Split large reviews.** Don't overwhelm one agent with 50 files.
 - **Focus-specific delegation.** Security agent ≠ Performance agent ≠ Test coverage agent.
 - **Analysis before action.** Always produce Review Analysis before delegating.
-- **Always estimate_tokens** before build_prompt to avoid context overflow.
+- **Always estimate_tokens** before build_prompt to avoid context overflow. If user provides a `max_tokens` limit, treat it as a hard ceiling, not a target. Lower is always better.

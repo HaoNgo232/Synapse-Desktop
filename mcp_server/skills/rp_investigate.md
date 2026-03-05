@@ -178,4 +178,4 @@ build_prompt(
 - **Sequential fixes for dependent bugs.** Parallel fixes for independent bugs.
 - **Test verification mandatory.** Each fix must be verified before next phase.
 - **Use manage_selection** to accumulate suspect files as you trace.
-- **Always estimate_tokens** before build_prompt to avoid context overflow.
+- **Always estimate_tokens** before build_prompt to avoid context overflow. If user provides a `max_tokens` limit, treat it as a hard ceiling, not a target. Lower is always better.

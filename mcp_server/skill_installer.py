@@ -9,7 +9,8 @@ trong thu muc skills tuong ung cua tung IDE.
 Ho tro:
 - Claude Code:       ~/.claude/skills/<name>/SKILL.md
 - Cursor:            ~/.cursor/skills/<name>/SKILL.md
-- Antigravity:       ~/.agents/skills/<name>/SKILL.md
+- Antigravity (Global):  ~/.gemini/antigravity/skills/<name>/SKILL.md
+- Antigravity (Local):   <workspace>/.agent/skills/<name>/SKILL.md
 - Kiro CLI:          ~/.kiro/skills/<name>/SKILL.md
 - OpenCode:          ~/.config/opencode/skills/<name>/SKILL.md
 - VS Code (Copilot): <workspace>/.github/skills/<name>/SKILL.md
@@ -38,8 +39,12 @@ SKILL_TARGETS: dict[str, dict] = {
         "is_global": True,
     },
     "Antigravity": {
-        "skills_dir": "~/.agents/skills",
+        "skills_dir": "~/.gemini/antigravity/skills",
         "is_global": True,
+    },
+    "Antigravity (Workspace)": {
+        "skills_dir": ".agent/skills",
+        "is_global": False,
     },
     "Kiro CLI": {
         "skills_dir": "~/.kiro/skills",

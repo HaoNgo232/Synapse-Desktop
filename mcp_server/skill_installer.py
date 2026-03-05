@@ -111,7 +111,7 @@ def _resolve_skills_dir(target_name: str, workspace_path: str | None = None) -> 
 
     Args:
         target_name: Ten IDE (vd: "Claude Code", "Cursor").
-        workspace_path: Duong dan workspace (can thiet cho VS Code/Copilot).
+        workspace_path: Duong dan workspace (can thiet cho VS Code/Copilot hoac khi muon override local).
 
     Returns:
         Path tuyet doi den thu muc skills.
@@ -129,17 +129,26 @@ def _resolve_skills_dir(target_name: str, workspace_path: str | None = None) -> 
     skills_dir_str: str = target["skills_dir"]
     is_global: bool = target["is_global"]
 
+    # Neu co workspace_path duoc truyen vao tu Settings UI -> Muon cai dat cuc bo vao du an
+    if workspace_path:
+        wp = Path(workspace_path)
+        if target_name == "Cursor":
+            return wp / ".cursor" / "skills"
+        elif target_name == "Antigravity":
+            return wp / ".agent" / "skills"
+        elif target_name == "Claude Code":
+            return wp / ".claude" / "skills"
+        # Cac target khac (nhu VS Code) se dung path mac dinh kem vs wp
+        return wp / skills_dir_str.replace("~/", "")
+
     if is_global:
         # Thu muc global: expand ~ thanh home dir
         return Path(os.path.expanduser(skills_dir_str))
 
-    # Thu muc project-level: can workspace_path
-    if not workspace_path:
-        raise ValueError(
-            f"IDE '{target_name}' yeu cau workspace_path "
-            "vi skills duoc luu o cap project."
-        )
-    return Path(workspace_path) / skills_dir_str
+    # Thu muc project-level: can workspace_path ma lai khong co
+    raise ValueError(
+        f"IDE '{target_name}' yeu cau workspace_path vi skills duoc luu o cap project."
+    )
 
 
 def install_skills_for_target(

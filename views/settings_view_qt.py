@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QDialog,
     QPlainTextEdit,
+    QMenu,
+    QFileDialog,
 )
 from PySide6.QtCore import Qt, Slot, QTimer, Signal
 
@@ -683,11 +685,36 @@ class SettingsViewQt(QWidget):
             btn_row = QHBoxLayout()
             btn_row.setSpacing(8)
 
-            install_btn = _make_ghost_btn(f"Install to {target_name}")
-            install_btn.setToolTip(f"Auto-install MCP config for {target_name}")
-            install_btn.clicked.connect(
+            install_btn = _make_ghost_btn(f"Install to {target_name} ▾")
+            install_btn.setToolTip(f"Install MCP config and Skills for {target_name}")
+
+            # Giau mui ten dropdown mac dinh xau xi cua PyQt, chi giu icon tren text
+            current_style = install_btn.styleSheet()
+            install_btn.setStyleSheet(
+                current_style
+                + "QPushButton::menu-indicator { image: none; width: 0px; }"
+            )
+
+            menu = QMenu(install_btn)
+            menu.setStyleSheet(
+                f"QMenu {{ background-color: {ThemeColors.BG_SURFACE}; border: 1px solid {ThemeColors.BORDER}; border-radius: 6px; padding: 4px; }}"
+                f"QMenu::item {{ color: {ThemeColors.TEXT_PRIMARY}; padding: 6px 20px; border-radius: 4px; }}"
+                f"QMenu::item:selected {{ background-color: {ThemeColors.BG_HOVER}; }}"
+            )
+
+            act_global = menu.addAction("📌 Install Global (Default)")
+            act_global.triggered.connect(
                 lambda checked=False, t=target_name: self._install_mcp_for(t)
             )
+
+            act_workspace = menu.addAction(
+                "📁 Install for specific Project / Workspace..."
+            )
+            act_workspace.triggered.connect(
+                lambda checked=False, t=target_name: self._ask_workspace_and_install(t)
+            )
+
+            install_btn.setMenu(menu)
 
             # Hien thi trang thai da cai hay chua
             if check_installed(target_name):
@@ -1083,7 +1110,24 @@ class SettingsViewQt(QWidget):
 
         dlg.exec()
 
-    def _install_mcp_for(self, target_name: str) -> None:
+    @Slot(str)
+    def _ask_workspace_and_install(self, target_name: str) -> None:
+        """Hoi nguoi dung chon thu muc workspace roi install."""
+
+        dir_path = QFileDialog.getExistingDirectory(
+            self,
+            f"Select Workspace Directory for {target_name} Integration",
+            options=QFileDialog.Option.ShowDirsOnly
+            | QFileDialog.Option.DontResolveSymlinks,
+        )
+        if not dir_path:
+            return  # Nguoi dung huy
+
+        self._install_mcp_for(target_name, workspace_path=dir_path)
+
+    def _install_mcp_for(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> None:
         """Hien thi preview JSON day du va ghi config vao file neu user dong y."""
         from mcp_server.config_installer import (
             get_config_path,
@@ -1092,8 +1136,8 @@ class SettingsViewQt(QWidget):
             check_installed,
         )
 
-        config_path = get_config_path(target_name)
-        preview_text = preview_json(target_name)
+        config_path = get_config_path(target_name, workspace_path)
+        preview_text = preview_json(target_name, workspace_path)
 
         # Tao custom dialog rong rai de hien thi preview JSON cho de doc
         dlg = QDialog(self)
@@ -1182,16 +1226,18 @@ class SettingsViewQt(QWidget):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
-        success, msg = install_config(target_name)
+        success, msg = install_config(target_name, workspace_path)
 
         if success:
             # Tu dong cai dat Agent Skills (SKILL.md) vao thu muc skills cua IDE
             try:
                 from mcp_server.skill_installer import install_skills_for_target
 
-                skill_ok, skill_msg = install_skills_for_target(target_name)
+                skill_ok, skill_msg = install_skills_for_target(
+                    target_name, workspace_path
+                )
                 if skill_ok and skill_msg:
-                    msg = f"{msg}\n{skill_msg}"
+                    msg = f"{msg}\\n{skill_msg}"
             except Exception:
                 # Loi install skills khong chan luong chinh
                 pass

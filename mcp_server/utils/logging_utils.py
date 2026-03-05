@@ -47,7 +47,12 @@ def force_all_logging_to_stderr() -> None:
     root.addHandler(stderr_handler)
 
     # 2. Patch Synapse singleton logger (neu da duoc tao truoc do)
-    for name in list(logging.Logger.manager.loggerDict.keys()):
+    # CẢNH BÁO: Không loop qua tắt cả các loggers (kể cả của thư viện mcp/fastmcp)
+    # vì mcp.server tự động thiết lập transport qua stdout. Nếu ta thay stdout
+    # của nó thành stderr, FastMCP sẽ ném lỗi "I/O operation on closed file".
+
+    # Chỉ patch "synapse-desktop" và "synapse.mcp"
+    for name in ["synapse-desktop", "synapse.mcp"]:
         lg = logging.getLogger(name)
         for h in lg.handlers[:]:
             if (

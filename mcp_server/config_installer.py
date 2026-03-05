@@ -18,6 +18,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger("synapse.mcp.config_installer")
 
@@ -125,8 +126,20 @@ def build_synapse_entry(target_name: str) -> dict:
 
 
 # Ham get_config_path tra ve Path tuyet doi den file cau hinh cua target
-def get_config_path(target_name: str) -> Path:
-    """Lay duong dan tuyet doi cua file config cho target."""
+def get_config_path(target_name: str, workspace_path: Optional[str] = None) -> Path:
+    """Lay duong dan tuyet doi cua file config cho target.
+    Neu workspace_path duoc cung cap, uu tien tao file local/workspace neu target ho tro.
+    """
+    if workspace_path:
+        # Phat hien custom workspace paths
+        wp = Path(workspace_path)
+        if target_name == "Cursor":
+            return wp / ".cursor" / "mcp.json"
+        elif target_name == "Antigravity":
+            return wp / ".agent" / "mcp_config.json"
+        elif target_name == "Claude Code":
+            return wp / ".claude.json"  # Claude Code luon thuoc tinh theo folder
+
     raw = MCP_TARGETS[target_name]["config_path"]
     if raw == "__vscode_mcp_json__":
         return _get_vscode_mcp_json_path()
@@ -134,9 +147,11 @@ def get_config_path(target_name: str) -> Path:
 
 
 # Ham read_existing_config doc file cau hinh JSON hien tai cua AI client
-def read_existing_config(target_name: str) -> dict:
+def read_existing_config(
+    target_name: str, workspace_path: Optional[str] = None
+) -> dict:
     """Doc file config hien tai. Tra ve dict rong neu file chua ton tai."""
-    config_path = get_config_path(target_name)
+    config_path = get_config_path(target_name, workspace_path)
     if not config_path.exists():
         return {}
     try:
@@ -146,11 +161,11 @@ def read_existing_config(target_name: str) -> dict:
 
 
 # Ham merge_config ho tro merge cau hinh Synapse vao file config co san ma khong lam mat cac server khac
-def merge_config(target_name: str) -> dict:
+def merge_config(target_name: str, workspace_path: Optional[str] = None) -> dict:
     """Doc config hien tai va merge entry Synapse vao, giu nguyen cac server khac."""
     target = MCP_TARGETS[target_name]
     root_key = target["root_key"]
-    existing = read_existing_config(target_name)
+    existing = read_existing_config(target_name, workspace_path)
 
     # Chuan hoa root path thanh list de ho tro nested keys (vd: ["mcp", "mcpServers"])
     if isinstance(root_key, str):
@@ -180,17 +195,19 @@ def merge_config(target_name: str) -> dict:
 
 
 # Ham preview_json tao chuoi JSON da merge de hien thi cho nguoi dung kiem tra truoc khi cai dat
-def preview_json(target_name: str) -> str:
+def preview_json(target_name: str, workspace_path: Optional[str] = None) -> str:
     """Tra ve JSON da merge de hien thi preview cho nguoi dung."""
-    merged = merge_config(target_name)
+    merged = merge_config(target_name, workspace_path)
     return json.dumps(merged, indent=2, ensure_ascii=False)
 
 
 # Ham install_config thuc hien ghi de file cau hinh sau khi da merge
-def install_config(target_name: str) -> tuple[bool, str]:
+def install_config(
+    target_name: str, workspace_path: Optional[str] = None
+) -> tuple[bool, str]:
     """Ghi config da merge vao file. Tra ve (success, message)."""
-    config_path = get_config_path(target_name)
-    merged = merge_config(target_name)
+    config_path = get_config_path(target_name, workspace_path)
+    merged = merge_config(target_name, workspace_path)
 
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -204,11 +221,11 @@ def install_config(target_name: str) -> tuple[bool, str]:
 
 
 # Ham check_installed kiem tra xem Synapse mcp da duoc cau hinh trong client hay chua
-def check_installed(target_name: str) -> bool:
+def check_installed(target_name: str, workspace_path: Optional[str] = None) -> bool:
     """Kiem tra Synapse da duoc cai trong config cua target chua."""
     target = MCP_TARGETS[target_name]
     root_key = target["root_key"]
-    existing = read_existing_config(target_name)
+    existing = read_existing_config(target_name, workspace_path)
 
     if isinstance(root_key, str):
         root = existing.get(root_key, {})

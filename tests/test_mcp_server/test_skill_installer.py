@@ -2,8 +2,8 @@
 Test module cho skill_installer.py.
 
 Kiem tra logic cai dat Synapse Agent Skills vao cac IDE:
+- Doc dung noi dung SKILL.md tu cac file .md
 - Tao dung cau truc folder <skill-name>/SKILL.md
-- Format YAML frontmatter chinh xac
 - Xu ly loi khi target khong hop le
 - Check installed dung/sai
 """
@@ -15,9 +15,9 @@ from unittest.mock import patch
 import pytest
 
 from mcp_server.skill_installer import (
+    SKILL_KEYS,
     SKILL_TARGETS,
-    SKILL_TEMPLATES,
-    _build_skill_md,
+    _load_skill_file,
     _resolve_skills_dir,
     check_skills_installed,
     install_skills_for_target,
@@ -27,39 +27,58 @@ from mcp_server.skill_installer import (
 EXPECTED_SKILLS = ["rp_build", "rp_review", "rp_refactor", "rp_investigate", "rp_test"]
 
 
-class TestBuildSkillMd:
-    """Kiem tra ham _build_skill_md() tao noi dung SKILL.md dung format."""
+class TestLoadSkillFile:
+    """Kiem tra ham _load_skill_file() doc dung noi dung tu file .md."""
 
-    def test_frontmatter_contains_name(self) -> None:
-        """SKILL.md phai co truong name trong YAML frontmatter."""
-        content = _build_skill_md("rp_build")
+    def test_loads_rp_build(self) -> None:
+        """File rp_build.md phai doc duoc va chua frontmatter."""
+        content = _load_skill_file("rp_build")
         assert content.startswith("---\n")
         assert "name: rp_build" in content
 
-    def test_frontmatter_contains_description(self) -> None:
-        """SKILL.md phai co truong description trong YAML frontmatter."""
-        content = _build_skill_md("rp_review")
-        assert "description: >-" in content
+    def test_loads_rp_review(self) -> None:
+        """File rp_review.md phai doc duoc va chua frontmatter."""
+        content = _load_skill_file("rp_review")
+        assert "name: rp_review" in content
 
-    def test_body_present_after_frontmatter(self) -> None:
-        """Noi dung body markdown phai nam sau YAML frontmatter."""
-        content = _build_skill_md("rp_build")
-        # Frontmatter ket thuc bang "---\n\n"
-        parts = content.split("---")
-        # parts[0] la empty, parts[1] la frontmatter, phan sau la body
-        assert len(parts) >= 3
-        body = parts[2]
-        assert "# Context Builder" in body
+    def test_loads_rp_refactor(self) -> None:
+        """File rp_refactor.md phai doc duoc."""
+        content = _load_skill_file("rp_refactor")
+        assert "name: rp_refactor" in content
+
+    def test_loads_rp_investigate(self) -> None:
+        """File rp_investigate.md phai doc duoc."""
+        content = _load_skill_file("rp_investigate")
+        assert "name: rp_investigate" in content
+
+    def test_loads_rp_test(self) -> None:
+        """File rp_test.md phai doc duoc."""
+        content = _load_skill_file("rp_test")
+        assert "name: rp_test" in content
+
+    def test_raises_for_unknown_skill(self) -> None:
+        """Skill khong ton tai phai raise FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            _load_skill_file("nonexistent_skill")
 
     @pytest.mark.parametrize("skill_key", EXPECTED_SKILLS)
     def test_all_skills_have_valid_content(self, skill_key: str) -> None:
-        """Tat ca 5 skills deu tao duoc noi dung hop le."""
-        content = _build_skill_md(skill_key)
-        assert "---" in content
+        """Tat ca 5 skills deu doc duoc va co noi dung hop le."""
+        content = _load_skill_file(skill_key)
+        assert content.startswith("---\n")
         assert f"name: {skill_key}" in content
         assert "description:" in content
-        # Body khong rong
         assert len(content) > 100
+
+    @pytest.mark.parametrize("skill_key", EXPECTED_SKILLS)
+    def test_all_skills_have_body(self, skill_key: str) -> None:
+        """Phan body (sau frontmatter) khong rong."""
+        content = _load_skill_file(skill_key)
+        parts = content.split("---")
+        # parts[0] la empty, parts[1] la frontmatter, phan con lai la body
+        assert len(parts) >= 3
+        body = "---".join(parts[2:])
+        assert len(body.strip()) > 50
 
 
 class TestResolveSkillsDir:
@@ -136,7 +155,7 @@ class TestInstallSkillsForTarget:
         content = (tmp_path / "rp_build" / "SKILL.md").read_text(encoding="utf-8")
         assert content.startswith("---\n")
         assert "name: rp_build" in content
-        assert "description: >-" in content
+        assert "description:" in content
 
     def test_overwrite_existing_skills(self, tmp_path: Path) -> None:
         """Ghi de file SKILL.md neu da ton tai truoc do."""
@@ -244,7 +263,7 @@ class TestCheckSkillsInstalled:
 
 
 class TestSkillTargetsConfig:
-    """Kiem tra cau hinh SKILL_TARGETS va SKILL_TEMPLATES dung."""
+    """Kiem tra cau hinh SKILL_TARGETS va SKILL_KEYS dung."""
 
     def test_all_expected_targets_present(self) -> None:
         """Phai co du 6 IDE targets."""
@@ -259,16 +278,22 @@ class TestSkillTargetsConfig:
         assert set(SKILL_TARGETS.keys()) == expected
 
     def test_all_expected_skills_present(self) -> None:
-        """Phai co du 5 skill templates."""
-        assert set(SKILL_TEMPLATES.keys()) == set(EXPECTED_SKILLS)
+        """Phai co du 5 skill keys."""
+        assert set(SKILL_KEYS) == set(EXPECTED_SKILLS)
 
     @pytest.mark.parametrize("skill_key", EXPECTED_SKILLS)
-    def test_template_has_required_fields(self, skill_key: str) -> None:
-        """Moi template phai co name, description, body."""
-        template = SKILL_TEMPLATES[skill_key]
-        assert "name" in template
-        assert "description" in template
-        assert "body" in template
-        assert template["name"] == skill_key
-        assert len(template["description"]) > 20
-        assert len(template["body"]) > 50
+    def test_skill_file_exists_on_disk(self, skill_key: str) -> None:
+        """Moi skill phai co file .md tuong ung tren disk."""
+        from mcp_server.skill_installer import _SKILLS_DIR
+
+        skill_file = _SKILLS_DIR / f"{skill_key}.md"
+        assert skill_file.is_file(), f"Thieu file: {skill_file}"
+
+    @pytest.mark.parametrize("skill_key", EXPECTED_SKILLS)
+    def test_skill_file_has_valid_frontmatter(self, skill_key: str) -> None:
+        """Moi file .md phai co YAML frontmatter voi name va description."""
+        content = _load_skill_file(skill_key)
+        assert "---" in content
+        assert f"name: {skill_key}" in content
+        assert "description:" in content
+        assert len(content) > 100

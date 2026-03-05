@@ -711,11 +711,11 @@ class SettingsViewQt(QWidget):
             card6_layout.addLayout(btn_row)
             card6_layout.addSpacing(6)
 
-        # Copy VS Code workspace (.vscode/mcp.json) snippet
+        # Generic IDE Config Snippet cho cac IDE chua duoc ho tro chinh thuc
         card6_layout.addSpacing(6)
-        copy_mcp_btn = _make_ghost_btn("VS Code .vscode/mcp.json Snippet")
+        copy_mcp_btn = _make_ghost_btn("Generic IDE Config Snippet")
         copy_mcp_btn.setToolTip(
-            "Generate VS Code workspace .vscode/mcp.json (servers) with preview for manual copy/paste"
+            "Generate generic MCP configuration for unsupported IDEs (manual copy/paste)"
         )
         copy_mcp_btn.clicked.connect(self._copy_mcp_config)
         card6_layout.addWidget(copy_mcp_btn)
@@ -971,11 +971,9 @@ class SettingsViewQt(QWidget):
     @Slot()
     def _copy_mcp_config(self) -> None:
         """
-        Sinh nội dung file VS Code workspace `.vscode/mcp.json` với UI preview.
+        Sinh config MCP chuan cho cac IDE chua duoc ho tro chinh thuc.
 
-        IDE như VS Code / Cursor buộc user phải mở `.vscode/mcp.json` ở mức project root
-        và tự copy/paste, nên ở đây sinh ra JSON đầy đủ dạng:
-
+        Output la JSON theo format mcpServers chuan ma hau het IDE deu ho tro:
         {
           "servers": {
             "synapse": {
@@ -985,10 +983,11 @@ class SettingsViewQt(QWidget):
             }
           }
         }
+        User tu copy/paste vao file config cua IDE minh.
         """
         cmd = self._get_mcp_command()
         entry = {
-            # VS Code MCP server dùng stdio cho Synapse Desktop
+            # MCP server stdio config chuan cho Synapse Desktop
             "type": "stdio",
             "command": cmd[0],
             "args": cmd[1:],
@@ -999,12 +998,12 @@ class SettingsViewQt(QWidget):
             }
         }
 
-        # Nội dung hoàn chỉnh cho .vscode/mcp.json
+        # JSON config chuan cho bat ky IDE nao ho tro MCP
         snippet = json.dumps(config_obj, indent=2, ensure_ascii=False)
 
         # Dialog preview để user dễ nhìn và có thể chỉnh tay nếu cần
         dlg = QDialog(self)
-        dlg.setWindowTitle("VS Code settings.json MCP snippet")
+        dlg.setWindowTitle("Generic IDE MCP Configuration")
         dlg.setMinimumSize(720, 440)
         dlg.setStyleSheet(f"QDialog {{ background: {ThemeColors.BG_SURFACE}; }}")
 
@@ -1013,7 +1012,7 @@ class SettingsViewQt(QWidget):
         layout.setSpacing(12)
 
         info_label = QLabel(
-            ".vscode/mcp.json — Tạo file này ở project root và dán toàn bộ nội dung bên dưới."
+            "Generic MCP config — Copy noi dung ben duoi vao file config cua IDE ban dang dung."
         )
         info_label.setWordWrap(True)
         info_label.setStyleSheet(
@@ -1071,9 +1070,7 @@ class SettingsViewQt(QWidget):
         def _do_copy() -> None:
             success, _ = copy_to_clipboard(snippet)
             self._show_status(
-                "VS Code .vscode/mcp.json snippet copied!"
-                if success
-                else "Failed to copy",
+                "Generic MCP config snippet copied!" if success else "Failed to copy",
                 is_error=not success,
             )
             if success:

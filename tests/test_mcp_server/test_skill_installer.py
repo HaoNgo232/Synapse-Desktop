@@ -86,6 +86,11 @@ class TestResolveSkillsDir:
         result = _resolve_skills_dir("Kiro CLI")
         assert result == Path.home() / ".kiro" / "skills"
 
+    def test_opencode_target(self) -> None:
+        """OpenCode skills luu tai ~/.config/opencode/skills."""
+        result = _resolve_skills_dir("OpenCode")
+        assert result == Path.home() / ".config" / "opencode" / "skills"
+
     def test_vscode_target_with_workspace(self) -> None:
         """VS Code/Copilot can workspace_path de tao duong dan project-level."""
         result = _resolve_skills_dir("VS Code (Copilot)", "/home/user/project")
@@ -242,12 +247,13 @@ class TestSkillTargetsConfig:
     """Kiem tra cau hinh SKILL_TARGETS va SKILL_TEMPLATES dung."""
 
     def test_all_expected_targets_present(self) -> None:
-        """Phai co du 5 IDE targets."""
+        """Phai co du 6 IDE targets."""
         expected = {
             "Claude Code",
             "Cursor",
             "Antigravity",
             "Kiro CLI",
+            "OpenCode",
             "VS Code (Copilot)",
         }
         assert set(SKILL_TARGETS.keys()) == expected

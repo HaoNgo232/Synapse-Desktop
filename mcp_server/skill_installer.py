@@ -41,6 +41,10 @@ SKILL_TARGETS: dict[str, dict] = {
         "skills_dir": "~/.kiro/skills",
         "is_global": True,
     },
+    "OpenCode": {
+        "skills_dir": "~/.config/opencode/skills",
+        "is_global": True,
+    },
     "VS Code (Copilot)": {
         "skills_dir": ".github/skills",
         "is_global": False,
@@ -55,108 +59,145 @@ SKILL_TEMPLATES: dict[str, dict[str, str]] = {
     "rp_build": {
         "name": "rp_build",
         "description": (
-            "Prepare optimized context for a coding task using Synapse MCP. "
-            "Use when user wants to build context, start a new implementation task, "
+            "Implementation context builder workflow using Synapse MCP tools. "
+            "Use when user wants to start a new feature, build implementation context, "
             "or prepare a handoff prompt for another agent."
         ),
         "body": """\
-# Context Builder (rp_build)
+# Context Builder Workflow
 
-Prepare optimized context for implementing a new feature or task using the
-Synapse MCP `rp_build` tool.
+Build optimized implementation context by exploring the codebase first,
+then packaging the relevant files into a structured prompt.
 
 ## When to Use
 
 - Starting a new feature implementation
 - Need to understand code structure before making changes
 - Want to hand off context to another AI agent
-- User asks to "build context" or "prepare implementation context"
+- User asks to "build context" or "prepare implementation"
 
-## Instructions
+## Step-by-Step Workflow
 
-1. Identify the task description from the user's request
-2. Call the `rp_build` MCP tool with these parameters:
-   - `task_description`: Clear description of what needs to be implemented
-   - `file_paths`: (Optional) Known relevant files
-   - `max_tokens`: Token budget (default: 100,000)
-   - `include_codemap`: Include code structure signatures (default: True)
-   - `output_file`: (Optional) Path to write prompt for cross-agent handoff
+### Step 1: Understand the Project Shape
+```python
+# Lay tong quan project: file types, frameworks, so luong file
+get_project_structure()
 
+# Xem cay thu muc de hieu bo cuc
+list_directories(max_depth=3)
 ```
-rp_build(
-    task_description="<user's task>",
-    file_paths=["path/to/file.py"],  # optional
-    max_tokens=100000,
-    output_file="context.xml"  # optional
+
+### Step 2: Find Relevant Files
+```python
+# Tim file lien quan den task bang ten/pattern
+list_files(extensions=[".py"])  # hoac .ts, .tsx, ...
+
+# Doc ky nang cua module ma khong can doc full file (tiet kiem token)
+get_codemap(file_paths=["src/auth/login.py", "src/api/routes.py"])
+
+# Tim noi mot symbol duoc su dung trong project
+find_references(symbol_name="UserService")
+```
+
+### Step 3: Trace Dependencies
+```python
+# Xem file nao import file nao
+get_imports_graph(file_paths=["src/auth/login.py"], max_depth=2)
+
+# Tim xem ai goi ham nay - de hieu blast radius
+get_callers(symbol_name="validate_token")
+```
+
+### Step 4: Build the Context Prompt
+Once you have identified the exact files (2-10 files), package them:
+```python
+build_prompt(
+    file_paths=["src/auth/login.py", "src/api/routes.py", "src/models/user.py"],
+    instructions="Implement rate limiting for login endpoint",
+    output_format="xml",  # best for AI consumption
+    auto_expand_dependencies=True,
+    output_file="context.xml"  # optional: save for cross-agent handoff
 )
 ```
 
-## What It Does
-
-- Detects relevant files from task description
-- Traces dependencies automatically
-- Slices large files to include only relevant sections
-- Optimizes content to fit token budget
-- Generates structured handoff prompt
+## Key Principle
+**YOU explore first, THEN package.** Never blindly select all files.
+Pick only 2-10 files that are directly relevant to the task.
 """,
     },
     "rp_review": {
         "name": "rp_review",
         "description": (
-            "Deep code review with full surrounding context using Synapse MCP. "
+            "Code review workflow using Synapse MCP tools. "
             "Use when user wants to review code changes, check a PR, "
             "or understand impact of recent modifications."
         ),
         "body": """\
-# Code Review (rp_review)
+# Code Review Workflow
 
-Perform deep code review with full surrounding context using the
-Synapse MCP `rp_review` tool.
+Perform deep code review by understanding git changes, finding impacted
+callers and tests, then packaging everything for analysis.
 
 ## When to Use
 
 - Before merging a PR or pushing changes
 - Need to understand impact of recent changes
-- Want AI to detect side effects and breaking changes
-- User asks to "review code" or "check changes"
+- Want to detect side effects and breaking changes
+- User asks to "review code" or "check my changes"
 
-## Instructions
+## Step-by-Step Workflow
 
-1. Call the `rp_review` MCP tool with these parameters:
-   - `review_focus`: (Optional) Focus area - "security", "performance", "correctness"
-   - `include_tests`: Pull related test files (default: True)
-   - `include_callers`: Pull files that call changed functions (default: True)
-   - `max_tokens`: Token budget (default: 120,000)
-   - `base_ref`: (Optional) Git ref to diff against
-
+### Step 1: See What Changed
+```python
+# Tong quan nhanh: file nao duoc add/modify/delete
+diff_summary(target="HEAD")
 ```
-rp_review(
-    review_focus="security",  # optional
-    include_tests=True,
-    include_callers=True,
-    max_tokens=120000
+
+### Step 2: Understand the Changed Code
+```python
+# Doc structure cua cac file bi thay doi (khong can doc full)
+get_codemap(file_paths=["src/changed_file.py"])
+
+# Doc chi tiet 1 doan code cu the neu can
+read_file_range(relative_path="src/changed_file.py", start_line=50, end_line=80)
+```
+
+### Step 3: Find Blast Radius
+```python
+# Tim xem ai goi cac ham da thay doi
+get_callers(symbol_name="changed_function_name")
+
+# Tim test files tuong ung
+get_related_tests(file_paths=["src/changed_file.py"])
+```
+
+### Step 4: Package Review Context
+```python
+build_prompt(
+    file_paths=["src/changed_file.py", "tests/test_changed.py"],
+    instructions="Review these changes for correctness, security, and performance",
+    include_git_changes=True,
+    profile="review"
 )
 ```
 
-## What It Does
-
-- Pulls git diff (staged + unstaged changes)
-- Identifies changed functions/classes (not just lines)
-- Finds surrounding context: imports, callers, tests
-- Packages everything into comprehensive review prompt
+## Key Principle
+**Understand the blast radius BEFORE reviewing.** A change to a utility
+function used in 20 places needs deeper review than a leaf function.
 """,
     },
     "rp_refactor": {
         "name": "rp_refactor",
         "description": (
-            "Two-pass refactoring workflow using Synapse MCP. "
-            "Use when user wants to refactor code safely with analysis-first approach."
+            "Two-pass refactoring workflow using Synapse MCP tools. "
+            "Use when user wants to refactor code safely with "
+            "analysis-first approach."
         ),
         "body": """\
-# Two-Pass Refactor (rp_refactor)
+# Refactoring Workflow
 
-Safe refactoring with analysis-first approach using the
-Synapse MCP `rp_refactor` tool.
+Safe refactoring with analysis-first approach: discover dependencies
+and risks before making any changes.
 
 ## When to Use
 
@@ -165,56 +206,70 @@ Synapse MCP `rp_refactor` tool.
 - Want to understand risks before making changes
 - User asks to "refactor" or "restructure" code
 
-## Instructions
+## Step-by-Step Workflow
 
-### Phase 1: Discovery (always run first)
+### Phase 1: Discovery (DO NOT SKIP)
 
+#### 1a. Locate the Target
+```python
+# Tim module/function can refactor
+find_references(symbol_name="LegacyService")
+get_codemap(file_paths=["src/legacy_service.py"])
 ```
-rp_refactor(
-    refactor_scope="<what to refactor>",
-    phase="discover",
-    file_paths=["path/to/file.py"]  # optional
+
+#### 1b. Map Dependencies
+```python
+# Ai import file nay?
+get_imports_graph(file_paths=["src/legacy_service.py"], max_depth=2)
+
+# Ai goi cac ham trong file nay?
+get_callers(symbol_name="LegacyService.process")
+
+# Tim test hien tai
+get_related_tests(file_paths=["src/legacy_service.py"])
+```
+
+#### 1c. Assess Risk
+```python
+# Doc chi tiet cac file bi anh huong
+get_codemap(file_paths=[
+    "src/legacy_service.py",
+    "src/caller_a.py",
+    "src/caller_b.py"
+])
+```
+
+Document your findings: number of callers, test coverage, coupling points.
+
+### Phase 2: Plan and Execute
+
+```python
+# Goi cac file can refactor + dependencies vao 1 prompt
+build_prompt(
+    file_paths=["src/legacy_service.py", "src/caller_a.py", "tests/test_legacy.py"],
+    instructions="Refactor LegacyService: extract validation into separate module",
+    auto_expand_dependencies=True,
+    profile="refactor"
 )
 ```
 
-Review the discovery report before proceeding.
-
-### Phase 2: Planning (after reviewing discovery)
-
-```
-rp_refactor(
-    refactor_scope="<what to refactor>",
-    phase="plan",
-    discovery_report="<paste discovery output>"
-)
-```
-
-## What It Does
-
-**Phase 1 (discover):**
-- Analyzes code structure WITHOUT making changes
-- Finds all dependencies and coupling points
-- Identifies risk areas and backward compatibility concerns
-
-**Phase 2 (plan):**
-- Takes discovery report as input
-- Generates concrete refactoring plan
-- Ensures backward compatibility
-- Suggests migration steps if needed
+## Key Principle
+**NEVER refactor without knowing the blast radius first.**
+Always run Phase 1 discovery to find all callers and dependents.
 """,
     },
     "rp_investigate": {
         "name": "rp_investigate",
         "description": (
-            "Automated bug investigation using Synapse MCP. "
+            "Bug investigation workflow using Synapse MCP tools. "
             "Use when user reports a bug, has an error trace, "
             "or needs to trace execution path to find root cause."
         ),
         "body": """\
-# Bug Investigation (rp_investigate)
+# Bug Investigation Workflow
 
-Automated bug investigation by tracing execution path using the
-Synapse MCP `rp_investigate` tool.
+Systematic bug investigation by tracing execution paths through the
+codebase to find the root cause.
 
 ## When to Use
 
@@ -223,48 +278,64 @@ Synapse MCP `rp_investigate` tool.
 - Need to understand execution flow
 - User reports a bug or error
 
-## Instructions
+## Step-by-Step Workflow
 
-1. Collect bug description and any error trace from the user
-2. Call the `rp_investigate` MCP tool:
-
-```
-# With error trace
-rp_investigate(
-    bug_description="<description of the bug>",
-    error_trace="<paste traceback/stack trace>",
-    max_depth=4
-)
-
-# Without error trace (manual entry points)
-rp_investigate(
-    bug_description="<description>",
-    entry_files=["path/to/suspect.py"],
-    max_depth=3
-)
+### Step 1: Parse the Error
+If user gave an error trace, identify the file and line number
+where the error originates. If no trace, search for the bug:
+```python
+# Tim function/class lien quan den bug
+find_references(symbol_name="suspected_function")
 ```
 
-## What It Does
+### Step 2: Read Code at Error Points
+```python
+# Doc doan code xung quanh loi
+read_file_range(
+    relative_path="src/module.py",
+    start_line=40,
+    end_line=70
+)
 
-- Parses error traces (Python traceback, JS stack traces)
-- Reads code at each trace point
-- Follows function calls (callers and callees) via BFS
-- Slices large files to show only relevant sections
-- Packages everything into investigation prompt
+# Xem structure cua file
+get_symbols(file_path="src/module.py")
+```
+
+### Step 3: Trace the Call Chain
+```python
+# Ai goi ham bi loi? Trace nguoc len
+get_callers(symbol_name="broken_function")
+
+# Xem dependency graph
+get_imports_graph(file_paths=["src/module.py"], max_depth=2)
+```
+
+### Step 4: Package Investigation Context
+```python
+build_prompt(
+    file_paths=["src/module.py", "src/caller.py", "tests/test_module.py"],
+    instructions="Investigate: <bug description>. Root cause analysis needed.",
+    auto_expand_dependencies=True,
+    profile="bugfix"
+)
+```
+
+## Key Principle
+**Trace from the error outward.** Start at the crash point,
+then follow the call chain upward to find where the data went wrong.
 """,
     },
     "rp_test": {
         "name": "rp_test",
         "description": (
-            "Test generation workflow using Synapse MCP. "
+            "Test generation workflow using Synapse MCP tools. "
             "Use when user wants to write tests, find coverage gaps, "
             "or improve test coverage for existing code."
         ),
         "body": """\
-# Test Generation (rp_test)
+# Test Generation Workflow
 
-Analyze code, find test coverage gaps, and prepare optimized context
-for writing tests using the Synapse MCP `rp_test` tool.
+Find test coverage gaps and prepare context for writing high-quality tests.
 
 ## When to Use
 
@@ -273,27 +344,41 @@ for writing tests using the Synapse MCP `rp_test` tool.
 - Want to focus on covering untested methods
 - User asks to "write tests" or "improve coverage"
 
-## Instructions
+## Step-by-Step Workflow
 
-1. Call the `rp_test` MCP tool:
-
+### Step 1: Identify Source Files
+```python
+# Tim file can test
+get_codemap(file_paths=["src/service.py"])
+# -> Hien thi toan bo functions/classes can duoc test
 ```
-rp_test(
-    task_description="Write tests for login functionality",
-    file_paths=["auth/login.py"],  # optional
-    max_tokens=100000,
-    test_framework="pytest"  # optional: "pytest", "jest", "vitest"
+
+### Step 2: Find Existing Tests
+```python
+# Tim test file tuong ung (neu co)
+get_related_tests(file_paths=["src/service.py"])
+
+# Doc test hien tai de hieu pattern dang dung
+get_codemap(file_paths=["tests/test_service.py"])
+```
+
+### Step 3: Identify Coverage Gaps
+So sanh danh sach functions trong source file voi danh sach
+test functions. Nhung ham nao chua co test?
+
+### Step 4: Package Test Context
+```python
+build_prompt(
+    file_paths=["src/service.py", "tests/test_service.py"],
+    instructions="Write tests for untested functions: func_a, func_b",
+    auto_expand_dependencies=True
 )
 ```
 
-## What It Does
-
-- Finds all source files and their corresponding test files
-- Extracts functions/methods/classes dynamically
-- Maps tested code to test functions
-- Identifies missing coverage with priority ranking (HIGH/MEDIUM/LOW)
-- Auto-detects testing frameworks (pytest, jest, vitest)
-- Formats analysis into an AI agent-ready plan
+## Key Principle
+**Read existing tests first to match the team's patterns.**
+New tests should be consistent with the existing test style,
+fixtures, and naming conventions.
 """,
     },
 }

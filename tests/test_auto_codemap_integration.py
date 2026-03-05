@@ -16,7 +16,14 @@ class TestAutoCodemapFeature:
     def mock_mcp(self):
         """Create mock MCP instance."""
         mcp = Mock()
-        mcp.tool = lambda: lambda func: func  # Decorator passthrough
+        mcp.registered_tools = {}  # Track registered tools by name
+
+        def tool_decorator(func):
+            """Decorator that captures registered tools."""
+            mcp.registered_tools[func.__name__] = func
+            return func
+
+        mcp.tool = Mock(side_effect=lambda: tool_decorator)
         return mcp
 
     @pytest.fixture
@@ -32,7 +39,7 @@ class TestAutoCodemapFeature:
         """Test that depth >= 2 dependencies are automatically added to codemap."""
         # Arrange
         register_tools(mock_mcp)
-        build_prompt_func = mock_mcp.tool.call_args_list[2][0][0]  # 3rd registered tool
+        build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
             patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
@@ -57,7 +64,6 @@ class TestAutoCodemapFeature:
             mock_resolver_cls.return_value = mock_resolver
 
             # Mock get_related_files_with_depth to return depth info
-            workspace / "main.py"
             utils_file = workspace / "utils.py"
             helpers_file = workspace / "helpers.py"
 
@@ -97,7 +103,7 @@ class TestAutoCodemapFeature:
         """Test that depth=1 does not trigger auto-codemap."""
         # Arrange
         register_tools(mock_mcp)
-        build_prompt_func = mock_mcp.tool.call_args_list[2][0][0]
+        build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
             patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
@@ -150,7 +156,7 @@ class TestAutoCodemapFeature:
         """Test that user-specified codemap_paths are merged with auto-detected ones."""
         # Arrange
         register_tools(mock_mcp)
-        build_prompt_func = mock_mcp.tool.call_args_list[2][0][0]
+        build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
             patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
@@ -209,7 +215,7 @@ class TestAutoCodemapFeature:
         """Test that depth=3 auto-codemaps both depth 2 and depth 3 dependencies."""
         # Arrange
         register_tools(mock_mcp)
-        build_prompt_func = mock_mcp.tool.call_args_list[2][0][0]
+        build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         (workspace / "db.py").write_text("# database")
 

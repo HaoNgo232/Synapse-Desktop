@@ -198,9 +198,27 @@ def generate_file_contents_xml(
         File contents string voi XML structure
     """
     if codemap_paths:
-        # Tach thanh 2 nhom: full content va codemap-only
-        full_paths = selected_paths - codemap_paths
-        codemap_only = selected_paths & codemap_paths
+        # Normalize ca hai set ve cung format de tranh silent failure
+        def _normalize(p: str) -> str:
+            pp = Path(p)
+            if not pp.is_absolute() and workspace_root:
+                return str((workspace_root / pp).resolve())
+            return str(pp.resolve())
+
+        normalized_selected = {_normalize(p) for p in selected_paths}
+        normalized_codemap = {_normalize(p) for p in codemap_paths}
+
+        full_paths_normalized = normalized_selected - normalized_codemap
+        codemap_only_normalized = normalized_selected & normalized_codemap
+
+        # Map nguoc ve original paths de truyen cho collect_files
+        norm_to_orig = {_normalize(p): p for p in selected_paths}
+        full_paths = {
+            norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
+        }
+        codemap_only = {
+            norm_to_orig[n] for n in codemap_only_normalized if n in norm_to_orig
+        }
 
         parts: list[str] = []
 
@@ -274,14 +292,16 @@ def _generate_codemap_xml(
                 if file_size > max_file_size:
                     continue
             except OSError:
-                pass
+                continue  # Khong doc duoc metadata -> skip an toan
 
             display_path = path_for_display(path, workspace_root, use_relative_paths)
+
+            # Doc file 1 lan duy nhat
+            raw_content = path.read_text(encoding="utf-8", errors="replace")
 
             # Try smart parse (AST signatures)
             ext = path.suffix.lstrip(".")
             if is_supported(ext):
-                raw_content = path.read_text(encoding="utf-8", errors="replace")
                 smart_content = smart_parse(
                     path_str, raw_content, include_relationships=False
                 )
@@ -293,9 +313,7 @@ def _generate_codemap_xml(
                     )
                     continue
 
-            # Fallback: neu smart_parse khong ho tro, van lay full content
-            # nhung danh dau la codemap-attempted
-            raw_content = path.read_text(encoding="utf-8", errors="replace")
+            # Fallback: neu smart_parse khong ho tro, su dung raw_content da doc
             parts.append(
                 f'<file path="{_xml_attr_escape(display_path)}" context="codemap-fallback">\n'
                 f"{raw_content}\n"
@@ -331,8 +349,27 @@ def generate_file_contents_json(
     if codemap_paths:
         import json as _json
 
-        full_paths = selected_paths - codemap_paths
-        codemap_only = selected_paths & codemap_paths
+        # Normalize ca hai set ve cung format
+        def _normalize(p: str) -> str:
+            pp = Path(p)
+            if not pp.is_absolute() and workspace_root:
+                return str((workspace_root / pp).resolve())
+            return str(pp.resolve())
+
+        normalized_selected = {_normalize(p) for p in selected_paths}
+        normalized_codemap = {_normalize(p) for p in codemap_paths}
+
+        full_paths_normalized = normalized_selected - normalized_codemap
+        codemap_only_normalized = normalized_selected & normalized_codemap
+
+        # Map nguoc ve original paths
+        norm_to_orig = {_normalize(p): p for p in selected_paths}
+        full_paths = {
+            norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
+        }
+        codemap_only = {
+            norm_to_orig[n] for n in codemap_only_normalized if n in norm_to_orig
+        }
 
         all_entries: list[dict] = []
 
@@ -421,8 +458,27 @@ def generate_file_contents_plain(
         String chua file paths va contents dang plain text
     """
     if codemap_paths:
-        full_paths = selected_paths - codemap_paths
-        codemap_only = selected_paths & codemap_paths
+        # Normalize ca hai set ve cung format
+        def _normalize(p: str) -> str:
+            pp = Path(p)
+            if not pp.is_absolute() and workspace_root:
+                return str((workspace_root / pp).resolve())
+            return str(pp.resolve())
+
+        normalized_selected = {_normalize(p) for p in selected_paths}
+        normalized_codemap = {_normalize(p) for p in codemap_paths}
+
+        full_paths_normalized = normalized_selected - normalized_codemap
+        codemap_only_normalized = normalized_selected & normalized_codemap
+
+        # Map nguoc ve original paths
+        norm_to_orig = {_normalize(p): p for p in selected_paths}
+        full_paths = {
+            norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
+        }
+        codemap_only = {
+            norm_to_orig[n] for n in codemap_only_normalized if n in norm_to_orig
+        }
 
         parts: list[str] = []
 

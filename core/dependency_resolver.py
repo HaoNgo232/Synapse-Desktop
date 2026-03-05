@@ -10,7 +10,7 @@ Future: JavaScript/TypeScript imports (Phase 2).
 
 import os
 from pathlib import Path
-from typing import Optional, Set, Dict, List
+from typing import Optional, Set, Dict, List, cast
 from tree_sitter import Parser, Query, QueryCursor, Language  # type: ignore
 
 from core.smart_context.loader import get_language
@@ -221,11 +221,13 @@ class DependencyResolver:
             for alias_pattern, target_paths in paths.items():
                 if isinstance(target_paths, list):
                     # Normalize: bỏ ./ prefix
-                    normalized_paths = []
-                    for p in target_paths:
-                        if p.startswith("./"):
-                            p = p[2:]
-                        normalized_paths.append(p)
+                    normalized_paths: list[str] = []
+                    typed_target_paths = cast(list[str], target_paths)
+                    for p in typed_target_paths:
+                        path_str = str(p)
+                        if path_str.startswith("./"):
+                            path_str = path_str[2:]
+                        normalized_paths.append(path_str)
                     self._ts_paths[alias_pattern] = normalized_paths
 
         except Exception:
@@ -378,13 +380,16 @@ class DependencyResolver:
             if not resolved_path.exists():
                 continue
 
-            # Chi cap nhat depth neu chua co hoac depth hien tai nho hon
-            # (giu depth nho nhat = gan nhat voi primary file)
-            if resolved_path not in result or current_depth < result[resolved_path]:
+            prev_depth = result.get(resolved_path)
+            is_shorter = prev_depth is None or current_depth < prev_depth
+
+            if is_shorter:
                 result[resolved_path] = current_depth
 
-            # Recurse neu chua visit va chua vuot max_depth
-            if resolved_path not in visited:
+            # Recurse neu: (a) chua visit, HOAC (b) tim duoc duong ngan hon
+            if resolved_path not in visited or (
+                is_shorter and current_depth + 1 <= max_depth
+            ):
                 visited.add(resolved_path)
                 self._collect_with_depth(
                     resolved_path, current_depth + 1, max_depth, result, visited
@@ -643,7 +648,9 @@ class DependencyResolver:
         # 4. Non-relative, non-alias imports (node_modules) - skip
         return None
 
-    def _resolve_ts_alias(self, import_path: str, extensions: list) -> Optional[Path]:
+    def _resolve_ts_alias(
+        self, import_path: str, extensions: list[str]
+    ) -> Optional[Path]:
         """
         Resolve import path sử dụng path aliases từ tsconfig.json.
 
@@ -728,7 +735,7 @@ class DependencyResolver:
         return None
 
     def _resolve_js_by_filename(
-        self, import_path: str, extensions: list
+        self, import_path: str, extensions: list[str]
     ) -> Optional[Path]:
         """
         Fallback: resolve JS/TS import bằng cách tìm filename cuối cùng trong file index.

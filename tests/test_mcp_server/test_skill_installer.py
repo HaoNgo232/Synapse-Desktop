@@ -24,7 +24,14 @@ from mcp_server.skill_installer import (
 )
 
 # ---------- Danh sach 5 skill keys can test ----------
-EXPECTED_SKILLS = ["rp_build", "rp_review", "rp_refactor", "rp_investigate", "rp_test"]
+EXPECTED_SKILLS = [
+    "rp_build",
+    "rp_review",
+    "rp_refactor",
+    "rp_investigate",
+    "rp_test",
+    "rp_export_context",
+]
 
 
 class TestLoadSkillFile:
@@ -55,6 +62,14 @@ class TestLoadSkillFile:
         """File rp_test.md phai doc duoc."""
         content = _load_skill_file("rp_test")
         assert "name: rp_test" in content
+
+    def test_loads_rp_export_context(self):
+        """Test loading the rp_export_context skill."""
+        content = _load_skill_file("rp_export_context")
+        assert content is not None
+        assert getattr(content, "startswith", lambda x: False)(
+            "---\nname: rp_export_context\n"
+        )
 
     def test_raises_for_unknown_skill(self) -> None:
         """Skill khong ton tai phai raise FileNotFoundError."""

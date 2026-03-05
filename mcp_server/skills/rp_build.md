@@ -65,8 +65,71 @@ build_prompt(
 )
 ```
 
+### Step 5: Implementation Plan & Task Decomposition (CRITICAL)
+**Act as an Architect/Orchestrator.** Before coding, determine if this is a simple or complex task:
+
+**Simple Task Criteria:**
+- Affects ≤10 files in 1-2 related modules
+- Estimated tokens <80,000
+- Can be implemented in one logical phase
+
+**Complex Task Criteria:**
+- Affects 3+ independent modules (e.g., DB + API + UI)
+- Estimated tokens >80,000
+- Requires sequential implementation (Phase A must complete before Phase B)
+
+**For Complex Tasks - Mandatory Decomposition:**
+```python
+# Example: "Add authentication to API"
+# Phase 1: Database schema changes
+build_prompt(
+    file_paths=["src/models/user.py", "migrations/add_auth.sql"],
+    instructions="Phase 1: Add user authentication tables and models",
+    output_file="context_phase1_db.xml"
+)
+
+# Phase 2: Authentication logic (depends on Phase 1)
+build_prompt(
+    file_paths=["src/auth/service.py", "src/auth/middleware.py"],
+    instructions="Phase 2: Implement JWT auth service and middleware",
+    output_file="context_phase2_auth.xml"
+)
+
+# Phase 3: API integration (depends on Phase 2)
+build_prompt(
+    file_paths=["src/api/routes.py", "src/api/decorators.py"],
+    instructions="Phase 3: Add auth decorators to API endpoints",
+    output_file="context_phase3_api.xml"
+)
+```
+
+### Step 6: Strategic Delegation
+1. **Check sub-agent availability**: Verify you have a tool for spawning sub-agents.
+2. **If NO sub-agent tool exists**: STOP and provide Implementation Plan + context files to user.
+3. **If available**:
+   - **Simple tasks**: Spawn 1 sub-agent with single context file
+   - **Complex tasks**: Spawn sub-agents sequentially (Phase 1 → verify → Phase 2 → verify → Phase 3)
+
+**Sub-agent definition**: A separate AI agent instance (via tool delegation) that can:
+- Read generated context files
+- Write and modify code
+- Run tests to verify changes
+- Report success/failure back to orchestrator
+
+### Step 7: Verification Protocol
+For each completed phase:
+```python
+# Orchestrator checks phase completion
+verify_phase_completion(
+    phase="Phase 1: DB changes",
+    success_criteria=["migrations run successfully", "models import without errors"],
+    context_file="context_phase1_db.xml"
+)
+```
+
 ## Key Principles
-- **YOU explore first, THEN package.** Never blindly select all files.
-- **Pick only 2-10 files** that are directly relevant to the task.
+- **Be the Architect.** Don't just gather files; design the implementation sequence.
+- **Split complex tasks.** 15 files in one prompt = confusion. 5 files in 3 prompts = precision.
+- **Sequential execution.** Each phase must be verified before proceeding to the next.
 - **Always estimate_tokens** before build_prompt to avoid context overflow.
 - **Use batch_codemap** for module-level scanning, not get_codemap per file.

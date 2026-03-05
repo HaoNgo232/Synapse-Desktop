@@ -9,7 +9,9 @@
 
 A desktop application that bridges your codebase and AI assistants (ChatGPT, Claude, Gemini, or any OpenAI-compatible API). Synapse Desktop lets you select files from a project tree, package them into structured prompts with accurate token counts, and then apply AI-generated code changes back to your codebase — all with visual diffs, auto-backup, and continuous memory across sessions.
 
-**Now supports Model Context Protocol (MCP):** Run Synapse as a headless server to expose your workspace directly to AI clients (Cursor, GitHub Copilot, Claude Code, Antigravity) via standardized tools, enabling seamless AI-codebase integration without manual copy/paste workflows.
+**Now supports Model Context Protocol (MCP):** Run Synapse as a headless server to expose your workspace directly to AI clients (Cursor, GitHub Copilot, Claude Code, Antigravity, Kiro CLI, OpenCode) via standardized tools, enabling seamless AI-codebase integration without manual copy/paste workflows.
+
+**Agent Skills Workflows:** Synapse includes 6 pre-built workflow skills (rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_export_context) that can be auto-installed to AI IDEs, providing structured multi-step workflows for complex coding tasks.
 
 > ⚠️ **Platform Status:** Currently stable on **Linux**. The **Windows** version is in experimental/beta phase. **macOS** is currently unsupported/untested due to lack of testing environments.
 
@@ -23,6 +25,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 - **AST Optimization:** Use "Smart Copy" to extract only function signatures and class definitions from code, saving 70-80% of your token budget while giving the AI the big picture.
 - **Safe Code Application:** Paste XML responses (OPX format) from the AI → view visual diffs → apply to codebase with seamless auto-backup.
 - **Autonomous Exploration (MCP Mode):** Let your AI Editors (Cursor, Copilot, etc.) use Synapse's advanced AST tools, token counting, and dependency graphs natively.
+- **Structured Workflows (Skills System):** Install pre-built multi-step workflows to your IDE that guide AI agents through complex tasks like code review, refactoring, and bug investigation.
 
 ---
 
@@ -49,7 +52,8 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 
 ### MCP Server Integration (IDE Backend for AI Agents)
 - **Direct AI Access**: Run Synapse as an MCP server to expose specialized workspace analysis tools directly to AI clients.
-- **19 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
+- **Auto-Detection**: Workspace path is automatically detected from MCP Context roots (no manual configuration needed).
+- **24 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
 
   **Workflow Tools (NEW)**
   *Advanced multi-step workflows for AI agent handoff:*
@@ -58,6 +62,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
   - `rp_refactor` — Two-Pass Refactor: Analyze first (discover), then plan (safe refactoring)
   - `rp_investigate` — Bug Investigation: Trace execution path from error traces
   - `rp_test` — Test Generation: Analyze code to identify coverage gaps and prepare context for writing missing tests
+  - `rp_export_context` — Oracle Export: Build context and export to file for manual handoff to external LLMs (ChatGPT, Claude Web)
   
   [📖 Workflow Tools Documentation](docs/WORKFLOW_TOOLS.md)
 
@@ -86,7 +91,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
   - `get_file_metrics` — LOC, functions/classes count, TODO/FIXME/HACK, complexity.
   - `find_todos` — Scan entire project for TODO/FIXME/HACK comments.
 
-- **Auto-Configuration**: One-click installation of MCP config files via Settings tab (supports Cursor, VS Code, Claude Code).
+- **Auto-Configuration**: One-click installation of MCP config files via Settings tab (supports Cursor, VS Code, Claude Code, Antigravity, Kiro CLI, OpenCode). Auto-updates command paths when binary is moved (AppImage/exe builds).
 - **Headless Operation**: No GUI overhead when running in MCP mode — pure stdio transport for maximum efficiency.
 
 ---
@@ -103,6 +108,12 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 2. **Use AI Client**: Open your AI client. Synapse tools are now available directly in AI conversations. Example: *"Use `get_project_structure` to analyze this codebase."*
 3. **AI Explores Autonomously**: The AI client spawns Synapse in headless mode (`--run-mcp`). No manual copy/paste—the AI uses Synapse's advanced AST and dependency parsing natively.
 4. **Cross-Agent Delegation (Pro Tip)**: Ask your Planning Agent to use the `build_prompt` tool to generate a `spec.xml` file containing the full project architecture. Then, tell your Coding Agent to read that file. This transfers massive context between AI agents efficiently without crashing the chat window!
+
+### 3. Skills-Based Workflow (Structured Multi-Step)
+1. **Install Skills** (Settings → Skills System → Install to [IDE]).
+2. **Invoke Skill**: In your AI client, reference the skill name (e.g., "Use rp_build to prepare context for adding rate limiting").
+3. **AI Follows Workflow**: The AI agent automatically executes the multi-step workflow defined in the skill, calling Synapse MCP tools in the correct sequence.
+4. **Review Results**: The AI presents the final context package or analysis for your review.
 
 *(Manual MCP Server Launch: `python main_window.py --run-mcp /path/to/workspace`)*
 
@@ -208,7 +219,29 @@ When enabled in Settings, the AI is instructed to include a `<synapse_memory>` b
 - **Apply failed "pattern not found"**: Ask the AI to provide a longer, more unique code block within the `<find>` tag.
 - **Cascade failures during Apply**: If multiple edits target the exact same file, block 1 might change the text that block 2 is trying to `<find>`. Use **Copy Error Context** to give the AI context so it can rewrite the OPX.
 - **Slow directory scanning**: Install `scandir-rs` (`pip install scandir-rs`) for 3–70x faster scanning.
-- **MCP Connection Timeout**: If Cursor/Copilot report "context deadline exceeded", test manually with `python main_window.py --run-mcp /path/to/workspace` to ensure no Python dependency errors are blocking startup.
+### MCP-Specific Issues
+
+**MCP Connection Timeout ("context deadline exceeded")**
+- **Cause**: MCP client (Cursor/Copilot) expects handshake within 5-10 seconds, but Synapse is slow to start.
+- **Solution 1**: Test manually: `python main_window.py --run-mcp /path/to/workspace`. If it hangs or shows Python errors, fix those first.
+- **Solution 2**: Check MCP config file (e.g., `~/.cursor/mcp.json`). Ensure `command` points to correct Python executable and `main_window.py` path.
+- **Solution 3**: If using AppImage, ensure `APPIMAGE` environment variable is set correctly. Run `echo $APPIMAGE` to verify.
+
+**MCP Tools Not Appearing in AI Client**
+- **Cause**: MCP server failed to start or crashed during initialization.
+- **Solution**: Check stderr logs. MCP server logs to stderr by default. Run `python main_window.py --run-mcp /path/to/workspace 2> mcp_error.log` to capture errors.
+
+**Auto-Detection Not Working**
+- **Cause**: AI client doesn't expose workspace roots via MCP Context.
+- **Solution**: Manually pass `workspace_path` parameter to tools. Example: `get_project_structure(workspace_path="/home/user/project")`.
+
+**Skills Not Appearing in IDE**
+- **Cause**: Skills not installed or IDE doesn't support Agent Skills standard.
+- **Solution**: Go to Settings → Skills System → Install to [IDE]. Verify installation path (e.g., `~/.cursor/skills/rp_build/SKILL.md`).
+
+**Skill Execution Fails**
+- **Cause**: AI agent doesn't have access to required MCP tools.
+- **Solution**: Ensure MCP server is running and all tools are registered. Run `start_session()` first to verify connectivity.
 
 ---
 
@@ -227,13 +260,20 @@ This section is intended for developers who wish to understand or contribute to 
 - **Mixin UI Pattern**: `ContextViewQt` composes behavior from focused Mixin modules (`UIBuilderMixin`, `CopyActionsMixin`, etc.).
 - **Service Container**: Pure dependency injection via `ServiceContainer` instead of massive global singletons.
 - **Thread-safe**: Aggressive use of global cancellation flags, `threading.Lock`, and `SignalBridge` for pushing background updates to the main thread securely.
+- **Skills as Markdown**: Workflow definitions stored as `.md` files for easy editing without touching Python code.
+- **MCP Auto-Detection**: Workspace path resolved from MCP Context roots, eliminating manual configuration.
+- **Auto-Update Configs**: MCP config commands automatically updated when binary path changes (AppImage/exe builds).
 
 ### Key Modules
 - `main_window.py`: Entry point for GUI and MCP mode.
 - `views/`: Qt UI modules (`context_view_qt`, `apply_view_qt`, `history_view_qt`, etc).
 - `services/`: Core logic (`token_display`, `prompt_build_service`, `workspace_index`).
 - `core/`: Base infrastructure (`theme`, `file_scanner`, `threading_utils`).
-- `mcp_server/`: FastMCP implementation (`server.py`, `config_installer.py`).
+- `mcp_server/`: FastMCP implementation (`server.py`, `config_installer.py`, `skill_installer.py`).
+- `mcp_server/handlers/`: 10 handler modules for MCP tools (workspace, file, selection, token, analysis, structure, dependency, git, context, workflow).
+- `mcp_server/skills/`: 6 workflow skill definitions (Markdown files).
+- `mcp_server/core/`: Core MCP infrastructure (workspace_manager, session_manager, profile_resolver, constants).
+- `core/workflows/`: Advanced workflow implementations (`context_builder`, `code_reviewer`, `bug_investigator`, `refactor_workflow`, `test_builder`).
 
 ### Development
 - Code Style: Type hints everywhere.

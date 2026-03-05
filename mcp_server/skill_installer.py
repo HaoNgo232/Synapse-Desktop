@@ -68,6 +68,7 @@ SKILL_KEYS: list[str] = [
     "rp_refactor",
     "rp_investigate",
     "rp_test",
+    "rp_export_context",
 ]
 
 

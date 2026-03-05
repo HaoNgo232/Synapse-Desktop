@@ -16,6 +16,8 @@ Synapse Desktop provides 5 advanced workflow tools designed for AI agent handoff
 - Slices large files to include only relevant sections
 - Optimizes content to fit token budget
 - Generates structured handoff prompt
+- Decomposes complex tasks into sequential phases (e.g., DB → Auth → API)
+- Supports strategic delegation to sub-agents with verification protocol
 
 **Usage:**
 ```python
@@ -44,7 +46,9 @@ rp_build(
 - Pulls git diff (staged + unstaged changes)
 - Identifies changed functions/classes (not just lines)
 - Finds surrounding context: imports, callers, tests
+- Performs comprehensive Review Analysis (Security, Performance, Breaking Changes, Test Coverage)
 - Packages everything into comprehensive review prompt
+- Splits large PRs (>20 files) into focused review phases
 
 **Usage:**
 ```python
@@ -80,8 +84,10 @@ rp_review(
 **Phase 2 (plan):**
 - Takes discovery report as input
 - Generates concrete refactoring plan
+- Enforces "No Big Bang" rule: breaks refactor into atomic, reversible phases
 - Ensures backward compatibility
 - Suggests migration steps if needed
+- Generates rollback instructions for each phase
 
 **Usage:**
 ```python
@@ -117,6 +123,8 @@ rp_refactor(
 - Reads code at each trace point
 - Follows function calls (callers and callees) via BFS
 - Slices large files to show only relevant sections
+- Enforces comprehensive Root Cause Analysis (RCA) before any fixes
+- Handles multi-component bugs via sequential fix phases (DB → API → UI)
 - Packages everything into investigation prompt
 
 **Usage:**
@@ -164,6 +172,7 @@ rp_investigate(
 - Recommends which untested targets to prioritize (HIGH/MEDIUM/LOW)
 - Auto-detects testing frameworks (pytest, jest, vitest)
 - Suggests new test file paths if missing
+- Creates comprehensive Test Plan (Framework Analysis, Coverage Strategy, Test Data Strategy) before code generation
 - Formats analysis into an AI agent-ready plan
 
 **Usage:**
@@ -188,6 +197,25 @@ rp_test(
 - Building unit/integration tests for untested code
 - Fixing or improving existing test files
 - Want AI to focus exclusively on covering untested methods
+
+---
+
+## Agent Skills vs MCP Workflow Tools
+
+**Important Distinction:**
+
+**MCP Workflow Tools (5 tools):** These are the core workflow tools exposed via MCP server (`mcp_server/handlers/workflow_handler.py`):
+- `rp_build`, `rp_review`, `rp_refactor`, `rp_investigate`, `rp_test`
+- Called directly by AI clients via MCP protocol
+- Implemented as Python functions in the MCP server
+
+**Agent Skills (6 skills):** These are workflow templates installed to IDE skill directories:
+- Stored as Markdown files in `mcp_server/skills/*.md`
+- Include all 5 MCP tools above PLUS `rp_export_context`
+- `rp_export_context` is NOT a separate MCP tool—it's a workflow that uses the existing `build_prompt` tool
+- Installed via Settings → Skills System → Install to [IDE]
+
+**Key Point:** `rp_export_context` appears in skill lists but is actually a wrapper workflow around `build_prompt`, designed specifically for manual handoff to external LLMs (ChatGPT, Claude Web).
 
 ---
 
@@ -240,9 +268,9 @@ Test coverage:
 
 ## Integration with MCP
 
-All 4 tools are exposed via MCP server (`mcp_server/server.py`).
+All 5 workflow tools are exposed via MCP server (`mcp_server/server.py`).
 
-AI clients (Cursor, Copilot, Claude Code) can call them directly:
+AI clients (Cursor, GitHub Copilot, Claude Code, Antigravity, Kiro CLI, OpenCode) can call them directly:
 
 ```bash
 # Start MCP server
@@ -285,3 +313,7 @@ Tools appear in AI client's tool list as:
 - [ ] Incremental context updates (only send changed files)
 - [ ] Visual diff rendering in XML output
 - [x] Test coverage analysis integration
+- [x] Task decomposition and strategic delegation
+- [x] Root Cause Analysis (RCA) enforcement
+- [x] Agent Skills system integration
+- [x] Oracle export workflow for external LLM handoff

@@ -76,12 +76,106 @@ build_prompt(
     use_selection=True,
     instructions="Investigate: <bug description>. Root cause analysis needed.",
     auto_expand_dependencies=True,
-    profile="bugfix"
+    profile="bugfix",
+    output_file="context.xml"
 )
 ```
 
+### Step 6: Write Root Cause Analysis (BEFORE fixing)
+Before writing any fix, produce a Root Cause Analysis (RCA) that includes:
+- **What happened**: Describe the observed bug/error behavior.
+- **Why it happened**: Explain the root cause at code level.
+- **Which code paths are affected**: List functions/files involved.
+- **Proposed fix**: Describe the fix approach and expected outcome.
+
+This prevents the agent from applying superficial patches that mask
+the real issue. Only proceed to code changes after the RCA is clear.
+
+### Step 7: Root Cause Analysis & Task Decomposition
+
+#### 7a. Write Comprehensive RCA (MANDATORY)
+Before any fixing, produce a Root Cause Analysis:
+
+**What Happened:**
+- Exact error behavior observed
+- When/where the error occurs
+- Affected user scenarios
+
+**Why It Happened:**
+- Root cause at code level
+- Contributing factors (race conditions, edge cases, etc.)
+- How the bug was introduced
+
+**Impact Analysis:**
+- Which code paths are affected
+- Data corruption risks
+- User experience impact
+
+**Proposed Fix Strategy:**
+- Specific code changes needed
+- Testing approach
+- Rollback plan if fix fails
+
+#### 7b. Task Decomposition for Complex Bugs
+**Single Bug (affects 1-2 files):**
+```python
+build_prompt(
+    use_selection=True,
+    instructions="RCA: <your analysis>. Implement the proposed fix strategy.",
+    output_file="context_bugfix.xml"
+)
+```
+
+**Multi-Component Bug (affects 3+ modules):**
+```python
+# Fix database layer first
+build_prompt(
+    file_paths=["src/db/connection.py", "tests/test_db.py"],
+    instructions="Bug Fix Phase 1: Fix connection pool leak in database layer. RCA: <analysis>",
+    output_file="context_bugfix_db.xml"
+)
+
+# Then fix API layer (depends on DB fix)
+build_prompt(
+    file_paths=["src/api/handlers.py", "tests/test_api.py"],
+    instructions="Bug Fix Phase 2: Fix timeout handling in API layer. RCA: <analysis>",
+    output_file="context_bugfix_api.xml"
+)
+```
+
+**Multiple Independent Bugs:**
+```python
+# Bug 1: Auth timeout
+build_prompt(
+    file_paths=["src/auth/login.py"],
+    instructions="Bug 1 Fix: Login timeout after 30s. RCA: <analysis>",
+    output_file="context_bug1_auth.xml"
+)
+
+# Bug 2: Memory leak (independent)
+build_prompt(
+    file_paths=["src/cache/redis.py"],
+    instructions="Bug 2 Fix: Memory leak in Redis client. RCA: <analysis>",
+    output_file="context_bug2_cache.xml"
+)
+```
+
+#### 7c. Strategic Delegation
+1. **Check sub-agent availability**: Verify you have a tool for spawning sub-agents.
+2. **If NO sub-agent tool exists**: STOP and provide RCA + context files to user.
+3. **If available**:
+   - **Single bug**: Spawn 1 sub-agent with RCA + context
+   - **Multi-component bug**: Spawn sub-agents sequentially (fix DB → verify → fix API)
+   - **Multiple bugs**: Spawn sub-agents in parallel (each fixes one bug independently)
+
+**Sub-agent verification protocol**: Each sub-agent must:
+- Apply the fix according to RCA
+- Run tests to verify bug is resolved
+- Report success/failure with test results
+
 ## Key Principles
-- **Trace from the error outward.** Start at the crash point,
-  then follow the call chain upward to find where the data went wrong.
+- **RCA before fixing.** Never patch without understanding root cause.
+- **Sequential fixes for dependent bugs.** Parallel fixes for independent bugs.
+- **Test verification mandatory.** Each fix must be verified before next phase.
 - **Use manage_selection** to accumulate suspect files as you trace.
 - **Always estimate_tokens** before build_prompt to avoid context overflow.

@@ -45,6 +45,9 @@ read_file_range(relative_path="src/changed_file.py", start_line=50, end_line=80)
 
 ### Step 3: Find Blast Radius
 ```python
+# Hieu kien truc module chua code bi thay doi
+explain_architecture(focus_directory="src/changed_module")
+
 # Tim xem ai goi cac ham da thay doi
 get_callers(symbol_name="changed_function_name")
 
@@ -68,8 +71,74 @@ build_prompt(
 )
 ```
 
+### Step 6: Review Analysis (BEFORE delegation)
+Before delegating, produce a comprehensive Review Analysis:
+
+**Security Analysis:**
+- SQL injection vulnerabilities
+- XSS attack vectors
+- Authentication/authorization bypasses
+- Secrets or credentials in code
+
+**Performance Analysis:**
+- N+1 query patterns
+- Blocking I/O operations
+- Memory leaks or resource leaks
+- Inefficient algorithms
+
+**Breaking Change Analysis:**
+- Public API signature changes
+- Removed or renamed functions
+- Changed behavior that affects callers
+- Database schema changes
+
+**Test Coverage Analysis:**
+- Are existing tests sufficient?
+- What edge cases need new tests?
+- Do integration tests cover the changes?
+
+### Step 7: Strategic Delegation
+**For Small PRs (≤20 files, <100k tokens):**
+```python
+build_prompt(
+    file_paths=changed_files,
+    instructions="Review Analysis: <your analysis>. Focus on security and breaking changes.",
+    include_git_changes=True,
+    output_file="context_review.xml"
+)
+```
+
+**For Large PRs (>20 files or >100k tokens) - Mandatory Split:**
+```python
+# Split by concern
+build_prompt(
+    file_paths=core_logic_files,
+    instructions="Review Analysis Phase 1: Focus on core logic changes and security",
+    output_file="context_review_core.xml"
+)
+
+build_prompt(
+    file_paths=test_files,
+    instructions="Review Analysis Phase 2: Focus on test coverage and edge cases",
+    output_file="context_review_tests.xml"
+)
+
+build_prompt(
+    file_paths=api_files,
+    instructions="Review Analysis Phase 3: Focus on API changes and breaking changes",
+    output_file="context_review_api.xml"
+)
+```
+
+**Delegation Protocol:**
+1. **Check sub-agent availability**: Verify you have a tool for spawning sub-agents.
+2. **If NO sub-agent tool exists**: STOP and provide Review Analysis + context files to user.
+3. **If available**: Spawn sub-agents with specific focus areas (security reviewer, performance reviewer, etc.)
+
+**Sub-agent definition**: A separate AI agent instance that can read code, analyze patterns, and identify issues.
+
 ## Key Principles
-- **Understand the blast radius BEFORE reviewing.** A change to a utility
-  function used in 20 places needs deeper review than a leaf function.
-- **Use get_file_metrics** to assess complexity of changed files.
+- **Split large reviews.** Don't overwhelm one agent with 50 files.
+- **Focus-specific delegation.** Security agent ≠ Performance agent ≠ Test coverage agent.
+- **Analysis before action.** Always produce Review Analysis before delegating.
 - **Always estimate_tokens** before build_prompt to avoid context overflow.

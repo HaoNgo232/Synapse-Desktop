@@ -59,19 +59,96 @@ get_symbols(file_path="tests/test_service.py")
 # Check size truoc khi build prompt
 estimate_tokens(file_paths=["src/service.py", "tests/test_service.py"])
 ```
+### Step 5: Test Strategy & Coverage Gap Analysis
 
-### Step 5: Package Test Context
+#### 5a. Comprehensive Coverage Analysis
+Compare source symbols with test symbols to identify gaps:
+
+```python
+# Get all functions/classes in source
+get_symbols(file_path="src/service.py")
+# Get all test functions
+get_symbols(file_path="tests/test_service.py")
+
+# Manual analysis: Which source functions have NO corresponding test?
+# Prioritize by risk: critical business logic > utility functions > getters/setters
+```
+
+**Coverage Gap Prioritization:**
+1. **Critical (must test)**: Business logic, security functions, data validation
+2. **Important (should test)**: API endpoints, error handling, edge cases
+3. **Nice-to-have**: Simple getters, utility functions, logging
+
+#### 5b. Test Plan Creation (BEFORE writing tests)
+Produce a Test Plan that includes:
+
+**Test Framework Analysis:**
+- Which framework is used? (pytest, jest, vitest, etc.)
+- What patterns to follow? (fixtures, mocks, parametrize)
+- How to run tests? (command, CI integration)
+
+**Coverage Strategy:**
+- **Unit tests**: Test individual functions in isolation
+- **Integration tests**: Test module interactions
+- **Edge case tests**: Boundary conditions, error paths
+
+**Test Data Strategy:**
+- What fixtures/mocks are needed?
+- How to handle database/API dependencies?
+- Test data cleanup requirements
+
+#### 5c. Task Decomposition for Large Test Suites
+
+**Single Module (≤10 functions):**
 ```python
 build_prompt(
     file_paths=["src/service.py", "tests/test_service.py"],
-    instructions="Write tests for untested functions: func_a, func_b",
-    auto_expand_dependencies=True
+    instructions="Test Plan: <your plan>. Write tests for priority functions: func_a, func_b, func_c",
+    output_file="context_tests.xml"
 )
 ```
 
+**Multiple Modules (3+ modules or >100 functions):**
+```python
+# Per-module test contexts
+build_prompt(
+    file_paths=["src/auth/service.py", "tests/auth/test_service.py"],
+    instructions="Test Plan Phase 1: Write comprehensive tests for auth module",
+    output_file="context_tests_auth.xml"
+)
+
+build_prompt(
+    file_paths=["src/api/routes.py", "tests/api/test_routes.py"],
+    instructions="Test Plan Phase 2: Write API endpoint tests with error handling",
+    output_file="context_tests_api.xml"
+)
+
+build_prompt(
+    file_paths=["src/db/models.py", "tests/db/test_models.py"],
+    instructions="Test Plan Phase 3: Write database model tests with edge cases",
+    output_file="context_tests_db.xml"
+)
+```
+
+#### 5d. Strategic Delegation
+1. **Check sub-agent availability**: Verify you have a tool for spawning sub-agents.
+2. **If NO sub-agent tool exists**: STOP and provide Test Plan + context files to user.
+3. **If available**:
+   - **Single module**: Spawn 1 sub-agent with Test Plan + context
+   - **Multiple modules**: Spawn N sub-agents in parallel (each handles one module)
+
+**Sub-agent verification protocol**: Each sub-agent must:
+- Write tests according to Test Plan
+- Run tests to ensure they pass
+- Measure coverage improvement
+- Report test results and coverage metrics
+
+**Sub-agent definition**: A separate AI agent instance that can write code, execute test commands, and measure coverage.
+
 ## Key Principles
-- **Read existing tests first to match the team's patterns.**
-  New tests should be consistent with the existing test style,
-  fixtures, and naming conventions.
+- **Test Plan before test code.** Always understand the testing strategy first.
+- **Match existing patterns.** New tests should be consistent with team conventions.
+- **Parallel testing for independent modules.** Don't wait for auth tests to finish before starting API tests.
+- **Coverage verification mandatory.** Each sub-agent must report coverage metrics.
 - **Use get_symbols** on both source and test files to precisely identify gaps.
 - **Always estimate_tokens** before build_prompt to avoid context overflow.

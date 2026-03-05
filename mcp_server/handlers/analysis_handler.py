@@ -74,16 +74,25 @@ def _find_references(
     return "\n".join(result)
 
 
-def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
-    """Internal implementation cho find_todos, co the goi tu start_session."""
+def _find_todos(
+    workspace_path: str,
+    include_hack: bool = True,
+    cached_files: Optional[List[str]] = None,
+) -> str:
+    """Internal implementation cho find_todos, co the goi tu start_session.
+
+    Args:
+        workspace_path: Duong dan workspace root.
+        include_hack: Co bao gom HACK comments khong.
+        cached_files: Danh sach files da scan san (optional).
+                      Neu truyen vao, se dung truc tiep thay vi goi collect_files_from_disk.
+                      Giup tranh scan filesystem nhieu lan trong start_session.
+    """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
 
     try:
-        from services.workspace_index import collect_files_from_disk
-
-        all_files = collect_files_from_disk(ws, workspace_path=ws)
         code_exts = {
             ".py",
             ".js",
@@ -97,7 +106,15 @@ def _find_todos(workspace_path: str, include_hack: bool = True) -> str:
             ".cpp",
             ".h",
         }
-        all_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
+
+        # Su dung cached_files neu co, tranh scan filesystem lan 2
+        if cached_files is not None:
+            all_files = [f for f in cached_files if Path(f).suffix.lower() in code_exts]
+        else:
+            from services.workspace_index import collect_files_from_disk
+
+            all_files = collect_files_from_disk(ws, workspace_path=ws)
+            all_files = [f for f in all_files if Path(f).suffix.lower() in code_exts]
 
         todos: list[tuple[str, int, str, str]] = []
 

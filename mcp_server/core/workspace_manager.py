@@ -8,10 +8,15 @@ Supports auto-detection of workspace path from MCP Context roots
 when workspace_path is not explicitly provided.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote, urlparse
 import logging
+
+# Timeout (giay) cho list_roots() call - tranh treo vinh vien
+# khi AI client khong ho tro hoac phan hoi cham
+_LIST_ROOTS_TIMEOUT_SECONDS = 5.0
 
 
 class WorkspaceManager:
@@ -99,7 +104,18 @@ class WorkspaceManager:
             if list_roots_fn is None:
                 return None
 
-            roots_result = await list_roots_fn()
+            # Goi list_roots() voi timeout de tranh treo vinh vien
+            # khi AI client khong ho tro hoac network bi cham
+            try:
+                roots_result = await asyncio.wait_for(
+                    list_roots_fn(), timeout=_LIST_ROOTS_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logging.getLogger(__name__).warning(
+                    "list_roots() timed out after %.1fs - falling back to CWD",
+                    _LIST_ROOTS_TIMEOUT_SECONDS,
+                )
+                return None
             if roots_result is None:
                 return None
 

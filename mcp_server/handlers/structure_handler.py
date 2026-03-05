@@ -53,16 +53,30 @@ def _detect_frameworks(ws: Path) -> list[str]:
     return frameworks
 
 
-def _get_project_structure(workspace_path: str) -> str:
-    """Internal implementation cho get_project_structure, co the goi tu start_session."""
+def _get_project_structure(
+    workspace_path: str, cached_files: Optional[list[str]] = None
+) -> str:
+    """Internal implementation cho get_project_structure, co the goi tu start_session.
+
+    Args:
+        workspace_path: Duong dan workspace root.
+        cached_files: Danh sach files da scan san (optional).
+                      Neu truyen vao, se dung truc tiep thay vi goi collect_files_from_disk.
+                      Giup tranh scan filesystem nhieu lan trong start_session.
+    """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
 
     try:
-        from services.workspace_index import collect_files_from_disk
+        # Su dung cached_files neu co, tranh scan filesystem lan 2
+        if cached_files is not None:
+            all_files = cached_files
+        else:
+            from services.workspace_index import collect_files_from_disk
 
-        all_files = collect_files_from_disk(ws, workspace_path=ws)
+            all_files = collect_files_from_disk(ws, workspace_path=ws)
+
         total = len(all_files)
 
         if total == 0:

@@ -101,11 +101,23 @@ def register_tools(mcp_instance) -> None:
         try:
             from mcp_server.handlers.structure_handler import _get_project_structure
             from mcp_server.handlers.analysis_handler import _find_todos
+            from services.workspace_index import collect_files_from_disk
 
             ws_str = str(ws)
-            structure = await asyncio.to_thread(_get_project_structure, ws_str)
+
+            # Scan filesystem 1 lan duy nhat, sau do truyen cached_files
+            # cho _get_project_structure va _find_todos de tranh scan lap
+            cached_files = await asyncio.to_thread(
+                collect_files_from_disk, ws, workspace_path=ws
+            )
+
+            structure = await asyncio.to_thread(
+                _get_project_structure, ws_str, cached_files
+            )
             tree = await asyncio.to_thread(_list_directories_impl, ws_str, 2)
-            todos_result = await asyncio.to_thread(_find_todos, ws_str, True)
+            todos_result = await asyncio.to_thread(
+                _find_todos, ws_str, True, cached_files
+            )
             todos_preview = (
                 todos_result
                 if len(todos_result) < 800

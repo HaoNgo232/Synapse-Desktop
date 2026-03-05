@@ -124,11 +124,11 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """List all files in the workspace, automatically respecting .gitignore.
+        """List all files in the workspace, respecting .gitignore.
 
         Args:
-            extensions: Optional list of extensions to filter by (e.g., [".py", ".js"]).
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+            extensions: Optional extensions to filter (e.g., [".py"]).
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

@@ -80,6 +80,7 @@ class PromptBuildService:
         tree_item: Optional[TreeItem] = None,
         selected_paths: Optional[Set[str]] = None,
         include_xml_formatting: bool = False,
+        codemap_paths: Optional[Set[str]] = None,
     ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt theo output format (backward-compatible API).
@@ -96,6 +97,10 @@ class PromptBuildService:
             use_relative_paths: Co dung relative paths khong
             tree_item: Root TreeItem cho file map (optional)
             selected_paths: Set paths da chon cho file map (optional)
+            include_xml_formatting: Co bao gom OPX khong
+            codemap_paths: Optional set cac file paths chi lay AST signatures.
+                           Cac file trong set nay se duoc xuat dang codemap
+                           thay vi full content.
 
         Returns:
             Tuple (prompt_text, token_count, breakdown)
@@ -110,6 +115,7 @@ class PromptBuildService:
             tree_item=tree_item,
             selected_paths=selected_paths,
             include_xml_formatting=include_xml_formatting,
+            codemap_paths=codemap_paths,
         )
         return result.to_legacy_tuple()
 
@@ -127,6 +133,7 @@ class PromptBuildService:
         dependency_files: Optional[List[Path]] = None,
         profile: Optional[str] = None,
         max_tokens: Optional[int] = None,
+        codemap_paths: Optional[Set[str]] = None,
     ) -> BuildResult:
         """
         Generate prompt va tra ve BuildResult day du voi metadata.
@@ -148,6 +155,11 @@ class PromptBuildService:
             dependency_files: Danh sach dependency file paths (Feature 3)
             profile: Ten profile da ap dung (Feature 1, chi de luu metadata)
             max_tokens: Gioi han token toi da (None = khong gioi han)
+            codemap_paths: Optional set cac file paths chi lay AST signatures.
+                           Co the la absolute paths. Cac file nay se duoc render
+                           dang codemap (function/class signatures) thay vi full content.
+                           Trong output_format="smart", tham so nay khong co tac dung
+                           vi smart format da la codemap-only.
 
         Returns:
             BuildResult voi tat ca metadata can thiet
@@ -160,6 +172,18 @@ class PromptBuildService:
                 if dp not in all_file_paths:
                     all_file_paths.append(dp)
                 dep_path_set.add(str(dp))
+
+        # Normalize codemap_paths: dam bao la set[str] cua absolute paths
+        normalized_codemap: Optional[Set[str]] = None
+        if codemap_paths:
+            normalized_codemap = set()
+            for cp in codemap_paths:
+                cp_path = Path(cp)
+                if cp_path.is_absolute():
+                    cp_path = cp_path.resolve()
+                else:
+                    cp_path = (workspace / cp).resolve()
+                normalized_codemap.add(str(cp_path))
 
         # Initialize variables de tranh loi uninitialized trong breakdown
         file_map = ""
@@ -199,13 +223,17 @@ class PromptBuildService:
             project_rules = get_rule_file_contents(workspace)
 
             # 3. Generate file contents using all selected paths
+            #    Truyen codemap_paths de tach full vs codemap-only
+            all_path_strs = {str(p) for p in all_file_paths}
+
             content_gen = _FORMAT_TO_GENERATOR.get(
                 output_format, generate_file_contents_xml
             )
             file_contents = content_gen(
-                selected_paths={str(p) for p in all_file_paths},
+                selected_paths=all_path_strs,
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
+                codemap_paths=normalized_codemap,
             )
 
             # 4. Assemble prompt voi git data va xml formatting
@@ -279,7 +307,11 @@ class PromptBuildService:
         # Per-file token counting - dem token cho tung file rieng le
         # ====================================================================
         per_file_tokens = self._count_per_file_tokens(
-            all_file_paths, workspace, use_relative_paths, dep_path_set
+            all_file_paths,
+            workspace,
+            use_relative_paths,
+            dep_path_set,
+            codemap_paths=normalized_codemap,
         )
 
         # ====================================================================
@@ -379,7 +411,11 @@ class PromptBuildService:
 
                 # Re-count per-file tokens
                 per_file_tokens = self._count_per_file_tokens(
-                    all_file_paths, workspace, use_relative_paths, dep_path_set
+                    all_file_paths,
+                    workspace,
+                    use_relative_paths,
+                    dep_path_set,
+                    codemap_paths=normalized_codemap,
                 )
 
         # Tao BuildResult day du
@@ -430,18 +466,17 @@ class PromptBuildService:
         workspace: Path,
         use_relative_paths: bool,
         dep_path_set: set[str],
+        codemap_paths: Optional[Set[str]] = None,
     ) -> List[FileTokenInfo]:
         """
         Dem token cho tung file rieng le de cung cap metadata chi tiet.
-
-        Doc content tung file va count tokens. Su dung collect_files
-        da co san de lay content (tranh doc file 2 lan neu can toi uu).
 
         Args:
             file_paths: Tat ca file paths (primary + dependency)
             workspace: Workspace root path
             use_relative_paths: Co dung relative paths khong
             dep_path_set: Set cac dependency file paths (str) de danh dau is_dependency
+            codemap_paths: Set cac file paths la codemap-only
 
         Returns:
             List[FileTokenInfo] voi token count per file
@@ -452,10 +487,34 @@ class PromptBuildService:
             use_relative_paths=use_relative_paths,
         )
 
+        codemap_set = codemap_paths or set()
+
         result: list[FileTokenInfo] = []
         for entry in entries:
+            # Normalize entry.path to absolute for comparison
+            entry_path_abs = str(entry.path)
+            if not Path(entry_path_abs).is_absolute():
+                entry_path_abs = str((workspace / entry_path_abs).resolve())
+
+            is_codemap_file = entry_path_abs in codemap_set
             tokens = 0
-            if entry.content:
+
+            if is_codemap_file and entry.content:
+                # Count tokens on codemap content (AST only)
+                from core.smart_context import smart_parse, is_supported
+
+                ext = Path(str(entry.path)).suffix.lstrip(".")
+                if is_supported(ext):
+                    smart = smart_parse(
+                        str(entry.path), entry.content, include_relationships=False
+                    )
+                    if smart:
+                        tokens = self._tokenization_service.count_tokens(smart)
+                    else:
+                        tokens = self._tokenization_service.count_tokens(entry.content)
+                else:
+                    tokens = self._tokenization_service.count_tokens(entry.content)
+            elif entry.content:
                 tokens = self._tokenization_service.count_tokens(entry.content)
 
             result.append(
@@ -464,6 +523,7 @@ class PromptBuildService:
                     tokens=tokens,
                     is_dependency=str(entry.path) in dep_path_set,
                     was_trimmed=False,
+                    is_codemap=is_codemap_file,
                 )
             )
 

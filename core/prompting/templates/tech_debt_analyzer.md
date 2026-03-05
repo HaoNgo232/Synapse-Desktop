@@ -51,6 +51,7 @@ Your task is to identify, quantify, and prioritize technical debt in the codebas
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep engineering/IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CRITICAL DEBT, DEBT REPAYMENT ROADMAP).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Include DEBT SCORE inline for each item (e.g., "DEBT SCORE: 65/100").

@@ -160,7 +160,13 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Find all locations where a function/class/variable is used (AST + regex)."""
+        """Find all locations where a symbol is used (AST + regex).
+
+        Args:
+            symbol_name: Name of symbol to find references for.
+            file_extensions: Optional filter (e.g., [".py"]).
+            workspace_path: Absolute path to workspace root.
+        """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -180,7 +186,12 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Scan entire project for TODO/FIXME/HACK comments with file path and line number."""
+        """Scan project for TODO/FIXME/HACK comments.
+
+        Args:
+            include_hack: Whether to include HACK comments.
+            workspace_path: Absolute path to workspace root.
+        """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -194,7 +205,12 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get structured list of all symbols (functions, classes, methods) in a file as JSON."""
+        """Get list of symbols (functions, classes, methods) in a file as JSON.
+
+        Args:
+            file_path: Relative path to the file.
+            workspace_path: Absolute path to workspace root.
+        """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:

@@ -20,6 +20,7 @@ Your task is to generate a comprehensive Pull Request (PR) description based on 
 - Emit your ENTIRE response inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire response in Vietnamese (tiếng Việt có dấu). Keep IT terms (e.g., commit types, API names) in English where appropriate.
   - Use UPPERCASE headings (e.g., PR TITLE, SUMMARY, KEY CHANGES, TESTING).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Reference files as path/to/file.ext format when listing changes.

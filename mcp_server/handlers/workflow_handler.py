@@ -35,13 +35,13 @@ def register_tools(mcp_instance) -> None:
         """Prepare optimized context for an AI agent to implement a task.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
             task_description: Description of what needs to be implemented.
-            file_paths: Optional list of known relevant files. If omitted, auto-detected.
-            max_tokens: Maximum token budget for the output (default: 100,000).
+            file_paths: Optional list of known relevant files.
+            max_tokens: Maximum token budget (default: 100,000).
             include_codemap: Include code structure signatures (default: True).
             include_git_changes: Include recent git changes (default: False).
-            output_file: Optional path to write the prompt (for cross-agent handoff).
+            output_file: Optional path to write the prompt.
+            workspace_path: Absolute path to the workspace root directory.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -107,12 +107,12 @@ def register_tools(mcp_instance) -> None:
         """Deep code review with full surrounding context.
 
         Args:
-            workspace_path: Absolute path to the workspace root.
             review_focus: Optional focus area ("security", "performance").
             include_tests: Pull related test files (default: True).
             include_callers: Pull files that call changed functions (default: True).
             max_tokens: Maximum token budget (default: 120,000).
             base_ref: Optional git ref to diff against.
+            workspace_path: Absolute path to the workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -163,12 +163,12 @@ def register_tools(mcp_instance) -> None:
         """Two-pass refactoring: analyze first, plan second.
 
         Args:
-            workspace_path: Absolute path to the workspace root.
             refactor_scope: Description of what to refactor.
             phase: "discover" or "plan" (default: "discover").
             file_paths: Optional list of files in scope.
             discovery_report: Output from phase="discover" (required for phase="plan").
             max_tokens: Maximum token budget (default: 80,000).
+            workspace_path: Absolute path to the workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -234,15 +234,15 @@ def register_tools(mcp_instance) -> None:
         max_depth: int = 4,
         max_tokens: int = 100_000,
     ) -> str:
-        """Automated bug investigation -- traces execution path to find root cause.
+        """Trace execution path to find root cause of a bug.
 
         Args:
-            workspace_path: Absolute path to the workspace root.
             bug_description: Description of the bug.
             error_trace: Optional error trace/stacktrace.
             entry_files: Optional starting files.
             max_depth: Maximum trace depth (default: 4).
             max_tokens: Maximum token budget (default: 100,000).
+            workspace_path: Absolute path to the workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -291,16 +291,16 @@ def register_tools(mcp_instance) -> None:
         include_existing_tests: bool = True,
         output_file: Optional[str] = None,
     ) -> str:
-        """Analyze code, find test coverage gaps, and prepare context for AI.
+        """Analyze code, find coverage gaps, and prepare context for writing tests.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
             task_description: Description of what tests to write.
             file_paths: Optional list of source files to generate tests for.
-            max_tokens: Maximum token budget for the output (default: 100,000).
-            test_framework: Test framework ("pytest", "jest", "vitest"). None = auto-detect.
-            include_existing_tests: Include existing test files as reference (default: True).
-            output_file: Optional path to write the prompt (for cross-agent handoff).
+            max_tokens: Maximum token budget (default: 100,000).
+            test_framework: Framework ("pytest", "jest", "vitest").
+            include_existing_tests: Include existing test files (default: True).
+            output_file: Optional path to write the prompt.
+            workspace_path: Absolute path to the workspace root directory.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

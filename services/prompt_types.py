@@ -24,12 +24,14 @@ class FileTokenInfo:
         tokens: So luong token cua file content
         is_dependency: True neu file duoc them tu dependency expansion (Feature 3)
         was_trimmed: True neu file bi cat giam boi ContextTrimmer (Feature 2)
+        is_codemap: True neu file chi co AST signatures thay vi full content
     """
 
     path: str
     tokens: int
     is_dependency: bool = False
     was_trimmed: bool = False
+    is_codemap: bool = False
 
 
 @dataclass(slots=True)
@@ -102,6 +104,7 @@ class BuildResult:
                     "tokens": f.tokens,
                     "is_dependency": f.is_dependency,
                     "was_trimmed": f.was_trimmed,
+                    "is_codemap": f.is_codemap,
                 }
                 for f in self.files
             ],

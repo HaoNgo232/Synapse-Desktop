@@ -27,7 +27,7 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Estimate token count for a set of files using the actual tokenizer. Essential for managing context window budgets."""
+        """Estimate token count for a set of files using the actual tokenizer."""
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:

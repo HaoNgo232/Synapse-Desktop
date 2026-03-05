@@ -28,13 +28,11 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Extract code structure (function signatures, class definitions, imports) from files.
-
-        Uses Tree-sitter AST to return only the API skeleton WITHOUT implementation bodies, saving 70-90% tokens. Use this before `read_file` to understand module shapes.
+        """Extract code structure (signatures, classes, imports) from files using Tree-sitter.
 
         Args:
+            file_paths: List of relative file paths to analyze.
             workspace_path: Absolute path to the workspace root directory.
-            file_paths: List of relative file paths to analyze (e.g., ["src/auth.py", "src/db.py"]).
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -84,10 +82,10 @@ def register_tools(mcp_instance) -> None:
         """Extract code structure (signatures, classes, imports) for ALL files in a directory.
 
         Args:
+            directory: Relative directory to scan (default: ".").
+            extensions: Optional file extensions to include (e.g., [".py"]).
+            max_files: Maximum files to process (default: 50).
             workspace_path: Absolute path to the workspace root directory.
-            directory: Relative directory to scan (default: "." = entire workspace).
-            extensions: Optional file extensions to include (e.g., [".py"]). Default: all supported.
-            max_files: Maximum files to process (default: 50, to prevent timeouts).
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -167,22 +165,24 @@ def register_tools(mcp_instance) -> None:
         auto_expand_dependencies: bool = False,
         dependency_depth: int = 1,
         max_tokens: Optional[int] = None,
+        codemap_paths: Optional[List[str]] = None,
     ) -> str:
-        """Build a complete, AI-ready prompt combining file contents, directory tree, project rules, and optionally git diffs.
+        """Build an AI-ready prompt combining files, directory tree, rules, and git diffs.
 
         Args:
+            file_paths: List of relative file paths to include.
+            instructions: Optional user instructions.
+            output_format: Output format ("xml", "json", "plain", "smart").
+            output_file: Optional path to write output.
+            include_git_changes: Include recent git diffs and logs.
+            profile: Preset config ("review", "bugfix", "refactor", "doc").
+            metadata_format: Response format for output_file ("text", "json").
+            use_selection: Merge current selection from .synapse/selection.json.
+            auto_expand_dependencies: Include files imported by selected files.
+            dependency_depth: Depth for dependency resolution (1-3).
+            max_tokens: Maximum token count for prompt trimming.
+            codemap_paths: Relative file paths for AST signatures only (no bodies).
             workspace_path: Absolute path to the workspace root directory.
-            file_paths: List of relative file paths to include in the prompt.
-            instructions: Optional user instructions to embed in the prompt header.
-            output_format: Output structure - "xml" (default, best for AI), "json", "plain", or "smart" (codemap + full content).
-            output_file: Relative or absolute path to write output to. None returns the prompt directly (warning: can be very large).
-            include_git_changes: Whether to include recent git diffs and log in the prompt (default: False).
-            profile: Preset configuration name ("review", "bugfix", "refactor", "doc"). Explicit params always override profile defaults.
-            metadata_format: Response format when output_file is set - "text" (default, human-readable) or "json" (structured metadata for multi-agent).
-            use_selection: When True, read file list from current selection (.synapse/selection.json) and merge with file_paths.
-            auto_expand_dependencies: When True, automatically include files imported by the selected files.
-            dependency_depth: Depth for dependency resolution (1-3, default 1). Only used when auto_expand_dependencies=True.
-            max_tokens: Maximum token count for prompt output. When set, context will be automatically trimmed to fit budget.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -254,6 +254,22 @@ def register_tools(mcp_instance) -> None:
             return "Error: No valid files provided."
 
         # ================================================================
+        # Phase 2.5: Resolve codemap_paths tu user input
+        # ================================================================
+        resolved_codemap_set: set[str] = set()
+        if codemap_paths:
+            for rp in codemap_paths:
+                fp = (ws / rp).resolve()
+                if not fp.is_relative_to(ws):
+                    return f"Error: Path traversal detected for codemap_path: {rp}"
+                if fp.is_file():
+                    resolved_codemap_set.add(str(fp))
+                else:
+                    # Khong return error, chi warning vi codemap file co the
+                    # khong ton tai (user chi dinh sai)
+                    logger.warning("Codemap path not found, skipping: %s", rp)
+
+        # ================================================================
         # Phase 3: Expand dependencies khi auto_expand_dependencies=True
         # ================================================================
         dependency_files: list[Path] = []
@@ -273,8 +289,31 @@ def register_tools(mcp_instance) -> None:
                 primary_set = {str(p) for p in abs_paths}
                 all_deps: set[Path] = set()
 
+                # ============================================================
+                # Feature 2: Depth-based codemap for transitive dependencies
+                # Khi dependency_depth >= 2, su dung get_related_files_with_depth()
+                # de phan biet depth level. Files o depth >= 2 duoc tu dong
+                # them vao codemap_paths.
+                # ============================================================
+                depth_2_plus_paths: set[str] = set()
+
                 for pf in abs_paths:
-                    related = resolver.get_related_files(pf, max_depth=dependency_depth)
+                    if dependency_depth >= 2:
+                        # Su dung depth-aware resolution
+                        related_with_depth = resolver.get_related_files_with_depth(  # type: ignore[attr-defined]
+                            pf, max_depth=dependency_depth
+                        )
+                        related = set(related_with_depth.keys())
+
+                        # Phan loai files theo depth
+                        for dep_path, depth_level in related_with_depth.items():
+                            if str(dep_path) not in primary_set and depth_level >= 2:
+                                depth_2_plus_paths.add(str(dep_path))
+                    else:
+                        related = resolver.get_related_files(
+                            pf, max_depth=dependency_depth
+                        )
+
                     # Chi lay files chua co trong primary
                     new_deps = {r for r in related if str(r) not in primary_set}
                     all_deps.update(new_deps)
@@ -287,6 +326,14 @@ def register_tools(mcp_instance) -> None:
 
                 dependency_files = sorted(all_deps)
                 dependency_graph = dep_graph
+
+                # Auto-add depth >= 2 files vao codemap set
+                if depth_2_plus_paths:
+                    resolved_codemap_set.update(depth_2_plus_paths)
+                    logger.info(
+                        "Auto-codemap %d transitive dependencies (depth >= 2)",
+                        len(depth_2_plus_paths),
+                    )
 
                 # Warning neu qua nhieu files
                 if len(dependency_files) > 50:
@@ -320,6 +367,7 @@ def register_tools(mcp_instance) -> None:
                 dependency_files=dependency_files if dependency_files else None,
                 profile=resolved_profile_name,
                 max_tokens=max_tokens,
+                codemap_paths=resolved_codemap_set if resolved_codemap_set else None,
             )
 
             # Gan dependency_graph vao BuildResult
@@ -349,6 +397,9 @@ def register_tools(mcp_instance) -> None:
 
                     metadata = build_result.to_metadata_dict()
                     metadata["output_file"] = str(out_path)
+                    # Include codemap info in metadata
+                    if resolved_codemap_set:
+                        metadata["codemap_file_count"] = len(resolved_codemap_set)
                     return _json.dumps(metadata, ensure_ascii=False, indent=2)
 
                 # Tra ve text summary (default behavior)
@@ -370,6 +421,8 @@ def register_tools(mcp_instance) -> None:
                     summary += f"Profile: {resolved_profile_name}\n"
                 if dependency_files:
                     summary += f"Dependencies expanded: {len(dependency_files)} files\n"
+                if resolved_codemap_set:
+                    summary += f"Codemap-only files: {len(resolved_codemap_set)}\n"
                 summary += "Breakdown:\n" + "\n".join(breakdown_lines)
                 return summary
             else:

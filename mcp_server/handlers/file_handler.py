@@ -27,13 +27,13 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Read file contents with optional line range support.
+        """Read file contents with line range support. (Prefer built-in read_file if available).
 
         Args:
-            relative_path: Relative path to the file from workspace root (e.g., "src/main.py").
-            start_line: First line to read (1-indexed). Omit to start from beginning.
-            end_line: Last line to read (1-indexed). Omit to read until end of file.
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+            relative_path: Relative path to the file.
+            start_line: Start line (1-indexed).
+            end_line: End line (1-indexed).
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -85,11 +85,11 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get code metrics: LOC, number of functions/classes, TODO/FIXME/HACK comments.
+        """Get code metrics: LOC, function/class counts, comments, and complexity.
 
         Args:
             file_path: Relative path to the file.
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

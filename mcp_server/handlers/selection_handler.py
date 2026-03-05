@@ -64,27 +64,16 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Manage the list of currently selected (ticked) files in the Synapse session.
 
-        WHY USE THIS OVER BUILT-IN: When building prompts across multiple tool calls, this lets you
-        incrementally add/remove files to a selection, then pass them all to build_prompt
-        at once. Useful for complex multi-step context curation.
-
-        This controls which files are included when building prompts. Use it to
-        curate the exact set of files that should be part of the AI context.
-
         Actions:
           "get"   - Return the current selection list.
-          "set"   - Replace the entire selection with the provided paths.
-          "add"   - Add paths to the existing selection (skips duplicates).
-          "clear" - Remove all files from the selection.
-
-        When to use: Before calling build_prompt, use "set" or "add" to choose the
-        right files. Use "get" to check what's currently selected. Use "clear" to
-        start fresh.
+          "set"   - Replace selection with the provided paths.
+          "add"   - Add paths to existing selection.
+          "clear" - Remove all files from selection.
 
         Args:
-            action: Action to perform - "get", "set", "add", or "clear".
-            paths: List of relative file paths (required for "set" and "add" actions).
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+            action: Action to perform ("get", "set", "add", "clear").
+            paths: List of relative file paths for "set" and "add".
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

@@ -21,6 +21,7 @@ Your task is to explain the codebase architecture, key components, and main exec
 - Emit your ENTIRE explanation inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire explanation in Vietnamese (tiếng Việt có dấu). Keep IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, PROJECT OVERVIEW, KEY MODULES).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Use ASCII diagrams or pseudocode where helpful.

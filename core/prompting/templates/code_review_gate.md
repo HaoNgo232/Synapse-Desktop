@@ -43,6 +43,7 @@ Your task is to perform a comprehensive pre-merge code review focusing on code q
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, BLOCKING ISSUES, HIGH PRIORITY ISSUES).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Include severity tags inline (e.g., [BLOCKING], [HIGH], [MEDIUM], [LOW]).

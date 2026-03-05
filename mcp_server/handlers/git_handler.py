@@ -25,12 +25,9 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Get summary of git changes: files added, modified, and deleted.
 
-        Provides a concise categorized overview of changed files compared
-        to a git target (branch, commit, or HEAD).
-
         Args:
-            target: Git target to compare against (default: HEAD = uncommitted changes)
-            workspace_path: Workspace root. Auto-detected if omitted.
+            target: Git target to compare against (default: HEAD).
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

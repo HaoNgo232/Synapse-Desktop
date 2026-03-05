@@ -24,5 +24,6 @@ Your task is to generate or update comprehensive, developer-friendly documentati
 ## Output format
 - Emit your ENTIRE documentation inside a single fenced ```markdown ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
+- Write the entire documentation in Vietnamese (tiếng Việt có dấu). Keep IT terms (library names, commands, API names) in English where appropriate.
 - If updating an existing README, clearly indicate which sections were modified with inline comments inside the block.
 - If you need to include code snippets, use tildes (~~~) or indented blocks to avoid conflicting with the outer fence.

@@ -306,10 +306,10 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get a high-level summary of the project: total files, breakdown by file type, detected frameworks, and estimated token count.
+        """Get project summary: file counts, types, frameworks, and estimated tokens.
 
         Args:
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -324,11 +324,11 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Auto-generate a high-level architecture summary of the codebase.
+        """Generate a high-level architecture summary of the codebase.
 
         Args:
             focus_directory: Optional subdirectory to focus analysis on (e.g., "src").
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+            workspace_path: Absolute path to workspace root.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

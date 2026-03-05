@@ -12,7 +12,7 @@ Giu lai trong file nay:
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
 
 from core.utils.file_utils import TreeItem, is_binary_file
 
@@ -177,23 +177,135 @@ def generate_file_contents_xml(
     max_file_size: int = 1024 * 1024,
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
+    codemap_paths: Optional[Set[str]] = None,
 ) -> str:
     """
     Tao file contents theo Repomix XML format.
 
     Delegate sang file_collector + XML formatter.
+    Khi codemap_paths duoc chi dinh, cac file trong set do
+    se chi co AST signatures (codemap) thay vi full content.
 
     Args:
         selected_paths: Set cac duong dan file duoc tick
         max_file_size: Maximum file size to include (default 1MB)
+        workspace_root: Workspace root cho relative paths
+        use_relative_paths: Su dung relative paths
+        codemap_paths: Optional set cac file paths chi lay codemap (AST signatures).
+                       Paths co the la absolute hoac relative tuy theo use_relative_paths.
 
     Returns:
         File contents string voi XML structure
     """
-    entries = collect_files(
-        selected_paths, max_file_size, workspace_root, use_relative_paths
-    )
-    return format_files_xml(entries)
+    if codemap_paths:
+        # Tach thanh 2 nhom: full content va codemap-only
+        full_paths = selected_paths - codemap_paths
+        codemap_only = selected_paths & codemap_paths
+
+        parts: list[str] = []
+
+        # Generate full content cho non-codemap files
+        if full_paths:
+            entries = collect_files(
+                full_paths, max_file_size, workspace_root, use_relative_paths
+            )
+            full_xml = format_files_xml(entries)
+            if full_xml.strip():
+                parts.append(full_xml)
+
+        # Generate codemap cho codemap-only files
+        if codemap_only:
+            codemap_xml = _generate_codemap_xml(
+                codemap_only, max_file_size, workspace_root, use_relative_paths
+            )
+            if codemap_xml.strip():
+                parts.append(codemap_xml)
+
+        return "\n\n".join(parts)
+    else:
+        entries = collect_files(
+            selected_paths, max_file_size, workspace_root, use_relative_paths
+        )
+        return format_files_xml(entries)
+
+
+def _generate_codemap_xml(
+    paths: set[str],
+    max_file_size: int,
+    workspace_root: Optional[Path],
+    use_relative_paths: bool,
+) -> str:
+    """
+    Generate XML output cho codemap-only files.
+
+    Su dung Tree-sitter smart_parse de extract AST signatures,
+    roi wrap trong XML tags voi attribute context="codemap".
+
+    Args:
+        paths: Set file paths can codemap
+        max_file_size: Max file size
+        workspace_root: Workspace root
+        use_relative_paths: Co dung relative paths khong
+
+    Returns:
+        XML string voi codemap content
+    """
+    from core.smart_context import smart_parse, is_supported
+    from xml.sax.saxutils import escape as xml_escape
+
+    def _xml_attr_escape(s: str) -> str:
+        """Escape string for XML attribute value."""
+        return xml_escape(s, {'"': "&quot;"})
+
+    parts: list[str] = []
+
+    for path_str in sorted(paths):
+        path = Path(path_str)
+
+        try:
+            if not path.is_file():
+                continue
+
+            if is_binary_file(path):
+                continue
+
+            try:
+                file_size = path.stat().st_size
+                if file_size > max_file_size:
+                    continue
+            except OSError:
+                pass
+
+            display_path = path_for_display(path, workspace_root, use_relative_paths)
+
+            # Try smart parse (AST signatures)
+            ext = path.suffix.lstrip(".")
+            if is_supported(ext):
+                raw_content = path.read_text(encoding="utf-8", errors="replace")
+                smart_content = smart_parse(
+                    path_str, raw_content, include_relationships=False
+                )
+                if smart_content:
+                    parts.append(
+                        f'<file path="{_xml_attr_escape(display_path)}" context="codemap">\n'
+                        f"{smart_content}\n"
+                        f"</file>"
+                    )
+                    continue
+
+            # Fallback: neu smart_parse khong ho tro, van lay full content
+            # nhung danh dau la codemap-attempted
+            raw_content = path.read_text(encoding="utf-8", errors="replace")
+            parts.append(
+                f'<file path="{_xml_attr_escape(display_path)}" context="codemap-fallback">\n'
+                f"{raw_content}\n"
+                f"</file>"
+            )
+
+        except (OSError, IOError):
+            continue
+
+    return "\n\n".join(parts)
 
 
 def generate_file_contents_json(
@@ -201,23 +313,91 @@ def generate_file_contents_json(
     max_file_size: int = 1024 * 1024,
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
+    codemap_paths: Optional[Set[str]] = None,
 ) -> str:
     """
     Tao file contents theo JSON format.
 
-    Delegate sang file_collector + JSON formatter.
-
     Args:
         selected_paths: Set cac duong dan file duoc tick
         max_file_size: Maximum file size to include (default 1MB)
+        workspace_root: Workspace root
+        use_relative_paths: Su dung relative paths
+        codemap_paths: Optional set cac file paths chi lay codemap
 
     Returns:
         JSON string chua file paths va contents
     """
-    entries = collect_files(
-        selected_paths, max_file_size, workspace_root, use_relative_paths
-    )
-    return format_files_json(entries)
+    if codemap_paths:
+        import json as _json
+
+        full_paths = selected_paths - codemap_paths
+        codemap_only = selected_paths & codemap_paths
+
+        all_entries: list[dict] = []
+
+        # Full content files
+        if full_paths:
+            entries = collect_files(
+                full_paths, max_file_size, workspace_root, use_relative_paths
+            )
+            for entry in entries:
+                all_entries.append(
+                    {
+                        "path": entry.display_path,
+                        "content": entry.content or "",
+                        "context": "full",
+                    }
+                )
+
+        # Codemap files
+        if codemap_only:
+            from core.smart_context import smart_parse, is_supported
+
+            for path_str in sorted(codemap_only):
+                path = Path(path_str)
+                try:
+                    if not path.is_file() or is_binary_file(path):
+                        continue
+
+                    display_path = path_for_display(
+                        path, workspace_root, use_relative_paths
+                    )
+                    ext = path.suffix.lstrip(".")
+                    raw_content = path.read_text(encoding="utf-8", errors="replace")
+
+                    if is_supported(ext):
+                        smart_content = smart_parse(
+                            path_str, raw_content, include_relationships=False
+                        )
+                        if smart_content:
+                            all_entries.append(
+                                {
+                                    "path": display_path,
+                                    "content": smart_content,
+                                    "context": "codemap",
+                                }
+                            )
+                            continue
+
+                    # Fallback to full content
+                    all_entries.append(
+                        {
+                            "path": display_path,
+                            "content": raw_content,
+                            "context": "codemap-fallback",
+                        }
+                    )
+
+                except (OSError, IOError):
+                    continue
+
+        return _json.dumps(all_entries, indent=2)
+    else:
+        entries = collect_files(
+            selected_paths, max_file_size, workspace_root, use_relative_paths
+        )
+        return format_files_json(entries)
 
 
 def generate_file_contents_plain(
@@ -225,23 +405,80 @@ def generate_file_contents_plain(
     max_file_size: int = 1024 * 1024,
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
+    codemap_paths: Optional[Set[str]] = None,
 ) -> str:
     """
     Tao file contents theo Plain Text format.
 
-    Delegate sang file_collector + plain formatter.
-
     Args:
         selected_paths: Set cac duong dan file duoc tick
         max_file_size: Maximum file size to include (default 1MB)
+        workspace_root: Workspace root
+        use_relative_paths: Su dung relative paths
+        codemap_paths: Optional set cac file paths chi lay codemap
 
     Returns:
         String chua file paths va contents dang plain text
     """
-    entries = collect_files(
-        selected_paths, max_file_size, workspace_root, use_relative_paths
-    )
-    return format_files_plain(entries)
+    if codemap_paths:
+        full_paths = selected_paths - codemap_paths
+        codemap_only = selected_paths & codemap_paths
+
+        parts: list[str] = []
+
+        # Full content files
+        if full_paths:
+            entries = collect_files(
+                full_paths, max_file_size, workspace_root, use_relative_paths
+            )
+            full_text = format_files_plain(entries)
+            if full_text.strip():
+                parts.append(full_text)
+
+        # Codemap files
+        if codemap_only:
+            from core.smart_context import smart_parse, is_supported
+
+            for path_str in sorted(codemap_only):
+                path = Path(path_str)
+                try:
+                    if not path.is_file() or is_binary_file(path):
+                        continue
+
+                    display_path = path_for_display(
+                        path, workspace_root, use_relative_paths
+                    )
+                    ext = path.suffix.lstrip(".")
+                    raw_content = path.read_text(encoding="utf-8", errors="replace")
+
+                    if is_supported(ext):
+                        smart_content = smart_parse(
+                            path_str, raw_content, include_relationships=False
+                        )
+                        if smart_content:
+                            parts.append(
+                                f"{display_path} [codemap]\n"
+                                f"{'-' * len(display_path)}\n"
+                                f"{smart_content}"
+                            )
+                            continue
+
+                    # Fallback
+                    parts.append(
+                        f"{display_path} [codemap-fallback]\n"
+                        f"{'-' * len(display_path)}\n"
+                        f"{raw_content}"
+                    )
+
+                except (OSError, IOError):
+                    continue
+
+        return "\n\n".join(parts)
+    else:
+        entries = collect_files(
+            selected_paths, max_file_size, workspace_root, use_relative_paths
+        )
+        return format_files_plain(entries)
 
 
 # ===========================================================================

@@ -13,6 +13,7 @@ Your task is to analyze and validate the logical flow, data flow, and control fl
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep architecture/flow and IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, FLOW ISSUES, RECOMMENDATIONS).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Use ASCII diagrams or pseudocode where helpful to illustrate flows.

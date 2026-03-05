@@ -303,6 +303,93 @@ class DependencyResolver:
 
         return resolved
 
+    def get_related_files_with_depth(
+        self, file_path: Path, max_depth: int = 1
+    ) -> Dict[Path, int]:
+        """
+        Parse file va tra ve dict cac files duoc import kem theo depth level.
+
+        Tuong tu get_related_files() nhung tra ve depth info de caller
+        co the phan biet direct dependencies (depth 1) va transitive
+        dependencies (depth >= 2).
+
+        Args:
+            file_path: Path den file can analyze
+            max_depth: So cap de quy de follow imports (default: 1)
+
+        Returns:
+            Dict mapping resolved file path -> depth level (1-based).
+            Depth 1 = direct import, depth 2 = import cua import, etc.
+        """
+        if not file_path.exists():
+            return {}
+
+        result: Dict[Path, int] = {}
+        visited: Set[Path] = {file_path}
+        source_file = file_path
+
+        self._collect_with_depth(file_path, 1, max_depth, result, visited)
+
+        # Remove source file from result if circular import added it
+        result.pop(source_file, None)
+
+        return result
+
+    def _collect_with_depth(
+        self,
+        file_path: Path,
+        current_depth: int,
+        max_depth: int,
+        result: Dict[Path, int],
+        visited: Set[Path],
+    ) -> None:
+        """
+        Recursively collect dependencies voi depth tracking.
+
+        Args:
+            file_path: File hien tai dang analyze
+            current_depth: Depth level hien tai (1-based)
+            max_depth: Depth toi da
+            result: Dict tich luy ket qua
+            visited: Set files da visit de tranh infinite loop
+        """
+        if current_depth > max_depth:
+            return
+
+        ext = file_path.suffix.lstrip(".")
+        lang_name = self._get_lang_name(ext)
+
+        if lang_name not in IMPORT_QUERIES:
+            return
+
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return
+
+        language = get_language(ext)
+        if not language:
+            return
+
+        import_names = self._extract_imports(language, content, lang_name, file_path)
+        resolved = self._resolve_imports(import_names, file_path, lang_name)
+
+        for resolved_path in resolved:
+            if not resolved_path.exists():
+                continue
+
+            # Chi cap nhat depth neu chua co hoac depth hien tai nho hon
+            # (giu depth nho nhat = gan nhat voi primary file)
+            if resolved_path not in result or current_depth < result[resolved_path]:
+                result[resolved_path] = current_depth
+
+            # Recurse neu chua visit va chua vuot max_depth
+            if resolved_path not in visited:
+                visited.add(resolved_path)
+                self._collect_with_depth(
+                    resolved_path, current_depth + 1, max_depth, result, visited
+                )
+
     def _extract_imports(
         self, language: Language, content: str, lang_name: str, source_file: Path
     ) -> Set[str]:

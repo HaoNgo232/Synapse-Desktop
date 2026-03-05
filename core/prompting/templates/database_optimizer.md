@@ -25,6 +25,7 @@ Your task is to analyze database interactions, query patterns, schema design, an
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep database/SQL and IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, QUERY ANALYSIS, SCHEMA RECOMMENDATIONS).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Include performance metrics inline (e.g., "Query time: 2.3s -> 45ms after index").

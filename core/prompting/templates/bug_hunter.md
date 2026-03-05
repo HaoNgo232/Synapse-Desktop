@@ -12,6 +12,7 @@ Your task is to review the provided codebase for potential bugs, edge cases, rac
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep QA/security and IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, BUG #1, BUG #2, PROPOSED FIXES).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Reference files as path/to/file.ext:L42 format.

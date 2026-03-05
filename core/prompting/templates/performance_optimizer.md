@@ -26,6 +26,7 @@ Your task is to analyze the codebase for performance bottlenecks, algorithmic in
 - Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
 - Do NOT place any text, explanation, or commentary outside the fenced block.
 - Inside the block, write in PLAIN TEXT only:
+  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep performance/benchmark and IT terms in English where appropriate.
   - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CRITICAL BOTTLENECKS, OPTIMIZATION PLAN).
   - Use dashes (-) for bullet lists and indentation for sub-items.
   - Include benchmarks and complexity analysis inline (e.g., "O(n^2) on 10k items = ~100M ops").

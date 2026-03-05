@@ -129,10 +129,10 @@ def register_tools(mcp_instance) -> None:
         """Find all functions/methods that CALL a given symbol, with caller context.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
             symbol_name: Function/method/class name to find callers of.
-            file_extensions: Optional filter (e.g., [".py", ".ts"]). None searches all code files.
-            max_results: Maximum number of caller entries to return (default: 30).
+            file_extensions: Optional filter (e.g., [".py", ".ts"]).
+            max_results: Maximum number of caller entries (default: 30).
+            workspace_path: Absolute path to the workspace root directory.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -258,8 +258,8 @@ def register_tools(mcp_instance) -> None:
         """Find test files corresponding to given source files.
 
         Args:
-            workspace_path: Absolute path to the workspace root directory.
             file_paths: List of relative source file paths to find tests for.
+            workspace_path: Absolute path to the workspace root directory.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

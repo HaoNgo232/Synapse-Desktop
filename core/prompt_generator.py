@@ -11,6 +11,7 @@ Giu lai trong file nay:
 - generate_smart_context() (tree-sitter specific)
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, Set
 
@@ -36,6 +37,8 @@ from core.prompting.prompt_assembler import (
     assemble_prompt,
     assemble_smart_prompt,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ===========================================================================
@@ -212,7 +215,19 @@ def generate_file_contents_xml(
         codemap_only_normalized = normalized_selected & normalized_codemap
 
         # Map nguoc ve original paths de truyen cho collect_files
-        norm_to_orig = {_normalize(p): p for p in selected_paths}
+        # Fix BUG #2: Detect collision khi nhieu paths normalize ve cung key
+        norm_to_orig: dict[str, str] = {}
+        for p in selected_paths:
+            key = _normalize(p)
+            if key in norm_to_orig and norm_to_orig[key] != p:
+                logger.warning(
+                    "Path collision detected: '%s' and '%s' resolve to same file. Using first occurrence.",
+                    norm_to_orig[key],
+                    p,
+                )
+            else:
+                norm_to_orig[key] = p
+
         full_paths = {
             norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
         }
@@ -363,7 +378,19 @@ def generate_file_contents_json(
         codemap_only_normalized = normalized_selected & normalized_codemap
 
         # Map nguoc ve original paths
-        norm_to_orig = {_normalize(p): p for p in selected_paths}
+        # Fix BUG #2: Detect collision
+        norm_to_orig: dict[str, str] = {}
+        for p in selected_paths:
+            key = _normalize(p)
+            if key in norm_to_orig and norm_to_orig[key] != p:
+                logger.warning(
+                    "Path collision detected: '%s' and '%s' resolve to same file. Using first occurrence.",
+                    norm_to_orig[key],
+                    p,
+                )
+            else:
+                norm_to_orig[key] = p
+
         full_paths = {
             norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
         }
@@ -472,7 +499,19 @@ def generate_file_contents_plain(
         codemap_only_normalized = normalized_selected & normalized_codemap
 
         # Map nguoc ve original paths
-        norm_to_orig = {_normalize(p): p for p in selected_paths}
+        # Fix BUG #2: Detect collision
+        norm_to_orig: dict[str, str] = {}
+        for p in selected_paths:
+            key = _normalize(p)
+            if key in norm_to_orig and norm_to_orig[key] != p:
+                logger.warning(
+                    "Path collision detected: '%s' and '%s' resolve to same file. Using first occurrence.",
+                    norm_to_orig[key],
+                    p,
+                )
+            else:
+                norm_to_orig[key] = p
+
         full_paths = {
             norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
         }

@@ -13,8 +13,6 @@ from pydantic import Field
 from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import logger
 from mcp_server.core.profile_resolver import resolve_profile_params
-from core.dependency_resolver import DependencyResolver
-from services.prompt_build_service import PromptBuildService
 
 
 def register_tools(mcp_instance) -> None:
@@ -350,6 +348,9 @@ def register_tools(mcp_instance) -> None:
             # Cap dependency_depth o 1-3
             dependency_depth = max(1, min(3, dependency_depth))
             try:
+                # Lazy import - chi load khi can thiet
+                from core.dependency_resolver import DependencyResolver
+
                 resolver = DependencyResolver(ws)
                 # Build file index tu disk (khong can TreeItem)
                 resolver.build_file_index_from_disk(ws)
@@ -407,6 +408,9 @@ def register_tools(mcp_instance) -> None:
             return f"Error: Invalid format '{output_format}'. Use: {', '.join(valid_formats)}"
 
         try:
+            # Lazy import - chi load khi can thiet
+            from services.prompt_build_service import PromptBuildService
+
             service = PromptBuildService()
 
             build_result = service.build_prompt_full(

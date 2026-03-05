@@ -37,6 +37,7 @@ from PySide6.QtCore import (
     QSize,
     QEvent,
     QPoint,
+    QTimer,
 )
 from PySide6.QtGui import QIcon
 
@@ -86,6 +87,18 @@ class FileTreeWidget(QWidget):
 
         # Search debounce
         self._search_debounce = DebouncedTimer(150, self._apply_search, self)
+
+        # Selection sync state & timer
+        self._last_synced_selection: Set[str] = set()
+        self._is_syncing_selection: bool = False
+        self._selection_poll_timer = QTimer(self)
+        self._selection_poll_timer.setInterval(2000)
+        self._selection_poll_timer.timeout.connect(self._poll_agent_selection)
+
+        self._pending_selection_write: Optional[Set[str]] = None
+        self._selection_write_debounce = DebouncedTimer(
+            500, self._do_write_agent_selection, self
+        )
 
         # State
         self._pending_search: str = ""
@@ -262,6 +275,9 @@ class FileTreeWidget(QWidget):
         self._last_search_results = []
         self._select_results_btn.hide()
 
+        # Start selection poll timer
+        self._selection_poll_timer.start()
+
         self._model.load_tree(workspace_path)
 
         # Expand root node
@@ -325,6 +341,8 @@ class FileTreeWidget(QWidget):
             self._current_token_worker.cancel()
         self._token_debounce.stop()
         self._search_debounce.stop()
+        self._selection_poll_timer.stop()
+        self._selection_write_debounce.stop()
 
     # ===== Slots =====
 
@@ -575,6 +593,9 @@ class FileTreeWidget(QWidget):
         """
         self.selection_changed.emit(selected)
 
+        # Sync selection qua selection.json
+        self._write_agent_selection(selected)
+
         # Debounce token counting
         self._token_debounce.start()
 
@@ -751,3 +772,111 @@ class FileTreeWidget(QWidget):
             if is_dir and path and path in paths:
                 self._tree_view.expand(index)
                 self._expand_paths_recursive(index, paths)
+
+    # ===== Agent Syncing =====
+
+    @Slot()
+    def _poll_agent_selection(self) -> None:
+        """Poll .synapse/selection.json moi 2 giay de dong bo.
+
+        Su dung cache de so sanh va tranh trigger render khong can thiet.
+        """
+        if self._is_syncing_selection:
+            return
+
+        workspace = self._model.get_workspace_path()
+        if not workspace:
+            return
+
+        from mcp_server.core.workspace_manager import WorkspaceManager
+        import json
+
+        session_file = WorkspaceManager.get_session_file(Path(workspace))
+        if not session_file.exists():
+            return
+
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                selected_list = data.get("selected_files", [])
+
+            # Convert from relative (in json) to absolute (for UI)
+            workspace_path = Path(workspace)
+            absolute_selected = set()
+            for rel_path in selected_list:
+                try:
+                    fp = (workspace_path / rel_path).resolve()
+                    absolute_selected.add(str(fp))
+                except Exception:
+                    pass
+
+            if absolute_selected != self._last_synced_selection:
+                self._last_synced_selection = absolute_selected
+
+                # Kiem tra neu thuc su khac voi model state thi moi update
+                model_selected = self._model.get_all_selected_paths()
+                if absolute_selected != model_selected:
+                    self._is_syncing_selection = True
+                    try:
+                        self.set_selected_paths(absolute_selected)
+                        # Force tree viewport de ve lai
+                        self._tree_view.viewport().update()
+                    finally:
+                        self._is_syncing_selection = False
+
+        except Exception as e:
+            logger.debug(f"Failed to poll selection: {e}")
+
+    def _write_agent_selection(self, selected: Set[str]) -> None:
+        """Ghi selection flag hien tai vao .synapse/selection.json (có debounce)."""
+        if self._is_syncing_selection:
+            return
+
+        workspace = self._model.get_workspace_path()
+        if not workspace:
+            return
+
+        # Nhanh: neu khong doi, bo qua ghi file de tiet kiem IO
+        if selected == self._last_synced_selection:
+            return
+
+        self._pending_selection_write = set(selected)
+        self._selection_write_debounce.start()
+
+    @Slot()
+    def _do_write_agent_selection(self) -> None:
+        """Thực thi thao tác IO thật sự sau khi debounce."""
+        if self._pending_selection_write is None:
+            return
+
+        selected = self._pending_selection_write
+        self._pending_selection_write = None
+        self._last_synced_selection = selected
+
+        workspace = self._model.get_workspace_path()
+        if not workspace:
+            return
+
+        from mcp_server.core.workspace_manager import WorkspaceManager
+        import json
+
+        workspace_path = Path(workspace)
+        session_file = WorkspaceManager.get_session_file(workspace_path)
+
+        # Convert from absolute (UI) to relative (for Agent)
+        relative_selected = []
+        for abs_path in selected:
+            try:
+                rel_path = Path(abs_path).relative_to(workspace_path)
+                relative_selected.append(str(rel_path).replace("\\", "/"))
+            except ValueError:
+                pass
+
+        try:
+            # Create directory if needed
+            session_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump({"selected_files": sorted(relative_selected)}, f, indent=2)
+                f.write("\n")
+        except Exception as e:
+            logger.debug(f"Failed to write selection.json: {e}")

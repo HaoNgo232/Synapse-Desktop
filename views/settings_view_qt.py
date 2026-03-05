@@ -1188,6 +1188,17 @@ class SettingsViewQt(QWidget):
         success, msg = install_config(target_name)
 
         if success:
+            # Tu dong cai dat Agent Skills (SKILL.md) vao thu muc skills cua IDE
+            try:
+                from mcp_server.skill_installer import install_skills_for_target
+
+                skill_ok, skill_msg = install_skills_for_target(target_name)
+                if skill_ok and skill_msg:
+                    msg = f"{msg}\n{skill_msg}"
+            except Exception:
+                # Loi install skills khong chan luong chinh
+                pass
+
             # Cap nhat trang thai label ngay lap tuc, khong can restart app
             try:
                 if check_installed(target_name):

@@ -8,9 +8,10 @@ import asyncio
 import json
 import fcntl
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import Annotated, List, Optional, Callable
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
@@ -49,31 +50,34 @@ def _locked_read_modify_write(
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky selection tools voi MCP server.
-
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
+    """Dang ky selection tools voi MCP server."""
 
     @mcp_instance.tool()
     async def manage_selection(
-        action: str = "get",
-        paths: Optional[List[str]] = None,
-        workspace_path: Optional[str] = None,
+        action: Annotated[
+            str,
+            Field(
+                description='Action to perform: "get" (list current selection), "set" (replace selection), "add" (append to selection), "clear" (remove all).'
+            ),
+        ] = "get",
+        paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description='List of relative file paths for "set" and "add" actions (e.g., ["src/main.py", "src/utils.py"]).'
+            ),
+        ] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
         """Manage the list of currently selected (ticked) files in the Synapse session.
 
-        Actions:
-          "get"   - Return the current selection list.
-          "set"   - Replace selection with the provided paths.
-          "add"   - Add paths to existing selection.
-          "clear" - Remove all files from selection.
-
-        Args:
-            action: Action to perform ("get", "set", "add", "clear").
-            paths: List of relative file paths for "set" and "add".
-            workspace_path: Absolute path to workspace root.
+        Use this to track files across multiple exploration steps, then pass them to build_prompt with use_selection=True.
+        Thread-safe with cross-process file locking.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -81,9 +85,6 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         session_file = WorkspaceManager.get_session_file(ws)
-
-        # BUG #1 FIX: Offload file read to background thread
-        # BUG #2 FIX: Use cross-process file lock via _locked_read_modify_write
 
         if action == "get":
             current_selection = []
@@ -128,7 +129,6 @@ def register_tools(mcp_instance) -> None:
             if action == "set":
 
                 def set_modifier(_: list[str]) -> list[str]:
-                    # Type hint ensures we satisfy the callable requirement
                     return paths if paths is not None else []
 
                 new_selection = await asyncio.to_thread(

@@ -4,36 +4,50 @@ File Handler - Xu ly cac tool lien quan den file operations.
 Bao gom: read_file_range, get_file_metrics.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky file tools voi MCP server.
-
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
+    """Dang ky file tools voi MCP server."""
 
     @mcp_instance.tool()
     async def read_file_range(
-        relative_path: str,
-        start_line: Optional[int] = None,
-        end_line: Optional[int] = None,
-        workspace_path: Optional[str] = None,
+        relative_path: Annotated[
+            str,
+            Field(
+                description="Relative path to the file from workspace root (e.g., 'src/main.py')."
+            ),
+        ],
+        start_line: Annotated[
+            Optional[int],
+            Field(
+                description="Start line number (1-indexed). Omit to read from beginning."
+            ),
+        ] = None,
+        end_line: Annotated[
+            Optional[int],
+            Field(
+                description="End line number (1-indexed, inclusive). Omit to read to end."
+            ),
+        ] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Read file contents with line range support. (Prefer built-in read_file if available).
+        """Read file contents with optional line range support.
 
-        Args:
-            relative_path: Relative path to the file.
-            start_line: Start line (1-indexed).
-            end_line: End line (1-indexed).
-            workspace_path: Absolute path to workspace root.
+        Returns file content with a header showing line info and estimated token count.
+        Prefer your built-in read_file if available; use this for large files where you need a specific line range.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -81,15 +95,23 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def get_file_metrics(
-        file_path: str,
-        workspace_path: Optional[str] = None,
+        file_path: Annotated[
+            str,
+            Field(
+                description="Relative path to the file from workspace root (e.g., 'src/main.py')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get code metrics: LOC, function/class counts, comments, and complexity.
+        """Get code metrics for a file: lines of code, function/class counts, comments, TODO/FIXME/HACK counts, and cyclomatic complexity estimate.
 
-        Args:
-            file_path: Relative path to the file.
-            workspace_path: Absolute path to workspace root.
+        Useful for assessing code quality and complexity before refactoring.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

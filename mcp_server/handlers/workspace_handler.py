@@ -6,9 +6,10 @@ Bao gom: start_session, list_files, list_directories.
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
@@ -79,12 +80,18 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def start_session(
-        workspace_path: Optional[str] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to the workspace root directory. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
         """Start a new session by auto-discovering project structure, organization, and technical debt.
 
         Call this FIRST when starting work on a new codebase or task.
+        Returns project summary, directory tree, and TODO/FIXME/HACK comments.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -120,15 +127,23 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def list_files(
-        extensions: Optional[List[str]] = None,
-        workspace_path: Optional[str] = None,
+        extensions: Annotated[
+            Optional[List[str]],
+            Field(
+                description='Optional file extensions to filter by (e.g., [".py", ".ts"]). Returns all files if omitted.'
+            ),
+        ] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to the workspace root directory. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """List all files in the workspace, respecting .gitignore.
+        """List all files in the workspace, respecting .gitignore rules.
 
-        Args:
-            extensions: Optional extensions to filter (e.g., [".py"]).
-            workspace_path: Absolute path to workspace root.
+        Returns a sorted list of relative file paths. Use 'extensions' to filter by file type.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -172,15 +187,22 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def list_directories(
-        max_depth: int = 3,
-        workspace_path: Optional[str] = None,
+        max_depth: Annotated[
+            int,
+            Field(description="Maximum directory depth to display (1-10). Default: 3."),
+        ] = 3,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to the workspace root directory. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
         """Show the directory tree structure of the workspace.
 
-        Args:
-            max_depth: Maximum directory depth to display (default: 3, max: 10).
-            workspace_path: Absolute path to workspace root. Auto-detected if omitted.
+        Displays a visual tree of directories, skipping common build/cache folders
+        (.git, node_modules, __pycache__, .venv, dist, build, etc.).
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

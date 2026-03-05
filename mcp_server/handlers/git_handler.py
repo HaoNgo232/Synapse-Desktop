@@ -6,9 +6,10 @@ Bao gom: diff_summary.
 
 import asyncio
 import subprocess
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import GIT_TIMEOUT, SAFE_GIT_REF, logger
 from mcp_server.core.workspace_manager import WorkspaceManager
@@ -19,15 +20,23 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def diff_summary(
-        target: str = "HEAD",
-        workspace_path: Optional[str] = None,
+        target: Annotated[
+            str,
+            Field(
+                description='Git ref to compare against (e.g., "HEAD", "main", "HEAD~3", a commit hash). Default: "HEAD" (unstaged changes).'
+            ),
+        ] = "HEAD",
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get summary of git changes: files added, modified, and deleted.
+        """Get a summary of git changes: files added, modified, deleted, and renamed.
 
-        Args:
-            target: Git target to compare against (default: HEAD).
-            workspace_path: Absolute path to workspace root.
+        Groups results by change type with file counts. Useful for understanding the scope of recent work before a code review.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

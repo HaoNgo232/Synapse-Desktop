@@ -7,9 +7,10 @@ Bao gom: get_imports_graph, get_callers, get_related_tests.
 import os
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import (
@@ -20,21 +21,35 @@ from mcp_server.core.constants import (
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky dependency tools voi MCP server.
+    """Dang ky dependency tools voi MCP server."""
 
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
-
-    # Ham get_imports_graph tao do thi phu thuoc giua cac file duoi dang JSON
     @mcp_instance.tool()
     async def get_imports_graph(
-        workspace_path: Optional[str] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        file_paths: Optional[List[str]] = None,
-        max_depth: int = 1,
+        file_paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description='Optional list of relative file paths to analyze (e.g., ["src/main.py"]). Analyzes all code files if omitted.'
+            ),
+        ] = None,
+        max_depth: Annotated[
+            int,
+            Field(
+                description="Maximum depth for transitive dependency resolution (1-3). Default: 1."
+            ),
+        ] = 1,
     ) -> str:
-        """Get dependency graph between files as JSON adjacency list."""
+        """Get the dependency graph between files as a JSON adjacency list.
+
+        Shows which files import which other files. Includes summary statistics (total edges, most coupled files)
+        and the full graph as JSON. Use this to understand module coupling and plan refactoring scope.
+        """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -117,22 +132,38 @@ def register_tools(mcp_instance) -> None:
             logger.error("get_imports_graph error: %s", e)
             return f"Error: {e}"
 
-    # Ham get_callers tim tat ca functions/methods goi mot symbol cu cu the
     @mcp_instance.tool()
     async def get_callers(
-        symbol_name: str,
-        workspace_path: Optional[str] = None,
+        symbol_name: Annotated[
+            str,
+            Field(
+                description="Function, method, or class name to find callers of (e.g., 'validate_token', 'UserService.save')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        file_extensions: Optional[List[str]] = None,
-        max_results: int = 30,
+        file_extensions: Annotated[
+            Optional[List[str]],
+            Field(
+                description='Optional file extensions to search (e.g., [".py", ".ts"]). Searches all code files if omitted.'
+            ),
+        ] = None,
+        max_results: Annotated[
+            int,
+            Field(
+                description="Maximum number of caller entries to return. Default: 30."
+            ),
+        ] = 30,
     ) -> str:
         """Find all functions/methods that CALL a given symbol, with caller context.
 
-        Args:
-            symbol_name: Function/method/class name to find callers of.
-            file_extensions: Optional filter (e.g., [".py", ".ts"]).
-            max_results: Maximum number of caller entries (default: 30).
-            workspace_path: Absolute path to the workspace root directory.
+        For each call site, shows the enclosing function name, file path, line number, and code snippet.
+        Use this to understand blast radius before modifying a function.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -248,18 +279,26 @@ def register_tools(mcp_instance) -> None:
             logger.error("get_callers error: %s", e)
             return f"Error: {e}"
 
-    # Ham get_related_tests tim test files tuong ung voi source files
     @mcp_instance.tool()
     async def get_related_tests(
-        file_paths: List[str],
-        workspace_path: Optional[str] = None,
+        file_paths: Annotated[
+            List[str],
+            Field(
+                description='List of relative source file paths to find corresponding test files for (e.g., ["src/auth/login.py", "src/utils.py"]).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
         """Find test files corresponding to given source files.
 
-        Args:
-            file_paths: List of relative source file paths to find tests for.
-            workspace_path: Absolute path to the workspace root directory.
+        Uses language-specific naming conventions (test_*.py, *.test.ts, *_test.go, *Test.java, etc.)
+        and searches test directories. Useful for verifying test coverage before making changes.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -317,7 +356,6 @@ def register_tools(mcp_instance) -> None:
                 elif ext == ".go":
                     candidates = [f"{stem}_test.go"]
                 elif ext == ".rs":
-                    # Rust tests are usually inline, but integration tests exist
                     candidates = [
                         f"{stem}_test.rs",
                         f"{stem}.rs",
@@ -351,7 +389,6 @@ def register_tools(mcp_instance) -> None:
                         for match_path in fpaths:
                             rel = os.path.relpath(match_path, ws)
                             if rel not in found_tests:
-                                # Verify it's actually in a test-like directory or has test-like name
                                 if any(
                                     part in rel.lower()
                                     for part in [

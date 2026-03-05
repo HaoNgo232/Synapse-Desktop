@@ -93,7 +93,7 @@ class TestBug2OSErrorBypassSizeCheck:
 
         # Should skip the file instead of processing it
         result = _generate_codemap_xml(
-            [str(test_file)],
+            {str(test_file)},
             workspace_root=tmp_path,
             use_relative_paths=False,
             max_file_size=1024,
@@ -134,7 +134,7 @@ class TestBug3DoubleFileRead:
         monkeypatch.setattr(core.smart_context, "smart_parse", mock_smart_parse)
 
         _generate_codemap_xml(
-            [str(test_file)],
+            {str(test_file)},
             workspace_root=tmp_path,
             use_relative_paths=False,
             max_file_size=1024 * 1024,

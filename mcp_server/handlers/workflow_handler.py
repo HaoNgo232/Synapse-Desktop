@@ -5,43 +5,69 @@ Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test.
 """
 
 import asyncio
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import SAFE_GIT_REF, logger
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky workflow tools voi MCP server.
+    """Dang ky workflow tools voi MCP server."""
 
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
-
-    # Tool rp_build chuan bi context toi uu cho AI agent implement task
     @mcp_instance.tool()
     async def rp_build(
-        task_description: str,
-        workspace_path: Optional[str] = None,
+        task_description: Annotated[
+            str,
+            Field(
+                description="Description of what needs to be implemented (e.g., 'Add rate limiting to login endpoint')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        file_paths: Optional[List[str]] = None,
-        max_tokens: int = 100_000,
-        include_codemap: bool = True,
-        include_git_changes: bool = False,
-        output_file: Optional[str] = None,
+        file_paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Optional list of known relevant relative file paths to seed the context."
+            ),
+        ] = None,
+        max_tokens: Annotated[
+            int,
+            Field(
+                description="Maximum token budget for the generated context. Default: 100,000."
+            ),
+        ] = 100_000,
+        include_codemap: Annotated[
+            bool,
+            Field(
+                description="Include AST code structure signatures in the context. Default: True."
+            ),
+        ] = True,
+        include_git_changes: Annotated[
+            bool,
+            Field(
+                description="Include recent git changes in the context. Default: False."
+            ),
+        ] = False,
+        output_file: Annotated[
+            Optional[str],
+            Field(
+                description="Relative path to write the prompt file (e.g., 'context.xml'). Returns inline if omitted."
+            ),
+        ] = None,
     ) -> str:
-        """Prepare optimized context for an AI agent to implement a task.
+        """Prepare optimized implementation context for an AI agent to build a feature.
 
-        Args:
-            task_description: Description of what needs to be implemented.
-            file_paths: Optional list of known relevant files.
-            max_tokens: Maximum token budget (default: 100,000).
-            include_codemap: Include code structure signatures (default: True).
-            include_git_changes: Include recent git changes (default: False).
-            output_file: Optional path to write the prompt.
-            workspace_path: Absolute path to the workspace root directory.
+        Auto-detects relevant files, traces dependencies, optimizes token budget,
+        and packages everything into a structured prompt. Use this as the starting point
+        for any new feature implementation or cross-agent delegation.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -93,26 +119,50 @@ def register_tools(mcp_instance) -> None:
             logger.error("rp_build error: %s", e)
             return f"Error: {e}"
 
-    # Tool rp_review review code voi full context xung quanh
     @mcp_instance.tool()
     async def rp_review(
-        workspace_path: Optional[str] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        review_focus: str = "",
-        include_tests: bool = True,
-        include_callers: bool = True,
-        max_tokens: int = 120_000,
-        base_ref: Optional[str] = None,
+        review_focus: Annotated[
+            str,
+            Field(
+                description='Optional focus area for the review (e.g., "security", "performance", "breaking-changes"). Reviews all aspects if empty.'
+            ),
+        ] = "",
+        include_tests: Annotated[
+            bool,
+            Field(
+                description="Pull related test files into the review context. Default: True."
+            ),
+        ] = True,
+        include_callers: Annotated[
+            bool,
+            Field(
+                description="Pull files that call changed functions to assess blast radius. Default: True."
+            ),
+        ] = True,
+        max_tokens: Annotated[
+            int,
+            Field(
+                description="Maximum token budget for the review context. Default: 120,000."
+            ),
+        ] = 120_000,
+        base_ref: Annotated[
+            Optional[str],
+            Field(
+                description='Git ref to diff against (e.g., "main", "HEAD~5", a commit hash). Uses HEAD if omitted.'
+            ),
+        ] = None,
     ) -> str:
-        """Deep code review with full surrounding context.
+        """Deep code review with full surrounding context (imports, callers, tests).
 
-        Args:
-            review_focus: Optional focus area ("security", "performance").
-            include_tests: Pull related test files (default: True).
-            include_callers: Pull files that call changed functions (default: True).
-            max_tokens: Maximum token budget (default: 120,000).
-            base_ref: Optional git ref to diff against.
-            workspace_path: Absolute path to the workspace root.
+        Automatically finds changed files via git diff, gathers their callers and tests,
+        and packages everything for comprehensive review analysis.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -149,26 +199,48 @@ def register_tools(mcp_instance) -> None:
             logger.error("rp_review error: %s", e)
             return f"Error: {e}"
 
-    # Tool rp_refactor phan tich va lap ke hoach refactoring 2 pha
     @mcp_instance.tool()
     async def rp_refactor(
-        refactor_scope: str,
-        workspace_path: Optional[str] = None,
+        refactor_scope: Annotated[
+            str,
+            Field(
+                description="Description of what to refactor (e.g., 'Extract validation logic from UserService into separate ValidationService')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        phase: str = "discover",
-        file_paths: Optional[List[str]] = None,
-        discovery_report: str = "",
-        max_tokens: int = 80_000,
+        phase: Annotated[
+            str,
+            Field(
+                description='Refactoring phase: "discover" (analyze dependencies and risks) or "plan" (generate refactoring plan from discovery report). Default: "discover".'
+            ),
+        ] = "discover",
+        file_paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Optional list of relative file paths in the refactoring scope."
+            ),
+        ] = None,
+        discovery_report: Annotated[
+            str,
+            Field(
+                description='Output from phase="discover" (required when phase="plan"). Pass the full discovery report text here.'
+            ),
+        ] = "",
+        max_tokens: Annotated[
+            int,
+            Field(description="Maximum token budget. Default: 80,000."),
+        ] = 80_000,
     ) -> str:
-        """Two-pass refactoring: analyze first, plan second.
+        """Two-pass safe refactoring: analyze first (discover), then plan second.
 
-        Args:
-            refactor_scope: Description of what to refactor.
-            phase: "discover" or "plan" (default: "discover").
-            file_paths: Optional list of files in scope.
-            discovery_report: Output from phase="discover" (required for phase="plan").
-            max_tokens: Maximum token budget (default: 80,000).
-            workspace_path: Absolute path to the workspace root.
+        Phase "discover": Maps all dependencies, callers, tests, and coupling points for the target code.
+        Phase "plan": Takes the discovery report and generates a step-by-step refactoring plan with rollback strategy.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -223,26 +295,46 @@ def register_tools(mcp_instance) -> None:
             logger.error("rp_refactor error: %s", e)
             return f"Error: {e}"
 
-    # Tool rp_investigate tu dong dieu tra bug bang cach trace execution path
     @mcp_instance.tool()
     async def rp_investigate(
-        bug_description: str,
-        workspace_path: Optional[str] = None,
+        bug_description: Annotated[
+            str,
+            Field(
+                description="Description of the bug or unexpected behavior (e.g., 'Login fails with 500 error after password reset')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        error_trace: str = "",
-        entry_files: Optional[List[str]] = None,
-        max_depth: int = 4,
-        max_tokens: int = 100_000,
+        error_trace: Annotated[
+            str,
+            Field(
+                description="Optional error traceback or stack trace to help locate the bug origin."
+            ),
+        ] = "",
+        entry_files: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Optional starting file paths for the investigation (e.g., files mentioned in the stack trace)."
+            ),
+        ] = None,
+        max_depth: Annotated[
+            int,
+            Field(description="Maximum call chain trace depth. Default: 4."),
+        ] = 4,
+        max_tokens: Annotated[
+            int,
+            Field(description="Maximum token budget. Default: 100,000."),
+        ] = 100_000,
     ) -> str:
-        """Trace execution path to find root cause of a bug.
+        """Trace execution path through the codebase to find the root cause of a bug.
 
-        Args:
-            bug_description: Description of the bug.
-            error_trace: Optional error trace/stacktrace.
-            entry_files: Optional starting files.
-            max_depth: Maximum trace depth (default: 4).
-            max_tokens: Maximum token budget (default: 100,000).
-            workspace_path: Absolute path to the workspace root.
+        Follows call chains from error points, gathers surrounding context (callers, imports, tests),
+        and packages everything for root cause analysis.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -278,29 +370,54 @@ def register_tools(mcp_instance) -> None:
             logger.error("rp_investigate error: %s", e)
             return f"Error: {e}"
 
-    # Tool rp_test phan tich code, tim test coverage gaps,
-    # va chuan bi context toi uu cho AI viet tests chat luong cao
     @mcp_instance.tool()
     async def rp_test(
-        workspace_path: Optional[str] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        task_description: str = "Write tests for the specified files",
-        file_paths: Optional[List[str]] = None,
-        max_tokens: int = 100_000,
-        test_framework: Optional[str] = None,
-        include_existing_tests: bool = True,
-        output_file: Optional[str] = None,
+        task_description: Annotated[
+            str,
+            Field(
+                description="Description of what tests to write (e.g., 'Write unit tests for the authentication module')."
+            ),
+        ] = "Write tests for the specified files",
+        file_paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Optional list of source file paths to generate tests for (e.g., ['src/auth/service.py'])."
+            ),
+        ] = None,
+        max_tokens: Annotated[
+            int,
+            Field(description="Maximum token budget. Default: 100,000."),
+        ] = 100_000,
+        test_framework: Annotated[
+            Optional[str],
+            Field(
+                description='Test framework to use (e.g., "pytest", "jest", "vitest"). Auto-detected if omitted.'
+            ),
+        ] = None,
+        include_existing_tests: Annotated[
+            bool,
+            Field(
+                description="Include existing test files in the context for pattern matching. Default: True."
+            ),
+        ] = True,
+        output_file: Annotated[
+            Optional[str],
+            Field(
+                description="Relative path to write the prompt file. Returns inline if omitted."
+            ),
+        ] = None,
     ) -> str:
-        """Analyze code, find coverage gaps, and prepare context for writing tests.
+        """Analyze code, find test coverage gaps, and prepare context for writing high-quality tests.
 
-        Args:
-            task_description: Description of what tests to write.
-            file_paths: Optional list of source files to generate tests for.
-            max_tokens: Maximum token budget (default: 100,000).
-            test_framework: Framework ("pytest", "jest", "vitest").
-            include_existing_tests: Include existing test files (default: True).
-            output_file: Optional path to write the prompt.
-            workspace_path: Absolute path to the workspace root directory.
+        Compares source symbols with existing test symbols to identify untested functions,
+        suggests test file names, and packages source + existing tests for AI test generation.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

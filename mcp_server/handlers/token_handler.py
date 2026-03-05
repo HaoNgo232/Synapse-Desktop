@@ -6,28 +6,39 @@ Uoc tinh so luong token cua mot danh sach file dung tokenizer thuc te.
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky token tools voi MCP server.
-
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
+    """Dang ky token tools voi MCP server."""
 
     @mcp_instance.tool()
     async def estimate_tokens(
-        file_paths: List[str],
-        workspace_path: Optional[str] = None,
+        file_paths: Annotated[
+            List[str],
+            Field(
+                description='List of relative file paths to count tokens for (e.g., ["src/main.py", "src/utils.py"]).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Estimate token count for a set of files using the actual tokenizer."""
+        """Estimate token count for a set of files using the actual LLM tokenizer.
+
+        Returns total token count and per-file breakdown. Use this BEFORE build_prompt to verify
+        your context fits within the model's context window.
+        """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:

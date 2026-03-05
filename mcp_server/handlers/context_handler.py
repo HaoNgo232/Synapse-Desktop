@@ -5,34 +5,41 @@ Bao gom: get_codemap, batch_codemap, build_prompt.
 """
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.workspace_manager import WorkspaceManager
 from mcp_server.core.constants import logger
 from mcp_server.core.profile_resolver import resolve_profile_params
+from core.dependency_resolver import DependencyResolver
+from services.prompt_build_service import PromptBuildService
 
 
 def register_tools(mcp_instance) -> None:
-    """Dang ky context tools voi MCP server.
+    """Dang ky context tools voi MCP server."""
 
-    Args:
-        mcp_instance: FastMCP server instance.
-    """
-
-    # Ham get_codemap dung Tree-sitter de trich xuat skeleton cua code (signatures, class defs)
     @mcp_instance.tool()
     async def get_codemap(
-        file_paths: List[str],
-        workspace_path: Optional[str] = None,
+        file_paths: Annotated[
+            List[str],
+            Field(
+                description='List of relative file paths to extract code structure from (e.g., ["src/main.py", "src/utils.py"]).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Extract code structure (signatures, classes, imports) from files using Tree-sitter.
+        """Extract code structure (function/class signatures, imports, relationships) from files using Tree-sitter AST parsing.
 
-        Args:
-            file_paths: List of relative file paths to analyze.
-            workspace_path: Absolute path to the workspace root directory.
+        Returns signatures WITHOUT function bodies, saving 70-80% tokens while preserving API understanding.
+        Use this instead of reading full files when you only need to understand the interface.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -70,22 +77,35 @@ def register_tools(mcp_instance) -> None:
             logger.error("get_codemap error: %s", e)
             return f"Error generating codemap: {e}"
 
-    # Ham batch_codemap trich xuat codemap cho tat ca file trong thu muc
     @mcp_instance.tool()
     async def batch_codemap(
-        directory: str = ".",
-        extensions: Optional[List[str]] = None,
-        max_files: int = 50,
-        workspace_path: Optional[str] = None,
+        directory: Annotated[
+            str,
+            Field(
+                description='Relative directory path to scan for code files (e.g., "src/auth", "lib"). Default: "." (workspace root).'
+            ),
+        ] = ".",
+        extensions: Annotated[
+            Optional[List[str]],
+            Field(
+                description='Optional file extensions to include (e.g., [".py", ".ts"]). Includes all Tree-sitter supported extensions if omitted.'
+            ),
+        ] = None,
+        max_files: Annotated[
+            int,
+            Field(description="Maximum number of files to process. Default: 50."),
+        ] = 50,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Extract code structure (signatures, classes, imports) for ALL files in a directory.
+        """Extract code structure (signatures, classes, imports) for ALL code files in a directory at once.
 
-        Args:
-            directory: Relative directory to scan (default: ".").
-            extensions: Optional file extensions to include (e.g., [".py"]).
-            max_files: Maximum files to process (default: 50).
-            workspace_path: Absolute path to the workspace root directory.
+        More efficient than calling get_codemap per file. Use this to quickly understand an entire module's API surface.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -149,40 +169,93 @@ def register_tools(mcp_instance) -> None:
             logger.error("batch_codemap error: %s", e)
             return f"Error: {e}"
 
-    # Ham build_prompt ket hop noi dung file, cau truc thu muc va git diffs de tao prompt cho AI
     @mcp_instance.tool()
     async def build_prompt(
-        file_paths: List[str],
-        workspace_path: Optional[str] = None,
+        file_paths: Annotated[
+            List[str],
+            Field(
+                description='List of relative file paths to include as full content in the prompt (e.g., ["src/main.py", "src/utils.py"]).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
-        instructions: str = "",
-        output_format: str = "xml",
-        output_file: Optional[str] = None,
-        include_git_changes: bool = False,
-        profile: Optional[str] = None,
-        metadata_format: str = "text",
-        use_selection: bool = False,
-        auto_expand_dependencies: bool = False,
-        dependency_depth: int = 1,
-        max_tokens: Optional[int] = None,
-        codemap_paths: Optional[List[str]] = None,
+        instructions: Annotated[
+            str,
+            Field(
+                description="User instructions to include in the prompt (e.g., 'Implement rate limiting for login endpoint')."
+            ),
+        ] = "",
+        output_format: Annotated[
+            str,
+            Field(
+                description='Output format: "xml" (structured XML), "json", "plain" (text), or "smart" (codemap + key sections). Default: "xml".'
+            ),
+        ] = "xml",
+        output_file: Annotated[
+            Optional[str],
+            Field(
+                description="Relative path to write the prompt to a file (e.g., 'context.xml'). Returns prompt inline if omitted."
+            ),
+        ] = None,
+        include_git_changes: Annotated[
+            bool,
+            Field(
+                description="Include recent git diffs and commit logs in the prompt. Default: False."
+            ),
+        ] = False,
+        profile: Annotated[
+            Optional[str],
+            Field(
+                description='Preset configuration profile (e.g., "review", "bugfix", "refactor", "doc"). Overrides defaults for format, git, instructions.'
+            ),
+        ] = None,
+        metadata_format: Annotated[
+            str,
+            Field(
+                description='Format for the response when output_file is set: "text" (human summary) or "json" (machine-readable metadata). Default: "text".'
+            ),
+        ] = "text",
+        use_selection: Annotated[
+            bool,
+            Field(
+                description="Merge files from the current .synapse/selection.json into file_paths. Default: False."
+            ),
+        ] = False,
+        auto_expand_dependencies: Annotated[
+            bool,
+            Field(
+                description="Automatically include files imported by the selected files. Default: False."
+            ),
+        ] = False,
+        dependency_depth: Annotated[
+            int,
+            Field(
+                description="Depth for transitive dependency resolution (1-3). Files at depth >= 2 are included as codemap-only. Default: 1."
+            ),
+        ] = 1,
+        max_tokens: Annotated[
+            Optional[int],
+            Field(
+                description="Maximum token count for prompt trimming. Omit for no limit."
+            ),
+        ] = None,
+        codemap_paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description='Relative file paths to include as AST signatures only (no function bodies), saving tokens (e.g., ["src/types.py"]).'
+            ),
+        ] = None,
     ) -> str:
-        """Build an AI-ready prompt combining files, directory tree, rules, and git diffs.
+        """Build an AI-ready prompt combining full file contents, directory tree, project rules, and git diffs.
 
-        Args:
-            file_paths: List of relative file paths to include.
-            instructions: Optional user instructions.
-            output_format: Output format ("xml", "json", "plain", "smart").
-            output_file: Optional path to write output.
-            include_git_changes: Include recent git diffs and logs.
-            profile: Preset config ("review", "bugfix", "refactor", "doc").
-            metadata_format: Response format for output_file ("text", "json").
-            use_selection: Merge current selection from .synapse/selection.json.
-            auto_expand_dependencies: Include files imported by selected files.
-            dependency_depth: Depth for dependency resolution (1-3).
-            max_tokens: Maximum token count for prompt trimming.
-            codemap_paths: Relative file paths for AST signatures only (no bodies).
-            workspace_path: Absolute path to the workspace root directory.
+        This is the main context packaging tool. Use estimate_tokens first to verify the prompt fits your model's context window.
+        Supports profiles for common tasks and dependency expansion for automatic context gathering.
+        Ideal for cross-agent delegation: write to output_file and have another agent read it.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -265,8 +338,6 @@ def register_tools(mcp_instance) -> None:
                 if fp.is_file():
                     resolved_codemap_set.add(str(fp))
                 else:
-                    # Khong return error, chi warning vi codemap file co the
-                    # khong ton tai (user chi dinh sai)
                     logger.warning("Codemap path not found, skipping: %s", rp)
 
         # ================================================================
@@ -279,8 +350,6 @@ def register_tools(mcp_instance) -> None:
             # Cap dependency_depth o 1-3
             dependency_depth = max(1, min(3, dependency_depth))
             try:
-                from core.dependency_resolver import DependencyResolver
-
                 resolver = DependencyResolver(ws)
                 # Build file index tu disk (khong can TreeItem)
                 resolver.build_file_index_from_disk(ws)
@@ -289,23 +358,15 @@ def register_tools(mcp_instance) -> None:
                 primary_set = {str(p) for p in abs_paths}
                 all_deps: set[Path] = set()
 
-                # ============================================================
-                # Feature 2: Depth-based codemap for transitive dependencies
-                # Khi dependency_depth >= 2, su dung get_related_files_with_depth()
-                # de phan biet depth level. Files o depth >= 2 duoc tu dong
-                # them vao codemap_paths.
-                # ============================================================
                 depth_2_plus_paths: set[str] = set()
 
                 for pf in abs_paths:
                     if dependency_depth >= 2:
-                        # Su dung depth-aware resolution
-                        related_with_depth = resolver.get_related_files_with_depth(  # type: ignore[attr-defined]
+                        related_with_depth = resolver.get_related_files_with_depth(
                             pf, max_depth=dependency_depth
                         )
                         related = set(related_with_depth.keys())
 
-                        # Phan loai files theo depth
                         for dep_path, depth_level in related_with_depth.items():
                             if str(dep_path) not in primary_set and depth_level >= 2:
                                 depth_2_plus_paths.add(str(dep_path))
@@ -314,11 +375,9 @@ def register_tools(mcp_instance) -> None:
                             pf, max_depth=dependency_depth
                         )
 
-                    # Chi lay files chua co trong primary
                     new_deps = {r for r in related if str(r) not in primary_set}
                     all_deps.update(new_deps)
 
-                    # Ghi nhan dependency graph
                     rel_pf = str(pf.relative_to(ws))
                     dep_graph[rel_pf] = [
                         str(r.relative_to(ws)) for r in related if r != pf
@@ -327,7 +386,6 @@ def register_tools(mcp_instance) -> None:
                 dependency_files = sorted(all_deps)
                 dependency_graph = dep_graph
 
-                # Auto-add depth >= 2 files vao codemap set
                 if depth_2_plus_paths:
                     resolved_codemap_set.update(depth_2_plus_paths)
                     logger.info(
@@ -335,7 +393,6 @@ def register_tools(mcp_instance) -> None:
                         len(depth_2_plus_paths),
                     )
 
-                # Warning neu qua nhieu files
                 if len(dependency_files) > 50:
                     logger.warning(
                         "Dependency expansion returned %d files. Consider reducing depth.",
@@ -350,13 +407,8 @@ def register_tools(mcp_instance) -> None:
             return f"Error: Invalid format '{output_format}'. Use: {', '.join(valid_formats)}"
 
         try:
-            from services.prompt_build_service import (
-                PromptBuildService,
-            )
-
             service = PromptBuildService()
 
-            # Goi build_prompt_full de lay BuildResult day du
             build_result = service.build_prompt_full(
                 file_paths=abs_paths,
                 workspace=ws,
@@ -370,39 +422,33 @@ def register_tools(mcp_instance) -> None:
                 codemap_paths=resolved_codemap_set if resolved_codemap_set else None,
             )
 
-            # Gan dependency_graph vao BuildResult
             if dependency_graph:
                 build_result.dependency_graph = dependency_graph
 
             prompt_text = build_result.prompt_text
             token_count = build_result.total_tokens
 
-            # Ghi ra file neu co chi dinh
             if output_file:
                 out_path = Path(output_file)
                 if not out_path.is_absolute():
                     out_path = ws / out_path
                 out_path = out_path.resolve()
 
-                # Validate output path stays within workspace (chong path traversal)
                 if not out_path.is_relative_to(ws):
                     return "Error: Output file path must be within workspace."
 
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(prompt_text, encoding="utf-8")
 
-                # Tra ve JSON metadata khi metadata_format="json"
                 if metadata_format == "json":
                     import json as _json
 
                     metadata = build_result.to_metadata_dict()
                     metadata["output_file"] = str(out_path)
-                    # Include codemap info in metadata
                     if resolved_codemap_set:
                         metadata["codemap_file_count"] = len(resolved_codemap_set)
                     return _json.dumps(metadata, ensure_ascii=False, indent=2)
 
-                # Tra ve text summary (default behavior)
                 breakdown = build_result.breakdown
                 breakdown_lines = []
                 for key, val in breakdown.items():
@@ -426,7 +472,6 @@ def register_tools(mcp_instance) -> None:
                 summary += "Breakdown:\n" + "\n".join(breakdown_lines)
                 return summary
             else:
-                # Tra ve truc tiep (canh bao: co the rat lon)
                 total_files = len(abs_paths) + len(dependency_files)
                 return (
                     f"--- Prompt ({token_count:,} tokens, {total_files} files, format={output_format}) ---\n"

@@ -7,9 +7,10 @@ Bao gom: get_project_structure, explain_architecture.
 import os
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import logger
 from mcp_server.core.workspace_manager import WorkspaceManager
@@ -20,12 +21,6 @@ def _detect_frameworks(ws: Path) -> list[str]:
     """Phat hien cac framework dua tren file cau hinh.
 
     Dung 1 listdir + set lookup thay vi nhieu stat calls.
-
-    Args:
-        ws: Workspace root path.
-
-    Returns:
-        Danh sach framework names da phat hien.
     """
     try:
         root_files = set(os.listdir(ws))
@@ -48,7 +43,6 @@ def _detect_frameworks(ws: Path) -> list[str]:
         if filename in root_files:
             frameworks.append(fw)
 
-    # Kiem tra them framework cu the
     if "manage.py" in root_files:
         frameworks.append("Django")
     if "next.config.js" in root_files or "next.config.mjs" in root_files:
@@ -60,14 +54,7 @@ def _detect_frameworks(ws: Path) -> list[str]:
 
 
 def _get_project_structure(workspace_path: str) -> str:
-    """Internal implementation cho get_project_structure, co the goi tu start_session.
-
-    Args:
-        workspace_path: Duong dan workspace.
-
-    Returns:
-        Chuoi tom tat project structure.
-    """
+    """Internal implementation cho get_project_structure, co the goi tu start_session."""
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
         return f"Error: '{workspace_path}' is not a valid directory."
@@ -81,7 +68,6 @@ def _get_project_structure(workspace_path: str) -> str:
         if total == 0:
             return f"Project: {ws.name}\nNo files found (empty or fully ignored)."
 
-        # Dem so luong file theo extension
         ext_counter: Counter[str] = Counter()
         total_bytes = 0
         for f in all_files:
@@ -92,12 +78,10 @@ def _get_project_structure(workspace_path: str) -> str:
             except OSError:
                 pass
 
-        # Sap xep theo so luong giam dan
         ext_lines = []
         for ext, count in ext_counter.most_common(20):
             ext_lines.append(f"  {ext:<15} {count:>5} files")
 
-        # Phat hien frameworks
         frameworks = _detect_frameworks(ws)
         fw_line = (
             f"Frameworks: {', '.join(frameworks)}"
@@ -132,7 +116,6 @@ def _explain_architecture_impl(
         if not all_files:
             return "No files found to analyze."
 
-        # 1. Module analysis - group files by top-level directory
         module_stats: dict[str, dict] = defaultdict(
             lambda: {"files": 0, "extensions": Counter()}
         )
@@ -178,20 +161,16 @@ def _explain_architecture_impl(
                 continue
 
             parts = rel.parts
-            # Top-level module = first directory, or "(root)" for root files
             module = parts[0] if len(parts) > 1 else "(root)"
             module_stats[module]["files"] += 1
             module_stats[module]["extensions"][fp.suffix.lower()] += 1
 
-            # Detect entry points
             if fp.name in entry_names:
                 entry_points.append(str(rel))
 
-            # Detect config files
             if fp.name in config_names:
                 config_files.append(str(rel))
 
-        # 2. Dependency analysis (sample top modules)
         code_exts = {
             ".py",
             ".js",
@@ -207,7 +186,6 @@ def _explain_architecture_impl(
         resolver = DependencyResolver(ws)
         resolver.build_file_index_from_disk(ws)
 
-        # Sample up to 100 files for dependency analysis
         sample_files = sorted(code_files)[:100]
         for f in sample_files:
             fp = Path(f)
@@ -228,33 +206,28 @@ def _explain_architecture_impl(
             except Exception as e:
                 logger.debug("Failed to analyze dependencies for %s: %s", fp, e)
 
-        # 3. Format output
         sections = []
         title = f"Architecture: {ws.name}"
         if focus_directory:
             title += f" (focus: {focus_directory}/)"
         sections.append(f"{title}\n{'=' * len(title)}\n")
 
-        # Overview
         sections.append(
             f"Total: {len(all_files)} files, {len(module_stats)} top-level modules\n"
         )
 
-        # Entry points
         if entry_points:
             sections.append("Entry Points:")
             for ep in entry_points[:10]:
                 sections.append(f"  -> {ep}")
             sections.append("")
 
-        # Config/infra
         if config_files:
             sections.append("Configuration:")
             for cf in config_files[:10]:
                 sections.append(f"  * {cf}")
             sections.append("")
 
-        # Module breakdown
         sections.append("Modules (by file count):")
         sorted_modules = sorted(
             module_stats.items(),
@@ -268,7 +241,6 @@ def _explain_architecture_impl(
             sections.append(f"  {module + '/':.<30} {file_count:>4} files  [{ext_str}]")
         sections.append("")
 
-        # Cross-module coupling
         if coupling_matrix:
             sections.append("Cross-Module Dependencies (strongest links):")
             all_links = []
@@ -280,7 +252,6 @@ def _explain_architecture_impl(
                 sections.append(f"  {src} -> {tgt} ({count} imports)")
             sections.append("")
 
-        # Recommendations for agent
         sections.append("Suggested exploration order:")
         if entry_points:
             sections.append(
@@ -303,13 +274,17 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def get_project_structure(
-        workspace_path: Optional[str] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get project summary: file counts, types, frameworks, and estimated tokens.
+        """Get project summary: total file counts by type, detected frameworks/languages, and estimated total token count.
 
-        Args:
-            workspace_path: Absolute path to workspace root.
+        Use this as a first step to understand the scale and tech stack of a codebase.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -320,15 +295,24 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def explain_architecture(
-        focus_directory: Optional[str] = None,
-        workspace_path: Optional[str] = None,
+        focus_directory: Annotated[
+            Optional[str],
+            Field(
+                description='Optional subdirectory to focus analysis on (e.g., "src", "mcp_server"). Analyzes entire workspace if omitted.'
+            ),
+        ] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
         """Generate a high-level architecture summary of the codebase.
 
-        Args:
-            focus_directory: Optional subdirectory to focus analysis on (e.g., "src").
-            workspace_path: Absolute path to workspace root.
+        Analyzes entry points, configuration files, module structure (by file count and type),
+        cross-module dependency coupling, and suggests an exploration order for AI agents.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

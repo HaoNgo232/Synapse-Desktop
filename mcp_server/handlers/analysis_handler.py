@@ -7,9 +7,10 @@ Bao gom: find_references, find_todos, get_symbols.
 import os
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
+from pydantic import Field
 
 from mcp_server.core.constants import (
     INLINE_COMMENT_RE,
@@ -155,17 +156,30 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def find_references(
-        symbol_name: str,
-        file_extensions: Optional[List[str]] = None,
-        workspace_path: Optional[str] = None,
+        symbol_name: Annotated[
+            str,
+            Field(
+                description="Name of the symbol (function, class, variable) to find references for."
+            ),
+        ],
+        file_extensions: Annotated[
+            Optional[List[str]],
+            Field(
+                description='Optional file extensions to filter (e.g., [".py", ".ts"]). Searches all code files if omitted.'
+            ),
+        ] = None,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Find all locations where a symbol is used (AST + regex).
+        """Find all locations where a symbol is used across the codebase.
 
-        Args:
-            symbol_name: Name of symbol to find references for.
-            file_extensions: Optional filter (e.g., [".py"]).
-            workspace_path: Absolute path to workspace root.
+        Filters out comments and string literals to reduce false positives.
+        Groups results by file with line numbers and code snippets.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -182,15 +196,23 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def find_todos(
-        include_hack: bool = True,
-        workspace_path: Optional[str] = None,
+        include_hack: Annotated[
+            bool,
+            Field(
+                description="Whether to include HACK comments in addition to TODO and FIXME. Default: True."
+            ),
+        ] = True,
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Scan project for TODO/FIXME/HACK comments.
+        """Scan the entire project for TODO, FIXME, and HACK comments.
 
-        Args:
-            include_hack: Whether to include HACK comments.
-            workspace_path: Absolute path to workspace root.
+        Returns results grouped by type (FIXME first as highest priority), with file paths and line numbers.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -201,15 +223,23 @@ def register_tools(mcp_instance) -> None:
 
     @mcp_instance.tool()
     async def get_symbols(
-        file_path: str,
-        workspace_path: Optional[str] = None,
+        file_path: Annotated[
+            str,
+            Field(
+                description="Relative path to the file to extract symbols from (e.g., 'src/main.py')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get list of symbols (functions, classes, methods) in a file as JSON.
+        """Extract a structured JSON list of symbols (functions, classes, methods) from a file using Tree-sitter AST parsing.
 
-        Args:
-            file_path: Relative path to the file.
-            workspace_path: Absolute path to workspace root.
+        Returns symbol name, kind, line range, signature, and parent class. Useful for programmatic analysis and identifying coverage gaps.
         """
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)

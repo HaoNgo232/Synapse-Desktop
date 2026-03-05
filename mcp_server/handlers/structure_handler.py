@@ -308,9 +308,6 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Get a high-level summary of the project: total files, breakdown by file type, detected frameworks, and estimated token count.
 
-        WHY USE THIS OVER BUILT-IN: Your built-in list_dir shows file names but can't
-        detect frameworks. This gives you the big picture in one call.
-
         Args:
             workspace_path: Absolute path to workspace root. Auto-detected if omitted.
         """
@@ -328,9 +325,6 @@ def register_tools(mcp_instance) -> None:
         ctx: Optional[Context] = None,
     ) -> str:
         """Auto-generate a high-level architecture summary of the codebase.
-
-        WHY USE THIS OVER BUILT-IN: No built-in tool can synthesize project structure,
-        module boundaries, entry points into a single architectural overview.
 
         Args:
             focus_directory: Optional subdirectory to focus analysis on (e.g., "src").

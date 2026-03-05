@@ -34,18 +34,6 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Prepare optimized context for an AI agent to implement a task.
 
-        WHY USE THIS: Combines scope detection, codemap extraction, file slicing,
-        and token budget optimization into a single workflow. Instead of manually
-        calling get_codemap + read_file + build_prompt, this tool automatically:
-        1. Detects which files are relevant to your task
-        2. Pulls full code for key files, signatures for surrounding context
-        3. Slices large files to include only relevant sections
-        4. Iterates to fit within token budget
-        5. Generates a handoff prompt explaining file relationships
-
-        BEST FOR: Starting a new implementation task. The output is a structured
-        prompt you can hand to a coding agent (or yourself) with full context.
-
         Args:
             workspace_path: Absolute path to the workspace root directory.
             task_description: Description of what needs to be implemented.
@@ -118,11 +106,6 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Deep code review with full surrounding context.
 
-        WHY USE THIS: Unlike simple diff reading, this tool automatically:
-        1. Pulls git diff and identifies changed functions/classes
-        2. Finds surrounding context: files that import changed modules, callers, tests
-        3. Packages everything into a review prompt
-
         Args:
             workspace_path: Absolute path to the workspace root.
             review_focus: Optional focus area ("security", "performance").
@@ -178,11 +161,6 @@ def register_tools(mcp_instance) -> None:
         max_tokens: int = 80_000,
     ) -> str:
         """Two-pass refactoring: analyze first, plan second.
-
-        WHY USE THIS: Enforces a two-phase approach to prevent breaking changes.
-
-        Phase 1 (discover): Analyzes code structure, finds dependencies, identifies risks.
-        Phase 2 (plan): Generates concrete refactoring plan with full context.
 
         Args:
             workspace_path: Absolute path to the workspace root.
@@ -258,12 +236,6 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Automated bug investigation -- traces execution path to find root cause.
 
-        WHY USE THIS: Automates tracing through multiple files:
-        1. Parses error traces to find entry points
-        2. Reads code at each trace point
-        3. Follows function calls to build execution context
-        4. Packages everything into an investigation prompt
-
         Args:
             workspace_path: Absolute path to the workspace root.
             bug_description: Description of the bug.
@@ -319,20 +291,7 @@ def register_tools(mcp_instance) -> None:
         include_existing_tests: bool = True,
         output_file: Optional[str] = None,
     ) -> str:
-        """Analyze code, find test coverage gaps, and prepare optimized
-        context for AI to write high-quality tests.
-
-        WHY USE THIS: Combines scope detection, test coverage gap analysis,
-        and token budget optimization into a single workflow. Instead of manually
-        finding untested functions and gathering context, this tool automatically:
-        1. Detects which source files need tests
-        2. Finds existing test files and analyzes coverage gaps
-        3. Identifies untested symbols with priority ranking
-        4. Auto-detects test framework (pytest, jest, vitest, etc.)
-        5. Packages everything into an optimized prompt for test generation
-
-        BEST FOR: Writing tests for new or existing code. The output includes
-        coverage analysis, untested symbol list, and existing test patterns.
+        """Analyze code, find test coverage gaps, and prepare context for AI.
 
         Args:
             workspace_path: Absolute path to the workspace root directory.

@@ -84,7 +84,6 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Start a new session by auto-discovering project structure, organization, and technical debt.
 
-        WHY USE THIS OVER BUILT-IN: Combines 3 calls into one.
         Call this FIRST when starting work on a new codebase or task.
         """
         try:
@@ -126,9 +125,6 @@ def register_tools(mcp_instance) -> None:
         ctx: Optional[Context] = None,
     ) -> str:
         """List all files in the workspace, automatically respecting .gitignore.
-
-        WHY USE THIS OVER BUILT-IN: Use YOUR BUILT-IN list_dir/ls for simple directories.
-        Use this to get a flat list of ALL files recursively.
 
         Args:
             extensions: Optional list of extensions to filter by (e.g., [".py", ".js"]).
@@ -181,9 +177,6 @@ def register_tools(mcp_instance) -> None:
         ctx: Optional[Context] = None,
     ) -> str:
         """Show the directory tree structure of the workspace.
-
-        WHY USE THIS OVER BUILT-IN: Use YOUR BUILT-IN list_dir/ls for simple exploration.
-        Use this to see the overall shape of the project recursively.
 
         Args:
             max_depth: Maximum directory depth to display (default: 3, max: 10).

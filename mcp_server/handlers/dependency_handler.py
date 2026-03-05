@@ -34,13 +34,7 @@ def register_tools(mcp_instance) -> None:
         file_paths: Optional[List[str]] = None,
         max_depth: int = 1,
     ) -> str:
-        """Get dependency graph between files as JSON adjacency list.
-
-        WHY USE THIS OVER BUILT-IN: Your built-in grep can find import statements, but
-        can't RESOLVE them to actual file paths (e.g., "from services.auth import login"
-        -> "services/auth.py"). This tool uses Synapse's dependency resolver to build
-        a proper file-to-file dependency graph.
-        """
+        """Get dependency graph between files as JSON adjacency list."""
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -123,7 +117,7 @@ def register_tools(mcp_instance) -> None:
             logger.error("get_imports_graph error: %s", e)
             return f"Error: {e}"
 
-    # Ham get_callers tim tat ca functions/methods goi mot symbol cu the
+    # Ham get_callers tim tat ca functions/methods goi mot symbol cu cu the
     @mcp_instance.tool()
     async def get_callers(
         symbol_name: str,
@@ -133,17 +127,6 @@ def register_tools(mcp_instance) -> None:
         max_results: int = 30,
     ) -> str:
         """Find all functions/methods that CALL a given symbol, with caller context.
-
-        WHY USE THIS OVER BUILT-IN: Your built-in grep finds text occurrences but can't
-        tell you WHICH FUNCTION contains the call. This tool returns caller_function -> callee
-        mappings with file and line info, essential for understanding impact before refactoring.
-
-        Example output:
-          UserService.create_user (services/user.py:45) calls validate_email
-          test_registration (tests/test_user.py:23) calls validate_email
-
-        When to use: Before modifying a function's signature or behavior, check who calls it
-        to understand the blast radius of your change.
 
         Args:
             workspace_path: Absolute path to the workspace root directory.
@@ -273,14 +256,6 @@ def register_tools(mcp_instance) -> None:
         ctx: Optional[Context] = None,
     ) -> str:
         """Find test files corresponding to given source files.
-
-        WHY USE THIS OVER BUILT-IN: Automatically handles multiple naming conventions
-        across languages (test_X.py, X_test.py, X.test.ts, X.spec.ts, __tests__/X.js)
-        and searches the entire project. Your built-in grep would need multiple patterns
-        and still miss co-located test directories.
-
-        When to use: Before modifying code, find existing tests that verify its behavior.
-        After modifying code, find tests to run.
 
         Args:
             workspace_path: Absolute path to the workspace root directory.

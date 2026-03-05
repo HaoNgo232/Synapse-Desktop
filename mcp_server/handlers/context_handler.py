@@ -30,20 +30,7 @@ def register_tools(mcp_instance) -> None:
     ) -> str:
         """Extract code structure (function signatures, class definitions, imports) from files.
 
-        WHY USE THIS OVER BUILT-IN: Your built-in read_file returns the ENTIRE file.
-        get_codemap uses Tree-sitter AST parsing to extract only the API skeleton -
-        function signatures, class declarations, type annotations - saving 70-90% tokens.
-        No built-in tool can do this.
-
-        Uses Tree-sitter to parse source code and return only the skeleton - function
-        signatures, class declarations, and type information - WITHOUT implementation
-        bodies. This gives you a complete understanding of module APIs while using
-        a fraction of the tokens compared to reading full files.
-
-        When to use: ALWAYS use this before read_file when exploring code. It lets you
-        understand the shape of modules, find the right function to dig into, and map
-        out dependencies - all at minimal token cost. Only use read_file after this
-        when you need the actual implementation.
+        Uses Tree-sitter AST to return only the API skeleton WITHOUT implementation bodies, saving 70-90% tokens. Use this before `read_file` to understand module shapes.
 
         Args:
             workspace_path: Absolute path to the workspace root directory.
@@ -95,13 +82,6 @@ def register_tools(mcp_instance) -> None:
         ctx: Optional[Context] = None,
     ) -> str:
         """Extract code structure (signatures, classes, imports) for ALL files in a directory.
-
-        WHY USE THIS OVER BUILT-IN: Eliminates the list_files -> filter -> get_codemap
-        round-trip pattern. One call gives you the API skeleton of an entire module/package.
-        Essential for understanding a new module before diving into implementation.
-
-        When to use: When exploring a new package/module and you want to understand all
-        its public APIs at once. Much faster than calling get_codemap file-by-file.
 
         Args:
             workspace_path: Absolute path to the workspace root directory.
@@ -189,32 +169,6 @@ def register_tools(mcp_instance) -> None:
         max_tokens: Optional[int] = None,
     ) -> str:
         """Build a complete, AI-ready prompt combining file contents, directory tree, project rules, and optionally git diffs.
-
-        WHY USE THIS OVER BUILT-IN: No built-in tool can package files into Synapse's
-        structured prompt format with directory tree, project rules, git context,
-        and token breakdown. This is equivalent to Synapse Desktop's "Copy Context" button.
-
-        This is a "Super Context Bundle" generator. It assembles everything an AI needs
-        to understand and work with the selected code into a single structured prompt.
-
-        When to use:
-        1. Cross-Agent Delegation: A planning agent runs this with `output_file="spec.xml"`.
-           A coding sub-agent then uses its native `read_file` tool to read "spec.xml" and
-           instantly understands the entire project architecture without needing to explore manually.
-        2. Deep Code Review: Use `include_git_changes=True` or `profile="review"` to get
-           full files + latest git diffs in one package.
-        3. Large Refactors/Features: When working across multiple modules (e.g., UI, DB, API),
-           gather all relevant files into one prompt so you don't lose the global architecture context.
-
-        Profiles: Use `profile` to apply preset configurations instead of manually setting params:
-        - "review": XML + git changes + code review instructions
-        - "bugfix": XML + git changes + auto-expand dependencies + debug instructions
-        - "refactor": Smart context + refactoring instructions
-        - "doc": Smart context + documentation instructions
-
-        Note: Use `output_file` to write large prompts to disk instead of returning them inline
-        to save token bandwidth and avoid crashing the chat interface. You don't need a special
-        tool to read the prompt back; just use your built-in file reading tool on the output file.
 
         Args:
             workspace_path: Absolute path to the workspace root directory.

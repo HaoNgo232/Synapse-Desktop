@@ -160,11 +160,7 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Find all locations where a function/class/variable is used (AST + regex).
-
-        WHY USE THIS OVER BUILT-IN: Your built-in grep/search finds ALL text matches
-        including strings, comments, and docs. This tool strips those before matching.
-        """
+        """Find all locations where a function/class/variable is used (AST + regex)."""
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -184,10 +180,7 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Scan entire project for TODO/FIXME/HACK comments with file path and line number.
-
-        WHY USE THIS OVER BUILT-IN: Uses smarter boundaries than standard grep.
-        """
+        """Scan entire project for TODO/FIXME/HACK comments with file path and line number."""
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -201,11 +194,7 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Get structured list of all symbols (functions, classes, methods) in a file as JSON.
-
-        WHY USE THIS OVER BUILT-IN: No built-in tool gives you structured, machine-readable
-        symbol data with line ranges, signatures, and parent class info.
-        """
+        """Get structured list of all symbols (functions, classes, methods) in a file as JSON."""
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:

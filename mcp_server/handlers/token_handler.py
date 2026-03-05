@@ -27,12 +27,7 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Estimate token count for a set of files before adding them to context.
-
-        WHY USE THIS OVER BUILT-IN: No built-in tool counts tokens. This uses the actual
-        tokenizer (tiktoken/HuggingFace) matching the target LLM model, not rough byte
-        estimates. Essential for managing context window budgets.
-        """
+        """Estimate token count for a set of files using the actual tokenizer. Essential for managing context window budgets."""
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:

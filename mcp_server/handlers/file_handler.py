@@ -27,11 +27,7 @@ def register_tools(mcp_instance) -> None:
         workspace_path: Optional[str] = None,
         ctx: Optional[Context] = None,
     ) -> str:
-        """Read file contents with optional line range support (enhanced version).
-
-        WHY USE THIS OVER BUILT-IN: Use YOUR BUILT-IN read_file for full files.
-        Use this when you specifically need to read a small segment of a massive file
-        to save token bandwidth, since some AI clients don't support line ranges natively.
+        """Read file contents with optional line range support.
 
         Args:
             relative_path: Relative path to the file from workspace root (e.g., "src/main.py").
@@ -90,9 +86,6 @@ def register_tools(mcp_instance) -> None:
         ctx: Optional[Context] = None,
     ) -> str:
         """Get code metrics: LOC, number of functions/classes, TODO/FIXME/HACK comments.
-
-        WHY USE THIS OVER BUILT-IN: Combines LOC counting, complexity estimation, and comment
-        scanning into one quick call instead of having to run multiple bash commands (like wc).
 
         Args:
             file_path: Relative path to the file.

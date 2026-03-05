@@ -57,6 +57,7 @@ _TAB_CONFIG = [
     ("📁", "Context"),
     ("⚡", "Apply"),
     ("🕐", "History"),
+    ("💬", "Chat"),
     ("📋", "Logs"),
     ("⚙️", "Settings"),
 ]
@@ -171,6 +172,7 @@ class SynapseMainWindow(QMainWindow):
         from views.history_view_qt import HistoryViewQt
         from views.logs_view_qt import LogsViewQt
         from views.settings_view_qt import SettingsViewQt
+        from components.chat_panel import ChatPanel
 
         # Tao ServiceContainer tai composition root de quan ly lifecycle cua tat ca services
         # Reuse boot container from QApplication instance (created in main())
@@ -196,11 +198,25 @@ class SynapseMainWindow(QMainWindow):
         self.logs_view = LogsViewQt()
         self.settings_view = SettingsViewQt(self._on_settings_changed)
 
+        # Chat panel - inject ChatService tu container
+        self.chat_panel = ChatPanel(
+            get_workspace=self._get_workspace_path,
+            get_selected_paths=self._get_selected_paths,
+            chat_service=self._services.chat_service,
+        )
+
+        # Connect file selection changes to chat panel context indicator
+        if hasattr(self.context_view, "selection_changed"):
+            self.context_view.selection_changed.connect(
+                self._on_selection_changed_for_chat
+            )
+
         # Add tabs with icon + text
         views = [
             self.context_view,
             self.apply_view,
             self.history_view,
+            self.chat_panel,
             self.logs_view,
             self.settings_view,
         ]
@@ -570,19 +586,39 @@ class SynapseMainWindow(QMainWindow):
         """Getter for workspace path."""
         return self.workspace_path
 
+    def _get_selected_paths(self) -> List[str]:
+        """Getter for currently selected file paths (for ChatPanel)."""
+        try:
+            if hasattr(self, "context_view"):
+                return list(self.context_view.get_selected_paths())
+        except Exception:
+            pass
+        return []
+
+    @Slot(object)
+    def _on_selection_changed_for_chat(self, selected_paths: object) -> None:
+        """Update chat panel context indicator khi selection thay doi."""
+        try:
+            paths = list(selected_paths) if selected_paths else []
+            if hasattr(self, "chat_panel"):
+                self.chat_panel.update_context_indicator(paths)
+        except Exception:
+            pass
+
     # ── Tab changes ───────────────────────────────────────────────
     @Slot(int)
     def _on_tab_changed(self, index: int) -> None:
         """Handle tab change — refresh relevant views."""
         self._current_tab_index = index
 
-        view_names = ["context", "apply", "history", "logs", "settings"]
+        # Tab order: 0=Context, 1=Apply, 2=History, 3=Chat, 4=Logs, 5=Settings
+        view_names = ["context", "apply", "history", "chat", "logs", "settings"]
         if 0 <= index < len(view_names):
             set_active_view(view_names[index])
 
         if index == 2:
             self.history_view.on_view_activated()
-        if index == 3:
+        if index == 4:
             self.logs_view.on_view_activated()
 
     def _on_settings_changed(self) -> None:

@@ -83,6 +83,14 @@ class AppSettings:
         ]
     )
 
+    # --- Chat Settings ---
+    # Model ID rieng cho chatbot (de trong = dung ai_model_id chung)
+    chat_model_id: str = ""
+    # Token budget toi da cho chat context (system message + files)
+    chat_max_context_tokens: int = 50000
+    # Co luu lich su chat hay khong (privacy setting)
+    chat_history_enabled: bool = True
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
         """
@@ -153,6 +161,9 @@ class AppSettings:
             "ai_auto_apply": self.ai_auto_apply,
             "enable_ai_memory": self.enable_ai_memory,
             "rule_file_names": self.rule_file_names,
+            "chat_model_id": self.chat_model_id,
+            "chat_max_context_tokens": self.chat_max_context_tokens,
+            "chat_history_enabled": self.chat_history_enabled,
         }
 
     def to_safe_dict(self) -> dict[str, Any]:

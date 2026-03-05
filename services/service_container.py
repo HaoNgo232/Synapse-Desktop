@@ -20,7 +20,7 @@ Design decisions:
 """
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from services.prompt_build_service import PromptBuildService, QtClipboardService
 from services.cache_registry import CacheRegistry
@@ -36,7 +36,9 @@ class ServiceContainer:
     """
     Composition root - single point of control cho service lifecycle.
 
-    So huu: PromptBuildService, QtClipboardService, TokenizationService, CacheRegistry, IgnoreEngine
+    So huu: PromptBuildService, QtClipboardService, TokenizationService,
+            CacheRegistry, IgnoreEngine, ChatService
+
     Khong con dung module-level singletons (encoder_registry, cache_registry).
 
     Thread Safety: Khoi tao PHAI thuc hien tren main thread.
@@ -69,6 +71,9 @@ class ServiceContainer:
 
         self.cache_registry: CacheRegistry = _module_registry
 
+        # ChatService - khoi tao lazy (chi khi can) de tranh Qt overhead khi khong dung
+        self._chat_service: Optional["ChatService"] = None  # type: ignore[name-defined]
+
         logger.info("ServiceContainer initialized with owned services")
 
     @property
@@ -79,6 +84,25 @@ class ServiceContainer:
         Tra ve instance do CONTAINER so huu, khong phai global singleton.
         """
         return self._tokenization_service
+
+    @property
+    def chat_service(self) -> "ChatService":  # type: ignore[name-defined]
+        """
+        Tra ve ChatService instance (lazy init).
+
+        ChatService duoc khoi tao lan dau tien khi can, sau do reuse.
+        Inject PromptBuildService de generate context.
+
+        Returns:
+            ChatService instance do container so huu
+        """
+        if self._chat_service is None:
+            from services.chat_service import ChatService
+
+            self._chat_service = ChatService(
+                prompt_builder=self.prompt_builder  # type: ignore[arg-type]
+            )
+        return self._chat_service
 
     def reset_for_model_change(self) -> None:
         """
@@ -102,6 +126,13 @@ class ServiceContainer:
             self.cache_registry.invalidate_for_workspace()
         except Exception as e:
             logger.warning("Failed to invalidate caches during shutdown: %s", e)
+
+        # Cancel any active chat requests
+        if self._chat_service is not None:
+            try:
+                self._chat_service.cancel_current_request()
+            except Exception as e:
+                logger.warning("Failed to cancel chat request during shutdown: %s", e)
 
         logger.info("ServiceContainer shut down")
 

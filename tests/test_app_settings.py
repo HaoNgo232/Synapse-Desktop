@@ -111,6 +111,9 @@ class TestAppSettings:
             "ai_auto_apply",
             "enable_ai_memory",
             "rule_file_names",
+            "chat_model_id",
+            "chat_max_context_tokens",
+            "chat_history_enabled",
         }
         assert set(d.keys()) == expected_keys
 

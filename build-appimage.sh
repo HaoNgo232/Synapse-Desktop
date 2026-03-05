@@ -103,5 +103,19 @@ ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.
 echo ""
 echo "========================================"
 echo "Build complete!"
-echo "AppImage: $BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
+echo "AppImage created: $BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 echo "========================================"
+
+# Auto move to Desktop
+DESKTOP_DIR="$HOME/Desktop"
+OUTPUT_FILE="$BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
+DESKTOP_DEST="$DESKTOP_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
+
+if [ -f "$OUTPUT_FILE" ]; then
+    echo "Moving AppImage to Desktop..."
+    mv -f "$OUTPUT_FILE" "$DESKTOP_DEST"
+    chmod +x "$DESKTOP_DEST"
+    echo "Successfully moved to: $DESKTOP_DEST"
+else
+    echo "Warning: Build succeeded but AppImage file not found at $OUTPUT_FILE"
+fi

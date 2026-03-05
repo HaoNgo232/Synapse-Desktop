@@ -248,6 +248,12 @@ def register_tools(mcp_instance) -> None:
                 description='Relative file paths to include as AST signatures only (no function bodies), saving tokens (e.g., ["src/types.py"]).'
             ),
         ] = None,
+        include_opx: Annotated[
+            bool,
+            Field(
+                description="Include OPX (Overwrite Patch XML) instructions in the prompt for AI-assisted editing. Default: False."
+            ),
+        ] = False,
     ) -> str:
         """Build an AI-ready prompt combining full file contents, directory tree, project rules, and git diffs.
 
@@ -424,6 +430,7 @@ def register_tools(mcp_instance) -> None:
                 profile=resolved_profile_name,
                 max_tokens=max_tokens,
                 codemap_paths=resolved_codemap_set if resolved_codemap_set else None,
+                include_xml_formatting=include_opx,
             )
 
             if dependency_graph:

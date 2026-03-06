@@ -3,7 +3,7 @@ Test để verify các bug được report trong analysis.
 """
 
 from pathlib import Path
-from core.dependency_resolver import DependencyResolver
+from application.services.dependency_resolver import DependencyResolver
 
 
 class TestBug1ShortestPathReexploration:
@@ -76,7 +76,7 @@ class TestBug2OSErrorBypassSizeCheck:
 
     def test_oserror_skips_file(self, tmp_path: Path, monkeypatch):
         """Test that OSError during stat() causes file to be skipped."""
-        from core.prompt_generator import _generate_codemap_xml
+        from domain.prompt.generator import _generate_codemap_xml
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")
@@ -110,7 +110,7 @@ class TestBug3DoubleFileRead:
 
     def test_file_read_once_only(self, tmp_path: Path, monkeypatch):
         """Test that file is read only once even when smart_parse fails."""
-        from core.prompt_generator import _generate_codemap_xml
+        from domain.prompt.generator import _generate_codemap_xml
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")
@@ -153,7 +153,7 @@ class TestBug4PathFormatMismatch:
 
     def test_mixed_path_formats_handled(self, tmp_path: Path):
         """Test that mixed absolute/relative paths are normalized correctly."""
-        from core.prompt_generator import generate_file_contents_xml
+        from domain.prompt.generator import generate_file_contents_xml
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")

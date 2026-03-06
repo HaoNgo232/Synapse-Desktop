@@ -6,7 +6,7 @@ Extracted tu: generate_file_contents_json() trong core/prompt_generator.py
 
 import json
 
-from core.prompting.types import FileEntry
+from shared.types.prompt_types import FileEntry
 
 
 def format_files_json(entries: list[FileEntry]) -> str:

@@ -4,14 +4,14 @@ Unit tests cho Template Manager module.
 Test cac function:
 - list_templates(): Liet ke templates kha dung
 - load_template(): Doc noi dung template theo ID
-from core.prompting.template_manager import LocalCustomTemplateProvider
+from domain.prompt.template_manager import LocalCustomTemplateProvider
 import core.prompting.template_manager as tm
 - get_template_info(): Lay metadata cua template
 """
 
 import pytest
 
-from core.prompting.template_manager import (
+from domain.prompt.template_manager import (
     list_templates,
     load_template,
     get_template_info,

@@ -6,7 +6,7 @@ Tests end-to-end flow of building prompts with codemap-only files.
 
 import pytest
 from unittest.mock import Mock, patch
-from services.prompt_build_service import PromptBuildService
+from application.services.prompt_build_service import PromptBuildService
 
 
 class TestPromptBuildServiceCodemapIntegration:
@@ -44,7 +44,8 @@ class TestPromptBuildServiceCodemapIntegration:
         mock_gen = Mock(return_value="<files>mocked</files>")
 
         with patch.dict(
-            "services.prompt_build_service._FORMAT_TO_GENERATOR", {"xml": mock_gen}
+            "application.services.prompt_build_service._FORMAT_TO_GENERATOR",
+            {"xml": mock_gen},
         ):
             # Act
             service.build_prompt_full(
@@ -76,7 +77,8 @@ class TestPromptBuildServiceCodemapIntegration:
         mock_gen = Mock(return_value="<files>mocked</files>")
 
         with patch.dict(
-            "services.prompt_build_service._FORMAT_TO_GENERATOR", {"xml": mock_gen}
+            "application.services.prompt_build_service._FORMAT_TO_GENERATOR",
+            {"xml": mock_gen},
         ):
             # Act
             service.build_prompt_full(
@@ -100,7 +102,9 @@ class TestPromptBuildServiceCodemapIntegration:
         file_paths = [workspace / "main.py", workspace / "utils.py"]
         codemap_paths = {str(workspace / "utils.py")}
 
-        with patch("services.prompt_build_service.collect_files") as mock_collect:
+        with patch(
+            "application.services.prompt_build_service.collect_files"
+        ) as mock_collect:
             # Mock file entries
             entry1 = Mock()
             entry1.path = workspace / "main.py"
@@ -139,7 +143,8 @@ class TestPromptBuildServiceCodemapIntegration:
         mock_gen = Mock(return_value="<files>mocked</files>")
 
         with patch.dict(
-            "services.prompt_build_service._FORMAT_TO_GENERATOR", {"xml": mock_gen}
+            "application.services.prompt_build_service._FORMAT_TO_GENERATOR",
+            {"xml": mock_gen},
         ):
             # Act
             service.build_prompt_full(
@@ -197,9 +202,11 @@ class TestPromptBuildServiceCodemapIntegration:
 
         with (
             patch(
-                "services.prompt_build_service.generate_file_contents_xml"
+                "application.services.prompt_build_service.generate_file_contents_xml"
             ) as mock_gen,
-            patch("services.prompt_build_service.collect_files") as mock_collect,
+            patch(
+                "application.services.prompt_build_service.collect_files"
+            ) as mock_collect,
         ):
             mock_gen.return_value = "<files>mixed content</files>"
 

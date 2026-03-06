@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Set
 
-from core.dependency_resolver import DependencyResolver
-from core.codemaps.symbol_extractor import extract_symbols
-from services.workspace_index import collect_files_from_disk
+from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.symbol_extractor import extract_symbols
+from application.services.workspace_index import collect_files_from_disk
 
 
 @dataclass
@@ -107,7 +107,7 @@ def detect_scope_from_git_diff(
     Returns:
         ScopeResult với changed files làm primary
     """
-    from core.utils.git_utils import get_git_diffs
+    from infrastructure.git.git_utils import get_git_diffs
     import re
 
     try:

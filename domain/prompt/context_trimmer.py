@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.interfaces.tokenization_service import ITokenizationService
+    from application.interfaces.tokenization_port import ITokenizationService
 
 logger = logging.getLogger(__name__)
 

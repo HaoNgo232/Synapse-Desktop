@@ -3,7 +3,7 @@
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from views.context_view_qt import ContextViewQt
+from presentation.views.context.context_view_qt import ContextViewQt
 
 
 @pytest.fixture(scope="module")

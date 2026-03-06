@@ -13,7 +13,7 @@ thay vi patch o services.workspace_index.
 
 from unittest.mock import patch, MagicMock
 
-from services.workspace_index import (
+from application.services.workspace_index import (
     build_search_index,
     search_in_index,
     collect_files_from_disk,
@@ -179,14 +179,22 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", return_value=False),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             index = build_search_index(tmp_path)
@@ -210,14 +218,22 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", side_effect=mock_is_binary),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                side_effect=mock_is_binary,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             index = build_search_index(tmp_path)
@@ -238,14 +254,22 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", return_value=False),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             index = build_search_index(tmp_path)
@@ -262,14 +286,22 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", return_value=False),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             # generation_check tra ve False -> cancel ngay
@@ -284,12 +316,14 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             index = build_search_index(tmp_path)
@@ -316,14 +350,22 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", return_value=False),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
@@ -347,14 +389,22 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", side_effect=mock_is_binary),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                side_effect=mock_is_binary,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
@@ -371,14 +421,22 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
-            patch("core.utils.file_utils.is_binary_file", return_value=False),
-            patch("core.utils.file_utils.is_system_path", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.file_utils.is_binary_file",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.file_utils.is_system_path",
+                return_value=False,
+            ),
+            patch(
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)
@@ -393,12 +451,14 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
             patch("os.walk", side_effect=PermissionError("denied")),
         ):
@@ -413,12 +473,14 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "core.ignore_engine.IgnoreEngine.find_git_root", return_value=tmp_path
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                return_value=tmp_path,
             ),
             patch("services.workspace_config.get_excluded_patterns", return_value=[]),
             patch("services.workspace_config.get_use_gitignore", return_value=False),
             patch(
-                "core.ignore_engine.IgnoreEngine.build_pathspec", return_value=mock_spec
+                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                return_value=mock_spec,
             ),
         ):
             result = collect_files_from_disk(tmp_path, workspace_path=tmp_path)

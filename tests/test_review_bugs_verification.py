@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from core.prompt_generator import generate_file_contents_xml
+from domain.prompt.generator import generate_file_contents_xml
 
 
 class TestBug1TopLevelImportFailure:
@@ -45,8 +45,8 @@ class TestBug1TopLevelImportFailure:
                 in_function = False
 
             if (
-                "from core.dependency_resolver import" in line
-                or "from services.prompt_build_service import" in line
+                "from application.services.dependency_resolver import" in line
+                or "from application.services.prompt_build_service import" in line
             ):
                 import_lines.append((i, line, in_function))
 

@@ -4,8 +4,12 @@ Regression tests for lazy loading ignore behavior with workspace-root matching.
 
 from pathlib import Path
 
-from core.utils.file_utils import TreeItem, load_folder_children, scan_directory_shallow
-from core.ignore_engine import IgnoreEngine
+from infrastructure.filesystem.file_utils import (
+    TreeItem,
+    load_folder_children,
+    scan_directory_shallow,
+)
+from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
 
 def _collect_file_labels(item: TreeItem) -> list[str]:

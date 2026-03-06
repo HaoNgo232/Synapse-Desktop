@@ -11,7 +11,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from services.service_interfaces import IPromptBuilder, IClipboardService
-from services.prompt_build_service import PromptBuildService, QtClipboardService
+from application.services.prompt_build_service import (
+    PromptBuildService,
+    QtClipboardService,
+)
 
 
 class TestProtocolCompliance:
@@ -29,10 +32,10 @@ class TestProtocolCompliance:
 class TestPromptBuildService:
     """Test PromptBuildService build operations."""
 
-    @patch("services.prompt_build_service.get_git_logs")
-    @patch("services.prompt_build_service.get_git_diffs")
-    @patch("services.prompt_build_service.generate_prompt")
-    @patch("services.prompt_build_service.generate_file_contents_xml")
+    @patch("application.services.prompt_build_service.get_git_logs")
+    @patch("application.services.prompt_build_service.get_git_diffs")
+    @patch("application.services.prompt_build_service.generate_prompt")
+    @patch("application.services.prompt_build_service.generate_file_contents_xml")
     def test_build_prompt_xml(
         self, mock_gen_xml, mock_gen_prompt, mock_diff, mock_logs
     ):
@@ -46,7 +49,9 @@ class TestPromptBuildService:
         mock_diff.return_value = None
         mock_logs.return_value = None
 
-        with patch("services.settings_manager.load_app_settings") as mock_settings:
+        with patch(
+            "infrastructure.persistence.settings_manager.load_app_settings"
+        ) as mock_settings:
             mock_settings_inst = MagicMock()
             mock_settings_inst.get_rule_filenames_set.return_value = set()
             mock_settings.return_value = mock_settings_inst
@@ -66,10 +71,10 @@ class TestPromptBuildService:
         assert breakdown["content_tokens"] == 42
         mock_gen_prompt.assert_called_once()
 
-    @patch("services.prompt_build_service.get_git_logs")
-    @patch("services.prompt_build_service.get_git_diffs")
-    @patch("services.prompt_build_service.build_smart_prompt")
-    @patch("services.prompt_build_service.generate_smart_context")
+    @patch("application.services.prompt_build_service.get_git_logs")
+    @patch("application.services.prompt_build_service.get_git_diffs")
+    @patch("application.services.prompt_build_service.build_smart_prompt")
+    @patch("application.services.prompt_build_service.generate_smart_context")
     def test_build_prompt_smart(self, mock_smart_ctx, mock_build, mock_diff, mock_logs):
         """build_prompt smart format goi smart pipeline."""
         mock_svc = MagicMock()
@@ -81,7 +86,9 @@ class TestPromptBuildService:
         mock_diff.return_value = None
         mock_logs.return_value = None
 
-        with patch("services.settings_manager.load_app_settings") as mock_settings:
+        with patch(
+            "infrastructure.persistence.settings_manager.load_app_settings"
+        ) as mock_settings:
             mock_settings_inst = MagicMock()
             mock_settings_inst.get_rule_filenames_set.return_value = set()
             mock_settings.return_value = mock_settings_inst
@@ -101,13 +108,13 @@ class TestPromptBuildService:
         mock_smart_ctx.assert_called_once()
         mock_build.assert_called_once()
 
-    @patch("services.prompt_build_service.generate_file_map")
+    @patch("application.services.prompt_build_service.generate_file_map")
     def test_build_file_map(self, mock_map):
         """build_file_map delegate den generate_file_map."""
         service = PromptBuildService()
         mock_map.return_value = "tree output"
 
-        from core.utils.file_utils import TreeItem
+        from infrastructure.filesystem.file_utils import TreeItem
 
         tree = TreeItem(
             label="root", path="/project", is_dir=True, is_loaded=True, children=[]
@@ -122,10 +129,10 @@ class TestPromptBuildService:
         assert result == "tree output"
         mock_map.assert_called_once()
 
-    @patch("services.prompt_build_service.get_git_logs")
-    @patch("services.prompt_build_service.get_git_diffs")
-    @patch("services.prompt_build_service.generate_prompt")
-    @patch("services.prompt_build_service.generate_file_contents_xml")
+    @patch("application.services.prompt_build_service.get_git_logs")
+    @patch("application.services.prompt_build_service.get_git_diffs")
+    @patch("application.services.prompt_build_service.generate_prompt")
+    @patch("application.services.prompt_build_service.generate_file_contents_xml")
     def test_build_prompt_extracts_rules(
         self, mock_gen_xml, mock_gen_prompt, mock_diff, mock_logs, tmp_path
     ):

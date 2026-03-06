@@ -21,7 +21,7 @@ from typing import (
 from pathlib import Path
 
 if TYPE_CHECKING:
-    from core.utils.file_utils import TreeItem
+    from infrastructure.filesystem.file_utils import TreeItem
 
 
 @runtime_checkable

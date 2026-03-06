@@ -22,12 +22,15 @@ Design decisions:
 import logging
 from typing import Any
 
-from services.prompt_build_service import PromptBuildService, QtClipboardService
-from services.cache_registry import CacheRegistry
-from services.tokenization_service import TokenizationService
-from services.service_interfaces import IPromptBuilder, IClipboardService
-from services.interfaces.tokenization_service import ITokenizationService
-from core.ignore_engine import IgnoreEngine
+from application.services.prompt_build_service import (
+    PromptBuildService,
+    QtClipboardService,
+)
+from infrastructure.adapters.cache_registry import CacheRegistry
+from application.services.tokenization_service import TokenizationService
+from application.services.service_interfaces import IPromptBuilder, IClipboardService
+from application.interfaces.tokenization_port import ITokenizationService
+from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,7 @@ class ServiceContainer:
 
         # TokenizationService - khoi tao noi bo thay vi dung global singleton
         # Lay tokenizer_repo tu settings hien tai
-        from services.encoder_registry import get_tokenizer_repo
+        from infrastructure.adapters.encoder_registry import get_tokenizer_repo
 
         _repo = get_tokenizer_repo()
         self._tokenization_service: TokenizationService = TokenizationService(
@@ -65,7 +68,9 @@ class ServiceContainer:
         self.clipboard: IClipboardService = QtClipboardService()
 
         # CacheRegistry - tam thoi giu lai module singleton o day cho den khi Phase 2 migration
-        from services.cache_registry import cache_registry as _module_registry
+        from infrastructure.adapters.cache_registry import (
+            cache_registry as _module_registry,
+        )
 
         self.cache_registry: CacheRegistry = _module_registry
 
@@ -132,8 +137,8 @@ class ServiceContainer:
         Tra ve None neu khong co model duoc cau hinh hoac gap loi.
         """
         try:
-            from services.settings_manager import load_app_settings
-            from config.model_config import get_model_by_id
+            from infrastructure.persistence.settings_manager import load_app_settings
+            from presentation.config.model_config import get_model_by_id
 
             settings = load_app_settings()
             model_id = settings.model_id

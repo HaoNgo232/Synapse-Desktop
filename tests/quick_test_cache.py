@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Test imports
 print("Testing imports...")
 try:
-    from core.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE
+    from domain.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE
 
     print("✓ Imports successful")
 except Exception as e:

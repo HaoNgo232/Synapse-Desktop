@@ -11,10 +11,10 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from core.codemaps.symbol_extractor import extract_symbols
-from core.codemaps.relationship_extractor import extract_relationships
-from core.codemaps.graph_builder import CodeMapBuilder
-from core.codemaps.types import SymbolKind, RelationshipKind
+from domain.codemap.symbol_extractor import extract_symbols
+from domain.codemap.relationship_extractor import extract_relationships
+from domain.codemap.graph_builder import CodeMapBuilder
+from domain.codemap.types import SymbolKind, RelationshipKind
 
 
 # Test data

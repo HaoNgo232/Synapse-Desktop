@@ -24,7 +24,7 @@ def mock_workspace(tmp_path, monkeypatch):
         return [str(tmp_path / "test.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     return tmp_path

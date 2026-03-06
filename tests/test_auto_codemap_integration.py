@@ -47,9 +47,11 @@ class TestAutoCodemapFeature:
                 "mcp_server.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             # Patch at import location (inside build_prompt function)
-            patch("core.dependency_resolver.DependencyResolver") as mock_resolver_cls,
             patch(
-                "services.prompt_build_service.PromptBuildService"
+                "application.services.dependency_resolver.DependencyResolver"
+            ) as mock_resolver_cls,
+            patch(
+                "application.services.prompt_build_service.PromptBuildService"
             ) as mock_service_cls,
         ):
             # Mock workspace resolution
@@ -109,9 +111,11 @@ class TestAutoCodemapFeature:
             patch(
                 "mcp_server.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
-            patch("core.dependency_resolver.DependencyResolver") as mock_resolver_cls,
             patch(
-                "services.prompt_build_service.PromptBuildService"
+                "application.services.dependency_resolver.DependencyResolver"
+            ) as mock_resolver_cls,
+            patch(
+                "application.services.prompt_build_service.PromptBuildService"
             ) as mock_service_cls,
         ):
             mock_ws.resolve = AsyncMock(return_value=workspace)
@@ -160,9 +164,11 @@ class TestAutoCodemapFeature:
             patch(
                 "mcp_server.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
-            patch("core.dependency_resolver.DependencyResolver") as mock_resolver_cls,
             patch(
-                "services.prompt_build_service.PromptBuildService"
+                "application.services.dependency_resolver.DependencyResolver"
+            ) as mock_resolver_cls,
+            patch(
+                "application.services.prompt_build_service.PromptBuildService"
             ) as mock_service_cls,
         ):
             mock_ws.resolve = AsyncMock(return_value=workspace)
@@ -219,9 +225,11 @@ class TestAutoCodemapFeature:
             patch(
                 "mcp_server.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
-            patch("core.dependency_resolver.DependencyResolver") as mock_resolver_cls,
             patch(
-                "services.prompt_build_service.PromptBuildService"
+                "application.services.dependency_resolver.DependencyResolver"
+            ) as mock_resolver_cls,
+            patch(
+                "application.services.prompt_build_service.PromptBuildService"
             ) as mock_service_cls,
         ):
             mock_ws.resolve = AsyncMock(return_value=workspace)

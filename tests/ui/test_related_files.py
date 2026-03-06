@@ -142,7 +142,7 @@ def test_depth_name_unknown(context_view):
     assert "Depth 10" in view._related_menu_btn.text()
 
 
-@patch("views.context.related_files_controller.schedule_background")
+@patch("presentation.views.context.related_files_controller.schedule_background")
 def test_resolve_related_files_no_workspace(mock_schedule, context_view):
     """Kiem tra _resolve_related_files khong lam gi khi khong co workspace (line 74-76)."""
     view = context_view
@@ -151,7 +151,7 @@ def test_resolve_related_files_no_workspace(mock_schedule, context_view):
     mock_schedule.assert_not_called()
 
 
-@patch("views.context.related_files_controller.schedule_background")
+@patch("presentation.views.context.related_files_controller.schedule_background")
 def test_resolve_related_files_no_source_files(mock_schedule, context_view):
     """Kiem tra _resolve_related_files khi khong co supported files (line 92-99)."""
     view = context_view
@@ -169,7 +169,7 @@ def test_resolve_related_files_no_source_files(mock_schedule, context_view):
     mock_schedule.assert_not_called()
 
 
-@patch("views.context.related_files_controller.schedule_background")
+@patch("presentation.views.context.related_files_controller.schedule_background")
 def test_resolve_related_files_dispatches_background(
     mock_schedule, context_view, tmp_path
 ):
@@ -189,7 +189,7 @@ def test_resolve_related_files_dispatches_background(
     mock_schedule.assert_called_once()
 
 
-@patch("views.context.related_files_controller.schedule_background")
+@patch("presentation.views.context.related_files_controller.schedule_background")
 def test_resolve_related_files_no_source_no_old_related(mock_schedule, context_view):
     """Kiem tra resolve voi no source files va no old related files."""
     view = context_view

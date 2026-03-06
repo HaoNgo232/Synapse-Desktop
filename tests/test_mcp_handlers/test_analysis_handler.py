@@ -35,7 +35,7 @@ async def test_find_references_basic(mcp_instance, mock_workspace, monkeypatch):
         return [str(mock_workspace / "test.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     tool = get_tool(mcp_instance, "find_references")
@@ -103,7 +103,7 @@ async def test_find_references_with_extensions(
         return [str(mock_workspace / "test.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     tool = get_tool(mcp_instance, "find_references")
@@ -137,7 +137,7 @@ async def test_find_references_exception_handling(
         return [str(mock_workspace / "test.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     # Mock Path.read_text to raise exception

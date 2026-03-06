@@ -16,25 +16,25 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from core.tokenization.cancellation import (
+from domain.tokenization.cancellation import (
     is_counting_tokens,
     start_token_counting,
     stop_token_counting,
 )
-from core.tokenization.cache import TokenCache
-from core.tokenization.counter import (
+from domain.tokenization.cache import TokenCache
+from domain.tokenization.counter import (
     count_tokens,
     count_tokens_for_file,
     _count_tokens_for_file_no_cache,
     _read_file_mmap,
     MAX_BYTES,
 )
-from core.tokenization.batch import (
+from domain.tokenization.batch import (
     get_worker_count,
     TASKS_PER_WORKER,
     MIN_FILES_FOR_PARALLEL,
 )
-from services.tokenization_service import TokenizationService
+from application.services.tokenization_service import TokenizationService
 
 
 # ============================================================================

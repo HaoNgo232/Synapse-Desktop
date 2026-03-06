@@ -10,7 +10,7 @@ Bao gom:
 
 import pytest
 
-from core.workflows.test_analyzer import (
+from domain.workflow.test_analyzer import (
     AnalysisResult,
     TestPriority,
     find_test_files,
@@ -21,12 +21,12 @@ from core.workflows.test_analyzer import (
     _classify_priority,
     _match_test_to_source,
 )
-from core.workflows.test_builder import (
+from domain.workflow.test_builder import (
     BuildTestResult,
     run_test_builder,
     _calc_overall_pct,
 )
-from core.codemaps.types import Symbol, SymbolKind
+from domain.codemap.types import Symbol, SymbolKind
 
 
 # ===================================================================

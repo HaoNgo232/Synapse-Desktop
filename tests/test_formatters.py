@@ -12,19 +12,19 @@ Test cac module:
 import json
 from pathlib import Path
 
-from core.prompting.types import FileEntry
-from core.prompting.formatters.markdown import format_files_markdown
-from core.prompting.delimiter_utils import calculate_markdown_delimiter
-from core.prompting.formatters.xml import (
+from shared.types.prompt_types import FileEntry
+from domain.prompt.formatters.markdown import format_files_markdown
+from shared.utils.delimiter_utils import calculate_markdown_delimiter
+from domain.prompt.formatters.xml import (
     format_files_xml,
     generate_file_summary_xml,
     generate_smart_summary_xml,
 )
-from core.prompting.formatters.json_fmt import format_files_json
-from core.prompting.formatters.plain import format_files_plain
-from core.prompting.prompt_assembler import assemble_prompt, assemble_smart_prompt
-from core.utils.git_utils import GitDiffResult
-from config.output_format import OutputStyle
+from domain.prompt.formatters.json_fmt import format_files_json
+from domain.prompt.formatters.plain import format_files_plain
+from domain.prompt.assembler import assemble_prompt, assemble_smart_prompt
+from infrastructure.git.git_utils import GitDiffResult
+from presentation.config.output_format import OutputStyle
 
 
 # === Helpers ===

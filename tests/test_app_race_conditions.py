@@ -25,7 +25,7 @@ def test_app_race_conditions():
         print("1. Testing imports...")
         from core.utils.safe_timer import SafeTimer, DebouncedCallback
         from core.utils.state_manager import global_state
-        from services.token_display import TokenDisplayService
+        from infrastructure.adapters.token_display import TokenDisplayService
 
         print("   ✅ All imports successful")
 

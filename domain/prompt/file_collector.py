@@ -13,9 +13,9 @@ Moi formatter goi collect_files() MOT LAN, roi format theo cach rieng.
 from pathlib import Path
 from typing import Optional
 
-from core.prompting.types import FileEntry
-from core.utils.file_utils import is_binary_file
-from core.utils.language_utils import get_language_from_path
+from shared.types.prompt_types import FileEntry
+from infrastructure.filesystem.file_utils import is_binary_file
+from shared.utils.language_utils import get_language_from_path
 
 
 def collect_files(
@@ -42,7 +42,7 @@ def collect_files(
     Returns:
         List[FileEntry] da sort theo path
     """
-    from core.prompting.path_utils import path_for_display
+    from shared.utils.path_utils import path_for_display
 
     sorted_paths = sorted(selected_paths)
     entries: list[FileEntry] = []

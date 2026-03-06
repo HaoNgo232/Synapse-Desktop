@@ -13,12 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from core.workflows.shared.scope_detector import detect_scope_from_git_diff
-from core.workflows.shared.token_budget_manager import TokenBudgetManager
-from core.workflows.shared.handoff_formatter import HandoffContext, format_handoff_xml
-from core.utils.git_utils import get_git_diffs, GitDiffResult
-from services.tokenization_service import TokenizationService
-from services.workspace_index import collect_files_from_disk
+from domain.workflow.shared.scope_detector import detect_scope_from_git_diff
+from domain.workflow.shared.token_budget_manager import TokenBudgetManager
+from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
+from infrastructure.git.git_utils import get_git_diffs, GitDiffResult
+from application.services.tokenization_service import TokenizationService
+from application.services.workspace_index import collect_files_from_disk
 
 logger = logging.getLogger(__name__)
 

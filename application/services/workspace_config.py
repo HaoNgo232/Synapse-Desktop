@@ -15,7 +15,7 @@ Functions:
 
 from typing import Callable
 
-from services.settings_manager import (
+from infrastructure.persistence.settings_manager import (
     load_app_settings,
     update_app_setting,
 )

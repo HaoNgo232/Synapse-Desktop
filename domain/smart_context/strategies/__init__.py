@@ -1,13 +1,13 @@
 # Strategies package cho Smart Context
 # Moi ngon ngu co 1 ParseStrategy rieng
 
-from core.smart_context.strategies.base import BaseParseStrategy
-from core.smart_context.strategies.python import PythonParseStrategy
-from core.smart_context.strategies.typescript import TypeScriptParseStrategy
-from core.smart_context.strategies.go import GoParseStrategy
-from core.smart_context.strategies.css import CssParseStrategy
-from core.smart_context.strategies.vue import VueParseStrategy
-from core.smart_context.strategies.default import DefaultParseStrategy
+from domain.smart_context.strategies.base import BaseParseStrategy
+from domain.smart_context.strategies.python import PythonParseStrategy
+from domain.smart_context.strategies.typescript import TypeScriptParseStrategy
+from domain.smart_context.strategies.go import GoParseStrategy
+from domain.smart_context.strategies.css import CssParseStrategy
+from domain.smart_context.strategies.vue import VueParseStrategy
+from domain.smart_context.strategies.default import DefaultParseStrategy
 
 __all__ = [
     "BaseParseStrategy",

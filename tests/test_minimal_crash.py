@@ -1,5 +1,5 @@
-from views.context_view_qt import ContextViewQt
-from services.service_container import ServiceContainer
+from presentation.views.context.context_view_qt import ContextViewQt
+from application.services.service_container import ServiceContainer
 
 
 def test_minimal_context_view_creation(qtbot):

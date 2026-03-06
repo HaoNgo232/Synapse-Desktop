@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from services.tokenization_service import TokenizationService
+from application.services.tokenization_service import TokenizationService
 from services.interfaces.tokenization_service import ITokenizationService
 
 
@@ -327,7 +327,9 @@ class TestFallbackWarning:
         service = TokenizationService()
 
         with patch.object(service, "_get_or_create_encoder", return_value=None):
-            with patch("services.tokenization_service.log_warning") as mock_warn:
+            with patch(
+                "application.services.tokenization_service.log_warning"
+            ) as mock_warn:
                 service.count_tokens("test1")
                 service.count_tokens("test2")
                 service.count_tokens("test3")
@@ -417,7 +419,8 @@ class TestBatchProcessing:
         """Empty list -> empty dict."""
         service = TokenizationService()
         with patch(
-            "services.tokenization_service.is_counting_tokens", return_value=True
+            "application.services.tokenization_service.is_counting_tokens",
+            return_value=True,
         ):
             result = service.count_tokens_batch_parallel([])
             assert result == {}
@@ -438,7 +441,8 @@ class TestBatchProcessing:
         missing = tmp_path / "missing.py"
 
         with patch(
-            "services.tokenization_service.is_counting_tokens", return_value=True
+            "application.services.tokenization_service.is_counting_tokens",
+            return_value=True,
         ):
             results = service.count_tokens_batch_parallel(
                 [text_file, binary_file, missing], max_workers=2
@@ -460,7 +464,8 @@ class TestBatchProcessing:
             files.append(f)
 
         with patch(
-            "services.tokenization_service.is_counting_tokens", return_value=True
+            "application.services.tokenization_service.is_counting_tokens",
+            return_value=True,
         ):
             results = service.count_tokens_batch_parallel(files, max_workers=2)
 
@@ -482,7 +487,8 @@ class TestBatchProcessing:
 
         # Cancellation flag = False -> return empty
         with patch(
-            "services.tokenization_service.is_counting_tokens", return_value=False
+            "application.services.tokenization_service.is_counting_tokens",
+            return_value=False,
         ):
             result = service.count_tokens_batch_parallel(files)
             assert result == {}

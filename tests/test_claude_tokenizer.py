@@ -13,13 +13,13 @@ Verify:
 
 import pytest
 from unittest.mock import patch
-from config.app_settings import AppSettings
-from services.tokenization_service import TokenizationService
-from core.encoders import (
+from presentation.config.app_settings import AppSettings
+from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.encoders import (
     reset_encoder,
     HAS_TOKENIZERS,
 )
-from services.encoder_registry import get_current_model
+from infrastructure.adapters.encoder_registry import get_current_model
 
 
 class TestClaudeTokenizer:
@@ -32,14 +32,18 @@ class TestClaudeTokenizer:
 
     def test_detect_claude_model(self):
         """Test model detection from settings."""
-        with patch("services.settings_manager.load_app_settings") as mock_load:
+        with patch(
+            "infrastructure.persistence.settings_manager.load_app_settings"
+        ) as mock_load:
             mock_load.return_value = AppSettings(model_id="claude-sonnet-4.5")
             model = get_current_model()
             assert "claude" in model
 
     def test_detect_gpt_model(self):
         """Test GPT model detection."""
-        with patch("services.settings_manager.load_app_settings") as mock_load:
+        with patch(
+            "infrastructure.persistence.settings_manager.load_app_settings"
+        ) as mock_load:
             mock_load.return_value = AppSettings(model_id="gpt-4o")
             model = get_current_model()
             assert "claude" not in model
@@ -47,7 +51,9 @@ class TestClaudeTokenizer:
     @pytest.mark.skipif(not HAS_TOKENIZERS, reason="tokenizers not installed")
     def test_use_tokenizers_for_claude(self):
         """Test that Claude models use tokenizers library."""
-        with patch("services.settings_manager.load_app_settings") as mock_load:
+        with patch(
+            "infrastructure.persistence.settings_manager.load_app_settings"
+        ) as mock_load:
             mock_load.return_value = AppSettings(model_id="claude-sonnet-4.5")
             # Tao service voi Claude tokenizer repo
             service = TokenizationService(tokenizer_repo="Xenova/claude-tokenizer")
@@ -61,7 +67,9 @@ class TestClaudeTokenizer:
 
     def test_use_tiktoken_for_gpt(self):
         """Test that GPT models use tiktoken/rs-bpe."""
-        with patch("services.settings_manager.load_app_settings") as mock_load:
+        with patch(
+            "infrastructure.persistence.settings_manager.load_app_settings"
+        ) as mock_load:
             mock_load.return_value = AppSettings(model_id="gpt-4o")
             service = TokenizationService(tokenizer_repo=None)
 
@@ -89,7 +97,7 @@ class TestClaudeTokenizer:
         text = "Hello, world!"
 
         # Truc tiep test _estimate_tokens (pure function)
-        from core.encoders import _estimate_tokens
+        from infrastructure.adapters.encoders import _estimate_tokens
 
         tokens = _estimate_tokens(text)
 

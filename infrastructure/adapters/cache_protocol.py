@@ -1,12 +1,50 @@
-"""Forward bridge: re-export tu services.cache_protocol
+"""
+ICacheable Protocol - Interface cho tat ca caches trong ung dung.
 
-Cho phep import tu vi tri moi (Clean Architecture) trong khi code goc
-van nam tai vi tri cu. Se duoc thay the bang code thuc khi migrate xong.
+Dinh nghia contract chung de CacheRegistry co the invalidate tat ca caches
+mot cach thong nhat qua mot API duy nhat.
+
+Protocol pattern cho phep cac cache implementations khong can ke thua,
+chi can implement dung methods.
 """
 
-import importlib as _importlib
+from typing import Protocol, runtime_checkable
 
-_mod = _importlib.import_module("services.cache_protocol")
-for _name in dir(_mod):
-    if not _name.startswith("__"):
-        globals()[_name] = getattr(_mod, _name)
+
+@runtime_checkable
+class ICacheable(Protocol):
+    """
+    Protocol cho cac cache co the duoc quan ly boi CacheRegistry.
+
+    Bat ky class nao implement 3 methods nay deu co the duoc register.
+    """
+
+    def invalidate_path(self, path: str) -> None:
+        """
+        Xoa cache entries lien quan den mot file path cu the.
+
+        Goi khi FileWatcher phat hien file thay doi hoac bi xoa.
+
+        Args:
+            path: Duong dan tuyet doi cua file da thay doi
+        """
+        ...
+
+    def invalidate_all(self) -> None:
+        """
+        Xoa toan bo cache.
+
+        Goi khi workspace thay doi hoac user reset.
+        """
+        ...
+
+    def size(self) -> int:
+        """
+        Tra ve so luong entries hien co trong cache.
+
+        Dung cho monitoring va debugging.
+
+        Returns:
+            So entries trong cache
+        """
+        ...

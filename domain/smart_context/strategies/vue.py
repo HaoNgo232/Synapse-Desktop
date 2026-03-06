@@ -4,7 +4,7 @@
 
 from typing import Optional
 
-from core.smart_context.strategies.base import BaseParseStrategy
+from domain.smart_context.strategies.base import BaseParseStrategy
 
 
 class VueParseStrategy(BaseParseStrategy):

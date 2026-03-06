@@ -30,7 +30,7 @@ import tree_sitter_css as tscss  # type: ignore
 import tree_sitter_solidity as tssolidity  # type: ignore
 
 # Import queries
-from core.smart_context.queries import (
+from domain.smart_context.queries import (
     QUERY_PYTHON,
     QUERY_JAVASCRIPT,
     QUERY_TYPESCRIPT,

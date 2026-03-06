@@ -16,15 +16,15 @@ Supported Languages:
 - C++ (.cpp, .hpp, .cc, .cxx)
 """
 
-from core.smart_context.parser import smart_parse
-from core.smart_context.config import (
+from domain.smart_context.parser import smart_parse
+from domain.smart_context.config import (
     get_supported_extensions,
     get_config_by_extension,
     is_supported,
     LanguageConfig,
     LANGUAGE_CONFIGS,
 )
-from core.smart_context.loader import get_language, get_query
+from domain.smart_context.loader import get_language, get_query
 
 __all__ = [
     # Main API

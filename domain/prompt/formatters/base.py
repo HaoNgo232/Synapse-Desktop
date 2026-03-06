@@ -4,7 +4,7 @@ Base Formatter Protocol - Interface chung cho tat ca formatters.
 
 from typing import Protocol, runtime_checkable
 
-from core.prompting.types import FileEntry
+from shared.types.prompt_types import FileEntry
 
 
 @runtime_checkable

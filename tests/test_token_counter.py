@@ -17,10 +17,10 @@ import pytest
 from pathlib import Path
 import os
 
-from services.tokenization_service import TokenizationService
-from core.tokenization.batch import get_worker_count
-from core.encoders import _estimate_tokens
-from core.binary_detection import _looks_binary, _check_magic_numbers
+from application.services.tokenization_service import TokenizationService
+from domain.tokenization.batch import get_worker_count
+from infrastructure.adapters.encoders import _estimate_tokens
+from shared.constants.binary_detection import _looks_binary, _check_magic_numbers
 
 
 class TestCountTokens:

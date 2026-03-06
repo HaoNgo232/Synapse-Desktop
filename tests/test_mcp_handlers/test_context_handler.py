@@ -25,7 +25,7 @@ def mock_workspace(tmp_path, monkeypatch):
         return [str(tmp_path / "test.py"), str(tmp_path / "src" / "main.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     return tmp_path
@@ -245,7 +245,7 @@ async def test_batch_codemap_no_supported_files(mcp_instance, tmp_path, monkeypa
         return [str(tmp_path / "test.txt")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     tool = get_tool(mcp_instance, "batch_codemap")

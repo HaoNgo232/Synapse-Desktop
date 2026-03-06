@@ -10,7 +10,7 @@ Chứa các utility modules:
 """
 
 # Re-export commonly used items for convenience
-from core.utils.file_utils import (
+from infrastructure.filesystem.file_utils import (
     TreeItem,
     scan_directory,
     is_binary_by_extension,
@@ -19,7 +19,7 @@ from core.utils.file_utils import (
     get_selected_file_paths,
 )
 
-from core.utils.git_utils import (
+from infrastructure.git.git_utils import (
     GitDiffResult,
     GitLogResult,
     GitCommit,
@@ -29,7 +29,7 @@ from core.utils.git_utils import (
     get_git_logs,
 )
 
-from core.utils.language_utils import (
+from shared.utils.language_utils import (
     get_language_from_filename,
     get_language_from_path,
     get_llm_compatible_language,

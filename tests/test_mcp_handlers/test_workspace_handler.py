@@ -25,7 +25,7 @@ def mock_workspace(tmp_path, monkeypatch):
         return [str(tmp_path / "test.py"), str(tmp_path / "src" / "main.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     return tmp_path
@@ -61,7 +61,9 @@ async def test_start_session_error_handling(mcp_instance, monkeypatch):
     def mock_error(*args, **kwargs):
         raise Exception("Test error")
 
-    monkeypatch.setattr("services.workspace_index.collect_files_from_disk", mock_error)
+    monkeypatch.setattr(
+        "application.services.workspace_index.collect_files_from_disk", mock_error
+    )
 
     tool = get_tool(mcp_instance, "start_session")
     result = await tool(workspace_path="/tmp")

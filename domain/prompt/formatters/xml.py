@@ -11,8 +11,8 @@ Import noi dung van ban tu system_prompts.py de dam bao nhat quan.
 
 import html
 
-from core.prompting.types import FileEntry
-from core.prompting.formatters.system_prompts import (
+from shared.types.prompt_types import FileEntry
+from domain.prompt.formatters.system_prompts import (
     AGENT_ROLE_INSTRUCTION,
     GENERATION_HEADER,
     SUMMARY_PURPOSE,

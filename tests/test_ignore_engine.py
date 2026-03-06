@@ -11,7 +11,7 @@ Kiem tra cac truong hop:
 
 from pathlib import Path
 
-from core.ignore_engine import IgnoreEngine
+from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
 
 class TestBuildIgnorePatterns:

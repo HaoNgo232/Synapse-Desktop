@@ -15,8 +15,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE  # noqa: E402
-from core.prompt_generator import generate_smart_context  # noqa: E402
+from domain.smart_context.parser import smart_parse, _RELATIONSHIPS_CACHE  # noqa: E402
+from domain.prompt.generator import generate_smart_context  # noqa: E402
 
 
 # Project path

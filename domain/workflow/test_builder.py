@@ -15,16 +15,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from core.workflows.shared.scope_detector import detect_scope_from_file_paths
-from core.workflows.shared.token_budget_manager import TokenBudgetManager
-from core.workflows.shared.handoff_formatter import (
+from domain.workflow.shared.scope_detector import detect_scope_from_file_paths
+from domain.workflow.shared.token_budget_manager import TokenBudgetManager
+from domain.workflow.shared.handoff_formatter import (
     HandoffContext,
     format_handoff_xml,
     format_relationships_section,
 )
-from core.prompt_generator import generate_file_map
-from core.utils.file_utils import scan_directory
-from core.workflows.test_analyzer import (
+from domain.prompt.generator import generate_file_map
+from infrastructure.filesystem.file_utils import scan_directory
+from domain.workflow.test_analyzer import (
     AnalysisResult,
     analyze_test_coverage,
     detect_test_framework,
@@ -32,7 +32,7 @@ from core.workflows.test_analyzer import (
     TestPriority,
     _classify_priority,
 )
-from services.tokenization_service import TokenizationService
+from application.services.tokenization_service import TokenizationService
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ def run_test_builder(
     framework = test_framework or detect_test_framework(ws)
 
     # Buoc 4: Build file map
-    from core.ignore_engine import IgnoreEngine
+    from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
     ignore_engine = IgnoreEngine()
     tree = scan_directory(ws, ignore_engine)

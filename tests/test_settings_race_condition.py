@@ -6,7 +6,7 @@ Verify rằng concurrent save_settings() calls không làm mất data.
 
 import threading
 import time
-from services.settings_manager import save_settings, load_settings
+from infrastructure.persistence.settings_manager import save_settings, load_settings
 
 
 def test_concurrent_save_settings():

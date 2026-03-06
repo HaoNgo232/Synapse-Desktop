@@ -32,7 +32,7 @@ class TestSelectionManagerEncapsulation:
 
     def test_selected_paths_returns_copy_not_reference(self):
         """Mutate returned set KHONG anh huong internal state."""
-        from services.selection_manager import SelectionManager
+        from domain.selection.manager import SelectionManager
 
         mgr = SelectionManager()
         mgr.add("/test.py")
@@ -49,7 +49,7 @@ class TestSelectionManagerEncapsulation:
 
     def test_last_resolved_files_returns_copy(self):
         """Resolved files property cung tra ve copy."""
-        from services.selection_manager import SelectionManager
+        from domain.selection.manager import SelectionManager
 
         mgr = SelectionManager()
         mgr.set_resolved_files({"/a.py", "/b.py"}, generation=1)
@@ -62,7 +62,7 @@ class TestSelectionManagerEncapsulation:
 
     def test_mutations_go_through_manager_methods(self):
         """Tat ca mutations di qua add/remove/clear, khong direct access."""
-        from services.selection_manager import SelectionManager
+        from domain.selection.manager import SelectionManager
 
         mgr = SelectionManager()
 
@@ -87,7 +87,7 @@ class TestSelectionManagerEncapsulation:
 
     def test_generation_increments_on_bump(self):
         """bump_generation() tang counter va invalidate resolved files."""
-        from services.selection_manager import SelectionManager
+        from domain.selection.manager import SelectionManager
 
         mgr = SelectionManager()
         gen0 = mgr.selection_generation
@@ -104,7 +104,7 @@ class TestSelectionManagerEncapsulation:
 
     def test_reset_clears_all_state(self):
         """reset() xoa tat ca state nhung BUMP generation (monotonic invariant)."""
-        from services.selection_manager import SelectionManager
+        from domain.selection.manager import SelectionManager
 
         mgr = SelectionManager()
         mgr.add("/a.py")
@@ -131,16 +131,18 @@ class TestFileTreeModelDelegation:
     @pytest.fixture
     def mock_qt(self):
         """Mock PySide6 de test khong can Qt runtime."""
-        with patch("components.file_tree_model.QAbstractItemModel.__init__"):
+        with patch(
+            "presentation.components.file_tree.file_tree_model.QAbstractItemModel.__init__"
+        ):
             yield
 
     def test_file_tree_model_selected_paths_property_returns_copy(self, mock_qt):
         """FileTreeModel._selected_paths tra ve copy tu SelectionManager."""
-        from components.file_tree_model import FileTreeModel
+        from presentation.components.file_tree.file_tree_model import FileTreeModel
 
         model = FileTreeModel.__new__(FileTreeModel)
         # Init manually
-        from services.selection_manager import SelectionManager
+        from domain.selection.manager import SelectionManager
 
         model._selection_mgr = SelectionManager()
         model._selection_mgr.add("/test.py")
@@ -175,7 +177,7 @@ class TestClipboardServiceAPI:
 
     def test_qt_clipboard_service_returns_tuple(self):
         """QtClipboardService.copy_to_clipboard tra ve tuple[bool, str]."""
-        from services.prompt_build_service import QtClipboardService
+        from application.services.prompt_build_service import QtClipboardService
 
         service = QtClipboardService()
 
@@ -196,7 +198,7 @@ class TestClipboardServiceAPI:
 
     def test_qt_clipboard_service_returns_error_on_failure(self):
         """QtClipboardService tra ve (False, error_msg) khi that bai."""
-        from services.prompt_build_service import QtClipboardService
+        from application.services.prompt_build_service import QtClipboardService
 
         service = QtClipboardService()
 
@@ -235,17 +237,21 @@ class TestSmartContextParameter:
 
     def test_build_smart_passes_include_relationships(self):
         """PromptBuildService._build_smart phai pass include_relationships=True."""
-        from services.prompt_build_service import PromptBuildService
+        from application.services.prompt_build_service import PromptBuildService
 
         service = PromptBuildService()
         workspace = Path("/tmp/test_workspace")
 
-        with patch("services.prompt_build_service.generate_smart_context") as mock_gen:
+        with patch(
+            "application.services.prompt_build_service.generate_smart_context"
+        ) as mock_gen:
             mock_gen.return_value = "mock smart content"
-            with patch("services.prompt_build_service.generate_file_map") as mock_map:
+            with patch(
+                "application.services.prompt_build_service.generate_file_map"
+            ) as mock_map:
                 mock_map.return_value = ""
                 with patch(
-                    "services.prompt_build_service.build_smart_prompt"
+                    "application.services.prompt_build_service.build_smart_prompt"
                 ) as mock_build:
                     mock_build.return_value = "final prompt"
 
@@ -276,7 +282,7 @@ class TestDependencyInjection:
 
     def test_context_view_accepts_injected_services(self):
         """ContextViewQt nhan prompt_builder va clipboard_service qua constructor."""
-        from views.context_view_qt import ContextViewQt
+        from presentation.views.context.context_view_qt import ContextViewQt
 
         mock_builder = Mock()
         mock_clipboard = Mock()
@@ -293,9 +299,14 @@ class TestDependencyInjection:
         # Fix: Su dung patch duy nhat QWidget.__init__ nhung dam bao super() van chay duoc
         # phan nao do hoac don gian la tranh loi call base class.
 
-        with patch("views.context_view_qt.QWidget.__init__", return_value=None):
-            with patch("views.context_view_qt.UIBuilderMixin._build_ui"):
-                with patch("views.context_view_qt.FileWatcher"):
+        with patch(
+            "presentation.views.context.context_view_qt.QWidget.__init__",
+            return_value=None,
+        ):
+            with patch(
+                "presentation.views.context.context_view_qt.UIBuilderMixin._build_ui"
+            ):
+                with patch("presentation.views.context.context_view_qt.FileWatcher"):
                     with patch("PySide6.QtGui.QShortcut"):
                         # Goi __init__ thuc su nhung QWidget.__init__ da bi neutralised
                         view.__init__(
@@ -309,15 +320,20 @@ class TestDependencyInjection:
 
     def test_context_view_creates_defaults_when_none(self):
         """ContextViewQt tao default services khi khong truyen vao."""
-        from views.context_view_qt import ContextViewQt
-        from services.prompt_build_service import (
+        from presentation.views.context.context_view_qt import ContextViewQt
+        from application.services.prompt_build_service import (
             PromptBuildService,
             QtClipboardService,
         )
 
-        with patch("views.context_view_qt.QWidget.__init__", return_value=None):
-            with patch("views.context_view_qt.UIBuilderMixin._build_ui"):
-                with patch("views.context_view_qt.FileWatcher"):
+        with patch(
+            "presentation.views.context.context_view_qt.QWidget.__init__",
+            return_value=None,
+        ):
+            with patch(
+                "presentation.views.context.context_view_qt.UIBuilderMixin._build_ui"
+            ):
+                with patch("presentation.views.context.context_view_qt.FileWatcher"):
                     with patch("PySide6.QtGui.QShortcut"):
                         view = ContextViewQt(
                             get_workspace=lambda: Path("/test"),
@@ -360,13 +376,18 @@ class TestPerformanceRegression:
 
     @pytest.fixture
     def mock_qt(self):
-        with patch("components.file_tree_model.QAbstractItemModel.__init__"):
+        with patch(
+            "presentation.components.file_tree.file_tree_model.QAbstractItemModel.__init__"
+        ):
             yield
 
     def test_selection_performance_with_large_tree(self, mock_qt):
         """Test FileTreeModel.data() check state performance voi 10,000 files."""
-        from components.file_tree_model import FileTreeModel, TreeNode
-        from services.selection_manager import SelectionManager
+        from presentation.components.file_tree.file_tree_model import (
+            FileTreeModel,
+            TreeNode,
+        )
+        from domain.selection.manager import SelectionManager
         import time
         from PySide6.QtCore import Qt
 

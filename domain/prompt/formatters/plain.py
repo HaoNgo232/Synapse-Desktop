@@ -4,7 +4,7 @@ Plain Text Formatter - Render file contents thanh plain text.
 Extracted tu: generate_file_contents_plain() trong core/prompt_generator.py
 """
 
-from core.prompting.types import FileEntry
+from shared.types.prompt_types import FileEntry
 
 
 def format_files_plain(entries: list[FileEntry]) -> str:

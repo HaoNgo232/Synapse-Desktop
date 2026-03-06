@@ -2,17 +2,23 @@ from unittest.mock import patch
 from pathlib import Path
 
 # Mock fonts and theme before importing MainWindow
-with patch("core.theme.ThemeFonts.load_fonts"):
-    from main_window import SynapseMainWindow
+with patch("presentation.config.theme.ThemeFonts.load_fonts"):
+    from presentation.main_window import SynapseMainWindow
 
 
 def test_main_window_initialization(qtbot):
     """Kiểm tra MainWindow khởi tạo thành công và chứa các tabs cơ bản."""
     with (
-        patch("main_window.get_memory_monitor"),
-        patch("components.toast_qt.init_toast_manager"),
-        patch("services.session_state.load_session_state", return_value=None),
-        patch("services.recent_folders.load_recent_folders", return_value=[]),
+        patch("presentation.main_window.get_memory_monitor"),
+        patch("presentation.components.toast.toast_qt.init_toast_manager"),
+        patch(
+            "infrastructure.persistence.session_state.load_session_state",
+            return_value=None,
+        ),
+        patch(
+            "infrastructure.persistence.recent_folders.load_recent_folders",
+            return_value=[],
+        ),
     ):
         window = SynapseMainWindow()
         qtbot.addWidget(window)
@@ -31,17 +37,24 @@ def test_main_window_initialization(qtbot):
 def test_main_window_open_folder(qtbot, tmp_path):
     """Kiểm tra chức năng mô phỏng mở folder qua QFileDialog."""
     with (
-        patch("main_window.get_memory_monitor"),
-        patch("components.toast_qt.init_toast_manager"),
-        patch("services.session_state.load_session_state", return_value=None),
-        patch("services.recent_folders.load_recent_folders", return_value=[]),
+        patch("presentation.main_window.get_memory_monitor"),
+        patch("presentation.components.toast.toast_qt.init_toast_manager"),
+        patch(
+            "infrastructure.persistence.session_state.load_session_state",
+            return_value=None,
+        ),
+        patch(
+            "infrastructure.persistence.recent_folders.load_recent_folders",
+            return_value=[],
+        ),
     ):
         window = SynapseMainWindow()
         qtbot.addWidget(window)
 
         fake_dir = str(tmp_path)
         with patch(
-            "main_window.QFileDialog.getExistingDirectory", return_value=fake_dir
+            "presentation.main_window.QFileDialog.getExistingDirectory",
+            return_value=fake_dir,
         ):
             # Gọi hàm mở folder (bật từ nút Open Folder)
             window._open_folder_dialog()

@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from PySide6.QtWidgets import QMessageBox
 
-from views.settings_view_qt import SettingsViewQt
+from presentation.views.settings.settings_view_qt import SettingsViewQt
 
 
 @pytest.fixture
@@ -28,9 +28,12 @@ def mock_settings():
 def settings_view(qtbot, mock_settings):
     """Tao SettingsViewQt voi mock settings."""
     with (
-        patch("views.settings_view_qt.load_settings", return_value=mock_settings),
         patch(
-            "views.settings_view_qt.get_excluded_patterns",
+            "presentation.views.settings.settings_view_qt.load_settings",
+            return_value=mock_settings,
+        ),
+        patch(
+            "presentation.views.settings.settings_view_qt.get_excluded_patterns",
             return_value=["node_modules", ".git"],
         ),
     ):
@@ -61,8 +64,14 @@ def test_settings_view_initial_load_invalid_rules(qtbot):
         "use_relative_paths": True,
     }
     with (
-        patch("views.settings_view_qt.load_settings", return_value=settings),
-        patch("views.settings_view_qt.get_excluded_patterns", return_value=[]),
+        patch(
+            "presentation.views.settings.settings_view_qt.load_settings",
+            return_value=settings,
+        ),
+        patch(
+            "presentation.views.settings.settings_view_qt.get_excluded_patterns",
+            return_value=[],
+        ),
     ):
         view = SettingsViewQt()
         qtbot.addWidget(view)
@@ -74,7 +83,9 @@ def test_settings_view_toggle_change(settings_view):
     view = settings_view
     view._gitignore_toggle.setChecked(False)
 
-    with patch("views.settings_view_qt.save_settings", return_value=True) as mock_save:
+    with patch(
+        "presentation.views.settings.settings_view_qt.save_settings", return_value=True
+    ) as mock_save:
         view._save_settings()
         mock_save.assert_called_once()
         saved_data = mock_save.call_args[0][0]
@@ -85,12 +96,15 @@ def test_settings_view_reset_defaults(settings_view):
     """Kiem tra Reset All to Defaults ap dung dung gia tri mac dinh."""
     view = settings_view
     with (
-        patch("views.settings_view_qt.save_settings", return_value=True),
         patch(
-            "views.settings_view_qt.QMessageBox.warning",
+            "presentation.views.settings.settings_view_qt.save_settings",
+            return_value=True,
+        ),
+        patch(
+            "presentation.views.settings.settings_view_qt.QMessageBox.warning",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.settings_view_qt.toast_success"),
+        patch("presentation.views.settings.settings_view_qt.toast_success"),
     ):
         view._reset_settings()
         assert view._gitignore_toggle.isChecked() is True
@@ -101,7 +115,7 @@ def test_settings_view_reset_cancelled(settings_view):
     """Kiem tra Reset bi cancel (line 706-707)."""
     view = settings_view
     with patch(
-        "views.settings_view_qt.QMessageBox.warning",
+        "presentation.views.settings.settings_view_qt.QMessageBox.warning",
         return_value=QMessageBox.StandardButton.Cancel,
     ):
         view._security_toggle.setChecked(False)
@@ -115,7 +129,9 @@ def test_save_settings_success(settings_view):
     view = settings_view
     view.on_settings_changed = MagicMock()
 
-    with patch("views.settings_view_qt.save_settings", return_value=True) as mock_save:
+    with patch(
+        "presentation.views.settings.settings_view_qt.save_settings", return_value=True
+    ) as mock_save:
         view._save_settings()
         mock_save.assert_called_once()
         view.on_settings_changed.assert_called_once()
@@ -126,8 +142,11 @@ def test_save_settings_failure(settings_view):
     """Kiem tra _save_settings that bai (line 682-687)."""
     view = settings_view
     with (
-        patch("views.settings_view_qt.save_settings", return_value=False),
-        patch("views.settings_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.settings.settings_view_qt.save_settings",
+            return_value=False,
+        ),
+        patch("presentation.views.settings.settings_view_qt.toast_error") as mock_error,
     ):
         view._save_settings()
         mock_error.assert_called_once_with("Error saving settings")
@@ -152,7 +171,8 @@ def test_reload_excluded_from_settings(settings_view):
     """Kiem tra _reload_excluded_from_settings (line 622-625)."""
     view = settings_view
     with patch(
-        "views.settings_view_qt.get_excluded_patterns", return_value=["new_pattern"]
+        "presentation.views.settings.settings_view_qt.get_excluded_patterns",
+        return_value=["new_pattern"],
     ):
         view._reload_excluded_from_settings()
     assert view._tag_chips.get_patterns() == ["new_pattern"]
@@ -170,10 +190,13 @@ def test_load_preset(settings_view):
     view = settings_view
     # Get first available preset name
     with (
-        patch("views.settings_view_qt.save_settings", return_value=True),
-        patch("views.settings_view_qt.toast_success"),
+        patch(
+            "presentation.views.settings.settings_view_qt.save_settings",
+            return_value=True,
+        ),
+        patch("presentation.views.settings.settings_view_qt.toast_success"),
     ):
-        from views.settings_view_qt import PRESET_PROFILES
+        from presentation.views.settings.settings_view_qt import PRESET_PROFILES
 
         if PRESET_PROFILES:
             first_preset = next(iter(PRESET_PROFILES))
@@ -199,11 +222,16 @@ def test_clear_session_confirmed(settings_view):
     view = settings_view
     with (
         patch(
-            "views.settings_view_qt.QMessageBox.question",
+            "presentation.views.settings.settings_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.settings_view_qt.clear_session_state", return_value=True),
-        patch("views.settings_view_qt.toast_success") as mock_toast,
+        patch(
+            "presentation.views.settings.settings_view_qt.clear_session_state",
+            return_value=True,
+        ),
+        patch(
+            "presentation.views.settings.settings_view_qt.toast_success"
+        ) as mock_toast,
     ):
         view._clear_session()
         mock_toast.assert_called_with("Session cleared. Restart to see effect.")
@@ -214,11 +242,14 @@ def test_clear_session_failed(settings_view):
     view = settings_view
     with (
         patch(
-            "views.settings_view_qt.QMessageBox.question",
+            "presentation.views.settings.settings_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.settings_view_qt.clear_session_state", return_value=False),
-        patch("views.settings_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.settings.settings_view_qt.clear_session_state",
+            return_value=False,
+        ),
+        patch("presentation.views.settings.settings_view_qt.toast_error") as mock_error,
     ):
         view._clear_session()
         mock_error.assert_called_with("Failed to clear session")
@@ -229,10 +260,12 @@ def test_clear_session_cancelled(settings_view):
     view = settings_view
     with (
         patch(
-            "views.settings_view_qt.QMessageBox.question",
+            "presentation.views.settings.settings_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Cancel,
         ),
-        patch("views.settings_view_qt.clear_session_state") as mock_clear,
+        patch(
+            "presentation.views.settings.settings_view_qt.clear_session_state"
+        ) as mock_clear,
     ):
         view._clear_session()
         mock_clear.assert_not_called()
@@ -243,9 +276,12 @@ def test_export_settings(settings_view):
     view = settings_view
     with (
         patch(
-            "views.settings_view_qt.copy_to_clipboard", return_value=(True, None)
+            "presentation.views.settings.settings_view_qt.copy_to_clipboard",
+            return_value=(True, None),
         ) as mock_copy,
-        patch("views.settings_view_qt.toast_success") as mock_toast,
+        patch(
+            "presentation.views.settings.settings_view_qt.toast_success"
+        ) as mock_toast,
     ):
         view._export_settings()
         mock_copy.assert_called_once()
@@ -260,8 +296,11 @@ def test_export_settings_failed(settings_view):
     """Kiem tra _export_settings khi clipboard fail."""
     view = settings_view
     with (
-        patch("views.settings_view_qt.copy_to_clipboard", return_value=(False, None)),
-        patch("views.settings_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.settings.settings_view_qt.copy_to_clipboard",
+            return_value=(False, None),
+        ),
+        patch("presentation.views.settings.settings_view_qt.toast_error") as mock_error,
     ):
         view._export_settings()
         mock_error.assert_called_with("Export failed")
@@ -282,15 +321,20 @@ def test_import_settings(settings_view):
     )
     with (
         patch(
-            "views.settings_view_qt.get_clipboard_text",
+            "presentation.views.settings.settings_view_qt.get_clipboard_text",
             return_value=(True, import_data),
         ),
         patch(
-            "views.settings_view_qt.QMessageBox.question",
+            "presentation.views.settings.settings_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.settings_view_qt.save_settings", return_value=True),
-        patch("views.settings_view_qt.toast_success") as mock_toast,
+        patch(
+            "presentation.views.settings.settings_view_qt.save_settings",
+            return_value=True,
+        ),
+        patch(
+            "presentation.views.settings.settings_view_qt.toast_success"
+        ) as mock_toast,
     ):
         view._import_settings()
         assert view._gitignore_toggle.isChecked() is False
@@ -302,8 +346,11 @@ def test_import_settings_empty_clipboard(settings_view):
     """Kiem tra _import_settings khi clipboard empty (line 798-800)."""
     view = settings_view
     with (
-        patch("views.settings_view_qt.get_clipboard_text", return_value=(False, "")),
-        patch("views.settings_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.settings.settings_view_qt.get_clipboard_text",
+            return_value=(False, ""),
+        ),
+        patch("presentation.views.settings.settings_view_qt.toast_error") as mock_error,
     ):
         view._import_settings()
         mock_error.assert_called_with("Clipboard is empty")
@@ -314,9 +361,10 @@ def test_import_settings_invalid_json(settings_view):
     view = settings_view
     with (
         patch(
-            "views.settings_view_qt.get_clipboard_text", return_value=(True, "not json")
+            "presentation.views.settings.settings_view_qt.get_clipboard_text",
+            return_value=(True, "not json"),
         ),
-        patch("views.settings_view_qt.toast_error") as mock_error,
+        patch("presentation.views.settings.settings_view_qt.toast_error") as mock_error,
     ):
         view._import_settings()
         mock_error.assert_called_with("Invalid JSON in clipboard")
@@ -327,10 +375,10 @@ def test_import_settings_missing_key(settings_view):
     view = settings_view
     with (
         patch(
-            "views.settings_view_qt.get_clipboard_text",
+            "presentation.views.settings.settings_view_qt.get_clipboard_text",
             return_value=(True, '{"some_key": "value"}'),
         ),
-        patch("views.settings_view_qt.toast_error") as mock_error,
+        patch("presentation.views.settings.settings_view_qt.toast_error") as mock_error,
     ):
         view._import_settings()
         mock_error.assert_called_with("Invalid settings format")
@@ -342,14 +390,16 @@ def test_import_settings_cancelled(settings_view):
     import_data = json.dumps({"excluded_folders": "dist"})
     with (
         patch(
-            "views.settings_view_qt.get_clipboard_text",
+            "presentation.views.settings.settings_view_qt.get_clipboard_text",
             return_value=(True, import_data),
         ),
         patch(
-            "views.settings_view_qt.QMessageBox.question",
+            "presentation.views.settings.settings_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Cancel,
         ),
-        patch("views.settings_view_qt.save_settings") as mock_save,
+        patch(
+            "presentation.views.settings.settings_view_qt.save_settings"
+        ) as mock_save,
     ):
         view._import_settings()
         mock_save.assert_not_called()
@@ -366,15 +416,18 @@ def test_import_settings_non_list_rules(settings_view):
     )
     with (
         patch(
-            "views.settings_view_qt.get_clipboard_text",
+            "presentation.views.settings.settings_view_qt.get_clipboard_text",
             return_value=(True, import_data),
         ),
         patch(
-            "views.settings_view_qt.QMessageBox.question",
+            "presentation.views.settings.settings_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.settings_view_qt.save_settings", return_value=True),
-        patch("views.settings_view_qt.toast_success"),
+        patch(
+            "presentation.views.settings.settings_view_qt.save_settings",
+            return_value=True,
+        ),
+        patch("presentation.views.settings.settings_view_qt.toast_success"),
     ):
         view._import_settings()
         # _rule_chips removed - no longer testing it
@@ -391,7 +444,9 @@ def test_has_unsaved_changes(settings_view):
 def test_show_status_error(settings_view):
     """Kiem tra _show_status voi is_error (line 853-861)."""
     view = settings_view
-    with patch("views.settings_view_qt.toast_error") as mock_error:
+    with patch(
+        "presentation.views.settings.settings_view_qt.toast_error"
+    ) as mock_error:
         view._show_status("Error!", is_error=True)
         mock_error.assert_called_with("Error!")
 
@@ -399,7 +454,9 @@ def test_show_status_error(settings_view):
 def test_show_status_empty(settings_view):
     """Kiem tra _show_status voi empty (line 855-856)."""
     view = settings_view
-    with patch("views.settings_view_qt.toast_success") as mock_success:
+    with patch(
+        "presentation.views.settings.settings_view_qt.toast_success"
+    ) as mock_success:
         view._show_status("")
         mock_success.assert_not_called()
 

@@ -10,8 +10,8 @@ Verify rằng khi mở app:
 from unittest.mock import patch, MagicMock
 
 
-from services.session_state import SessionState, save_session_state
-from services.recent_folders import add_recent_folder
+from infrastructure.persistence.session_state import SessionState, save_session_state
+from infrastructure.persistence.recent_folders import add_recent_folder
 
 
 class TestCleanSession:
@@ -38,7 +38,9 @@ class TestCleanSession:
         save_session_state(session)
 
         # Mock main window restore
-        with patch("services.recent_folders.load_recent_folders") as mock_recent:
+        with patch(
+            "infrastructure.persistence.recent_folders.load_recent_folders"
+        ) as mock_recent:
             mock_recent.return_value = [str(workspace1)]
 
             # Verify: Workspace được restore từ recent (workspace1), không phải session (workspace2)
@@ -60,7 +62,7 @@ class TestCleanSession:
         save_session_state(session)
 
         # Verify: Instructions text được giữ lại
-        from services.session_state import load_session_state
+        from infrastructure.persistence.session_state import load_session_state
 
         loaded = load_session_state()
         assert loaded is not None
@@ -103,7 +105,7 @@ class TestCleanSession:
         save_session_state(session)
 
         # Verify: Window size được restore
-        from services.session_state import load_session_state
+        from infrastructure.persistence.session_state import load_session_state
 
         loaded = load_session_state()
         assert loaded is not None
@@ -123,7 +125,7 @@ class TestCleanSession:
         save_session_state(session)
 
         # Verify: Active tab trong session là 2
-        from services.session_state import load_session_state
+        from infrastructure.persistence.session_state import load_session_state
 
         loaded = load_session_state()
         assert loaded is not None

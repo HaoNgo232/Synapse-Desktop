@@ -9,7 +9,7 @@ Verify:
 5. Thread-safe reads
 """
 
-from services.selection_manager import SelectionManager
+from domain.selection.manager import SelectionManager
 
 
 class TestSelectionBasic:

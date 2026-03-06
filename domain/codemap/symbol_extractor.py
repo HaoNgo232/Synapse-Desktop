@@ -9,9 +9,9 @@ import os
 from typing import Optional
 from tree_sitter import Parser, Node  # type: ignore
 
-from core.codemaps.types import Symbol, SymbolKind
-from core.smart_context.config import get_config_by_extension
-from core.smart_context.loader import get_language
+from domain.codemap.types import Symbol, SymbolKind
+from domain.smart_context.config import get_config_by_extension
+from domain.smart_context.loader import get_language
 
 
 def extract_symbols(file_path: str, content: str) -> list[Symbol]:

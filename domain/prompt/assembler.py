@@ -17,15 +17,15 @@ Tat ca format deu bao gom:
 import json
 from typing import Optional
 
-from core.utils.git_utils import GitDiffResult, GitLogResult
+from infrastructure.git.git_utils import GitDiffResult, GitLogResult
 
-from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-from config.output_format import OutputStyle
-from core.prompting.formatters.xml import (
+from domain.prompt.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+from presentation.config.output_format import OutputStyle
+from domain.prompt.formatters.xml import (
     generate_file_summary_xml,
     generate_smart_summary_xml,
 )
-from core.prompting.formatters.system_prompts import (
+from domain.prompt.formatters.system_prompts import (
     AGENT_ROLE_INSTRUCTION,
     GENERATION_HEADER,
     SUMMARY_PURPOSE,

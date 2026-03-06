@@ -64,7 +64,7 @@ def test_begin_copy_operation(context_view):
 def test_begin_copy_operation_clears_toast(context_view):
     """Kiem tra _begin_copy_operation dismisses toasts (line 342-349)."""
     view = context_view
-    with patch("components.toast_qt.ToastManager") as mock_mgr:
+    with patch("presentation.components.toast.toast_qt.ToastManager") as mock_mgr:
         mock_instance = MagicMock()
         mock_mgr.instance.return_value = mock_instance
         view._copy_controller._begin_copy_operation()
@@ -137,7 +137,9 @@ def test_set_copy_buttons_enabled(context_view):
 def test_save_instruction_to_history(context_view):
     """Kiem tra _save_instruction_to_history (line 428-437)."""
     view = context_view
-    with patch("services.settings_manager.add_instruction_history") as mock_add:
+    with patch(
+        "infrastructure.persistence.settings_manager.add_instruction_history"
+    ) as mock_add:
         view._copy_controller._save_instruction_to_history("Test instruction")
         mock_add.assert_called_once_with("Test instruction")
 
@@ -225,11 +227,11 @@ def test_copy_context_background_no_security(context_view, tmp_path):
     with (
         patch.object(view._copy_controller, "_try_cache_hit", return_value=None),
         patch(
-            "views.context.copy_action_controller.load_app_settings",
+            "presentation.views.context.copy_action_controller.load_app_settings",
             return_value=mock_settings,
         ),
         patch.object(view._copy_controller, "_do_copy_context") as mock_do,
-        patch("services.settings_manager.add_instruction_history"),
+        patch("infrastructure.persistence.settings_manager.add_instruction_history"),
     ):
         view._copy_controller._copy_context()
         mock_do.assert_called_once()
@@ -249,13 +251,13 @@ def test_copy_context_security_enabled(context_view, tmp_path):
     with (
         patch.object(view._copy_controller, "_try_cache_hit", return_value=None),
         patch(
-            "views.context.copy_action_controller.load_app_settings",
+            "presentation.views.context.copy_action_controller.load_app_settings",
             return_value=mock_settings,
         ),
         patch.object(
             view._copy_controller, "_run_security_check_then_copy"
         ) as mock_sec,
-        patch("services.settings_manager.add_instruction_history"),
+        patch("infrastructure.persistence.settings_manager.add_instruction_history"),
     ):
         view._copy_controller._copy_context()
         mock_sec.assert_called_once()
@@ -301,7 +303,9 @@ def test_copy_smart_cache_hit(context_view, tmp_path):
         )
         with (
             patch.object(view, "show_copy_breakdown"),
-            patch("services.settings_manager.add_instruction_history"),
+            patch(
+                "infrastructure.persistence.settings_manager.add_instruction_history"
+            ),
         ):
             view._copy_controller._copy_smart_context()
             view._clipboard_service.copy_to_clipboard.assert_called_with("smart prompt")
@@ -317,9 +321,9 @@ def test_copy_smart_background(context_view, tmp_path):
     with (
         patch.object(view._copy_controller, "_try_cache_hit", return_value=None),
         patch.object(view._copy_controller, "_run_copy_in_background") as mock_run,
-        patch("services.settings_manager.add_instruction_history"),
+        patch("infrastructure.persistence.settings_manager.add_instruction_history"),
         patch(
-            "views.context.copy_action_controller.load_app_settings",
+            "presentation.views.context.copy_action_controller.load_app_settings",
             return_value=MagicMock(include_git_changes=False),
         ),
     ):
@@ -355,7 +359,9 @@ def test_copy_tree_map_cache_hit(context_view, tmp_path):
         )
         with (
             patch.object(view, "show_copy_breakdown"),
-            patch("services.settings_manager.add_instruction_history"),
+            patch(
+                "infrastructure.persistence.settings_manager.add_instruction_history"
+            ),
         ):
             view._copy_controller._copy_tree_map_only()
 
@@ -368,7 +374,7 @@ def test_copy_tree_map_background(context_view, tmp_path):
     with (
         patch.object(view._copy_controller, "_try_cache_hit", return_value=None),
         patch.object(view._copy_controller, "_run_copy_in_background") as mock_run,
-        patch("services.settings_manager.add_instruction_history"),
+        patch("infrastructure.persistence.settings_manager.add_instruction_history"),
     ):
         view._copy_controller._copy_tree_map_only()
         mock_run.assert_called_once()
@@ -381,7 +387,7 @@ def test_copy_tree_map_background(context_view, tmp_path):
 
 def test_collect_all_tree_paths(context_view):
     """Kiem tra _collect_all_tree_paths (line 913-923)."""
-    from core.utils.file_utils import TreeItem
+    from infrastructure.filesystem.file_utils import TreeItem
 
     view = context_view
     root = TreeItem(label="root", path="/root")
@@ -398,7 +404,9 @@ def test_collect_all_tree_paths(context_view):
 def test_scan_full_tree(context_view, tmp_path):
     """Kiem tra _scan_full_tree (line 925-931)."""
     view = context_view
-    with patch("views.context.copy_action_controller.scan_directory") as mock_scan:
+    with patch(
+        "presentation.views.context.copy_action_controller.scan_directory"
+    ) as mock_scan:
         mock_scan.return_value = MagicMock()
         view._copy_controller._scan_full_tree(tmp_path)
         mock_scan.assert_called_once()
@@ -422,8 +430,10 @@ def test_show_diff_only_dialog(context_view):
     """Kiem tra _show_diff_only_dialog opens dialog (line 933-974)."""
     view = context_view
     with (
-        patch("components.dialogs_qt.DiffOnlyDialogQt") as mock_dialog,
-        patch("services.settings_manager.add_instruction_history"),
+        patch(
+            "presentation.components.dialogs.dialogs_qt.DiffOnlyDialogQt"
+        ) as mock_dialog,
+        patch("infrastructure.persistence.settings_manager.add_instruction_history"),
     ):
         mock_instance = MagicMock()
         mock_dialog.return_value = mock_instance
@@ -436,8 +446,11 @@ def test_show_diff_only_dialog_exception(context_view):
     """Kiem tra _show_diff_only_dialog xu ly exception (line 973-974)."""
     view = context_view
     with (
-        patch("components.dialogs_qt.DiffOnlyDialogQt", side_effect=Exception("Fail")),
-        patch("services.settings_manager.add_instruction_history"),
+        patch(
+            "presentation.components.dialogs.dialogs_qt.DiffOnlyDialogQt",
+            side_effect=Exception("Fail"),
+        ),
+        patch("infrastructure.persistence.settings_manager.add_instruction_history"),
         patch.object(view, "show_status") as mock_status,
     ):
         view._copy_controller._show_diff_only_dialog()
@@ -459,7 +472,7 @@ def test_show_copy_breakdown_basic(context_view):
         "include_opx": False,
         "copy_mode": "Copy Context",
     }
-    with patch("components.toast_qt.toast_success") as mock_toast:
+    with patch("presentation.components.toast.toast_qt.toast_success") as mock_toast:
         view.show_copy_breakdown(700, pre_snapshot)
         mock_toast.assert_called_once()
         call_kwargs = mock_toast.call_args
@@ -476,8 +489,11 @@ def test_show_copy_breakdown_with_opx(context_view):
         "copy_mode": "Copy + OPX",
     }
     with (
-        patch("components.toast_qt.toast_success") as mock_toast,
-        patch("core.opx_instruction.XML_FORMATTING_INSTRUCTIONS", "some instructions"),
+        patch("presentation.components.toast.toast_qt.toast_success") as mock_toast,
+        patch(
+            "domain.prompt.opx_instruction.XML_FORMATTING_INSTRUCTIONS",
+            "some instructions",
+        ),
     ):
         view._prompt_builder.count_tokens = MagicMock(return_value=100)
         view.show_copy_breakdown(600, pre_snapshot)
@@ -493,7 +509,7 @@ def test_show_copy_breakdown_overflow(context_view):
         "include_opx": False,
         "copy_mode": "Copy Context",
     }
-    with patch("components.toast_qt.toast_success") as mock_toast:
+    with patch("presentation.components.toast.toast_qt.toast_success") as mock_toast:
         # Total < sum of parts
         view.show_copy_breakdown(500, pre_snapshot)
         mock_toast.assert_called_once()
@@ -519,7 +535,9 @@ def test_run_copy_in_background_dispatches(context_view):
     view = context_view
     gen = view._copy_controller._begin_copy_operation()
 
-    with patch("views.context.copy_action_controller.QThreadPool") as mock_pool:
+    with patch(
+        "presentation.views.context.copy_action_controller.QThreadPool"
+    ) as mock_pool:
         mock_instance = MagicMock()
         mock_pool.globalInstance.return_value = mock_instance
         view._copy_controller._run_copy_in_background(
@@ -540,7 +558,7 @@ def test_do_copy_context_dispatches(context_view, tmp_path):
     with (
         patch.object(view._copy_controller, "_run_copy_in_background") as mock_run,
         patch(
-            "views.context.copy_action_controller.load_app_settings",
+            "presentation.views.context.copy_action_controller.load_app_settings",
             return_value=mock_settings,
         ),
     ):
@@ -557,7 +575,7 @@ def test_do_copy_context_exception(context_view, tmp_path):
 
     with (
         patch(
-            "views.context.copy_action_controller.load_app_settings",
+            "presentation.views.context.copy_action_controller.load_app_settings",
             side_effect=Exception("Fail"),
         ),
         patch.object(view, "show_status") as mock_status,
@@ -586,7 +604,9 @@ def test_run_security_check_dispatches(context_view, tmp_path):
     view = context_view
     gen = view._copy_controller._begin_copy_operation()
 
-    with patch("views.context.copy_action_controller.QThreadPool") as mock_pool:
+    with patch(
+        "presentation.views.context.copy_action_controller.QThreadPool"
+    ) as mock_pool:
         mock_instance = MagicMock()
         mock_pool.globalInstance.return_value = mock_instance
         view._copy_controller._run_security_check_then_copy(

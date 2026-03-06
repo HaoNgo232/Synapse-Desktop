@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Signal
 
-from views.context_view_qt import ContextViewQt
+from presentation.views.context.context_view_qt import ContextViewQt
 
 
 class FakeFileTreeWidget(QWidget):
@@ -99,14 +99,22 @@ def context_view(qtbot):
     mock_app_settings.output_format = None
 
     with (
-        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
-        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
         patch(
-            "views.context._ui_builder.load_app_settings",
+            "presentation.views.context.ui_builder.FileTreeWidget", FakeFileTreeWidget
+        ),
+        patch(
+            "presentation.views.context.ui_builder.TokenStatsPanelQt",
+            FakeTokenStatsPanel,
+        ),
+        patch(
+            "presentation.views.context.ui_builder.load_app_settings",
             return_value=mock_app_settings,
         ),
-        patch("core.prompting.template_manager.list_templates", return_value=[]),
-        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+        patch("domain.prompt.template_manager.list_templates", return_value=[]),
+        patch(
+            "presentation.views.context.context_view_qt.FileWatcher",
+            return_value=MagicMock(),
+        ),
     ):
         view = ContextViewQt(
             get_workspace=lambda: Path("/fake/workspace"),

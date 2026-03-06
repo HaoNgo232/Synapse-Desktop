@@ -9,9 +9,12 @@ import shutil
 from pathlib import Path
 import pytest
 
-from core.dependency_resolver import DependencyResolver, get_related_files_for_selection
-from core.utils.file_utils import scan_directory_shallow
-from core.ignore_engine import IgnoreEngine
+from application.services.dependency_resolver import (
+    DependencyResolver,
+    get_related_files_for_selection,
+)
+from infrastructure.filesystem.file_utils import scan_directory_shallow
+from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 from PySide6.QtWidgets import QMessageBox
 
-from views.apply_view_qt import ApplyViewQt
+from presentation.views.apply.apply_view_qt import ApplyViewQt
 from services.apply_service import convert_to_row_results
 from core.file_actions import ActionResult
 
@@ -17,8 +17,8 @@ from core.file_actions import ActionResult
 def apply_view(qtbot):
     """Fixture tao ApplyViewQt."""
     with (
-        patch("views.apply_view_qt.toast_success"),
-        patch("views.apply_view_qt.toast_error"),
+        patch("presentation.views.apply.apply_view_qt.toast_success"),
+        patch("presentation.views.apply.apply_view_qt.toast_error"),
     ):
         view = ApplyViewQt(get_workspace=lambda: Path("/fake/workspace"))
         qtbot.addWidget(view)
@@ -45,7 +45,8 @@ def test_paste_from_clipboard(apply_view):
     """Kiem tra _paste_from_clipboard (line 342-345)."""
     view = apply_view
     with patch(
-        "views.apply_view_qt.get_clipboard_text", return_value=(True, "clipboard text")
+        "presentation.views.apply.apply_view_qt.get_clipboard_text",
+        return_value=(True, "clipboard text"),
     ):
         view._paste_from_clipboard()
     assert view._opx_input.toPlainText() == "clipboard text"
@@ -55,7 +56,10 @@ def test_paste_from_clipboard_fail(apply_view):
     """Kiem tra _paste_from_clipboard khi fail."""
     view = apply_view
     view._opx_input.setPlainText("existing")
-    with patch("views.apply_view_qt.get_clipboard_text", return_value=(False, "")):
+    with patch(
+        "presentation.views.apply.apply_view_qt.get_clipboard_text",
+        return_value=(False, ""),
+    ):
         view._paste_from_clipboard()
     assert view._opx_input.toPlainText() == "existing"
 
@@ -72,7 +76,7 @@ def test_preview_no_content(apply_view):
     """Kiem tra _preview_changes khi khong co opx (line 356-358)."""
     view = apply_view
     view._opx_input.clear()
-    with patch("views.apply_view_qt.toast_error") as mock_error:
+    with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._preview_changes()
         mock_error.assert_called_with("No OPX content to preview")
 
@@ -82,7 +86,7 @@ def test_preview_no_workspace(apply_view):
     view = apply_view
     view.get_workspace = lambda: None
     view._opx_input.setPlainText("<edit>test</edit>")
-    with patch("views.apply_view_qt.toast_error") as mock_error:
+    with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._preview_changes()
         mock_error.assert_called_with("No workspace selected")
 
@@ -96,8 +100,11 @@ def test_preview_no_valid_actions(apply_view):
     mock_result.file_actions = []
 
     with (
-        patch("views.apply_view_qt.parse_opx_response", return_value=mock_result),
-        patch("views.apply_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            return_value=mock_result,
+        ),
+        patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
     ):
         view._preview_changes()
         mock_error.assert_called_with("No valid OPX actions found")
@@ -118,10 +125,19 @@ def test_preview_success(apply_view):
     mock_preview.rows = [mock_row]
 
     with (
-        patch("views.apply_view_qt.parse_opx_response", return_value=mock_parse),
-        patch("views.apply_view_qt.analyze_file_actions", return_value=mock_preview),
-        patch("views.apply_view_qt.generate_preview_diff_lines", return_value=[]),
-        patch("views.apply_view_qt.toast_success") as mock_toast,
+        patch(
+            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            return_value=mock_parse,
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.analyze_file_actions",
+            return_value=mock_preview,
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.generate_preview_diff_lines",
+            return_value=[],
+        ),
+        patch("presentation.views.apply.apply_view_qt.toast_success") as mock_toast,
         patch.object(view, "_render_preview"),
     ):
         view._preview_changes()
@@ -135,9 +151,10 @@ def test_preview_parse_error(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.parse_opx_response", side_effect=Exception("Bad XML")
+            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            side_effect=Exception("Bad XML"),
         ),
-        patch("views.apply_view_qt.toast_error") as mock_error,
+        patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
     ):
         view._preview_changes()
         assert "Parse error" in mock_error.call_args[0][0]
@@ -147,7 +164,7 @@ def test_apply_no_content(apply_view):
     """Kiem tra _apply_changes khi khong co noi dung (line 398-401)."""
     view = apply_view
     view._opx_input.clear()
-    with patch("views.apply_view_qt.toast_error") as mock_error:
+    with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._apply_changes()
         mock_error.assert_called_with("No OPX content to apply")
 
@@ -157,7 +174,7 @@ def test_apply_no_workspace(apply_view):
     view = apply_view
     view.get_workspace = lambda: None
     view._opx_input.setPlainText("<edit>test</edit>")
-    with patch("views.apply_view_qt.toast_error") as mock_error:
+    with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._apply_changes()
         mock_error.assert_called_with("No workspace selected")
 
@@ -167,7 +184,7 @@ def test_apply_cancelled(apply_view):
     view = apply_view
     view._opx_input.setPlainText("<edit>test</edit>")
     with patch(
-        "views.apply_view_qt.QMessageBox.question",
+        "presentation.views.apply.apply_view_qt.QMessageBox.question",
         return_value=QMessageBox.StandardButton.No,
     ):
         view._apply_changes()
@@ -184,11 +201,14 @@ def test_apply_no_valid_actions(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.QMessageBox.question",
+            "presentation.views.apply.apply_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.apply_view_qt.parse_opx_response", return_value=mock_result),
-        patch("views.apply_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            return_value=mock_result,
+        ),
+        patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
     ):
         view._apply_changes()
         mock_error.assert_called_with("No valid OPX actions found")
@@ -214,14 +234,23 @@ def test_apply_success(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.QMessageBox.question",
+            "presentation.views.apply.apply_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.apply_view_qt.apply_file_actions", return_value=[mock_result]),
-        patch("views.apply_view_qt.analyze_file_actions", return_value=mock_preview),
-        patch("views.apply_view_qt.generate_preview_diff_lines", return_value=[]),
-        patch("views.apply_view_qt.add_history_entry"),
-        patch("views.apply_view_qt.toast_success") as mock_toast,
+        patch(
+            "presentation.views.apply.apply_view_qt.apply_file_actions",
+            return_value=[mock_result],
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.analyze_file_actions",
+            return_value=mock_preview,
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.generate_preview_diff_lines",
+            return_value=[],
+        ),
+        patch("presentation.views.apply.apply_view_qt.add_history_entry"),
+        patch("presentation.views.apply.apply_view_qt.toast_success") as mock_toast,
         patch.object(view, "_render_results"),
     ):
         view._apply_changes()
@@ -248,15 +277,27 @@ def test_apply_with_fresh_parse(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.QMessageBox.question",
+            "presentation.views.apply.apply_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.apply_view_qt.parse_opx_response", return_value=mock_parse),
-        patch("views.apply_view_qt.apply_file_actions", return_value=[mock_result]),
-        patch("views.apply_view_qt.analyze_file_actions", return_value=mock_preview),
-        patch("views.apply_view_qt.generate_preview_diff_lines", return_value=[]),
-        patch("views.apply_view_qt.add_history_entry"),
-        patch("views.apply_view_qt.toast_success"),
+        patch(
+            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            return_value=mock_parse,
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.apply_file_actions",
+            return_value=[mock_result],
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.analyze_file_actions",
+            return_value=mock_preview,
+        ),
+        patch(
+            "presentation.views.apply.apply_view_qt.generate_preview_diff_lines",
+            return_value=[],
+        ),
+        patch("presentation.views.apply.apply_view_qt.add_history_entry"),
+        patch("presentation.views.apply.apply_view_qt.toast_success"),
         patch.object(view, "_render_results"),
     ):
         view._apply_changes()
@@ -270,14 +311,18 @@ def test_apply_exception(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.QMessageBox.question",
+            "presentation.views.apply.apply_view_qt.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ),
-        patch("views.apply_view_qt.apply_file_actions", side_effect=Exception("Crash")),
         patch(
-            "views.apply_view_qt.analyze_file_actions", return_value=MagicMock(rows=[])
+            "presentation.views.apply.apply_view_qt.apply_file_actions",
+            side_effect=Exception("Crash"),
         ),
-        patch("views.apply_view_qt.toast_error") as mock_error,
+        patch(
+            "presentation.views.apply.apply_view_qt.analyze_file_actions",
+            return_value=MagicMock(rows=[]),
+        ),
+        patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
     ):
         view._apply_changes()
         assert "Apply error" in mock_error.call_args[0][0]
@@ -292,11 +337,11 @@ def test_copy_error_context_with_results(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.build_error_context_for_ai",
+            "presentation.views.apply.apply_view_qt.build_error_context_for_ai",
             return_value="error context",
         ) as mock_build,
-        patch("views.apply_view_qt.copy_to_clipboard") as mock_copy,
-        patch("views.apply_view_qt.toast_success"),
+        patch("presentation.views.apply.apply_view_qt.copy_to_clipboard") as mock_copy,
+        patch("presentation.views.apply.apply_view_qt.toast_success"),
     ):
         view._copy_error_context()
         mock_build.assert_called_once()
@@ -311,11 +356,11 @@ def test_copy_error_context_fallback(apply_view):
 
     with (
         patch(
-            "views.apply_view_qt.build_general_error_context",
+            "presentation.views.apply.apply_view_qt.build_general_error_context",
             return_value="general context",
         ) as mock_build,
-        patch("views.apply_view_qt.copy_to_clipboard"),
-        patch("views.apply_view_qt.toast_success"),
+        patch("presentation.views.apply.apply_view_qt.copy_to_clipboard"),
+        patch("presentation.views.apply.apply_view_qt.toast_success"),
     ):
         view._copy_error_context()
         mock_build.assert_called_once()
@@ -375,7 +420,10 @@ def test_create_preview_card_with_diff(apply_view):
     row.diff_lines = [("add", "+new line"), ("remove", "-old line")]
 
     fake_diff = QWidget()
-    with patch("views.apply_view_qt.DiffViewerWidget", return_value=fake_diff):
+    with patch(
+        "presentation.views.apply.apply_view_qt.DiffViewerWidget",
+        return_value=fake_diff,
+    ):
         card = view._create_preview_card(row)
     assert card is not None
 
@@ -431,7 +479,7 @@ def test_create_result_card_error(apply_view):
 def test_show_status_error(apply_view):
     """Kiem tra _show_status error (line 757-765)."""
     view = apply_view
-    with patch("views.apply_view_qt.toast_error") as mock_error:
+    with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._show_status("Error!", is_error=True)
         mock_error.assert_called_with("Error!")
 
@@ -439,7 +487,7 @@ def test_show_status_error(apply_view):
 def test_show_status_empty(apply_view):
     """Kiem tra _show_status empty (line 759-760)."""
     view = apply_view
-    with patch("views.apply_view_qt.toast_success") as mock_success:
+    with patch("presentation.views.apply.apply_view_qt.toast_success") as mock_success:
         view._show_status("")
         mock_success.assert_not_called()
 

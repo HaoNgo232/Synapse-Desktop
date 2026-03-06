@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from core.workflows.shared.scope_detector import (
+from domain.workflow.shared.scope_detector import (
     detect_scope_from_file_paths,
     detect_scope_from_symbols,
 )

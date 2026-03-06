@@ -49,7 +49,7 @@ def test_smart_parse_without_relationships():
     print("TEST 1: Smart Parse WITHOUT Relationships (Backward Compatible)")
     print("=" * 80)
 
-    from core.smart_context.parser import smart_parse
+    from domain.smart_context.parser import smart_parse
 
     result = smart_parse("test.py", TEST_PYTHON_CODE, include_relationships=False)
 
@@ -69,7 +69,7 @@ def test_smart_parse_with_relationships():
     print("TEST 2: Smart Parse WITH Relationships (CodeMaps Enabled)")
     print("=" * 80)
 
-    from core.smart_context.parser import smart_parse
+    from domain.smart_context.parser import smart_parse
 
     result = smart_parse("test.py", TEST_PYTHON_CODE, include_relationships=True)
 
@@ -97,7 +97,7 @@ def test_direct_relationship_extraction():
     print("TEST 3: Direct Relationship Extraction")
     print("=" * 80)
 
-    from core.codemaps.relationship_extractor import extract_relationships
+    from domain.codemap.relationship_extractor import extract_relationships
 
     relationships = extract_relationships("test.py", TEST_PYTHON_CODE)
 

@@ -10,14 +10,14 @@ Tests:
 import tempfile
 from pathlib import Path
 
-from core.utils.file_utils import scan_directory_shallow
-from core.ignore_engine import IgnoreEngine
+from infrastructure.filesystem.file_utils import scan_directory_shallow
+from infrastructure.filesystem.ignore_engine import IgnoreEngine
 from services.workspace_config import (
     add_excluded_patterns,
     remove_excluded_patterns,
     get_excluded_patterns,
 )
-from services.settings_manager import save_settings, load_settings
+from infrastructure.persistence.settings_manager import save_settings, load_settings
 
 
 class TestIgnoreSelectedPatternFormat:

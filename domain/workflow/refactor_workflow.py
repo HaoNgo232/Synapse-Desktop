@@ -19,15 +19,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from core.workflows.shared.scope_detector import detect_scope_from_symbols
-from core.workflows.shared.token_budget_manager import TokenBudgetManager
-from core.workflows.shared.handoff_formatter import (
+from domain.workflow.shared.scope_detector import detect_scope_from_symbols
+from domain.workflow.shared.token_budget_manager import TokenBudgetManager
+from domain.workflow.shared.handoff_formatter import (
     HandoffContext,
     format_handoff_xml,
     format_relationships_section,
 )
-from core.smart_context.parser import smart_parse
-from services.tokenization_service import TokenizationService
+from domain.smart_context.parser import smart_parse
+from application.services.tokenization_service import TokenizationService
 
 logger = logging.getLogger(__name__)
 

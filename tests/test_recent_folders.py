@@ -8,7 +8,7 @@ from unittest.mock import patch
 import tempfile
 import shutil
 
-from services.recent_folders import (
+from infrastructure.persistence.recent_folders import (
     load_recent_folders,
     add_recent_folder,
     remove_recent_folder,
@@ -55,7 +55,7 @@ class TestRecentFoldersIntegration:
     def test_add_and_load(self, temp_settings_dir, temp_folders):
         """Test add và load recent folders"""
         with patch(
-            "services.recent_folders.RECENT_FOLDERS_FILE",
+            "infrastructure.persistence.recent_folders.RECENT_FOLDERS_FILE",
             temp_settings_dir / "recent.json",
         ):
             # Clear first
@@ -75,10 +75,12 @@ class TestRecentFoldersIntegration:
     def test_max_folders_limit(self, temp_settings_dir, temp_folders):
         """Test giới hạn số lượng folders"""
         with patch(
-            "services.recent_folders.RECENT_FOLDERS_FILE",
+            "infrastructure.persistence.recent_folders.RECENT_FOLDERS_FILE",
             temp_settings_dir / "recent.json",
         ):
-            with patch("services.recent_folders.MAX_RECENT_FOLDERS", 3):
+            with patch(
+                "infrastructure.persistence.recent_folders.MAX_RECENT_FOLDERS", 3
+            ):
                 clear_recent_folders()
 
                 # Add nhiều hơn limit
@@ -91,7 +93,7 @@ class TestRecentFoldersIntegration:
     def test_remove_folder(self, temp_settings_dir, temp_folders):
         """Test xóa folder khỏi list"""
         with patch(
-            "services.recent_folders.RECENT_FOLDERS_FILE",
+            "infrastructure.persistence.recent_folders.RECENT_FOLDERS_FILE",
             temp_settings_dir / "recent.json",
         ):
             clear_recent_folders()

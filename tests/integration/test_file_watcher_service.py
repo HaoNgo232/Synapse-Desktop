@@ -8,7 +8,7 @@ tich hop giua Observer, Handler, Debouncer.
 import time
 from pathlib import Path
 
-from services.file_watcher_pkg.service import FileWatcher
+from infrastructure.filesystem.file_watcher.service import FileWatcher
 from services.interfaces.file_watcher_service import (
     IIgnoreStrategy,
     WatcherCallbacks,

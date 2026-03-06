@@ -8,7 +8,7 @@ Sử dụng LanguageConfig từ config.py để xác định cách load.
 from typing import Optional
 from tree_sitter import Language  # type: ignore
 
-from core.smart_context.config import get_config_by_extension
+from domain.smart_context.config import get_config_by_extension
 
 # Cache đã load languages
 _language_cache: dict[str, Language] = {}

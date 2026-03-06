@@ -6,7 +6,7 @@ Tests the _generate_codemap_xml() helper and generate_file_contents_xml() with c
 
 import pytest
 from unittest.mock import patch, Mock
-from core.prompt_generator import generate_file_contents_xml, _generate_codemap_xml
+from domain.prompt.generator import generate_file_contents_xml, _generate_codemap_xml
 
 
 class TestCodemapXMLGeneration:
@@ -32,8 +32,8 @@ class TestCodemapXMLGeneration:
         paths = {str(py_file)}
 
         with (
-            patch("core.smart_context.smart_parse") as mock_parse,
-            patch("core.smart_context.is_supported") as mock_supported,
+            patch("domain.smart_context.smart_parse") as mock_parse,
+            patch("domain.smart_context.is_supported") as mock_supported,
         ):
             mock_supported.return_value = True
             mock_parse.return_value = "def hello(): ..."
@@ -60,7 +60,7 @@ class TestCodemapXMLGeneration:
         txt_file.write_text("plain text content")
         paths = {str(txt_file)}
 
-        with patch("core.smart_context.is_supported") as mock_supported:
+        with patch("domain.smart_context.is_supported") as mock_supported:
             mock_supported.return_value = False
 
             # Act
@@ -82,7 +82,7 @@ class TestCodemapXMLGeneration:
         bin_file.write_bytes(b"\x00\x01\x02\x03")
         paths = {str(bin_file)}
 
-        with patch("core.prompt_generator.is_binary_file") as mock_binary:
+        with patch("domain.prompt.generator.is_binary_file") as mock_binary:
             mock_binary.return_value = True
 
             # Act
@@ -126,9 +126,9 @@ class TestCodemapXMLGeneration:
         codemap_paths = {str(file2)}
 
         with (
-            patch("core.prompt_generator.collect_files") as mock_collect,
-            patch("core.prompt_generator.format_files_xml") as mock_format_xml,
-            patch("core.prompt_generator._generate_codemap_xml") as mock_codemap,
+            patch("domain.prompt.generator.collect_files") as mock_collect,
+            patch("domain.prompt.generator.format_files_xml") as mock_format_xml,
+            patch("domain.prompt.generator._generate_codemap_xml") as mock_codemap,
         ):
             # Mock full content collection
             mock_entry = Mock()
@@ -169,8 +169,8 @@ class TestCodemapXMLGeneration:
         selected_paths = {str(file1)}
 
         with (
-            patch("core.prompt_generator.collect_files") as mock_collect,
-            patch("core.prompt_generator.format_files_xml") as mock_format,
+            patch("domain.prompt.generator.collect_files") as mock_collect,
+            patch("domain.prompt.generator.format_files_xml") as mock_format,
         ):
             mock_entry = Mock()
             mock_entry.display_path = "test.py"
@@ -201,8 +201,8 @@ class TestCodemapXMLGeneration:
         codemap_paths = set()  # Empty set
 
         with (
-            patch("core.prompt_generator.collect_files") as mock_collect,
-            patch("core.prompt_generator.format_files_xml") as mock_format,
+            patch("domain.prompt.generator.collect_files") as mock_collect,
+            patch("domain.prompt.generator.format_files_xml") as mock_format,
         ):
             mock_entry = Mock()
             mock_collect.return_value = [mock_entry]

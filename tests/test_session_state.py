@@ -9,7 +9,7 @@ from unittest.mock import patch
 import tempfile
 import shutil
 
-from services.session_state import (
+from infrastructure.persistence.session_state import (
     SessionState,
     save_session_state,
     load_session_state,
@@ -54,7 +54,9 @@ class TestSaveLoadSession:
 
     def test_save_and_load(self, temp_session_file):
         """Test save then load session"""
-        with patch("services.session_state.SESSION_FILE", temp_session_file):
+        with patch(
+            "infrastructure.persistence.session_state.SESSION_FILE", temp_session_file
+        ):
             # Create temp workspace
             workspace = temp_session_file.parent / "workspace"
             workspace.mkdir()
@@ -79,13 +81,17 @@ class TestSaveLoadSession:
 
     def test_load_nonexistent(self, temp_session_file):
         """Test load when file doesn't exist"""
-        with patch("services.session_state.SESSION_FILE", temp_session_file):
+        with patch(
+            "infrastructure.persistence.session_state.SESSION_FILE", temp_session_file
+        ):
             result = load_session_state()
             assert result is None
 
     def test_clear_session(self, temp_session_file):
         """Test clear session"""
-        with patch("services.session_state.SESSION_FILE", temp_session_file):
+        with patch(
+            "infrastructure.persistence.session_state.SESSION_FILE", temp_session_file
+        ):
             # Save first
             state = SessionState(instructions_text="test")
             save_session_state(state)
@@ -97,7 +103,9 @@ class TestSaveLoadSession:
 
     def test_invalid_workspace_filtered(self, temp_session_file):
         """Test that invalid workspace is filtered out"""
-        with patch("services.session_state.SESSION_FILE", temp_session_file):
+        with patch(
+            "infrastructure.persistence.session_state.SESSION_FILE", temp_session_file
+        ):
             # Save with non-existent workspace
             data = {
                 "workspace_path": "/nonexistent/path",

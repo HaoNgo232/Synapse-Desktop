@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from core.workflows.context_builder import run_context_builder
+from domain.workflow.context_builder import run_context_builder
 
 
 @pytest.fixture

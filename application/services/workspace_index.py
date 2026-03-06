@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set
 
 if TYPE_CHECKING:
-    from core.ignore_engine import IgnoreEngine
+    from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,9 @@ def build_search_index(
         Vi du: {"main.py": ["/home/user/project/main.py"]}
     """
     from core.constants import DIRECTORY_QUICK_SKIP
-    from core.utils.file_utils import is_binary_file, is_system_path
-    from core.ignore_engine import IgnoreEngine
-    from services.workspace_config import (
+    from infrastructure.filesystem.file_utils import is_binary_file, is_system_path
+    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from application.services.workspace_config import (
         get_excluded_patterns,
         get_use_gitignore,
     )
@@ -220,9 +220,12 @@ def collect_files_from_disk(
     Returns:
         List cac full paths (khong trung lap, da loc binary/ignored).
     """
-    from core.utils.file_utils import is_binary_file, is_system_path
-    from core.ignore_engine import IgnoreEngine
-    from services.workspace_config import get_excluded_patterns, get_use_gitignore
+    from infrastructure.filesystem.file_utils import is_binary_file, is_system_path
+    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from application.services.workspace_config import (
+        get_excluded_patterns,
+        get_use_gitignore,
+    )
     from core.constants import DIRECTORY_QUICK_SKIP
 
     # workspace_path bat buoc - caller phai truyen

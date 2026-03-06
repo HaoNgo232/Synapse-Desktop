@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.interfaces.tokenization_service import ITokenizationService
+    from application.interfaces.tokenization_port import ITokenizationService
 
-from core.workflows.shared.file_slicer import auto_slice_file
-from core.smart_context.parser import smart_parse
+from domain.workflow.shared.file_slicer import auto_slice_file
+from domain.smart_context.parser import smart_parse
 
 logger = logging.getLogger(__name__)
 

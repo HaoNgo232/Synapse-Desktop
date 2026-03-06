@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Optional, Set, Dict, List, cast
 from tree_sitter import Parser, Query, QueryCursor, Language  # type: ignore
 
-from core.smart_context.loader import get_language
-from core.utils.file_utils import TreeItem
+from domain.smart_context.loader import get_language
+from infrastructure.filesystem.file_utils import TreeItem
 
 
 # ========================================
@@ -129,7 +129,7 @@ class DependencyResolver:
         Args:
             workspace_root: Thu muc goc cua workspace
         """
-        from services.workspace_index import collect_files_from_disk
+        from application.services.workspace_index import collect_files_from_disk
 
         # Load tsconfig/jsconfig for alias support
         self._load_ts_config()

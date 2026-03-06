@@ -6,7 +6,7 @@ Tests depth tracking logic for transitive dependencies.
 
 import pytest
 from unittest.mock import patch
-from core.dependency_resolver import DependencyResolver
+from application.services.dependency_resolver import DependencyResolver
 
 
 class TestGetRelatedFilesWithDepth:

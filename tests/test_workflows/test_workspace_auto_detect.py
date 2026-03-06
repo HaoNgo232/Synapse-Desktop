@@ -41,7 +41,7 @@ def in_temp_dir(tmp_path, monkeypatch):
 
     try:
         monkeypatch.setattr(
-            "services.workspace_index.collect_files_from_disk", mock_collect
+            "application.services.workspace_index.collect_files_from_disk", mock_collect
         )
     except Exception:
         pass

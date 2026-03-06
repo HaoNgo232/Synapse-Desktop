@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Dict, List
 import html
 
-from core.prompting.formatters.system_prompts import AGENT_ROLE_INSTRUCTION
-from core.dependency_resolver import DependencyResolver
+from domain.prompt.formatters.system_prompts import AGENT_ROLE_INSTRUCTION
+from application.services.dependency_resolver import DependencyResolver
 
 
 @dataclass

@@ -10,8 +10,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from core.prompting.file_collector import collect_files
-from core.prompting.types import FileEntry
+from domain.prompt.file_collector import collect_files
+from shared.types.prompt_types import FileEntry
 
 
 class TestCollectFilesBasic:

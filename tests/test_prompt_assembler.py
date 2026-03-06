@@ -1,17 +1,17 @@
 import json
 import pytest
 
-from core.prompting.prompt_assembler import assemble_prompt, assemble_smart_prompt
-from config.output_format import OutputStyle
-from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-from core.utils.git_utils import (
+from domain.prompt.assembler import assemble_prompt, assemble_smart_prompt
+from presentation.config.output_format import OutputStyle
+from domain.prompt.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+from infrastructure.git.git_utils import (
     GitDiffResult,
     GitLogResult,
     DiffOnlyResult,
     build_diff_only_prompt,
 )
 from core.tree_map_generator import generate_tree_map_only
-from core.utils.file_utils import TreeItem
+from infrastructure.filesystem.file_utils import TreeItem
 
 
 @pytest.fixture

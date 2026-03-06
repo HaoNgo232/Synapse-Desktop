@@ -12,7 +12,7 @@ Test các case:
 
 import pytest
 
-from core.prompt_generator import (
+from domain.prompt.generator import (
     generate_prompt,
     generate_file_map,
     generate_file_contents,
@@ -23,9 +23,9 @@ from core.prompt_generator import (
     build_smart_prompt,
     calculate_markdown_delimiter,
 )
-from core.utils.file_utils import TreeItem
-from core.utils.git_utils import GitDiffResult, GitLogResult, GitCommit
-from config.output_format import OutputStyle
+from infrastructure.filesystem.file_utils import TreeItem
+from infrastructure.git.git_utils import GitDiffResult, GitLogResult, GitCommit
+from presentation.config.output_format import OutputStyle
 
 
 class TestCalculateMarkdownDelimiter:

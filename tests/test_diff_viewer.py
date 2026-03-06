@@ -9,7 +9,7 @@ Test cac case:
 """
 
 import pytest
-from components.diff_viewer import (
+from presentation.components.diff_viewer import (
     generate_diff_lines,
     generate_create_diff_lines,
     generate_delete_diff_lines,

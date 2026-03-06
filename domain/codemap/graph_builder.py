@@ -6,11 +6,11 @@ Module này build CodeMap cho files/workspace và provide query API.
 
 from pathlib import Path
 from typing import Optional, Set
-from core.utils.file_utils import TreeItem
+from infrastructure.filesystem.file_utils import TreeItem
 
-from core.codemaps.types import CodeMap
-from core.codemaps.symbol_extractor import extract_symbols
-from core.codemaps.relationship_extractor import extract_relationships
+from domain.codemap.types import CodeMap
+from domain.codemap.symbol_extractor import extract_symbols
+from domain.codemap.relationship_extractor import extract_relationships
 
 
 class CodeMapBuilder:

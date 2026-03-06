@@ -9,8 +9,8 @@ Extracted tu: generate_file_contents() trong core/prompt_generator.py
 
 from io import StringIO
 
-from core.prompting.types import FileEntry
-from core.prompting.delimiter_utils import calculate_markdown_delimiter
+from shared.types.prompt_types import FileEntry
+from shared.utils.delimiter_utils import calculate_markdown_delimiter
 
 
 def format_files_markdown(entries: list[FileEntry]) -> str:

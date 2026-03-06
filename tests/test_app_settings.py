@@ -13,7 +13,7 @@ import json
 import pytest
 from unittest.mock import patch
 
-from config.app_settings import AppSettings
+from presentation.config.app_settings import AppSettings
 
 
 # ============================================================
@@ -157,17 +157,19 @@ class TestTypedSettingsManager:
 
     def test_load_app_settings_no_file(self, tmp_path):
         """Test load khi file chua ton tai -> defaults."""
-        from services.settings_manager import load_app_settings
+        from infrastructure.persistence.settings_manager import load_app_settings
 
         fake_file = tmp_path / "nonexistent.json"
-        with patch("services.settings_manager.SETTINGS_FILE", fake_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", fake_file
+        ):
             settings = load_app_settings()
             assert isinstance(settings, AppSettings)
             assert settings.model_id == "claude-sonnet-4.5"
 
     def test_load_app_settings_with_file(self, tmp_path):
         """Test load tu existing file."""
-        from services.settings_manager import load_app_settings
+        from infrastructure.persistence.settings_manager import load_app_settings
 
         settings_file = tmp_path / "settings.json"
         settings_file.write_text(
@@ -179,7 +181,9 @@ class TestTypedSettingsManager:
             )
         )
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             settings = load_app_settings()
             assert settings.model_id == "gpt-4"
             assert settings.enable_security_check is False
@@ -188,25 +192,29 @@ class TestTypedSettingsManager:
 
     def test_load_app_settings_invalid_json(self, tmp_path):
         """Test load khi file corrupt -> defaults."""
-        from services.settings_manager import load_app_settings
+        from infrastructure.persistence.settings_manager import load_app_settings
 
         settings_file = tmp_path / "settings.json"
         settings_file.write_text("not json {{{")
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             settings = load_app_settings()
             assert settings.model_id == "claude-sonnet-4.5"
 
     def test_save_app_settings(self, tmp_path):
         """Test save -> load roundtrip."""
-        from services.settings_manager import (
+        from infrastructure.persistence.settings_manager import (
             load_app_settings,
             save_app_settings,
         )
 
         settings_file = tmp_path / "settings.json"
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             original = AppSettings(model_id="gpt-4", use_gitignore=False)
             assert save_app_settings(original) is True
 
@@ -216,12 +224,14 @@ class TestTypedSettingsManager:
 
     def test_save_preserves_extra_keys(self, tmp_path):
         """Test save bao toan extra keys trong file (keys khong thuoc AppSettings)."""
-        from services.settings_manager import save_app_settings
+        from infrastructure.persistence.settings_manager import save_app_settings
 
         settings_file = tmp_path / "settings.json"
         settings_file.write_text(json.dumps({"custom_key": "custom_value"}))
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             assert save_app_settings(AppSettings()) is True
 
             saved = json.loads(settings_file.read_text())
@@ -230,28 +240,32 @@ class TestTypedSettingsManager:
 
     def test_update_app_setting_single(self, tmp_path):
         """Test update 1 field."""
-        from services.settings_manager import (
+        from infrastructure.persistence.settings_manager import (
             load_app_settings,
             update_app_setting,
         )
 
         settings_file = tmp_path / "settings.json"
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             assert update_app_setting(model_id="gpt-4") is True
             settings = load_app_settings()
             assert settings.model_id == "gpt-4"
 
     def test_update_app_setting_multiple(self, tmp_path):
         """Test update nhieu fields cung luc."""
-        from services.settings_manager import (
+        from infrastructure.persistence.settings_manager import (
             load_app_settings,
             update_app_setting,
         )
 
         settings_file = tmp_path / "settings.json"
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             assert (
                 update_app_setting(
                     model_id="gpt-4",
@@ -266,11 +280,13 @@ class TestTypedSettingsManager:
 
     def test_update_app_setting_invalid_field(self, tmp_path):
         """Test update voi field khong ton tai -> TypeError."""
-        from services.settings_manager import update_app_setting
+        from infrastructure.persistence.settings_manager import update_app_setting
 
         settings_file = tmp_path / "settings.json"
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             with pytest.raises(TypeError, match="not a valid AppSettings field"):
                 update_app_setting(invalid_field="value")
 
@@ -285,41 +301,52 @@ class TestBackwardCompat:
 
     def test_load_settings_returns_dict(self, tmp_path):
         """load_settings() van tra ve Dict."""
-        from services.settings_manager import load_settings
+        from infrastructure.persistence.settings_manager import load_settings
 
         settings_file = tmp_path / "nonexistent.json"
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             result = load_settings()
             assert isinstance(result, dict)
             assert "model_id" in result
 
     def test_get_setting_works(self, tmp_path):
         """get_setting() van lay dung value."""
-        from services.settings_manager import get_setting
+        from infrastructure.persistence.settings_manager import get_setting
 
         settings_file = tmp_path / "settings.json"
         settings_file.write_text(json.dumps({"model_id": "gpt-4"}))
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             assert get_setting("model_id") == "gpt-4"
 
     def test_set_setting_works(self, tmp_path):
         """set_setting() van luu dung value."""
-        from services.settings_manager import set_setting, get_setting
+        from infrastructure.persistence.settings_manager import set_setting, get_setting
 
         settings_file = tmp_path / "settings.json"
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             assert set_setting("model_id", "gpt-4") is True
             assert get_setting("model_id") == "gpt-4"
 
     def test_save_settings_dict(self, tmp_path):
         """save_settings() van nhan Dict va luu dung."""
-        from services.settings_manager import save_settings, load_settings
+        from infrastructure.persistence.settings_manager import (
+            save_settings,
+            load_settings,
+        )
 
         settings_file = tmp_path / "settings.json"
 
-        with patch("services.settings_manager.SETTINGS_FILE", settings_file):
+        with patch(
+            "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
+        ):
             assert save_settings({"model_id": "gpt-4"}) is True
             result = load_settings()
             assert result["model_id"] == "gpt-4"

@@ -3,8 +3,8 @@
 
 from typing import Optional
 
-from core.smart_context.strategies.base import BaseParseStrategy
-from core.smart_context.chunk_utils import check_and_add
+from domain.smart_context.strategies.base import BaseParseStrategy
+from domain.smart_context.chunk_utils import check_and_add
 
 
 class CssParseStrategy(BaseParseStrategy):

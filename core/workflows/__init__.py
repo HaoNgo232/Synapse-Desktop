@@ -9,16 +9,16 @@ Public API:
 - run_test_builder: Tool 5 - Test Generation Context Builder
 """
 
-from core.workflows.context_builder import run_context_builder, BuildResult
-from core.workflows.code_reviewer import run_code_review, ReviewResult
-from core.workflows.refactor_workflow import (
+from domain.workflow.context_builder import run_context_builder, BuildResult
+from domain.workflow.code_reviewer import run_code_review, ReviewResult
+from domain.workflow.refactor_workflow import (
     run_refactor_discovery,
     run_refactor_planning,
     DiscoveryReport,
     RefactorPlan,
 )
-from core.workflows.bug_investigator import run_bug_investigation, InvestigationResult
-from core.workflows.test_builder import run_test_builder, BuildTestResult
+from domain.workflow.bug_investigator import run_bug_investigation, InvestigationResult
+from domain.workflow.test_builder import run_test_builder, BuildTestResult
 
 __all__ = [
     "run_context_builder",

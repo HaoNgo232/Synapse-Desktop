@@ -18,10 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from core.workflows.shared.file_slicer import slice_file_by_line_range
-from core.workflows.shared.handoff_formatter import HandoffContext, format_handoff_xml
-from core.dependency_resolver import DependencyResolver
-from services.tokenization_service import TokenizationService
+from domain.workflow.shared.file_slicer import slice_file_by_line_range
+from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
+from application.services.dependency_resolver import DependencyResolver
+from application.services.tokenization_service import TokenizationService
 
 logger = logging.getLogger(__name__)
 

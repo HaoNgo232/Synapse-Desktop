@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from core.codemaps.symbol_extractor import extract_symbols
-from core.codemaps.types import Symbol, SymbolKind
+from domain.codemap.symbol_extractor import extract_symbols
+from domain.codemap.types import Symbol, SymbolKind
 
 logger = logging.getLogger(__name__)
 

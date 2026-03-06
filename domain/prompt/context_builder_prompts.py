@@ -19,7 +19,7 @@ LLM phai tra ve:
 from typing import List, Optional
 
 from core.ai.base_provider import LLMMessage
-from core.utils.git_utils import GitDiffResult
+from infrastructure.git.git_utils import GitDiffResult
 
 
 # ===========================================================================

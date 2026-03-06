@@ -31,7 +31,7 @@ def mock_workspace(tmp_path, monkeypatch):
         ]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     return tmp_path
@@ -141,7 +141,7 @@ async def test_get_imports_graph_empty_workspace(mcp_instance, tmp_path, monkeyp
         return []
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     tool = get_tool(mcp_instance, "get_imports_graph")
@@ -158,7 +158,7 @@ async def test_get_callers_max_results(mcp_instance, mock_workspace, monkeypatch
         return [str(mock_workspace / "main.py")]
 
     monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
+        "application.services.workspace_index.collect_files_from_disk", mock_collect
     )
 
     tool = get_tool(mcp_instance, "get_callers")

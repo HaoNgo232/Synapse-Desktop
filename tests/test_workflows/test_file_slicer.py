@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from core.workflows.shared.file_slicer import (
+from domain.workflow.shared.file_slicer import (
     auto_slice_file,
     slice_file_by_symbols,
     slice_file_by_line_range,

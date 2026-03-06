@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.tokenization.cache import TokenCache
+    from domain.tokenization.cache import TokenCache
 
-from core.encoders import _estimate_tokens
+from infrastructure.adapters.encoders import _estimate_tokens
 
 # Guardrail: skip files > 5MB
 MAX_BYTES = 5 * 1024 * 1024
@@ -123,7 +123,7 @@ def _count_tokens_for_file_no_cache(
             if cached is not None:
                 return cached
 
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         if is_binary_file(file_path):
             return 0
@@ -177,7 +177,7 @@ def count_tokens_for_file(
             if cached is not None:
                 return cached
 
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         if is_binary_file(file_path):
             return 0

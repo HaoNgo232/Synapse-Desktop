@@ -12,12 +12,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.smart_context.parser import smart_parse  # noqa: E402
-from core.codemaps.relationship_extractor import (  # noqa: E402
+from domain.smart_context.parser import smart_parse  # noqa: E402
+from domain.codemap.relationship_extractor import (  # noqa: E402
     _build_function_boundaries_map,
     _find_enclosing_function_fast,
 )
-from core.smart_context.loader import get_language  # noqa: E402
+from domain.smart_context.loader import get_language  # noqa: E402
 from tree_sitter import Parser  # noqa: E402
 
 

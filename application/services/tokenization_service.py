@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.encoders import (
+from infrastructure.adapters.encoders import (
     HAS_TOKENIZERS,
     _estimate_tokens,
     _get_encoder,
@@ -30,9 +30,9 @@ from core.encoders import (
     reset_encoder as _core_reset_encoder,
 )
 from core.logging_config import log_error, log_info, log_warning
-from core.tokenization.cache import TokenCache
-from core.tokenization.cancellation import is_counting_tokens
-from services.interfaces.tokenization_service import ITokenizationService
+from domain.tokenization.cache import TokenCache
+from domain.tokenization.cancellation import is_counting_tokens
+from application.interfaces.tokenization_port import ITokenizationService
 
 # Guardrail: bo qua files lon hon 5MB
 MAX_BYTES = 5 * 1024 * 1024
@@ -145,7 +145,7 @@ class TokenizationService(ITokenizationService):
                 return cached
 
             # Check binary file
-            from core.utils.file_utils import is_binary_file
+            from infrastructure.filesystem.file_utils import is_binary_file
 
             if is_binary_file(file_path):
                 return 0
@@ -266,7 +266,7 @@ class TokenizationService(ITokenizationService):
             self._encoder = _get_encoder(tokenizer_repo=self._tokenizer_repo)
             if self._encoder is not None:
                 # Xac dinh loai encoder
-                import core.encoders as _enc
+                import infrastructure.adapters.encoders as _enc
 
                 self._encoder_type = _enc._encoder_type
                 self._using_estimation = False
@@ -326,7 +326,7 @@ class TokenizationService(ITokenizationService):
             if cached is not None:
                 return cached
 
-            from core.utils.file_utils import is_binary_file
+            from infrastructure.filesystem.file_utils import is_binary_file
 
             if is_binary_file(file_path):
                 return 0
@@ -372,7 +372,7 @@ class TokenizationService(ITokenizationService):
             if not is_counting_tokens():
                 return (str(path), 0, 0)
             try:
-                from core.utils.file_utils import is_binary_file
+                from infrastructure.filesystem.file_utils import is_binary_file
 
                 if is_binary_file(path):
                     return (str(path), 0, 0)

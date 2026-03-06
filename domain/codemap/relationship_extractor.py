@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Optional, Set
 from tree_sitter import Parser, Language, Query, QueryCursor  # type: ignore
 
-from core.codemaps.types import Relationship, RelationshipKind
-from core.smart_context.config import get_config_by_extension
-from core.smart_context.loader import get_language
-from core.codemaps.queries import (
+from domain.codemap.types import Relationship, RelationshipKind
+from domain.smart_context.config import get_config_by_extension
+from domain.smart_context.loader import get_language
+from domain.codemap.queries import (
     QUERY_PYTHON_CALLS,
     QUERY_PYTHON_INHERITANCE,
     QUERY_JS_CALLS,
@@ -25,7 +25,7 @@ from core.codemaps.queries import (
     QUERY_RUST_CALLS,
     QUERY_RUST_INHERITANCE,
 )
-from core.dependency_resolver import DependencyResolver
+from application.services.dependency_resolver import DependencyResolver
 
 
 def extract_relationships(

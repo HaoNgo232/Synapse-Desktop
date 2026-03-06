@@ -12,9 +12,9 @@ Verify:
 import pytest
 from unittest.mock import patch
 
-from services.cache_protocol import ICacheable
-from services.cache_registry import CacheRegistry, cache_registry
-from services.cache_adapters import (
+from infrastructure.adapters.cache_protocol import ICacheable
+from infrastructure.adapters.cache_registry import CacheRegistry, cache_registry
+from infrastructure.adapters.cache_adapters import (
     TokenCacheAdapter,
     SecurityCacheAdapter,
     IgnoreCacheAdapter,
@@ -190,7 +190,7 @@ class TestTokenCacheAdapter:
 
     def _make_adapter(self):
         """Helper tao adapter voi TokenizationService fresh."""
-        from services.tokenization_service import TokenizationService
+        from application.services.tokenization_service import TokenizationService
 
         return TokenCacheAdapter(TokenizationService())
 
@@ -201,7 +201,7 @@ class TestTokenCacheAdapter:
     def test_invalidate_path_clears_file(self, tmp_path):
         """invalidate_path goi clear_file_from_cache tren service."""
         from unittest.mock import patch
-        from services.tokenization_service import TokenizationService
+        from application.services.tokenization_service import TokenizationService
 
         svc = TokenizationService()
         adapter = TokenCacheAdapter(svc)
@@ -212,7 +212,7 @@ class TestTokenCacheAdapter:
     def test_invalidate_all_calls_clear(self):
         """invalidate_all goi clear_cache tren service."""
         from unittest.mock import patch
-        from services.tokenization_service import TokenizationService
+        from application.services.tokenization_service import TokenizationService
 
         svc = TokenizationService()
         adapter = TokenCacheAdapter(svc)
@@ -248,7 +248,7 @@ class TestIgnoreCacheAdapter:
     """Test IgnoreCacheAdapter wraps ignore engine caches."""
 
     def _make_adapter(self):
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         return IgnoreCacheAdapter(IgnoreEngine())
 
@@ -256,7 +256,7 @@ class TestIgnoreCacheAdapter:
         assert isinstance(self._make_adapter(), ICacheable)
 
     def test_invalidate_path_gitignore_triggers_clear(self):
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         adapter = IgnoreCacheAdapter(engine)
@@ -267,7 +267,7 @@ class TestIgnoreCacheAdapter:
         assert len(engine._gitignore_cache) == 0
 
     def test_invalidate_path_normal_file_no_clear(self):
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         engine._gitignore_cache["dummy"] = (0.0, [])
@@ -277,7 +277,7 @@ class TestIgnoreCacheAdapter:
         assert len(engine._gitignore_cache) == 1
 
     def test_invalidate_all(self):
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         engine._gitignore_cache["dummy"] = (0.0, [])
@@ -308,8 +308,8 @@ class TestRegisterAllCaches:
         cache_registry._reset_for_testing()
 
     def test_registers_all_four_caches(self):
-        from core.ignore_engine import IgnoreEngine
-        from services.tokenization_service import TokenizationService
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from application.services.tokenization_service import TokenizationService
 
         register_all_caches(
             ignore_engine=IgnoreEngine(),
@@ -322,8 +322,8 @@ class TestRegisterAllCaches:
         assert "relationship_cache" in names
 
     def test_idempotent(self):
-        from core.ignore_engine import IgnoreEngine
-        from services.tokenization_service import TokenizationService
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from application.services.tokenization_service import TokenizationService
 
         kwargs = dict(
             ignore_engine=IgnoreEngine(),

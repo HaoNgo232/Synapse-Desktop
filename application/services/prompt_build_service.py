@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import List, Optional, Set, Tuple, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.interfaces.tokenization_service import ITokenizationService
+    from application.interfaces.tokenization_port import ITokenizationService
 
-from core.prompt_generator import (
+from domain.prompt.generator import (
     generate_file_map,
     generate_file_contents_xml,
     generate_file_contents_json,
@@ -30,9 +30,9 @@ from core.prompt_generator import (
     build_smart_prompt,
     OutputStyle,
 )
-from core.prompting.file_collector import collect_files
-from core.utils.file_utils import TreeItem
-from core.utils.git_utils import get_git_diffs, get_git_logs
+from domain.prompt.file_collector import collect_files
+from infrastructure.filesystem.file_utils import TreeItem
+from infrastructure.git.git_utils import get_git_diffs, get_git_logs
 from services.prompt_types import BuildResult, FileTokenInfo
 
 
@@ -64,7 +64,9 @@ class PromptBuildService:
         tokenization_service: Optional["ITokenizationService"] = None,
     ):
         if tokenization_service is None:
-            from services.encoder_registry import get_tokenization_service
+            from infrastructure.adapters.encoder_registry import (
+                get_tokenization_service,
+            )
 
             tokenization_service = get_tokenization_service()
         self._tokenization_service = tokenization_service
@@ -218,7 +220,7 @@ class PromptBuildService:
                 )
 
             # 2. Load Project Rules from workspace
-            from services.workspace_rules import get_rule_file_contents
+            from application.services.workspace_rules import get_rule_file_contents
 
             project_rules = get_rule_file_contents(workspace)
 
@@ -290,7 +292,9 @@ class PromptBuildService:
             opx_t = 0
             if include_xml_formatting:
                 try:
-                    from core.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+                    from domain.prompt.opx_instruction import (
+                        XML_FORMATTING_INSTRUCTIONS,
+                    )
 
                     opx_t = self._tokenization_service.count_tokens(
                         XML_FORMATTING_INSTRUCTIONS
@@ -321,7 +325,7 @@ class PromptBuildService:
         trimmed_notes: list[str] = []
 
         if max_tokens is not None and token_count > max_tokens:
-            from core.prompting.context_trimmer import (
+            from domain.prompt.context_trimmer import (
                 ContextTrimmer,
                 PromptComponents,
             )
@@ -501,7 +505,7 @@ class PromptBuildService:
 
             if is_codemap_file and entry.content:
                 # Count tokens on codemap content (AST only)
-                from core.smart_context import smart_parse, is_supported
+                from domain.smart_context import smart_parse, is_supported
 
                 ext = Path(str(entry.path)).suffix.lstrip(".")
                 if is_supported(ext):
@@ -595,7 +599,7 @@ class PromptBuildService:
         path_strs = {str(p) for p in file_paths}
 
         # Load Project Rules from workspace
-        from services.workspace_rules import get_rule_file_contents
+        from application.services.workspace_rules import get_rule_file_contents
 
         project_rules = get_rule_file_contents(workspace)
 

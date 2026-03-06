@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from services.preset_store import PresetStore, PRESET_FILENAME
+from infrastructure.persistence.preset_store import PresetStore, PRESET_FILENAME
 
 
 @pytest.fixture

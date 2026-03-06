@@ -31,7 +31,7 @@ def get_tool(mcp, name):
 async def test_estimate_tokens_basic(mcp_instance, mock_workspace):
     """Test estimate_tokens returns token count"""
     with patch(
-        "services.tokenization_service.TokenizationService.count_tokens",
+        "application.services.tokenization_service.TokenizationService.count_tokens",
         return_value=10,
     ):
         tool = get_tool(mcp_instance, "estimate_tokens")
@@ -78,7 +78,7 @@ async def test_estimate_tokens_multiple_files(mcp_instance, mock_workspace):
     (mock_workspace / "test2.py").write_text("def bar(): pass")
 
     with patch(
-        "services.tokenization_service.TokenizationService.count_tokens",
+        "application.services.tokenization_service.TokenizationService.count_tokens",
         return_value=10,
     ):
         tool = get_tool(mcp_instance, "estimate_tokens")

@@ -15,25 +15,25 @@ import logging
 from pathlib import Path
 from typing import Optional, Set
 
-from core.utils.file_utils import TreeItem, is_binary_file
+from infrastructure.filesystem.file_utils import TreeItem, is_binary_file
 
 # Single source of truth cho path display
-from core.prompting.path_utils import path_for_display
+from shared.utils.path_utils import path_for_display
 
-from core.utils.language_utils import get_language_from_path
-from core.utils.git_utils import GitDiffResult, GitLogResult
-from config.output_format import OutputStyle
+from shared.utils.language_utils import get_language_from_path
+from infrastructure.git.git_utils import GitDiffResult, GitLogResult
+from presentation.config.output_format import OutputStyle
 
 # === Pipeline imports ===
-from core.prompting.file_collector import collect_files
-from core.prompting.formatters.markdown import format_files_markdown
-from core.prompting.delimiter_utils import calculate_markdown_delimiter
-from core.prompting.formatters.xml import (
+from domain.prompt.file_collector import collect_files
+from domain.prompt.formatters.markdown import format_files_markdown
+from shared.utils.delimiter_utils import calculate_markdown_delimiter
+from domain.prompt.formatters.xml import (
     format_files_xml,
 )
-from core.prompting.formatters.json_fmt import format_files_json
-from core.prompting.formatters.plain import format_files_plain
-from core.prompting.prompt_assembler import (
+from domain.prompt.formatters.json_fmt import format_files_json
+from domain.prompt.formatters.plain import format_files_plain
+from domain.prompt.assembler import (
     assemble_prompt,
     assemble_smart_prompt,
 )
@@ -283,7 +283,7 @@ def _generate_codemap_xml(
     Returns:
         XML string voi codemap content
     """
-    from core.smart_context import smart_parse, is_supported
+    from domain.smart_context import smart_parse, is_supported
     from xml.sax.saxutils import escape as xml_escape
 
     def _xml_attr_escape(s: str) -> str:
@@ -416,7 +416,7 @@ def generate_file_contents_json(
 
         # Codemap files
         if codemap_only:
-            from core.smart_context import smart_parse, is_supported
+            from domain.smart_context import smart_parse, is_supported
 
             for path_str in sorted(codemap_only):
                 path = Path(path_str)
@@ -532,7 +532,7 @@ def generate_file_contents_plain(
 
         # Codemap files
         if codemap_only:
-            from core.smart_context import smart_parse, is_supported
+            from domain.smart_context import smart_parse, is_supported
 
             for path_str in sorted(codemap_only):
                 path = Path(path_str)
@@ -606,7 +606,7 @@ def generate_smart_context(
         Smart context string voi code signatures
     """
     from concurrent.futures import ThreadPoolExecutor
-    from core.smart_context import smart_parse, is_supported
+    from domain.smart_context import smart_parse, is_supported
 
     sorted_paths = sorted(selected_paths)
 
@@ -769,7 +769,7 @@ def generate_prompt(
     Returns:
         Prompt hoan chinh
     """
-    from services.settings_manager import load_app_settings
+    from infrastructure.persistence.settings_manager import load_app_settings
 
     settings = load_app_settings()
     enable_ai_memory = settings.enable_ai_memory

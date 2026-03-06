@@ -18,7 +18,7 @@ class TestIsBinaryFile:
 
     def test_binary_with_extension(self, tmp_path):
         """File có extension binary (.exe) phải được detect"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         exe_file = tmp_path / "test.exe"
         exe_file.write_bytes(b"MZ" + b"\x00" * 100)
@@ -26,7 +26,7 @@ class TestIsBinaryFile:
 
     def test_binary_without_extension_elf(self, tmp_path):
         """ELF binary (Linux executable) KHÔNG có extension phải được detect"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         # ELF magic bytes
         elf_binary = tmp_path / "my-program-x86_64-unknown-linux-gnu"
@@ -35,7 +35,7 @@ class TestIsBinaryFile:
 
     def test_binary_without_extension_macho(self, tmp_path):
         """Mach-O binary (macOS executable) KHÔNG có extension phải được detect"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         # Mach-O magic bytes (64-bit)
         macho_binary = tmp_path / "my-program-aarch64-apple-darwin"
@@ -44,7 +44,7 @@ class TestIsBinaryFile:
 
     def test_binary_without_extension_null_bytes(self, tmp_path):
         """File chứa null bytes phải được detect là binary"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         binary_file = tmp_path / "some-binary-no-ext"
         binary_file.write_bytes(b"some data\x00more data\x00" + b"\x00" * 50)
@@ -52,7 +52,7 @@ class TestIsBinaryFile:
 
     def test_text_file_not_binary(self, tmp_path):
         """File text thuần KHÔNG phải binary"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         text_file = tmp_path / "readme.txt"
         text_file.write_text("Hello world\nThis is text\n")
@@ -60,7 +60,7 @@ class TestIsBinaryFile:
 
     def test_text_file_without_extension_not_binary(self, tmp_path):
         """File text KHÔNG có extension cũng KHÔNG phải binary"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         text_file = tmp_path / "Makefile"
         text_file.write_text("all:\n\techo hello\n")
@@ -68,7 +68,7 @@ class TestIsBinaryFile:
 
     def test_empty_file_not_binary(self, tmp_path):
         """File rỗng KHÔNG phải binary"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         empty_file = tmp_path / "empty"
         empty_file.write_bytes(b"")
@@ -76,7 +76,7 @@ class TestIsBinaryFile:
 
     def test_nonexistent_file_not_binary(self, tmp_path):
         """File không tồn tại → False"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         missing = tmp_path / "does-not-exist"
         assert is_binary_file(missing) is False
@@ -87,7 +87,7 @@ class TestIsBinaryByExtension:
 
     def test_misses_binary_without_extension(self, tmp_path):
         """EXPECTED: is_binary_by_extension MISS binary without extension"""
-        from core.utils.file_utils import is_binary_by_extension
+        from infrastructure.filesystem.file_utils import is_binary_by_extension
 
         # ELF binary without extension
         elf_file = tmp_path / "cli-proxy-x86_64-linux"
@@ -98,7 +98,7 @@ class TestIsBinaryByExtension:
 
     def test_detects_binary_with_extension(self, tmp_path):
         """is_binary_by_extension CAN detect .exe"""
-        from core.utils.file_utils import is_binary_by_extension
+        from infrastructure.filesystem.file_utils import is_binary_by_extension
 
         exe_file = tmp_path / "test.exe"
         exe_file.write_bytes(b"MZ" + b"\x00" * 100)
@@ -110,8 +110,8 @@ class TestTokenCountWorkerSkipsBinary:
 
     def test_skip_binary_without_extension(self, tmp_path):
         """TokenCountWorker phải skip binary files KHÔNG có extension"""
-        from components.file_tree_model import TokenCountWorker
-        from services.tokenization_service import TokenizationService
+        from presentation.components.file_tree.file_tree_model import TokenCountWorker
+        from application.services.tokenization_service import TokenizationService
 
         # Create binary file without extension (giả lập ELF)
         binary_file = tmp_path / "my-binary-x86_64-linux"
@@ -141,8 +141,8 @@ class TestTokenCountWorkerSkipsBinary:
 
     def test_skip_large_file(self, tmp_path):
         """TokenCountWorker phải skip files > 5MB"""
-        from components.file_tree_model import TokenCountWorker
-        from services.tokenization_service import TokenizationService
+        from presentation.components.file_tree.file_tree_model import TokenCountWorker
+        from application.services.tokenization_service import TokenizationService
 
         # Create large text file (> 5MB)
         large_file = tmp_path / "huge.txt"
@@ -170,7 +170,7 @@ class TestGetSelectedPathsSkipsBinary:
 
     def test_skip_binary_file_in_selection(self, tmp_path):
         """get_selected_paths phải skip binary files KHÔNG có extension"""
-        from components.file_tree_model import FileTreeModel
+        from presentation.components.file_tree.file_tree_model import FileTreeModel
 
         # Create files
         binary_file = tmp_path / "my-elf-binary"
@@ -179,13 +179,13 @@ class TestGetSelectedPathsSkipsBinary:
         text_file = tmp_path / "code.py"
         text_file.write_text("x = 1")
 
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         model = FileTreeModel(ignore_engine=IgnoreEngine())
         model._workspace_path = tmp_path  # Required for get_selected_paths()
 
         # Simulate: add nodes to model
-        from components.file_tree_model import TreeNode
+        from presentation.components.file_tree.file_tree_model import TreeNode
 
         root_node = TreeNode("root", str(tmp_path), is_dir=True)
         bin_node = TreeNode("my-elf-binary", str(binary_file), is_dir=False)
@@ -215,7 +215,7 @@ class TestCollectFilesFromDiskSkipsBinary:
 
     def test_skip_binary_in_disk_scan(self, tmp_path):
         """collect_files_from_disk phai skip binary KHONG co extension"""
-        from services.workspace_index import collect_files_from_disk
+        from application.services.workspace_index import collect_files_from_disk
 
         # Create .git dir to anchor root path resolution
         (tmp_path / ".git").mkdir()
@@ -243,7 +243,7 @@ class TestPromptGeneratorSkipsBinary:
 
     def test_xml_format_skip_binary(self, tmp_path):
         """generate_file_contents_xml phải skip binary KHÔNG có extension"""
-        from core.prompt_generator import generate_file_contents_xml
+        from domain.prompt.generator import generate_file_contents_xml
 
         binary_file = tmp_path / "server-binary"
         binary_file.write_bytes(b"\x7fELF" + b"\x00" * 100)
@@ -261,7 +261,7 @@ class TestPromptGeneratorSkipsBinary:
     def test_json_format_skip_binary(self, tmp_path):
         """generate_file_contents_json phải skip binary KHÔNG có extension"""
         import json
-        from core.prompt_generator import generate_file_contents_json
+        from domain.prompt.generator import generate_file_contents_json
 
         binary_file = tmp_path / "server-binary"
         binary_file.write_bytes(b"\x7fELF" + b"\x00" * 100)
@@ -284,7 +284,7 @@ class TestPromptGeneratorSkipsBinary:
 
     def test_plain_format_skip_binary(self, tmp_path):
         """generate_file_contents_plain phải skip binary KHÔNG có extension"""
-        from core.prompt_generator import generate_file_contents_plain
+        from domain.prompt.generator import generate_file_contents_plain
 
         binary_file = tmp_path / "server-binary"
         binary_file.write_bytes(b"\x7fELF" + b"\x00" * 100)
@@ -333,7 +333,7 @@ class TestRealWorldProxypalBinaries:
     )
     def test_all_proxypal_binaries_detected(self):
         """Tất cả binary files trong proxypal phải được is_binary_file detect"""
-        from core.utils.file_utils import is_binary_file
+        from infrastructure.filesystem.file_utils import is_binary_file
 
         for f in self.BINARIES_DIR.iterdir():
             if f.is_file():
@@ -347,8 +347,8 @@ class TestRealWorldProxypalBinaries:
     )
     def test_token_worker_skips_proxypal_binaries(self):
         """TokenCountWorker phải skip tất cả proxypal binaries, KHÔNG đọc file"""
-        from components.file_tree_model import TokenCountWorker
-        from services.tokenization_service import TokenizationService
+        from presentation.components.file_tree.file_tree_model import TokenCountWorker
+        from application.services.tokenization_service import TokenizationService
 
         binary_paths = [str(f) for f in self.BINARIES_DIR.iterdir() if f.is_file()]
         assert len(binary_paths) > 0, "No binary files found"

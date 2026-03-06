@@ -7,7 +7,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from PySide6.QtCore import Qt
 
-from views.logs_view_qt import LogsViewQt
+from presentation.views.logs.logs_view_qt import LogsViewQt
 
 
 @pytest.fixture
@@ -29,9 +29,9 @@ def mock_log_file(tmp_path):
 def _create_view(qtbot, log_dir):
     """Helper tao LogsViewQt voi mock LOG_DIR."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -43,9 +43,9 @@ def test_logs_view_load_and_filter(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -69,9 +69,9 @@ def test_logs_view_clear(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -89,9 +89,9 @@ def test_on_view_activated_loads_once(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -112,9 +112,9 @@ def test_load_logs_no_files(qtbot, tmp_path):
     empty_dir.mkdir()
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", empty_dir),
-        patch("views.logs_view_qt.toast_success") as mock_success,
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", empty_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success") as mock_success,
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -127,15 +127,18 @@ def test_load_logs_no_files(qtbot, tmp_path):
 def test_load_logs_exception(qtbot, tmp_path):
     """Kiem tra _load_logs xu ly exception (line 240-241)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error") as mock_error,
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error") as mock_error,
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
 
         # Patch sorted to raise when called during _load_logs
-        with patch("views.logs_view_qt.sorted", side_effect=PermissionError("denied")):
+        with patch(
+            "presentation.views.logs.logs_view_qt.sorted",
+            side_effect=PermissionError("denied"),
+        ):
             view._load_logs()
             mock_error.assert_called_once()
 
@@ -143,9 +146,9 @@ def test_load_logs_exception(qtbot, tmp_path):
 def test_parse_log_line_empty(qtbot, tmp_path):
     """Kiem tra _parse_log_line voi empty line (line 244-245)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -156,9 +159,9 @@ def test_parse_log_line_empty(qtbot, tmp_path):
 def test_parse_log_line_no_timestamp(qtbot, tmp_path):
     """Kiem tra _parse_log_line voi line khong co timestamp (line 256-257)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -171,9 +174,9 @@ def test_parse_log_line_no_timestamp(qtbot, tmp_path):
 def test_parse_log_line_with_timestamp(qtbot, tmp_path):
     """Kiem tra _parse_log_line voi timestamp (line 253-255)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -188,9 +191,9 @@ def test_render_logs_empty_filter(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -207,9 +210,9 @@ def test_render_logs_warning_background(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -225,9 +228,9 @@ def test_render_logs_warning_background(qtbot, mock_log_file):
 def test_toggle_debug(qtbot, tmp_path):
     """Kiem tra _toggle_debug goi set_debug_mode (line 313-319)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success") as mock_success,
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success") as mock_success,
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -247,11 +250,12 @@ def test_copy_all(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
         patch(
-            "views.logs_view_qt.copy_to_clipboard", return_value=(True, None)
+            "presentation.views.logs.logs_view_qt.copy_to_clipboard",
+            return_value=(True, None),
         ) as mock_copy,
     ):
         view = LogsViewQt()
@@ -265,9 +269,9 @@ def test_copy_all(qtbot, mock_log_file):
 def test_copy_all_no_logs(qtbot, tmp_path):
     """Kiem tra _copy_all khi khong co logs (line 323-324)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error") as mock_error,
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error") as mock_error,
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -280,11 +284,12 @@ def test_copy_errors(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
         patch(
-            "views.logs_view_qt.copy_to_clipboard", return_value=(True, None)
+            "presentation.views.logs.logs_view_qt.copy_to_clipboard",
+            return_value=(True, None),
         ) as mock_copy,
     ):
         view = LogsViewQt()
@@ -303,9 +308,9 @@ def test_copy_errors_no_errors(qtbot, mock_log_file):
     log_dir, _ = mock_log_file
 
     with (
-        patch("views.logs_view_qt.LOG_DIR", log_dir),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error") as mock_error,
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", log_dir),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error") as mock_error,
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -318,9 +323,9 @@ def test_copy_errors_no_errors(qtbot, mock_log_file):
 def test_show_status_error(qtbot, tmp_path):
     """Kiem tra _show_status voi is_error (line 365-373)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success"),
-        patch("views.logs_view_qt.toast_error") as mock_error,
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success"),
+        patch("presentation.views.logs.logs_view_qt.toast_error") as mock_error,
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -331,9 +336,9 @@ def test_show_status_error(qtbot, tmp_path):
 def test_show_status_empty(qtbot, tmp_path):
     """Kiem tra _show_status voi empty message (line 367-368)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success") as mock_success,
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success") as mock_success,
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)
@@ -344,9 +349,9 @@ def test_show_status_empty(qtbot, tmp_path):
 def test_show_status_success(qtbot, tmp_path):
     """Kiem tra _show_status thanh cong (line 371-373)."""
     with (
-        patch("views.logs_view_qt.LOG_DIR", tmp_path),
-        patch("views.logs_view_qt.toast_success") as mock_success,
-        patch("views.logs_view_qt.toast_error"),
+        patch("presentation.views.logs.logs_view_qt.LOG_DIR", tmp_path),
+        patch("presentation.views.logs.logs_view_qt.toast_success") as mock_success,
+        patch("presentation.views.logs.logs_view_qt.toast_error"),
     ):
         view = LogsViewQt()
         qtbot.addWidget(view)

@@ -27,18 +27,30 @@ def test_context_view_default_services_injected(qtbot):
     mock_app_settings.output_format = None
 
     with (
-        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
-        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
         patch(
-            "views.context._ui_builder.load_app_settings",
+            "presentation.views.context.ui_builder.FileTreeWidget", FakeFileTreeWidget
+        ),
+        patch(
+            "presentation.views.context.ui_builder.TokenStatsPanelQt",
+            FakeTokenStatsPanel,
+        ),
+        patch(
+            "presentation.views.context.ui_builder.load_app_settings",
             return_value=mock_app_settings,
         ),
-        patch("core.prompting.template_manager.list_templates", return_value=[]),
-        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
-        patch("services.prompt_build_service.PromptBuildService") as mock_pb,
-        patch("services.prompt_build_service.QtClipboardService") as mock_cs,
+        patch("domain.prompt.template_manager.list_templates", return_value=[]),
+        patch(
+            "presentation.views.context.context_view_qt.FileWatcher",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "application.services.prompt_build_service.PromptBuildService"
+        ) as mock_pb,
+        patch(
+            "application.services.prompt_build_service.QtClipboardService"
+        ) as mock_cs,
     ):
-        from views.context_view_qt import ContextViewQt
+        from presentation.views.context.context_view_qt import ContextViewQt
 
         view = ContextViewQt(
             get_workspace=lambda: Path("/fake/workspace"),
@@ -113,7 +125,7 @@ def test_on_workspace_changed(context_view):
 
     new_path = Path("/new/workspace")
     with (
-        patch("services.cache_registry.cache_registry") as mock_registry,
+        patch("infrastructure.adapters.cache_registry.cache_registry") as mock_registry,
         patch("core.logging_config.log_info"),
     ):
         # workspace path doesn't exist in test
@@ -134,7 +146,7 @@ def test_on_workspace_changed_starts_watcher(context_view, tmp_path):
     view._file_watcher = mock_watcher
 
     with (
-        patch("services.cache_registry.cache_registry"),
+        patch("infrastructure.adapters.cache_registry.cache_registry"),
         patch("core.logging_config.log_info"),
     ):
         view.on_workspace_changed(tmp_path)
@@ -184,7 +196,7 @@ def test_cleanup(context_view):
     copy_controller = view._copy_controller
     copy_controller._stale_workers = [mock_qobj, "not_a_qobject"]
 
-    with patch("components.toast_qt.ToastManager") as mock_toast_mgr:
+    with patch("presentation.components.toast.toast_qt.ToastManager") as mock_toast_mgr:
         mock_instance = MagicMock()
         mock_toast_mgr.instance.return_value = mock_instance
         view.cleanup()
@@ -206,7 +218,7 @@ def test_cleanup_toast_exception(context_view):
     view.file_tree_widget.cleanup = MagicMock()
     view._file_watcher = None
 
-    with patch("components.toast_qt.ToastManager") as mock_toast_mgr:
+    with patch("presentation.components.toast.toast_qt.ToastManager") as mock_toast_mgr:
         mock_toast_mgr.instance.side_effect = RuntimeError("no app")
         view.cleanup()  # Should not raise
 
@@ -236,8 +248,10 @@ def test_on_format_changed(context_view):
     """Kiem tra _on_format_changed cap nhat style va settings (lines 234-244)."""
     view = context_view
     with (
-        patch("views.context_view_qt.update_app_setting"),
-        patch("views.context_view_qt.get_style_by_id") as mock_get_style,
+        patch("presentation.views.context.context_view_qt.update_app_setting"),
+        patch(
+            "presentation.views.context.context_view_qt.get_style_by_id"
+        ) as mock_get_style,
     ):
         mock_get_style.return_value = MagicMock()
         view._format_combo.setCurrentIndex(0)
@@ -248,7 +262,10 @@ def test_on_format_changed(context_view):
 def test_on_format_changed_value_error(context_view):
     """Kiem tra _on_format_changed xu ly ValueError (line 243-244)."""
     view = context_view
-    with patch("views.context_view_qt.get_style_by_id", side_effect=ValueError("bad")):
+    with patch(
+        "presentation.views.context.context_view_qt.get_style_by_id",
+        side_effect=ValueError("bad"),
+    ):
         view._on_format_changed(0)  # Should not raise
 
 
@@ -259,7 +276,7 @@ def test_on_template_selected(context_view):
     mock_action.data.return_value = "test_template_id"
 
     with patch(
-        "core.prompting.template_manager.load_template", return_value="Template content"
+        "domain.prompt.template_manager.load_template", return_value="Template content"
     ):
         view._on_template_selected(mock_action)
 
@@ -274,7 +291,7 @@ def test_on_template_selected_replaces_existing(context_view):
     mock_action.data.return_value = "test_template_id"
 
     with patch(
-        "core.prompting.template_manager.load_template", return_value="New template"
+        "domain.prompt.template_manager.load_template", return_value="New template"
     ):
         view._on_template_selected(mock_action)
 
@@ -290,7 +307,7 @@ def test_on_template_selected_error(context_view):
     mock_action.data.return_value = "bad_id"
 
     with patch(
-        "core.prompting.template_manager.load_template", side_effect=Exception("fail")
+        "domain.prompt.template_manager.load_template", side_effect=Exception("fail")
     ):
         view._on_template_selected(mock_action)  # Should not raise
 
@@ -301,7 +318,8 @@ def test_populate_history_menu_empty(context_view):
     mock_settings = MagicMock()
     mock_settings.instruction_history = []
     with patch(
-        "services.settings_manager.load_app_settings", return_value=mock_settings
+        "infrastructure.persistence.settings_manager.load_app_settings",
+        return_value=mock_settings,
     ):
         view._populate_history_menu()
 
@@ -320,7 +338,8 @@ def test_populate_history_menu_with_entries(context_view):
         "A" * 100,  # Long instruction -> truncated label
     ]
     with patch(
-        "services.settings_manager.load_app_settings", return_value=mock_settings
+        "infrastructure.persistence.settings_manager.load_app_settings",
+        return_value=mock_settings,
     ):
         view._populate_history_menu()
 
@@ -353,7 +372,8 @@ def test_on_model_changed(context_view):
     view.file_tree_widget._start_token_counting = MagicMock()
 
     with patch(
-        "services.encoder_registry.get_tokenizer_repo", return_value="test/repo"
+        "infrastructure.adapters.encoder_registry.get_tokenizer_repo",
+        return_value="test/repo",
     ) as mock_repo:
         with patch.object(
             view._tokenization_service, "set_model_config"
@@ -368,7 +388,7 @@ def test_on_model_changed(context_view):
 def test_show_status_error(context_view):
     """Kiem tra _show_status voi is_error=True (lines 370-382)."""
     view = context_view
-    with patch("components.toast_qt.toast_error") as mock_toast:
+    with patch("presentation.components.toast.toast_qt.toast_error") as mock_toast:
         view._show_status("Something failed", is_error=True)
         mock_toast.assert_called_once_with("Something failed")
 
@@ -376,7 +396,7 @@ def test_show_status_error(context_view):
 def test_show_status_success(context_view):
     """Kiem tra _show_status voi is_error=False."""
     view = context_view
-    with patch("components.toast_qt.toast_success") as mock_toast:
+    with patch("presentation.components.toast.toast_qt.toast_success") as mock_toast:
         view._show_status("Done!", is_error=False)
         mock_toast.assert_called_once_with("Done!")
 
@@ -384,6 +404,6 @@ def test_show_status_success(context_view):
 def test_show_status_empty_message(context_view):
     """Kiem tra _show_status voi empty message (line 372-373)."""
     view = context_view
-    with patch("components.toast_qt.toast_success") as mock_toast:
+    with patch("presentation.components.toast.toast_qt.toast_success") as mock_toast:
         view._show_status("")
         mock_toast.assert_not_called()

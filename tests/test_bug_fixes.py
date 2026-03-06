@@ -13,8 +13,8 @@ class TestBug1TokenCountWorkerArgument:
 
     def test_worker_accepts_tokenization_service(self, tmp_path):
         """TokenCountWorker should accept tokenization_service parameter"""
-        from components.file_tree_model import TokenCountWorker
-        from services.tokenization_service import TokenizationService
+        from presentation.components.file_tree.file_tree_model import TokenCountWorker
+        from application.services.tokenization_service import TokenizationService
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')")
@@ -48,8 +48,8 @@ class TestBug2And3SingleServiceContainer:
 
     def test_context_view_receives_injected_services(self, qtbot):
         """ContextViewQt should receive ignore_engine and tokenization_service"""
-        from views.context_view_qt import ContextViewQt
-        from services.service_container import ServiceContainer
+        from presentation.views.context.context_view_qt import ContextViewQt
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
 
@@ -68,16 +68,19 @@ class TestBug2And3SingleServiceContainer:
 
     def test_cache_adapters_use_same_services(self):
         """Cache adapters should reference the same service instances as views"""
-        from services.service_container import ServiceContainer
-        from services.cache_adapters import TokenCacheAdapter, IgnoreCacheAdapter
-        from services.cache_registry import cache_registry
+        from application.services.service_container import ServiceContainer
+        from infrastructure.adapters.cache_adapters import (
+            TokenCacheAdapter,
+            IgnoreCacheAdapter,
+        )
+        from infrastructure.adapters.cache_registry import cache_registry
 
         # In test environment, cache_registry might be empty
         # The important thing is that when adapters ARE registered,
         # they use the same service instances
 
         # Create a fresh container and register adapters
-        from services.cache_adapters import register_all_caches
+        from infrastructure.adapters.cache_adapters import register_all_caches
 
         container = ServiceContainer()
         register_all_caches(
@@ -101,8 +104,8 @@ class TestBug4WorkspaceIndexIgnoreEngine:
 
     def test_build_search_index_accepts_ignore_engine(self, tmp_path):
         """build_search_index should accept optional ignore_engine parameter"""
-        from services.workspace_index import build_search_index
-        from core.ignore_engine import IgnoreEngine
+        from application.services.workspace_index import build_search_index
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / "test.py").write_text("x = 1")
 
@@ -114,8 +117,8 @@ class TestBug4WorkspaceIndexIgnoreEngine:
 
     def test_collect_files_accepts_ignore_engine(self, tmp_path):
         """collect_files_from_disk should accept optional ignore_engine parameter"""
-        from services.workspace_index import collect_files_from_disk
-        from core.ignore_engine import IgnoreEngine
+        from application.services.workspace_index import collect_files_from_disk
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / "test.py").write_text("x = 1")
 
@@ -129,8 +132,8 @@ class TestBug4WorkspaceIndexIgnoreEngine:
 
     def test_ignore_engine_cache_reused(self, tmp_path):
         """IgnoreEngine cache should be reused across multiple calls"""
-        from services.workspace_index import build_search_index
-        from core.ignore_engine import IgnoreEngine
+        from application.services.workspace_index import build_search_index
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / ".gitignore").write_text("*.log")
         (tmp_path / "test.py").write_text("x = 1")
@@ -155,7 +158,7 @@ class TestBug5IgnoreEngineThreadSafety:
 
     def test_ignore_engine_has_lock(self):
         """IgnoreEngine should have a threading.Lock"""
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         assert hasattr(engine, "_lock")
@@ -165,7 +168,7 @@ class TestBug5IgnoreEngineThreadSafety:
 
     def test_concurrent_cache_access_no_race(self, tmp_path):
         """Concurrent cache access should not cause race conditions"""
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / ".gitignore").write_text("*.log")
 
@@ -201,7 +204,7 @@ class TestBug5IgnoreEngineThreadSafety:
 
     def test_clear_cache_thread_safe(self, tmp_path):
         """clear_cache should be thread-safe"""
-        from core.ignore_engine import IgnoreEngine
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
 
@@ -229,8 +232,8 @@ class TestPromptBuilderUsesContainerTokenization:
 
     def test_prompt_builder_receives_tokenization_service(self):
         """PromptBuildService should receive tokenization_service from container"""
-        from services.service_container import ServiceContainer
-        from services.prompt_build_service import PromptBuildService
+        from application.services.service_container import ServiceContainer
+        from application.services.prompt_build_service import PromptBuildService
 
         container = ServiceContainer()
 

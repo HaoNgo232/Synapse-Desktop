@@ -38,16 +38,24 @@ def test_refresh_tree_no_workspace(qtbot):
     mock_app_settings.output_format = None
 
     with (
-        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
-        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
         patch(
-            "views.context._ui_builder.load_app_settings",
+            "presentation.views.context.ui_builder.FileTreeWidget", FakeFileTreeWidget
+        ),
+        patch(
+            "presentation.views.context.ui_builder.TokenStatsPanelQt",
+            FakeTokenStatsPanel,
+        ),
+        patch(
+            "presentation.views.context.ui_builder.load_app_settings",
             return_value=mock_app_settings,
         ),
-        patch("core.prompting.template_manager.list_templates", return_value=[]),
-        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+        patch("domain.prompt.template_manager.list_templates", return_value=[]),
+        patch(
+            "presentation.views.context.context_view_qt.FileWatcher",
+            return_value=MagicMock(),
+        ),
     ):
-        from views.context_view_qt import ContextViewQt
+        from presentation.views.context.context_view_qt import ContextViewQt
 
         view = ContextViewQt(
             get_workspace=lambda: None,
@@ -123,7 +131,7 @@ def test_undo_ignore_nothing_to_undo(context_view):
     view._tree_controller.undo_ignore()
 
 
-@patch("components.dialogs_qt.FilePreviewDialogQt")
+@patch("presentation.components.dialogs.dialogs_qt.FilePreviewDialogQt")
 def test_preview_file(mock_dialog, context_view):
     """Kiem tra _preview_file goi FilePreviewDialogQt.show_preview (line 80-82)."""
     view = context_view
@@ -133,8 +141,8 @@ def test_preview_file(mock_dialog, context_view):
     )
 
 
-@patch("components.dialogs_qt.RemoteRepoDialogQt")
-@patch("core.utils.repo_manager.RepoManager")
+@patch("presentation.components.dialogs.dialogs_qt.RemoteRepoDialogQt")
+@patch("infrastructure.git.repo_manager.RepoManager")
 def test_open_remote_repo_dialog(mock_repo_mgr, mock_dialog, context_view):
     """Kiem tra _open_remote_repo_dialog tao dialog va exec (line 84-98)."""
     view = context_view
@@ -149,7 +157,7 @@ def test_open_remote_repo_dialog(mock_repo_mgr, mock_dialog, context_view):
     mock_dialog_instance.exec.assert_called_once()
 
 
-@patch("components.dialogs_qt.RemoteRepoDialogQt")
+@patch("presentation.components.dialogs.dialogs_qt.RemoteRepoDialogQt")
 def test_open_remote_repo_dialog_existing_manager(mock_dialog, context_view):
     """Kiem tra _open_remote_repo_dialog reuse existing repo manager."""
     view = context_view
@@ -163,8 +171,8 @@ def test_open_remote_repo_dialog_existing_manager(mock_dialog, context_view):
     assert view._tree_controller._repo_manager is existing_manager
 
 
-@patch("components.dialogs_qt.CacheManagementDialogQt")
-@patch("core.utils.repo_manager.RepoManager")
+@patch("presentation.components.dialogs.dialogs_qt.CacheManagementDialogQt")
+@patch("infrastructure.git.repo_manager.RepoManager")
 def test_open_cache_management_dialog(mock_repo_mgr, mock_dialog, context_view):
     """Kiem tra _open_cache_management_dialog tao dialog va exec (line 100-113)."""
     view = context_view
@@ -179,7 +187,7 @@ def test_open_cache_management_dialog(mock_repo_mgr, mock_dialog, context_view):
     mock_dialog_instance.exec.assert_called_once()
 
 
-@patch("services.cache_registry.cache_registry")
+@patch("infrastructure.adapters.cache_registry.cache_registry")
 def test_on_file_modified(mock_registry, context_view):
     """Kiem tra _on_file_modified invalidate caches."""
     view = context_view
@@ -205,7 +213,7 @@ def test_on_file_created_no_crash(context_view):
     view._tree_controller.on_file_created("/fake/workspace/new.py")
 
 
-@patch("views.context.tree_management_controller.run_on_main_thread")
+@patch("presentation.views.context.tree_management_controller.run_on_main_thread")
 def test_on_file_system_changed(mock_run, context_view):
     """Kiem tra _on_file_system_changed dispatch refresh len main thread."""
     view = context_view
@@ -213,7 +221,7 @@ def test_on_file_system_changed(mock_run, context_view):
     mock_run.assert_called_once()
 
 
-@patch("views.context.tree_management_controller.run_on_main_thread")
+@patch("presentation.views.context.tree_management_controller.run_on_main_thread")
 def test_on_file_system_changed_no_workspace(mock_run, qtbot):
     """Kiem tra _on_file_system_changed khong lam gi khi khong co workspace."""
     from tests.ui.conftest import FakeFileTreeWidget, FakeTokenStatsPanel
@@ -222,16 +230,24 @@ def test_on_file_system_changed_no_workspace(mock_run, qtbot):
     mock_app_settings.output_format = None
 
     with (
-        patch("views.context._ui_builder.FileTreeWidget", FakeFileTreeWidget),
-        patch("views.context._ui_builder.TokenStatsPanelQt", FakeTokenStatsPanel),
         patch(
-            "views.context._ui_builder.load_app_settings",
+            "presentation.views.context.ui_builder.FileTreeWidget", FakeFileTreeWidget
+        ),
+        patch(
+            "presentation.views.context.ui_builder.TokenStatsPanelQt",
+            FakeTokenStatsPanel,
+        ),
+        patch(
+            "presentation.views.context.ui_builder.load_app_settings",
             return_value=mock_app_settings,
         ),
-        patch("core.prompting.template_manager.list_templates", return_value=[]),
-        patch("views.context_view_qt.FileWatcher", return_value=MagicMock()),
+        patch("domain.prompt.template_manager.list_templates", return_value=[]),
+        patch(
+            "presentation.views.context.context_view_qt.FileWatcher",
+            return_value=MagicMock(),
+        ),
     ):
-        from views.context_view_qt import ContextViewQt
+        from presentation.views.context.context_view_qt import ContextViewQt
 
         view = ContextViewQt(
             get_workspace=lambda: None,

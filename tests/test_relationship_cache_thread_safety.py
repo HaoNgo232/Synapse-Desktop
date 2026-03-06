@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def test_relationship_cache_thread_safety(tmp_path):
     """Test concurrent access to relationship cache doesn't cause race conditions."""
-    from core.smart_context.parser import _build_relationships_section
+    from domain.smart_context.parser import _build_relationships_section
 
     # Create test files with different content
     test_files = []
@@ -48,7 +48,7 @@ def function_{i}_b():
 
 def test_relationship_cache_content_change():
     """Test cache invalidation when content changes."""
-    from core.smart_context.parser import _build_relationships_section
+    from domain.smart_context.parser import _build_relationships_section
 
     file_path = "test.py"
 

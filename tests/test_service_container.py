@@ -26,7 +26,7 @@ class TestServiceContainerCreation:
 
     def test_creates_prompt_builder(self):
         """Container phai tao PromptBuildService instance."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
         from services.service_interfaces import IPromptBuilder
 
         container = ServiceContainer()
@@ -34,7 +34,7 @@ class TestServiceContainerCreation:
 
     def test_creates_clipboard_service(self):
         """Container phai tao QtClipboardService instance."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
         from services.service_interfaces import IClipboardService
 
         container = ServiceContainer()
@@ -42,8 +42,8 @@ class TestServiceContainerCreation:
 
     def test_creates_owned_cache_registry(self):
         """Container phai tao CacheRegistry rieng (khong dung global singleton)."""
-        from services.service_container import ServiceContainer
-        from services.cache_registry import CacheRegistry
+        from application.services.service_container import ServiceContainer
+        from infrastructure.adapters.cache_registry import CacheRegistry
 
         container = ServiceContainer()
         # Container so huu instance rieng cua CacheRegistry
@@ -51,7 +51,7 @@ class TestServiceContainerCreation:
 
     def test_creates_owned_tokenization_service(self):
         """Container phai tao TokenizationService rieng (khong dung global singleton)."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
         from services.interfaces.tokenization_service import ITokenizationService
 
         container = ServiceContainer()
@@ -60,7 +60,7 @@ class TestServiceContainerCreation:
 
     def test_two_containers_share_cache_registry_until_phase2(self):
         """Moi container hien su dung module-level cache_registry."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container_a = ServiceContainer()
         container_b = ServiceContainer()
@@ -73,7 +73,7 @@ class TestServiceContainerLifecycle:
 
     def test_reset_for_model_change_updates_tokenization(self):
         """reset_for_model_change() phai cap nhat tokenization service config."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
         # Mock _resolve_tokenizer_repo de kiem soat test
@@ -85,7 +85,7 @@ class TestServiceContainerLifecycle:
 
     def test_shutdown_does_not_raise(self):
         """shutdown() khong duoc raise exception."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
         # Should not raise
@@ -93,7 +93,7 @@ class TestServiceContainerLifecycle:
 
     def test_shutdown_invalidates_caches(self):
         """shutdown() phai goi invalidate_for_workspace() tren cache_registry."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
         with patch.object(
@@ -108,7 +108,7 @@ class TestServiceContainerHealthReport:
 
     def test_health_report_contains_cache_stats(self):
         """get_health_report() phai tra ve cache_stats."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
         report = container.get_health_report()
@@ -118,7 +118,7 @@ class TestServiceContainerHealthReport:
 
     def test_health_report_contains_registered_names(self):
         """get_health_report() phai tra ve danh sach caches da dang ky."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
         report = container.get_health_report()
@@ -128,7 +128,7 @@ class TestServiceContainerHealthReport:
 
     def test_health_report_handles_cache_error_gracefully(self):
         """get_health_report() khong crash khi cache loi."""
-        from services.service_container import ServiceContainer
+        from application.services.service_container import ServiceContainer
 
         container = ServiceContainer()
 

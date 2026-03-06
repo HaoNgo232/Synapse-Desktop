@@ -10,8 +10,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Set
 
-from core.codemaps.symbol_extractor import extract_symbols
-from core.codemaps.types import Symbol
+from domain.codemap.symbol_extractor import extract_symbols
+from domain.codemap.types import Symbol
 
 SMALL_FILE_THRESHOLD = 200
 

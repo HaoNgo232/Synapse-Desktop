@@ -15,7 +15,7 @@ Strategy:
 
 from pathlib import Path
 
-from core.prompt_generator import (
+from domain.prompt.generator import (
     generate_file_contents,
     generate_file_contents_xml,
     generate_file_contents_json,

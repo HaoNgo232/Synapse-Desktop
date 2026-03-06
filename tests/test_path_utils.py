@@ -13,7 +13,7 @@ Kiem tra cac truong hop:
 from pathlib import Path
 
 
-from core.prompting.path_utils import path_for_display
+from shared.utils.path_utils import path_for_display
 
 
 class TestPathForDisplay:

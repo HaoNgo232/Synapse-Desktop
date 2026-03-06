@@ -13,8 +13,8 @@ import threading
 from typing import Optional
 from tree_sitter import Parser, Node, Language, Tree  # type: ignore
 
-from core.smart_context.config import is_supported, get_config_by_extension
-from core.smart_context.loader import get_language, get_query
+from domain.smart_context.config import is_supported, get_config_by_extension
+from domain.smart_context.loader import get_language, get_query
 
 logger = logging.getLogger(__name__)
 
@@ -193,8 +193,8 @@ def _build_relationships_section(
         return cached if cached else None  # "" means no relationships
 
     try:
-        from core.codemaps.relationship_extractor import extract_relationships
-        from core.codemaps.types import RelationshipKind
+        from domain.codemap.relationship_extractor import extract_relationships
+        from domain.codemap.types import RelationshipKind
 
         # Extract relationships (reuse tree nếu có)
         relationships = extract_relationships(
@@ -265,8 +265,8 @@ def _parse_with_query(
     """
     try:
         from tree_sitter import Query, QueryCursor  # type: ignore
-        from core.smart_context.strategies import get_strategy
-        from core.smart_context.chunk_utils import (
+        from domain.smart_context.strategies import get_strategy
+        from domain.smart_context.chunk_utils import (
             filter_duplicated_chunks,
             merge_adjacent_chunks,
         )

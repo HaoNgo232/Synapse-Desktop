@@ -40,7 +40,7 @@ async def test_rp_build_basic(mcp_instance, mock_workspace):
     mock_result.optimizations = []
 
     with patch(
-        "core.workflows.context_builder.run_context_builder", return_value=mock_result
+        "domain.workflow.context_builder.run_context_builder", return_value=mock_result
     ):
         tool = get_tool(mcp_instance, "rp_build")
         result = await tool(
@@ -63,7 +63,7 @@ async def test_rp_build_with_output_file(mcp_instance, mock_workspace):
     mock_result.optimizations = []
 
     with patch(
-        "core.workflows.context_builder.run_context_builder", return_value=mock_result
+        "domain.workflow.context_builder.run_context_builder", return_value=mock_result
     ):
         tool = get_tool(mcp_instance, "rp_build")
         result = await tool(
@@ -98,7 +98,7 @@ async def test_rp_review_basic(mcp_instance, mock_workspace):
     mock_result.files_context = 0
 
     with patch(
-        "core.workflows.code_reviewer.run_code_review", return_value=mock_result
+        "domain.workflow.code_reviewer.run_code_review", return_value=mock_result
     ):
         tool = get_tool(mcp_instance, "rp_review")
         result = await tool(workspace_path=str(mock_workspace))
@@ -126,7 +126,7 @@ async def test_rp_refactor_discover(mcp_instance, mock_workspace):
     mock_result.scope_files = ["main.py"]
 
     with patch(
-        "core.workflows.refactor_workflow.run_refactor_discovery",
+        "domain.workflow.refactor_workflow.run_refactor_discovery",
         return_value=mock_result,
     ):
         tool = get_tool(mcp_instance, "rp_refactor")
@@ -171,7 +171,7 @@ async def test_rp_investigate_basic(mcp_instance, mock_workspace):
     mock_result.max_depth_reached = 2
 
     with patch(
-        "core.workflows.bug_investigator.run_bug_investigation",
+        "domain.workflow.bug_investigator.run_bug_investigation",
         return_value=mock_result,
     ):
         tool = get_tool(mcp_instance, "rp_investigate")
@@ -198,7 +198,7 @@ async def test_rp_test_basic(mcp_instance, mock_workspace):
     mock_result.optimizations = []
 
     with patch(
-        "core.workflows.test_builder.run_test_builder", return_value=mock_result
+        "domain.workflow.test_builder.run_test_builder", return_value=mock_result
     ):
         tool = get_tool(mcp_instance, "rp_test")
         result = await tool(workspace_path=str(mock_workspace))
@@ -225,7 +225,7 @@ async def test_rp_review_with_focus(mcp_instance, mock_workspace):
     mock_result.files_context = 0
 
     with patch(
-        "core.workflows.code_reviewer.run_code_review", return_value=mock_result
+        "domain.workflow.code_reviewer.run_code_review", return_value=mock_result
     ):
         tool = get_tool(mcp_instance, "rp_review")
         result = await tool(review_focus="security", workspace_path=str(mock_workspace))
@@ -243,7 +243,7 @@ async def test_rp_refactor_plan_with_discovery(mcp_instance, mock_workspace):
     mock_result.migration_needed = False
 
     with patch(
-        "core.workflows.refactor_workflow.run_refactor_planning",
+        "domain.workflow.refactor_workflow.run_refactor_planning",
         return_value=mock_result,
     ):
         tool = get_tool(mcp_instance, "rp_refactor")
@@ -267,7 +267,7 @@ async def test_rp_investigate_with_error_trace(mcp_instance, mock_workspace):
     mock_result.max_depth_reached = 3
 
     with patch(
-        "core.workflows.bug_investigator.run_bug_investigation",
+        "domain.workflow.bug_investigator.run_bug_investigation",
         return_value=mock_result,
     ):
         tool = get_tool(mcp_instance, "rp_investigate")
@@ -296,7 +296,7 @@ async def test_rp_test_with_framework(mcp_instance, mock_workspace):
     mock_result.optimizations = []
 
     with patch(
-        "core.workflows.test_builder.run_test_builder", return_value=mock_result
+        "domain.workflow.test_builder.run_test_builder", return_value=mock_result
     ):
         tool = get_tool(mcp_instance, "rp_test")
         result = await tool(test_framework="pytest", workspace_path=str(mock_workspace))

@@ -1,49 +1,20 @@
+"""DEPRECATED: Module da chuyen sang domain.prompt.formatters.plain
+
+Bridge file - import module moi va alias vao sys.modules tai vi tri cu.
+Tat ca code import tu 'core.prompting.formatters.plain' se duoc redirect tu dong.
 """
-Plain Text Formatter - Render file contents thanh plain text.
 
-Extracted tu: generate_file_contents_plain() trong core/prompt_generator.py
-"""
+import importlib
+import sys
 
-from core.prompting.types import FileEntry
+# Import module moi
+_mod = importlib.import_module("domain.prompt.formatters.plain")
 
+# Alias tat ca symbols tu module moi vao namespace hien tai
+# De `from core.prompting.formatters.plain import X` van hoat dong
+for _name in dir(_mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(_mod, _name)
 
-def format_files_plain(entries: list[FileEntry]) -> str:
-    """
-    Render List[FileEntry] thanh plain text format.
-
-    Format:
-        File: path/to/file
-        ----------------
-        content
-        ----------------
-
-    Args:
-        entries: List file entries da doc tu file_collector
-
-    Returns:
-        String chua file paths va contents dang plain text
-    """
-    file_elements: list[str] = []
-    separator = "-" * 16
-
-    for entry in entries:
-        file_header = f"File: {entry.display_path}\n{separator}"
-
-        if entry.error:
-            if entry.error == "Binary file":
-                content_display = "Binary file (skipped)"
-            elif entry.error.startswith("File too large"):
-                content_display = f"{entry.error} (skipped)"
-            else:
-                content_display = entry.error
-        elif entry.content is not None:
-            content_display = entry.content.strip()
-        else:
-            content_display = ""
-
-        file_elements.append(f"{file_header}\n{content_display}\n{separator}")
-
-    if not file_elements:
-        return "No files selected."
-
-    return "\n\n".join(file_elements)
+# Dong thoi alias trong sys.modules de `import core.prompting.formatters.plain` cung hoat dong
+sys.modules[__name__] = _mod

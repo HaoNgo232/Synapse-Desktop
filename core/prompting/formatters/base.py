@@ -1,21 +1,20 @@
+"""DEPRECATED: Module da chuyen sang domain.prompt.formatters.base
+
+Bridge file - import module moi va alias vao sys.modules tai vi tri cu.
+Tat ca code import tu 'core.prompting.formatters.base' se duoc redirect tu dong.
 """
-Base Formatter Protocol - Interface chung cho tat ca formatters.
-"""
 
-from typing import Protocol, runtime_checkable
+import importlib
+import sys
 
-from core.prompting.types import FileEntry
+# Import module moi
+_mod = importlib.import_module("domain.prompt.formatters.base")
 
+# Alias tat ca symbols tu module moi vao namespace hien tai
+# De `from core.prompting.formatters.base import X` van hoat dong
+for _name in dir(_mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(_mod, _name)
 
-@runtime_checkable
-class Formatter(Protocol):
-    """
-    Protocol cho cac file content formatters.
-
-    Moi formatter implement phuong thuc format_files()
-    de render List[FileEntry] thanh string output.
-    """
-
-    def format_files(self, entries: list[FileEntry]) -> str:
-        """Render danh sach FileEntry thanh string theo format cu the."""
-        ...
+# Dong thoi alias trong sys.modules de `import core.prompting.formatters.base` cung hoat dong
+sys.modules[__name__] = _mod

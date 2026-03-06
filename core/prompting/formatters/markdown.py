@@ -1,62 +1,20 @@
-"""
-Markdown Formatter - Render file contents thanh markdown code blocks.
+"""DEPRECATED: Module da chuyen sang domain.prompt.formatters.markdown
 
-Bao gom Smart Markdown Delimiter de tranh broken markdown
-khi file content chua backticks.
-
-Extracted tu: generate_file_contents() trong core/prompt_generator.py
+Bridge file - import module moi va alias vao sys.modules tai vi tri cu.
+Tat ca code import tu 'core.prompting.formatters.markdown' se duoc redirect tu dong.
 """
 
-from io import StringIO
+import importlib
+import sys
 
-from core.prompting.types import FileEntry
-from core.prompting.delimiter_utils import calculate_markdown_delimiter
+# Import module moi
+_mod = importlib.import_module("domain.prompt.formatters.markdown")
 
+# Alias tat ca symbols tu module moi vao namespace hien tai
+# De `from core.prompting.formatters.markdown import X` van hoat dong
+for _name in dir(_mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(_mod, _name)
 
-def format_files_markdown(entries: list[FileEntry]) -> str:
-    """
-    Render List[FileEntry] thanh markdown code blocks.
-
-    Format:
-        File: path/to/file
-        ```language
-        content
-        ```
-
-    Su dung Smart Markdown Delimiter de dam bao an toan
-    khi content chua backticks.
-
-    Args:
-        entries: List file entries da doc tu file_collector
-
-    Returns:
-        File contents string voi markdown code blocks
-    """
-    if not entries:
-        return ""
-
-    # Tinh delimiter tu tat ca contents using shared function
-    contents = [entry.content for entry in entries if entry.content]
-    delimiter = calculate_markdown_delimiter(contents)
-
-    output = StringIO()
-    first = True
-
-    for entry in entries:
-        if not first:
-            output.write("\n")
-        first = False
-
-        if entry.error:
-            output.write(
-                f"File: {entry.display_path}\n*** Skipped: {entry.error} ***\n"
-            )
-        elif entry.content is not None:
-            output.write(
-                f"File: {entry.display_path}\n"
-                f"{delimiter}{entry.language}\n"
-                f"{entry.content}\n"
-                f"{delimiter}\n"
-            )
-
-    return output.getvalue().strip()
+# Dong thoi alias trong sys.modules de `import core.prompting.formatters.markdown` cung hoat dong
+sys.modules[__name__] = _mod

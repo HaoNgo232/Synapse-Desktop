@@ -1,53 +1,20 @@
-"""
-Cancellation flag cho token counting - thread-safe.
+"""DEPRECATED: Module da chuyen sang domain.tokenization.cancellation
 
-Di chuyen tu services/token_display.py xuong core layer
-de fix circular dependency (core khong duoc import tu services).
-
-Su dung threading.Lock de dam bao thread-safe
-khi doc/ghi tu nhieu threads (UI thread, worker threads).
+Bridge file - import module moi va alias vao sys.modules tai vi tri cu.
+Tat ca code import tu 'core.tokenization.cancellation' se duoc redirect tu dong.
 """
 
-import threading
+import importlib
+import sys
 
-# Global cancellation state
-_counting_lock = threading.Lock()
-_is_counting = False
+# Import module moi
+_mod = importlib.import_module("domain.tokenization.cancellation")
 
+# Alias tat ca symbols tu module moi vao namespace hien tai
+# De `from core.tokenization.cancellation import X` van hoat dong
+for _name in dir(_mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(_mod, _name)
 
-def is_counting_tokens() -> bool:
-    """
-    Kiem tra co dang counting tokens khong.
-
-    Thread-safe: Su dung lock de doc gia tri.
-    Goi boi batch processors de check cancellation.
-
-    Returns:
-        True neu dang counting, False neu da stop
-    """
-    with _counting_lock:
-        return _is_counting
-
-
-def start_token_counting() -> None:
-    """
-    Bat dau token counting - set flag = True.
-
-    Thread-safe: Su dung lock de set gia tri.
-    Goi boi TokenDisplayService.request_tokens_for_tree().
-    """
-    global _is_counting
-    with _counting_lock:
-        _is_counting = True
-
-
-def stop_token_counting() -> None:
-    """
-    Dung token counting ngay lap tuc - set flag = False.
-
-    Thread-safe: Su dung lock de set gia tri.
-    Goi khi user switch folder, close app, hoac cancel.
-    """
-    global _is_counting
-    with _counting_lock:
-        _is_counting = False
+# Dong thoi alias trong sys.modules de `import core.tokenization.cancellation` cung hoat dong
+sys.modules[__name__] = _mod

@@ -1,40 +1,20 @@
-"""
-Batch/parallel token counting - Pure utility functions.
+"""DEPRECATED: Module da chuyen sang domain.tokenization.batch
 
-REFACTORED: Toan bo logic batch processing da duoc chuyen sang
-services.tokenization_service.TokenizationService.
-
-Module nay chi chua cac ham tien ich con duoc re-export
-boi TokenizationService:
-- get_worker_count(): Tinh so workers toi uu
-
-DIP: Module nay KHONG import tu services layer.
+Bridge file - import module moi va alias vao sys.modules tai vi tri cu.
+Tat ca code import tu 'core.tokenization.batch' se duoc redirect tu dong.
 """
 
-import os
+import importlib
+import sys
 
-# Worker initialization la expensive, nen dung it threads tru khi co nhieu files
-TASKS_PER_WORKER = 100
+# Import module moi
+_mod = importlib.import_module("domain.tokenization.batch")
 
-# So file toi thieu de trigger parallel processing
-MIN_FILES_FOR_PARALLEL = 10
+# Alias tat ca symbols tu module moi vao namespace hien tai
+# De `from core.tokenization.batch import X` van hoat dong
+for _name in dir(_mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(_mod, _name)
 
-
-def get_worker_count(num_tasks: int) -> int:
-    """
-    Tinh so luong workers toi uu dua tren so luong tasks va CPU cores.
-
-    Logic port tu Repomix:
-    - Moi worker xu ly ~100 tasks.
-    - Khong vuot qua so CPU cores.
-    - Toi thieu 1 worker.
-
-    Args:
-        num_tasks: So luong tasks can xu ly.
-
-    Returns:
-        So luong workers toi uu.
-    """
-    cpu_count = os.cpu_count() or 4
-    calculated = (num_tasks + TASKS_PER_WORKER - 1) // TASKS_PER_WORKER
-    return max(1, min(cpu_count, calculated))
+# Dong thoi alias trong sys.modules de `import core.tokenization.batch` cung hoat dong
+sys.modules[__name__] = _mod

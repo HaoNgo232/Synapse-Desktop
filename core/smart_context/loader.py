@@ -1,59 +1,20 @@
+"""DEPRECATED: Module da chuyen sang domain.smart_context.loader
+
+Bridge file - import module moi va alias vao sys.modules tai vi tri cu.
+Tat ca code import tu 'core.smart_context.loader' se duoc redirect tu dong.
 """
-Tree-sitter Language Loader
 
-Module để load Tree-sitter Language objects với caching.
-Sử dụng LanguageConfig từ config.py để xác định cách load.
-"""
+import importlib
+import sys
 
-from typing import Optional
-from tree_sitter import Language  # type: ignore
+# Import module moi
+_mod = importlib.import_module("domain.smart_context.loader")
 
-from core.smart_context.config import get_config_by_extension
+# Alias tat ca symbols tu module moi vao namespace hien tai
+# De `from core.smart_context.loader import X` van hoat dong
+for _name in dir(_mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(_mod, _name)
 
-# Cache đã load languages
-_language_cache: dict[str, Language] = {}
-
-
-def get_language(extension: str) -> Optional[Language]:
-    """
-    Lấy Tree-sitter Language object cho file extension.
-
-    Load language từ config và cache kết quả để tránh load lại.
-
-    Args:
-        extension: File extension không có dấu chấm (e.g., 'py', 'ts')
-
-    Returns:
-        Tree-sitter Language object hoặc None nếu không hỗ trợ
-    """
-    config = get_config_by_extension(extension)
-    if not config:
-        return None
-
-    # Check cache
-    if config.name not in _language_cache:
-        # Load và cache
-        _language_cache[config.name] = config.loader()
-
-    return _language_cache[config.name]
-
-
-def get_query(extension: str) -> Optional[str]:
-    """
-    Lấy tree-sitter query string cho file extension.
-
-    Args:
-        extension: File extension không có dấu chấm
-
-    Returns:
-        Query string hoặc None nếu không hỗ trợ
-    """
-    config = get_config_by_extension(extension)
-    if not config:
-        return None
-    return config.query
-
-
-def clear_cache() -> None:
-    """Clear language cache (useful for testing)."""
-    _language_cache.clear()
+# Dong thoi alias trong sys.modules de `import core.smart_context.loader` cung hoat dong
+sys.modules[__name__] = _mod

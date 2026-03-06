@@ -235,12 +235,12 @@ def test_toggle_debug(qtbot, tmp_path):
         view = LogsViewQt()
         qtbot.addWidget(view)
 
-        with patch("core.logging_config.set_debug_mode") as mock_debug:
+        with patch("shared.logging_config.set_debug_mode") as mock_debug:
             view._toggle_debug(Qt.CheckState.Checked.value)
             mock_debug.assert_called_once_with(True)
             mock_success.assert_called_with("Debug mode enabled")
 
-        with patch("core.logging_config.set_debug_mode") as mock_debug:
+        with patch("shared.logging_config.set_debug_mode") as mock_debug:
             view._toggle_debug(Qt.CheckState.Unchecked.value)
             mock_debug.assert_called_once_with(False)
 

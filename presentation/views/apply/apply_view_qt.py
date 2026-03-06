@@ -22,7 +22,7 @@ from PySide6.QtCore import Qt, Slot
 
 from presentation.config.theme import ThemeColors
 from domain.prompt.opx_parser import parse_opx_response
-from core.file_actions import apply_file_actions, ActionResult
+from infrastructure.filesystem.file_actions import apply_file_actions, ActionResult
 from infrastructure.adapters.clipboard_utils import (
     copy_to_clipboard,
     get_clipboard_text,
@@ -484,7 +484,7 @@ class ApplyViewQt(QWidget):
             # Save continuous memory if apply was at least partially successful
             if success_count > 0 and memory_block:
                 try:
-                    from core.utils.qt_utils import schedule_background
+                    from infrastructure.adapters.qt_utils import schedule_background
 
                     schedule_background(
                         lambda: save_memory_block(workspace, memory_block)

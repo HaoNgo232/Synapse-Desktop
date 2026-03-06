@@ -31,7 +31,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QTimer
 from PySide6.QtGui import QFont
 
 from presentation.config.theme import ThemeColors
-from core.utils.qt_utils import run_on_main_thread
+from infrastructure.adapters.qt_utils import run_on_main_thread
 from infrastructure.adapters.clipboard_utils import copy_to_clipboard
 
 
@@ -103,7 +103,7 @@ class SecurityDialogQt(BaseDialogQt):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        from core.security_check import format_security_warning
+        from infrastructure.adapters.security_check import format_security_warning
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from presentation.views.apply.apply_view_qt import ApplyViewQt
 from application.services.apply_service import convert_to_row_results
-from core.file_actions import ActionResult
+from infrastructure.filesystem.file_actions import ActionResult
 
 
 @pytest.fixture

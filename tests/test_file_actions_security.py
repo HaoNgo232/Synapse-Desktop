@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import shutil
 import os
-from core.file_actions import apply_file_actions, _resolve_path, FileAction
+from infrastructure.filesystem.file_actions import apply_file_actions, _resolve_path, FileAction
 from domain.prompt.opx_parser import ChangeBlock
 
 

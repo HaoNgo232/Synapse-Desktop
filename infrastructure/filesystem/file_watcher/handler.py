@@ -19,7 +19,7 @@ from watchdog.events import (
     DirMovedEvent,
 )
 
-from core.logging_config import log_debug
+from shared.logging_config import log_debug
 from application.interfaces.file_watcher_port import (
     FileChangeEvent,
     IEventDebouncer,

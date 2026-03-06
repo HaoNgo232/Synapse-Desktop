@@ -18,7 +18,7 @@ def test_safe_timer():
     print("Testing SafeTimer...")
 
     # Import SafeTimer from correct location
-    from core.utils.safe_timer import SafeTimer, DebouncedCallback
+    from infrastructure.adapters.safe_timer import SafeTimer, DebouncedCallback
 
     # Test basic functionality
     callback_count = 0
@@ -75,7 +75,7 @@ def test_state_manager():
     """Test GlobalState manager"""
     print("\nTesting GlobalState manager...")
 
-    from core.utils.state_manager import GlobalState
+    from infrastructure.adapters.state_manager import GlobalState
 
     state = GlobalState()
 

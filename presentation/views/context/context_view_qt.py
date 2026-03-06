@@ -187,7 +187,7 @@ class ContextViewQt(
         ):
             return
 
-        from core.logging_config import log_info
+        from shared.logging_config import log_info
 
         log_info(f"[ContextView] Workspace changing to: {workspace_path}")
 

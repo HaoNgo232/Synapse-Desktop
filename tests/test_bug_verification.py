@@ -129,9 +129,9 @@ class TestBug3DoubleFileRead:
         def mock_smart_parse(*args, **kwargs):
             return None
 
-        import core.smart_context
+        import domain.smart_context
 
-        monkeypatch.setattr(core.smart_context, "smart_parse", mock_smart_parse)
+        monkeypatch.setattr(domain.smart_context, "smart_parse", mock_smart_parse)
 
         _generate_codemap_xml(
             {str(test_file)},

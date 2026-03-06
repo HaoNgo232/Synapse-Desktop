@@ -23,7 +23,7 @@ from typing import List, Optional
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
-from core.logging_config import log_error, log_debug, log_info, log_warning
+from shared.logging_config import log_error, log_debug, log_info, log_warning
 from presentation.config.paths import SESSION_FILE
 
 

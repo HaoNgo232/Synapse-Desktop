@@ -50,19 +50,19 @@ class SecurityCacheAdapter:
 
     def invalidate_path(self, path: str) -> None:
         """Xoa security scan result cho file cu the."""
-        from core.security_check import invalidate_security_cache
+        from infrastructure.adapters.security_check import invalidate_security_cache
 
         invalidate_security_cache(path)
 
     def invalidate_all(self) -> None:
         """Xoa toan bo security scan cache."""
-        from core.security_check import clear_security_cache
+        from infrastructure.adapters.security_check import clear_security_cache
 
         clear_security_cache()
 
     def size(self) -> int:
         """Tra ve so entries hien co."""
-        from core.security_check import get_security_cache_stats
+        from infrastructure.adapters.security_check import get_security_cache_stats
 
         stats = get_security_cache_stats()
         return stats.get("size", 0) if isinstance(stats, dict) else 0

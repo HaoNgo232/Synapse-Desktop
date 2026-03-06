@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List
 from datetime import datetime
 
-from core.logging_config import log_error, log_debug
+from shared.logging_config import log_error, log_debug
 from presentation.config.paths import RECENT_FOLDERS_FILE
 
 # Số lượng tối đa folders lưu trữ

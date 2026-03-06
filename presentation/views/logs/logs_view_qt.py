@@ -22,7 +22,7 @@ from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
 from PySide6.QtCore import Qt, Slot
 
 from presentation.config.theme import ThemeColors
-from core.logging_config import LOG_DIR
+from shared.logging_config import LOG_DIR
 from infrastructure.adapters.clipboard_utils import copy_to_clipboard
 from presentation.components.toast.toast_qt import toast_success, toast_error
 
@@ -312,7 +312,7 @@ class LogsViewQt(QWidget):
 
     @Slot(int)
     def _toggle_debug(self, state: int) -> None:
-        from core.logging_config import set_debug_mode
+        from shared.logging_config import set_debug_mode
 
         enabled = state == Qt.CheckState.Checked.value
         set_debug_mode(enabled)

@@ -100,7 +100,7 @@ def extract_relationships(
         return relationships
 
     except Exception as e:
-        from core.logging_config import log_debug
+        from shared.logging_config import log_debug
 
         log_debug(f"[RelationshipExtractor] Failed for {file_path}: {e}")
         return []

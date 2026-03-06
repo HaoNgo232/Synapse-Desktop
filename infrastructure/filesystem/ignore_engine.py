@@ -22,7 +22,7 @@ import threading
 
 import pathspec
 
-from core.constants import EXTENDED_IGNORE_PATTERNS
+from shared.constants import EXTENDED_IGNORE_PATTERNS
 
 
 class IgnoreEngine:

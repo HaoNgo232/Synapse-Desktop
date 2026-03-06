@@ -10,7 +10,7 @@ from infrastructure.git.git_utils import (
     DiffOnlyResult,
     build_diff_only_prompt,
 )
-from core.tree_map_generator import generate_tree_map_only
+from domain.codemap.tree_map_generator import generate_tree_map_only
 from infrastructure.filesystem.file_utils import TreeItem
 
 

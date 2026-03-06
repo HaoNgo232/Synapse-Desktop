@@ -29,7 +29,7 @@ from infrastructure.adapters.encoders import (
     _get_hf_tokenizer,
     reset_encoder as _core_reset_encoder,
 )
-from core.logging_config import log_error, log_info, log_warning
+from shared.logging_config import log_error, log_info, log_warning
 from domain.tokenization.cache import TokenCache
 from domain.tokenization.cancellation import is_counting_tokens
 from application.interfaces.tokenization_port import ITokenizationService

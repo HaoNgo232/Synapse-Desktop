@@ -111,7 +111,7 @@ class TokenDisplayService(QObject):
 
     def clear_cache(self):
         """Xoa toan bo cache (khi reload tree)."""
-        from core.logging_config import log_debug
+        from shared.logging_config import log_debug
 
         log_debug("[TokenDisplayService] clear_cache() called")
 
@@ -141,7 +141,7 @@ class TokenDisplayService(QObject):
         Set disposal flag TRUOC khi cancel timers.
         Cancel ALL deferred timers de dam bao khong co background work con chay.
         """
-        from core.logging_config import log_debug
+        from shared.logging_config import log_debug
 
         log_debug("[TokenDisplayService] stop() called - cancelling all operations")
 
@@ -172,7 +172,7 @@ class TokenDisplayService(QObject):
         CRITICAL: Goi method nay khi switch folder hoac stop service
         de dam bao khong co background token counting con chay.
         """
-        from core.logging_config import log_debug
+        from shared.logging_config import log_debug
 
         with self._deferred_threads_lock:
             timer_count = len(self._deferred_threads)
@@ -249,14 +249,14 @@ class TokenDisplayService(QObject):
 
             # Emit signal de UI tu update (thread-safe qua Qt signal mechanism)
             if not self._is_disposed:
-                from core.utils.qt_utils import run_on_main_thread
+                from infrastructure.adapters.qt_utils import run_on_main_thread
 
                 run_on_main_thread(
                     lambda: self.cache_updated.emit() if not self._is_disposed else None
                 )
 
         except Exception as e:
-            from core.logging_config import log_debug
+            from shared.logging_config import log_debug
 
             log_debug(f"[TokenDisplayService] Failed to count tokens for {path}: {e}")
             with self._lock:
@@ -335,7 +335,7 @@ class TokenDisplayService(QObject):
         # Count immediate files PARALLEL - su dung ThreadPoolExecutor + mmap
         # AN TOAN: count_tokens_batch_parallel() da xu ly race condition
         if immediate_files and is_counting_tokens():
-            from core.logging_config import log_info
+            from shared.logging_config import log_info
 
             # PERFORMANCE TRACKING
             start_time = time.perf_counter()
@@ -381,7 +381,7 @@ class TokenDisplayService(QObject):
         FOLDER SWITCH FIX: Track all timers de cancel khi switch folder.
         Su dung threading.Timer thay vi SafeTimer de giam phu thuoc vao UI.
         """
-        from core.logging_config import log_debug
+        from shared.logging_config import log_debug
 
         # Early exit checks
         if not files:
@@ -403,7 +403,7 @@ class TokenDisplayService(QObject):
 
         def count_batch(batch_files):
             """Dem tokens cho mot batch files."""
-            from core.logging_config import log_debug
+            from shared.logging_config import log_debug
 
             # Check cancellation FIRST
             if not is_counting_tokens() or self._is_disposed:
@@ -426,7 +426,7 @@ class TokenDisplayService(QObject):
                     with self._lock:
                         self._cache[path] = tokens
                 except Exception as e:
-                    from core.logging_config import log_debug
+                    from shared.logging_config import log_debug
 
                     log_debug(
                         f"[TokenDisplayService] Deferred count failed for {path}: {e}"
@@ -436,7 +436,7 @@ class TokenDisplayService(QObject):
 
             # Emit signal sau khi batch hoan thanh
             if not self._is_disposed and is_counting_tokens():
-                from core.utils.qt_utils import run_on_main_thread
+                from infrastructure.adapters.qt_utils import run_on_main_thread
 
                 run_on_main_thread(
                     lambda: self.cache_updated.emit() if not self._is_disposed else None

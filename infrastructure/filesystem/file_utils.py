@@ -11,7 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 import pathspec
-from core.constants import (
+from shared.constants import (
     BINARY_EXTENSIONS,
     DIRECTORY_QUICK_SKIP,
 )

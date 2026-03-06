@@ -588,7 +588,7 @@ def show_toast(
     manager = ToastManager.instance()
     if manager is None:
         # Fallback: log warning neu manager chua duoc init
-        from core.logging_config import log_warning
+        from shared.logging_config import log_warning
 
         log_warning(
             "[Toast] ToastManager not initialized. Call init_toast_manager() first."

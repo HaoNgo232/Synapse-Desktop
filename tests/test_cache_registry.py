@@ -233,12 +233,12 @@ class TestSecurityCacheAdapter:
     def test_implements_protocol(self):
         assert isinstance(SecurityCacheAdapter(), ICacheable)
 
-    @patch("core.security_check.invalidate_security_cache")
+    @patch("infrastructure.adapters.security_check.invalidate_security_cache")
     def test_invalidate_path(self, mock_invalidate):
         SecurityCacheAdapter().invalidate_path("/test.py")
         mock_invalidate.assert_called_once_with("/test.py")
 
-    @patch("core.security_check.clear_security_cache")
+    @patch("infrastructure.adapters.security_check.clear_security_cache")
     def test_invalidate_all(self, mock_clear):
         SecurityCacheAdapter().invalidate_all()
         mock_clear.assert_called_once()

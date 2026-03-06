@@ -305,7 +305,7 @@ class TestSecurityCheckSkipsBinary:
 
     def test_scan_skip_binary(self, tmp_path):
         """scan_secrets_in_files phải skip binary KHÔNG có extension"""
-        from core.security_check import scan_secrets_in_files
+        from infrastructure.adapters.security_check import scan_secrets_in_files
 
         binary_file = tmp_path / "server-binary"
         binary_file.write_bytes(b"\x7fELF" + b"\x00" * 100)

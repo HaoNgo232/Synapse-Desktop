@@ -13,7 +13,7 @@ from typing import Any, Protocol, Set, runtime_checkable, Optional
 from PySide6.QtCore import QObject
 
 from application.services.dependency_resolver import DependencyResolver
-from core.utils.qt_utils import run_on_main_thread, schedule_background
+from infrastructure.adapters.qt_utils import run_on_main_thread, schedule_background
 
 
 @runtime_checkable

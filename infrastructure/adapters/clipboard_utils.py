@@ -5,7 +5,7 @@ Xử lý các trường hợp clipboard không hoạt động trên một số s
 """
 
 from typing import Tuple
-from core.logging_config import log_error, log_warning
+from shared.logging_config import log_error, log_warning
 
 
 def copy_to_clipboard(text: str) -> Tuple[bool, str]:

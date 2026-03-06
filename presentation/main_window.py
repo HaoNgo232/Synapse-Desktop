@@ -31,10 +31,10 @@ from PySide6.QtCore import Qt, Slot, QTimer, QSize
 from PySide6.QtGui import QIcon
 
 from presentation.config.theme import ThemeColors, ThemeFonts, apply_theme
-from core.utils.qt_utils import (
+from infrastructure.adapters.qt_utils import (
     get_signal_bridge,
 )
-from core.utils.threading_utils import shutdown_all, set_active_view
+from infrastructure.adapters.threading_utils import shutdown_all, set_active_view
 from infrastructure.persistence.recent_folders import (
     load_recent_folders,
     add_recent_folder,
@@ -499,7 +499,7 @@ class SynapseMainWindow(QMainWindow):
             # branch is Optional[str] but signal emits object
             self._cached_git_branch = branch if isinstance(branch, str) else None
 
-        from core.utils.qt_utils import schedule_background
+        from infrastructure.adapters.qt_utils import schedule_background
 
         schedule_background(_detect, on_result=_on_result)
 
@@ -639,11 +639,11 @@ class SynapseMainWindow(QMainWindow):
                 f"color: {ThemeColors.SUCCESS};"
             )
 
-            from core.logging_config import log_info
+            from shared.logging_config import log_info
 
             log_info(f"Memory cleared. Current usage: {stats.rss_mb:.0f}MB")
         except Exception as e:
-            from core.logging_config import log_error
+            from shared.logging_config import log_error
 
             log_error(f"Error clearing memory: {e}")
 
@@ -711,7 +711,7 @@ class SynapseMainWindow(QMainWindow):
         Each step is wrapped individually so that a failure in one
         does not prevent subsequent cleanup from running.
         """
-        from core.logging_config import log_error
+        from shared.logging_config import log_error
 
         # 1. Stop background scanning
         try:
@@ -776,7 +776,7 @@ class SynapseMainWindow(QMainWindow):
 
         # 10. Flush and cleanup logs (last — so earlier errors get logged)
         try:
-            from core.logging_config import flush_logs, cleanup_old_logs
+            from shared.logging_config import flush_logs, cleanup_old_logs
 
             flush_logs()
             cleanup_old_logs(max_age_days=7)
@@ -809,7 +809,7 @@ def main() -> None:
 
     # CRITICAL for Windows taskbar icon: Set AppUserModelID TRƯỚC KHI tạo QApplication
     # Windows nhóm app theo AppUserModelID - nếu không set, Windows sẽ dùng icon của Python
-    from core.utils.windows_utils import (
+    from infrastructure.adapters.windows_utils import (
         set_app_user_model_id,
         get_default_app_user_model_id,
     )

@@ -14,7 +14,7 @@ from typing import Any, Callable, Optional
 
 from watchdog.observers import Observer
 
-from core.logging_config import log_info, log_error
+from shared.logging_config import log_info, log_error
 from application.interfaces.file_watcher_port import (
     IFileWatcherService,
     IIgnoreStrategy,

@@ -23,8 +23,8 @@ def test_app_race_conditions():
     try:
         # Test imports
         print("1. Testing imports...")
-        from core.utils.safe_timer import SafeTimer, DebouncedCallback
-        from core.utils.state_manager import global_state
+        from infrastructure.adapters.safe_timer import SafeTimer, DebouncedCallback
+        from infrastructure.adapters.state_manager import global_state
         from infrastructure.adapters.token_display import TokenDisplayService
 
         print("   ✅ All imports successful")
@@ -145,7 +145,7 @@ def simulate_user_stress_test():
     print("-" * 30)
 
     try:
-        from core.utils.safe_timer import DebouncedCallback
+        from infrastructure.adapters.safe_timer import DebouncedCallback
 
         # Simulate rapid file selection changes
         selection_changes = 0
@@ -170,7 +170,7 @@ def simulate_user_stress_test():
 
         # Simulate rapid folder opening
         print("\nSimulating rapid folder operations...")
-        from core.utils.state_manager import global_state
+        from infrastructure.adapters.state_manager import global_state
 
         operations = 0
 

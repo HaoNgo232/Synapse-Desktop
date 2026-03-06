@@ -1374,7 +1374,7 @@ class SettingsViewQt(QWidget):
         Su dung QRunnable background worker de tranh block main UI thread.
         Network request co the mat toi 15 giay neu server cham.
         """
-        from core.ai.openai_provider import OpenAICompatibleProvider
+        from infrastructure.ai.openai_provider import OpenAICompatibleProvider
         from PySide6.QtCore import QThreadPool, QRunnable, QObject, Signal
         from PySide6.QtCore import Slot as QSlot
 

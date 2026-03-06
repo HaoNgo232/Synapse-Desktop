@@ -23,7 +23,7 @@ def force_all_logging_to_stderr() -> None:
     """
     # 0. Set MCP flag trong logging_config de bat ky get_logger() call nao
     #    trong tuong lai (lazy import) cung se dung stderr thay vi stdout.
-    import core.logging_config as _lc
+    import shared.logging_config as _lc
 
     _lc._MCP_MODE = True
 

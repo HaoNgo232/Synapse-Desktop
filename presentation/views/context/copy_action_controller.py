@@ -37,7 +37,7 @@ from typing import (
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 
 
-from core.tree_map_generator import generate_tree_map_only
+from domain.codemap.tree_map_generator import generate_tree_map_only
 from infrastructure.filesystem.file_utils import scan_directory, TreeItem
 from infrastructure.persistence.settings_manager import load_app_settings
 from application.services.workspace_config import (
@@ -239,7 +239,7 @@ class SecurityCheckWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         try:
-            from core.security_check import scan_secrets_in_files_cached
+            from infrastructure.adapters.security_check import scan_secrets_in_files_cached
 
             matches = scan_secrets_in_files_cached(self.paths)
             try:

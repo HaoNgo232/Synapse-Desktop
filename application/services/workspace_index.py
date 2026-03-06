@@ -47,7 +47,7 @@ def build_search_index(
         Dict mapping filename_lower -> list of full paths.
         Vi du: {"main.py": ["/home/user/project/main.py"]}
     """
-    from core.constants import DIRECTORY_QUICK_SKIP
+    from shared.constants import DIRECTORY_QUICK_SKIP
     from infrastructure.filesystem.file_utils import is_binary_file, is_system_path
     from infrastructure.filesystem.ignore_engine import IgnoreEngine
     from application.services.workspace_config import (
@@ -226,7 +226,7 @@ def collect_files_from_disk(
         get_excluded_patterns,
         get_use_gitignore,
     )
-    from core.constants import DIRECTORY_QUICK_SKIP
+    from shared.constants import DIRECTORY_QUICK_SKIP
 
     # workspace_path bat buoc - caller phai truyen
     if workspace_path is None:

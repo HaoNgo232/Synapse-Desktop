@@ -5,7 +5,7 @@ Test cac function:
 - list_templates(): Liet ke templates kha dung
 - load_template(): Doc noi dung template theo ID
 from domain.prompt.template_manager import LocalCustomTemplateProvider
-import core.prompting.template_manager as tm
+import domain.prompt.template_manager as tm
 - get_template_info(): Lay metadata cua template
 """
 
@@ -18,7 +18,7 @@ from domain.prompt.template_manager import (
     TemplateInfo,
     LocalCustomTemplateProvider,
 )
-import core.prompting.template_manager as tm
+import domain.prompt.template_manager as tm
 
 
 class TestListTemplates:

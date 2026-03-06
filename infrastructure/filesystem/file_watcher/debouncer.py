@@ -8,7 +8,7 @@ Tranh spam callback khi co nhieu thay doi lien tuc (vd: IDE auto-save).
 from threading import Timer
 from typing import Optional
 
-from core.logging_config import log_debug, log_error
+from shared.logging_config import log_debug, log_error
 from application.interfaces.file_watcher_port import (
     FileChangeEvent,
     IEventDebouncer,

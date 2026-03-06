@@ -126,7 +126,7 @@ def test_on_workspace_changed(context_view):
     new_path = Path("/new/workspace")
     with (
         patch("infrastructure.adapters.cache_registry.cache_registry") as mock_registry,
-        patch("core.logging_config.log_info"),
+        patch("shared.logging_config.log_info"),
     ):
         # workspace path doesn't exist in test
         view.on_workspace_changed(new_path)
@@ -147,7 +147,7 @@ def test_on_workspace_changed_starts_watcher(context_view, tmp_path):
 
     with (
         patch("infrastructure.adapters.cache_registry.cache_registry"),
-        patch("core.logging_config.log_info"),
+        patch("shared.logging_config.log_info"),
     ):
         view.on_workspace_changed(tmp_path)
 

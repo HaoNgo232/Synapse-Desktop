@@ -14,7 +14,7 @@ from typing import List, Optional
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
-from core.logging_config import log_error, log_debug, log_info
+from shared.logging_config import log_error, log_debug, log_info
 from presentation.config.paths import HISTORY_FILE
 
 # Số lượng tối đa entries lưu trữ

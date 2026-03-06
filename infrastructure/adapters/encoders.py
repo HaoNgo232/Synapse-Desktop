@@ -98,12 +98,12 @@ def _get_hf_tokenizer(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
 
     try:
         _claude_tokenizer = Tokenizer.from_pretrained(tokenizer_repo)
-        from core.logging_config import log_info
+        from shared.logging_config import log_info
 
         log_info(f"[Encoders] Using {tokenizer_repo} tokenizer")
         return _claude_tokenizer
     except Exception as e:
-        from core.logging_config import log_error
+        from shared.logging_config import log_error
 
         log_error(f"[Encoders] Failed to load tokenizer from {tokenizer_repo}: {e}")
         return None
@@ -158,7 +158,7 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
             try:
                 _encoder = rs_bpe_openai.o200k_base()
                 _encoder_type = "rs_bpe"
-                from core.logging_config import log_info
+                from shared.logging_config import log_info
 
                 log_info("[Encoders] Using rs-bpe (Rust) - 5x faster than tiktoken")
                 return _encoder
@@ -168,7 +168,7 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
             try:
                 _encoder = rs_bpe_openai.cl100k_base()
                 _encoder_type = "rs_bpe"
-                from core.logging_config import log_info
+                from shared.logging_config import log_info
 
                 log_info("[Encoders] Using rs-bpe cl100k_base (Rust)")
                 return _encoder
@@ -187,7 +187,7 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
             try:
                 _encoder = tiktoken.get_encoding(encoding_name)
                 _encoder_type = "tiktoken"
-                from core.logging_config import log_info
+                from shared.logging_config import log_info
 
                 log_info(f"[Encoders] Using tiktoken {encoding_name}")
                 return _encoder
@@ -226,6 +226,6 @@ def reset_encoder() -> None:
     _encoder_type = ""
     _claude_tokenizer = None
 
-    from core.logging_config import log_info
+    from shared.logging_config import log_info
 
     log_info("[Encoders] Encoder reset - will reload on next count_tokens() call")

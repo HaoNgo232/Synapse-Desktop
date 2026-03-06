@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QTimer
 
-from core.logging_config import log_error
+from shared.logging_config import log_error
 
 # psutil should always be available (in requirements.txt)
 # but wrap in try/except for runtime errors
@@ -172,7 +172,7 @@ class MemoryMonitor:
             try:
                 self.on_update(stats)
             except Exception as e:
-                from core.logging_config import log_debug
+                from shared.logging_config import log_debug
 
                 log_debug(f"[MemoryMonitor] Callback error: {e}")
 

@@ -209,7 +209,7 @@ class FileScanner:
 
         NOTE: RustWalk trả về relative paths, không phải absolute paths!
         """
-        from core.logging_config import log_info
+        from shared.logging_config import log_info
 
         if not HAS_SCANDIR_RS or RustWalk is None:
             return self._scan_directory(root_path, root_path, spec, progress_callback)
@@ -314,7 +314,7 @@ class FileScanner:
             self._emit_progress(progress_callback, force=True)
 
         except Exception as e:
-            from core.logging_config import log_error
+            from shared.logging_config import log_error
 
             log_error(f"[FileScanner] Rust scanner error: {e}, falling back to Python")
             # Fallback nếu Rust scanner lỗi

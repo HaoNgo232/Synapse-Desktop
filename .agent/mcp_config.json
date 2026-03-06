@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "synapse": {
+      "command": "/home/hao/Desktop/Synapse-Desktop-1.0.0-x86_64.AppImage",
+      "args": [
+        "--run-mcp"
+      ]
+    }
+  }
+}

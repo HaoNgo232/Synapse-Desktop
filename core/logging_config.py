@@ -15,7 +15,7 @@ import logging.handlers
 import sys
 from typing import Optional
 
-from config.paths import LOG_DIR, DEBUG_MODE
+from presentation.config.paths import LOG_DIR, DEBUG_MODE
 
 # Logger singleton
 _logger: Optional[logging.Logger] = None

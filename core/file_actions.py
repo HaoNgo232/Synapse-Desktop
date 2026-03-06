@@ -17,7 +17,7 @@ from datetime import datetime
 
 from core.opx_parser import FileAction
 from core.logging_config import log_error, log_info, log_debug, log_warning
-from config.paths import BACKUP_DIR
+from presentation.config.paths import BACKUP_DIR
 
 
 def create_backup(file_path: Path) -> Optional[Path]:

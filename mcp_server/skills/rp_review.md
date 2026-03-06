@@ -39,8 +39,8 @@ get_symbols(file_path="src/changed_file.py")
 # Danh gia do phuc tap cua file
 get_file_metrics(file_path="src/changed_file.py")
 
-# Doc chi tiet 1 doan code cu the neu can
-read_file_range(relative_path="src/changed_file.py", start_line=50, end_line=80)
+# Doc chi tiet 1 doan code cu the: dung built-in read_file voi offset/limit
+# Vi du: read_file("src/changed_file.py", offset=49, limit=31)  # dong 50-80
 ```
 
 ### Step 3: Find Blast Radius

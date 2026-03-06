@@ -39,6 +39,7 @@ class DefaultIgnoreStrategy(IIgnoreStrategy):
         "dist",
         "build",
         ".mypy_cache",
+        ".synapse",  # Chứa selection.json - thay đổi bởi UI, không cần trigger watcher
     }
 
     def should_ignore(self, path: str) -> bool:

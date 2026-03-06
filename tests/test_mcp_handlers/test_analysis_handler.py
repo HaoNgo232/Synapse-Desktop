@@ -65,43 +65,6 @@ async def test_find_references_path_traversal(mcp_instance, mock_workspace):
 
 
 @pytest.mark.asyncio
-async def test_find_todos_basic(mcp_instance, mock_workspace, monkeypatch):
-    """Test find_todos finds TODO comments"""
-
-    def mock_collect(ws, workspace_path=None):
-        return [str(mock_workspace / "test.py")]
-
-    monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
-    )
-
-    tool = get_tool(mcp_instance, "find_todos")
-    result = await tool(workspace_path=str(mock_workspace))
-
-    assert "TODO" in result
-
-
-@pytest.mark.asyncio
-async def test_find_todos_no_comments(mcp_instance, tmp_path, monkeypatch):
-    """Test find_todos with no TODO comments"""
-    clean_file = tmp_path / "clean.py"
-    clean_file.write_text("def bar(): pass")
-
-    def mock_collect(ws, workspace_path=None):
-        return [str(clean_file)]
-
-    monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
-    )
-    monkeypatch.setattr(Path, "cwd", staticmethod(lambda: tmp_path))
-
-    tool = get_tool(mcp_instance, "find_todos")
-    result = await tool(workspace_path=str(tmp_path))
-
-    assert "No TODO" in result
-
-
-@pytest.mark.asyncio
 async def test_get_symbols_basic(mcp_instance, mock_workspace):
     """Test get_symbols extracts symbols"""
     tool = get_tool(mcp_instance, "get_symbols")
@@ -152,25 +115,6 @@ async def test_find_references_with_extensions(
 
 
 @pytest.mark.asyncio
-async def test_find_todos_with_hack(mcp_instance, mock_workspace, monkeypatch):
-    """Test find_todos includes HACK comments"""
-    hack_file = mock_workspace / "hack.py"
-    hack_file.write_text("# HACK: temporary fix")
-
-    def mock_collect(ws, workspace_path=None):
-        return [str(hack_file)]
-
-    monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
-    )
-
-    tool = get_tool(mcp_instance, "find_todos")
-    result = await tool(include_hack=True, workspace_path=str(mock_workspace))
-
-    assert "HACK" in result
-
-
-@pytest.mark.asyncio
 async def test_get_symbols_no_symbols(mcp_instance, tmp_path, monkeypatch):
     """Test get_symbols with file containing no symbols"""
     empty_file = tmp_path / "empty.py"
@@ -210,22 +154,3 @@ async def test_find_references_exception_handling(
     result = await tool(symbol_name="foo", workspace_path=str(mock_workspace))
 
     assert isinstance(result, str)
-
-
-@pytest.mark.asyncio
-async def test_find_todos_without_hack(mcp_instance, mock_workspace, monkeypatch):
-    """Test find_todos excludes HACK when disabled"""
-    hack_file = mock_workspace / "hack.py"
-    hack_file.write_text("# HACK: temporary fix")
-
-    def mock_collect(ws, workspace_path=None):
-        return [str(hack_file)]
-
-    monkeypatch.setattr(
-        "services.workspace_index.collect_files_from_disk", mock_collect
-    )
-
-    tool = get_tool(mcp_instance, "find_todos")
-    result = await tool(include_hack=False, workspace_path=str(mock_workspace))
-
-    assert "No TODO" in result or "FIXME" in result

@@ -1,7 +1,7 @@
 """
 Structure Handler - Xu ly cac tool lien quan den project structure.
 
-Bao gom: get_project_structure, explain_architecture.
+Bao gom: explain_architecture. (get_project_structure da go bo - dung built-in glob/script.)
 """
 
 import os
@@ -285,27 +285,6 @@ def _explain_architecture_impl(
 
 def register_tools(mcp_instance) -> None:
     """Dang ky structure tools voi MCP server."""
-
-    @mcp_instance.tool()
-    async def get_project_structure(
-        workspace_path: Annotated[
-            Optional[str],
-            Field(
-                description="Absolute path to workspace root. Auto-detected if omitted."
-            ),
-        ] = None,
-        ctx: Optional[Context] = None,
-    ) -> str:
-        """Get project summary: total file counts by type, detected frameworks/languages, and estimated total token count.
-
-        Use this as a first step to understand the scale and tech stack of a codebase.
-        """
-        try:
-            ws = await WorkspaceManager.resolve(workspace_path, ctx)
-        except ValueError as e:
-            return f"Error: {e}"
-
-        return await asyncio.to_thread(_get_project_structure, str(ws))
 
     @mcp_instance.tool()
     async def explain_architecture(

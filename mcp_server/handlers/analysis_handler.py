@@ -1,7 +1,7 @@
 """
 Analysis Handler - Xu ly cac tool phan tich code.
 
-Bao gom: find_references, find_todos, get_symbols.
+Bao gom: find_references, get_symbols. (find_todos da go bo - dung built-in grep TODO|FIXME|HACK.)
 """
 
 import os
@@ -210,33 +210,6 @@ def register_tools(mcp_instance) -> None:
         except Exception as e:
             logger.error("find_references error: %s", e)
             return f"Error: {e}"
-
-    @mcp_instance.tool()
-    async def find_todos(
-        include_hack: Annotated[
-            bool,
-            Field(
-                description="Whether to include HACK comments in addition to TODO and FIXME. Default: True."
-            ),
-        ] = True,
-        workspace_path: Annotated[
-            Optional[str],
-            Field(
-                description="Absolute path to workspace root. Auto-detected if omitted."
-            ),
-        ] = None,
-        ctx: Optional[Context] = None,
-    ) -> str:
-        """Scan the entire project for TODO, FIXME, and HACK comments.
-
-        Returns results grouped by type (FIXME first as highest priority), with file paths and line numbers.
-        """
-        try:
-            ws = await WorkspaceManager.resolve(workspace_path, ctx)
-        except ValueError as e:
-            return f"Error: {e}"
-
-        return await asyncio.to_thread(_find_todos, str(ws), include_hack)
 
     @mcp_instance.tool()
     async def get_symbols(

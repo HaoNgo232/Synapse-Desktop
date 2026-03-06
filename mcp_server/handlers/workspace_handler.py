@@ -1,12 +1,12 @@
 """
 Workspace Handler - Xu ly cac tool lien quan den workspace operations.
 
-Bao gom: start_session, list_files, list_directories.
+Bao gom: start_session. (list_files, list_directories da go bo - dung built-in list_dir/glob.)
 """
 
 import os
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import Context
 from pydantic import Field
@@ -136,89 +136,3 @@ def register_tools(mcp_instance) -> None:
         except Exception as e:
             logger.error("start_session error: %s", e)
             return f"Error initializing session: {e}"
-
-    @mcp_instance.tool()
-    async def list_files(
-        extensions: Annotated[
-            Optional[List[str]],
-            Field(
-                description='Optional file extensions to filter by (e.g., [".py", ".ts"]). Returns all files if omitted.'
-            ),
-        ] = None,
-        workspace_path: Annotated[
-            Optional[str],
-            Field(
-                description="Absolute path to the workspace root directory. Auto-detected if omitted."
-            ),
-        ] = None,
-        ctx: Optional[Context] = None,
-    ) -> str:
-        """List all files in the workspace, respecting .gitignore rules.
-
-        Returns a sorted list of relative file paths. Use 'extensions' to filter by file type.
-        """
-        try:
-            ws = await WorkspaceManager.resolve(workspace_path, ctx)
-        except ValueError as e:
-            return f"Error: {e}"
-
-        try:
-            from services.workspace_index import collect_files_from_disk
-
-            def _get_files():
-                all_files = collect_files_from_disk(ws, workspace_path=ws)
-
-                if extensions:
-                    ext_set = {
-                        e.lower() if e.startswith(".") else f".{e.lower()}"
-                        for e in extensions
-                    }
-                    all_files = [
-                        f for f in all_files if Path(f).suffix.lower() in ext_set
-                    ]
-
-                result_lines = []
-                for f in sorted(all_files):
-                    try:
-                        rel = os.path.relpath(f, ws)
-                        result_lines.append(rel)
-                    except ValueError:
-                        result_lines.append(f)
-                return result_lines
-
-            result_lines = await asyncio.to_thread(_get_files)
-
-            if not result_lines:
-                return "No files found matching the criteria."
-
-            return f"Found {len(result_lines)} files:\n" + "\n".join(result_lines)
-
-        except Exception as e:
-            logger.error("list_files error: %s", e)
-            return f"Error listing files: {e}"
-
-    @mcp_instance.tool()
-    async def list_directories(
-        max_depth: Annotated[
-            int,
-            Field(description="Maximum directory depth to display (1-10). Default: 3."),
-        ] = 3,
-        workspace_path: Annotated[
-            Optional[str],
-            Field(
-                description="Absolute path to the workspace root directory. Auto-detected if omitted."
-            ),
-        ] = None,
-        ctx: Optional[Context] = None,
-    ) -> str:
-        """Show the directory tree structure of the workspace.
-
-        Displays a visual tree of directories, skipping common build/cache folders
-        (.git, node_modules, __pycache__, .venv, dist, build, etc.).
-        """
-        try:
-            ws = await WorkspaceManager.resolve(workspace_path, ctx)
-        except ValueError as e:
-            return f"Error: {e}"
-
-        return await asyncio.to_thread(_list_directories_impl, str(ws), max_depth)

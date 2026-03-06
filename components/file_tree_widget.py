@@ -88,17 +88,14 @@ class FileTreeWidget(QWidget):
         # Search debounce
         self._search_debounce = DebouncedTimer(150, self._apply_search, self)
 
-        # Selection sync state & timer
+        # Selection sync: đồng bộ selection giữa UI và .synapse/selection.json
+        # Poll timer đọc JSON mỗi 2s (agent ghi từ bên ngoài)
+        # Write thực hiện synchronous để tránh race condition với poll
         self._last_synced_selection: Set[str] = set()
         self._is_syncing_selection: bool = False
         self._selection_poll_timer = QTimer(self)
         self._selection_poll_timer.setInterval(2000)
         self._selection_poll_timer.timeout.connect(self._poll_agent_selection)
-
-        self._pending_selection_write: Optional[Set[str]] = None
-        self._selection_write_debounce = DebouncedTimer(
-            500, self._do_write_agent_selection, self
-        )
 
         # State
         self._pending_search: str = ""
@@ -342,7 +339,6 @@ class FileTreeWidget(QWidget):
         self._token_debounce.stop()
         self._search_debounce.stop()
         self._selection_poll_timer.stop()
-        self._selection_write_debounce.stop()
 
     # ===== Slots =====
 
@@ -774,12 +770,27 @@ class FileTreeWidget(QWidget):
                 self._expand_paths_recursive(index, paths)
 
     # ===== Agent Syncing =====
+    #
+    # Luồng đồng bộ 2 chiều giữa UI <-> .synapse/selection.json:
+    #
+    # UI -> JSON (write): Khi user click checkbox, _write_agent_selection()
+    #   ghi SYNCHRONOUS vào JSON và update _last_synced_selection ngay lập tức.
+    #   Không dùng debounce để tránh race condition với poll timer.
+    #
+    # JSON -> UI (poll): Timer 2s đọc JSON, so sánh với _last_synced_selection.
+    #   Nếu khác (agent đã sửa từ bên ngoài) thì apply vào UI.
+    #   Nếu giống (do chính UI vừa ghi) thì skip.
+    #
+    # Race condition đã fix: Vì write là synchronous, _last_synced_selection
+    # luôn khớp với nội dung JSON. Poll timer đọc JSON sẽ thấy data giống
+    # _last_synced_selection -> skip. Không bao giờ ghi đè selection mới.
 
     @Slot()
     def _poll_agent_selection(self) -> None:
-        """Poll .synapse/selection.json moi 2 giay de dong bo.
+        """Poll .synapse/selection.json mỗi 2 giây để đồng bộ từ agent.
 
-        Su dung cache de so sanh va tranh trigger render khong can thiet.
+        Chỉ apply khi phát hiện agent thay đổi JSON từ bên ngoài.
+        Skip nếu data trong JSON trùng với _last_synced_selection (do UI vừa ghi).
         """
         if self._is_syncing_selection:
             return
@@ -800,35 +811,45 @@ class FileTreeWidget(QWidget):
                 data = json.load(f)
                 selected_list = data.get("selected_files", [])
 
-            # Convert from relative (in json) to absolute (for UI)
+            # Convert relative paths (trong JSON) sang absolute (cho UI)
+            # Dùng .absolute() thay vì .resolve() để tránh symlink mismatch
             workspace_path = Path(workspace)
             absolute_selected = set()
             for rel_path in selected_list:
                 try:
-                    fp = (workspace_path / rel_path).resolve()
+                    fp = (workspace_path / rel_path).absolute()
                     absolute_selected.add(str(fp))
                 except Exception:
                     pass
 
-            if absolute_selected != self._last_synced_selection:
-                self._last_synced_selection = absolute_selected
+            # So sánh với cache: nếu giống thì JSON chưa thay đổi -> skip
+            if absolute_selected == self._last_synced_selection:
+                return
 
-                # Kiem tra neu thuc su khac voi model state thi moi update
-                model_selected = self._model.get_all_selected_paths()
-                if absolute_selected != model_selected:
-                    self._is_syncing_selection = True
-                    try:
-                        self.set_selected_paths(absolute_selected)
-                        # Force tree viewport de ve lai
-                        self._tree_view.viewport().update()
-                    finally:
-                        self._is_syncing_selection = False
+            # JSON đã thay đổi (agent sửa từ bên ngoài)
+            self._last_synced_selection = absolute_selected
+
+            # Kiểm tra nếu thực sự khác với model state thì mới apply
+            model_selected = self._model.get_all_selected_paths()
+            if absolute_selected != model_selected:
+                self._is_syncing_selection = True
+                try:
+                    self.set_selected_paths(absolute_selected)
+                    self._tree_view.viewport().update()
+                finally:
+                    self._is_syncing_selection = False
 
         except Exception as e:
             logger.debug(f"Failed to poll selection: {e}")
 
     def _write_agent_selection(self, selected: Set[str]) -> None:
-        """Ghi selection flag hien tai vao .synapse/selection.json (có debounce)."""
+        """Ghi selection hiện tại vào .synapse/selection.json (synchronous).
+
+        Ghi ĐỒNG BỘ để đảm bảo _last_synced_selection luôn khớp với JSON.
+        Nếu dùng debounce, poll timer có thể đọc JSON cũ trong khoảng delay
+        và ghi đè selection mới của user -> mất checkbox.
+        """
+        # Bỏ qua nếu đang sync từ poll (tránh vòng lặp)
         if self._is_syncing_selection:
             return
 
@@ -836,26 +857,13 @@ class FileTreeWidget(QWidget):
         if not workspace:
             return
 
-        # Nhanh: neu khong doi, bo qua ghi file de tiet kiem IO
+        # Fast path: nếu selection không đổi thì skip IO
         if selected == self._last_synced_selection:
             return
 
-        self._pending_selection_write = set(selected)
-        self._selection_write_debounce.start()
-
-    @Slot()
-    def _do_write_agent_selection(self) -> None:
-        """Thực thi thao tác IO thật sự sau khi debounce."""
-        if self._pending_selection_write is None:
-            return
-
-        selected = self._pending_selection_write
-        self._pending_selection_write = None
-        self._last_synced_selection = selected
-
-        workspace = self._model.get_workspace_path()
-        if not workspace:
-            return
+        # Update cache TRƯỚC khi ghi file
+        # Đảm bảo poll timer luôn thấy data mới nhất
+        self._last_synced_selection = set(selected)
 
         from mcp_server.core.workspace_manager import WorkspaceManager
         import json
@@ -863,7 +871,7 @@ class FileTreeWidget(QWidget):
         workspace_path = Path(workspace)
         session_file = WorkspaceManager.get_session_file(workspace_path)
 
-        # Convert from absolute (UI) to relative (for Agent)
+        # Convert absolute paths (UI) -> relative paths (cho agent)
         relative_selected = []
         for abs_path in selected:
             try:
@@ -873,7 +881,6 @@ class FileTreeWidget(QWidget):
                 pass
 
         try:
-            # Create directory if needed
             session_file.parent.mkdir(parents=True, exist_ok=True)
             with open(session_file, "w", encoding="utf-8") as f:
                 json.dump({"selected_files": sorted(relative_selected)}, f, indent=2)

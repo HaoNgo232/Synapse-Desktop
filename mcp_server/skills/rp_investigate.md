@@ -35,12 +35,8 @@ find_references(symbol_name="suspected_function")
 
 ### Step 2: Read Code at Error Points
 ```python
-# Doc doan code xung quanh loi
-read_file_range(
-    relative_path="src/module.py",
-    start_line=40,
-    end_line=70
-)
+# Doc doan code xung quanh loi: dung built-in read_file voi offset/limit
+# Vi du: read_file("src/module.py", offset=39, limit=31)  # dong 40-70
 
 # Xem structure cua file: functions/classes va line ranges
 get_symbols(file_path="src/module.py")

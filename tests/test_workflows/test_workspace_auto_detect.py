@@ -61,26 +61,6 @@ async def test_start_session_auto_detect(in_temp_dir):
 
 
 @pytest.mark.asyncio
-async def test_get_project_structure_auto_detect(in_temp_dir):
-    """Verify get_project_structure falls back to CWD."""
-    get_project_structure = get_tool("get_project_structure")
-    result = await get_project_structure()
-    assert "Project:" in result
-    assert str(in_temp_dir.name) in result
-    assert ".py" in result
-
-
-@pytest.mark.asyncio
-async def test_find_todos_auto_detect(in_temp_dir):
-    """Verify find_todos falls back to CWD."""
-    find_todos = get_tool("find_todos")
-    (in_temp_dir / "todo.py").write_text("# TODO: fix me")
-    result = await find_todos()
-    assert "TODO" in result
-    assert "fix me" in result
-
-
-@pytest.mark.asyncio
 async def test_rp_build_auto_detect(in_temp_dir):
     """Verify rp_build falls back to CWD."""
     rp_build = get_tool("rp_build")

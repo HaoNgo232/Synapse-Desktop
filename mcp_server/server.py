@@ -32,7 +32,7 @@ if str(_project_root) not in sys.path:
 mcp = FastMCP(
     "Synapse Desktop",
     instructions=(
-        "Synapse Desktop - AI-powered codebase exploration toolkit with 19 tools.\n"
+        "Synapse Desktop - AI-powered codebase exploration toolkit with 14 tools.\n"
         "\n"
         "USE YOUR BUILT-IN TOOLS FOR BASIC OPERATIONS:\n"
         "  - Reading files -> use your native read_file, unless files are too large\n"
@@ -50,10 +50,9 @@ mcp = FastMCP(
         "  - diff_summary - function-level git change analysis\n"
         "  - explain_architecture - auto-generate codebase architecture summary\n"
         "  - build_prompt - structured prompt packaging\n"
-        "  - get_project_structure - detect frameworks and codebase scale\n"
         "\n"
         "[CRITICAL] WORKFLOW:\n"
-        "  1. Start with explain_architecture or get_project_structure to understand the codebase\n"
+        "  1. Start with explain_architecture or start_session to understand the codebase\n"
         "  2. Use batch_codemap on key modules to understand their APIs\n"
         "  3. Use get_callers before modifying any function to check impact\n"
         "  4. Use get_related_tests to find tests to verify your changes\n"

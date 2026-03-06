@@ -31,19 +31,16 @@ class TestIndividualHandlerRegistration:
     """Kiem tra tung handler dang ky dung so luong va ten tools."""
 
     def test_workspace_handler_tools(self):
-        """workspace_handler dang ky 3 tools."""
+        """workspace_handler dang ky 1 tool (list_files, list_directories da go bo)."""
         names = _get_tool_names(reg_workspace)
         assert "start_session" in names
-        assert "list_files" in names
-        assert "list_directories" in names
-        assert len(names) == 3
+        assert len(names) == 1
 
     def test_file_handler_tools(self):
-        """file_handler dang ky 2 tools."""
+        """file_handler dang ky 1 tool (read_file_range da go bo)."""
         names = _get_tool_names(reg_file)
-        assert "read_file_range" in names
         assert "get_file_metrics" in names
-        assert len(names) == 2
+        assert len(names) == 1
 
     def test_selection_handler_tools(self):
         """selection_handler dang ky 1 tool."""
@@ -58,19 +55,17 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 1
 
     def test_analysis_handler_tools(self):
-        """analysis_handler dang ky 3 tools."""
+        """analysis_handler dang ky 2 tools (find_todos da go bo)."""
         names = _get_tool_names(reg_analysis)
         assert "find_references" in names
-        assert "find_todos" in names
         assert "get_symbols" in names
-        assert len(names) == 3
+        assert len(names) == 2
 
     def test_structure_handler_tools(self):
-        """structure_handler dang ky 2 tools."""
+        """structure_handler dang ky 1 tool (get_project_structure da go bo)."""
         names = _get_tool_names(reg_structure)
-        assert "get_project_structure" in names
         assert "explain_architecture" in names
-        assert len(names) == 2
+        assert len(names) == 1
 
     def test_dependency_handler_tools(self):
         """dependency_handler dang ky 3 tools."""
@@ -109,11 +104,11 @@ class TestRegisterAllTools:
     """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 24 (3+2+1+1+3+2+3+1+3+5)."""
+        """Tong so tools phai la 19 (sau khi go 5 tools: list_files, list_directories, read_file_range, get_project_structure, find_todos)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 24
+        assert len(tools) == 19
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -124,7 +119,7 @@ class TestRegisterAllTools:
         assert len(names) == len(set(names)), f"Duplicate tools: {names}"
 
     def test_all_expected_tools_present(self):
-        """Tat ca 24 tools duoc dang ky dung ten."""
+        """Tat ca 19 tools duoc dang ky dung ten."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         names = {t.name for t in mcp._tool_manager.list_tools()}
@@ -132,10 +127,7 @@ class TestRegisterAllTools:
         expected_tools = {
             # workspace_handler
             "start_session",
-            "list_files",
-            "list_directories",
             # file_handler
-            "read_file_range",
             "get_file_metrics",
             # selection_handler
             "manage_selection",
@@ -143,10 +135,8 @@ class TestRegisterAllTools:
             "estimate_tokens",
             # analysis_handler
             "find_references",
-            "find_todos",
             "get_symbols",
             # structure_handler
-            "get_project_structure",
             "explain_architecture",
             # dependency_handler
             "get_imports_graph",

@@ -111,9 +111,9 @@ class TestResolveSkillsDir:
         assert result == Path.home() / ".cursor" / "skills"
 
     def test_antigravity_target(self) -> None:
-        """Antigravity skills luu tai ~/.agents/skills."""
+        """Antigravity skills luu tai ~/.gemini/antigravity/skills."""
         result = _resolve_skills_dir("Antigravity")
-        assert result == Path.home() / ".agents" / "skills"
+        assert result == Path.home() / ".gemini" / "antigravity" / "skills"
 
     def test_kiro_target(self) -> None:
         """Kiro CLI skills luu tai ~/.kiro/skills."""
@@ -281,11 +281,12 @@ class TestSkillTargetsConfig:
     """Kiem tra cau hinh SKILL_TARGETS va SKILL_KEYS dung."""
 
     def test_all_expected_targets_present(self) -> None:
-        """Phai co du 6 IDE targets."""
+        """Phai co du 7 IDE targets."""
         expected = {
             "Claude Code",
             "Cursor",
             "Antigravity",
+            "Antigravity (Workspace)",
             "Kiro CLI",
             "OpenCode",
             "VS Code (Copilot)",

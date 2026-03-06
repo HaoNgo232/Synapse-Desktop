@@ -689,7 +689,7 @@ class SettingsViewQt(QWidget):
         card6_layout.addSpacing(14)
 
         # Buttons cho tung AI client
-        from mcp_server.config_installer import MCP_TARGETS, check_installed
+        from infrastructure.mcp.config_installer import MCP_TARGETS, check_installed
 
         for target_name in MCP_TARGETS:
             btn_row = QHBoxLayout()
@@ -1001,7 +1001,7 @@ class SettingsViewQt(QWidget):
 
     def _get_mcp_command(self) -> list[str]:
         """Tự động phát hiện lệnh khởi chạy MCP server."""
-        from mcp_server.config_installer import get_mcp_command
+        from infrastructure.mcp.config_installer import get_mcp_command
 
         return get_mcp_command()
 
@@ -1139,7 +1139,7 @@ class SettingsViewQt(QWidget):
         self, target_name: str, workspace_path: Optional[str] = None
     ) -> None:
         """Hien thi preview JSON day du va ghi config vao file neu user dong y."""
-        from mcp_server.config_installer import (
+        from infrastructure.mcp.config_installer import (
             get_config_path,
             preview_json,
             install_config,
@@ -1241,7 +1241,7 @@ class SettingsViewQt(QWidget):
         if success:
             # Tu dong cai dat Agent Skills (SKILL.md) vao thu muc skills cua IDE
             try:
-                from mcp_server.skill_installer import install_skills_for_target
+                from infrastructure.mcp.skill_installer import install_skills_for_target
 
                 skill_ok, skill_msg = install_skills_for_target(
                     target_name, workspace_path

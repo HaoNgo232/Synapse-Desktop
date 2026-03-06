@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from mcp_server.core.session_manager import SessionManager
+from infrastructure.mcp.core.session_manager import SessionManager
 
 
 @pytest.fixture

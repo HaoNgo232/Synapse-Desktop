@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_server.skill_installer import (
+from infrastructure.mcp.skill_installer import (
     SKILL_KEYS,
     SKILL_TARGETS,
     _load_skill_file,
@@ -147,7 +147,7 @@ class TestInstallSkillsForTarget:
     def test_creates_all_5_skill_folders(self, tmp_path: Path) -> None:
         """Phai tao du 5 folder voi file SKILL.md ben trong."""
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(tmp_path), "is_global": True}},
         ):
             ok, msg = install_skills_for_target("TestIDE")
@@ -162,7 +162,7 @@ class TestInstallSkillsForTarget:
     def test_skill_md_content_has_frontmatter(self, tmp_path: Path) -> None:
         """File SKILL.md phai co YAML frontmatter dung format."""
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(tmp_path), "is_global": True}},
         ):
             install_skills_for_target("TestIDE")
@@ -180,7 +180,7 @@ class TestInstallSkillsForTarget:
         (old_dir / "SKILL.md").write_text("old content")
 
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(tmp_path), "is_global": True}},
         ):
             ok, _ = install_skills_for_target("TestIDE")
@@ -222,7 +222,7 @@ class TestInstallSkillsForTarget:
         os.chmod(readonly_dir, 0o444)
 
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(readonly_dir), "is_global": True}},
         ):
             ok, msg = install_skills_for_target("TestIDE")
@@ -240,7 +240,7 @@ class TestCheckSkillsInstalled:
     def test_returns_true_when_all_installed(self, tmp_path: Path) -> None:
         """Tra ve True khi tat ca 5 skills deu co file SKILL.md."""
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(tmp_path), "is_global": True}},
         ):
             # Cai dat truoc
@@ -252,7 +252,7 @@ class TestCheckSkillsInstalled:
     def test_returns_false_when_missing_one(self, tmp_path: Path) -> None:
         """Tra ve False khi thieu 1 skill bat ky."""
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(tmp_path), "is_global": True}},
         ):
             install_skills_for_target("TestIDE")
@@ -269,7 +269,7 @@ class TestCheckSkillsInstalled:
     def test_returns_false_when_empty_dir(self, tmp_path: Path) -> None:
         """Tra ve False khi thu muc skills rong."""
         with patch.dict(
-            "mcp_server.skill_installer.SKILL_TARGETS",
+            "infrastructure.mcp.skill_installer.SKILL_TARGETS",
             {"TestIDE": {"skills_dir": str(tmp_path), "is_global": True}},
         ):
             result = check_skills_installed("TestIDE")
@@ -300,7 +300,7 @@ class TestSkillTargetsConfig:
     @pytest.mark.parametrize("skill_key", EXPECTED_SKILLS)
     def test_skill_file_exists_on_disk(self, skill_key: str) -> None:
         """Moi skill phai co file .md tuong ung tren disk."""
-        from mcp_server.skill_installer import _SKILLS_DIR
+        from infrastructure.mcp.skill_installer import _SKILLS_DIR
 
         skill_file = _SKILLS_DIR / f"{skill_key}.md"
         assert skill_file.is_file(), f"Thieu file: {skill_file}"

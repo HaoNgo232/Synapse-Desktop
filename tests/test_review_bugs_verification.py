@@ -23,7 +23,7 @@ class TestBug1TopLevelImportFailure:
     def test_context_handler_imports_at_top_level(self):
         """Verify rằng DependencyResolver và PromptBuildService được import ở top-level."""
         # Read context_handler.py
-        handler_file = Path("mcp_server/handlers/context_handler.py")
+        handler_file = Path("infrastructure/mcp/handlers/context_handler.py")
         if not handler_file.exists():
             pytest.skip("context_handler.py not found")
 
@@ -212,7 +212,7 @@ class TestBug4RaceCondition:
 
     def test_concurrent_session_file_creation(self, tmp_path):
         """Test race condition khi nhiều threads tạo session file đồng thời."""
-        from mcp_server.handlers.selection_handler import _locked_read_modify_write
+        from infrastructure.mcp.handlers.selection_handler import _locked_read_modify_write
 
         # Arrange
         session_file = tmp_path / ".synapse" / "selection.json"

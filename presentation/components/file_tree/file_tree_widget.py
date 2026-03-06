@@ -803,7 +803,7 @@ class FileTreeWidget(QWidget):
         if not workspace:
             return
 
-        from mcp_server.core.workspace_manager import WorkspaceManager
+        from infrastructure.mcp.core.workspace_manager import WorkspaceManager
         import json
 
         session_file = WorkspaceManager.get_session_file(Path(workspace))
@@ -869,7 +869,7 @@ class FileTreeWidget(QWidget):
         # Đảm bảo poll timer luôn thấy data mới nhất
         self._last_synced_selection = set(selected)
 
-        from mcp_server.core.workspace_manager import WorkspaceManager
+        from infrastructure.mcp.core.workspace_manager import WorkspaceManager
         import json
 
         workspace_path = Path(workspace)

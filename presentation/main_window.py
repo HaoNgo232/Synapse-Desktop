@@ -802,7 +802,7 @@ def main() -> None:
     if "--run-mcp" in sys.argv:
         idx = sys.argv.index("--run-mcp")
         workspace = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else None
-        from mcp_server.server import run_mcp_server
+        from infrastructure.mcp.server import run_mcp_server
 
         run_mcp_server(workspace)
         return

@@ -1,9 +1,9 @@
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.handlers.context_handler import register_tools as _reg_ctx
-from mcp_server.handlers.dependency_handler import register_tools as _reg_dep
-from mcp_server.handlers.structure_handler import register_tools as _reg_struct
+from infrastructure.mcp.handlers.context_handler import register_tools as _reg_ctx
+from infrastructure.mcp.handlers.dependency_handler import register_tools as _reg_dep
+from infrastructure.mcp.handlers.structure_handler import register_tools as _reg_struct
 
 # Tao mot MCP instance gia lap de dang ky va lay cac tool functions
 _test_mcp = FastMCP("test")

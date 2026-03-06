@@ -9,7 +9,7 @@ Kiem tra atomic_write dam bao:
 
 import pytest
 
-from mcp_server.utils.file_utils import atomic_write
+from infrastructure.mcp.utils.file_utils import atomic_write
 
 
 class TestAtomicWrite:

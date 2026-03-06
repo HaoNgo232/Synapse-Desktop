@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.handlers.file_handler import register_tools
+from infrastructure.mcp.handlers.file_handler import register_tools
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from mcp_server.core.workspace_manager import WorkspaceManager
+from infrastructure.mcp.core.workspace_manager import WorkspaceManager
 
 
 class TestWorkspaceManagerResolveSync:

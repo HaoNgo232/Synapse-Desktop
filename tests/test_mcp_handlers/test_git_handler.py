@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.handlers.git_handler import register_tools
+from infrastructure.mcp.handlers.git_handler import register_tools
 
 
 @pytest.fixture

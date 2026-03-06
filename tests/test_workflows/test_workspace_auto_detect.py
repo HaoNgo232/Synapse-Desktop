@@ -3,11 +3,11 @@ import os
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.handlers.workspace_handler import register_tools as _reg_ws
-from mcp_server.handlers.analysis_handler import register_tools as _reg_analysis
-from mcp_server.handlers.structure_handler import register_tools as _reg_struct
-from mcp_server.handlers.git_handler import register_tools as _reg_git
-from mcp_server.handlers.workflow_handler import register_tools as _reg_workflow
+from infrastructure.mcp.handlers.workspace_handler import register_tools as _reg_ws
+from infrastructure.mcp.handlers.analysis_handler import register_tools as _reg_analysis
+from infrastructure.mcp.handlers.structure_handler import register_tools as _reg_struct
+from infrastructure.mcp.handlers.git_handler import register_tools as _reg_git
+from infrastructure.mcp.handlers.workflow_handler import register_tools as _reg_workflow
 
 # Setup a mock MCP instance
 _test_mcp = FastMCP("test_auto_detect")

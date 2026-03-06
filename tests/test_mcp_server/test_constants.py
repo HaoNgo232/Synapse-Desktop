@@ -8,7 +8,7 @@ Kiem tra cac regex patterns va constants duoc dinh nghia dung:
 - GIT_TIMEOUT: co gia tri hop ly
 """
 
-from mcp_server.core.constants import (
+from infrastructure.mcp.core.constants import (
     GIT_TIMEOUT,
     INLINE_COMMENT_RE,
     SAFE_GIT_REF,

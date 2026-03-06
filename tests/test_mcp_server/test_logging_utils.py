@@ -9,7 +9,7 @@ Kiem tra force_all_logging_to_stderr redirect logging dung:
 import logging
 import sys
 
-from mcp_server.utils.logging_utils import force_all_logging_to_stderr
+from infrastructure.mcp.utils.logging_utils import force_all_logging_to_stderr
 
 
 class TestForceAllLoggingToStderr:

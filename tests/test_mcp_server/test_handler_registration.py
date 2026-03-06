@@ -7,17 +7,17 @@ voi ten chinh xac khi goi register_all_tools().
 
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.handlers import register_all_tools
-from mcp_server.handlers.analysis_handler import register_tools as reg_analysis
-from mcp_server.handlers.context_handler import register_tools as reg_context
-from mcp_server.handlers.dependency_handler import register_tools as reg_dependency
-from mcp_server.handlers.file_handler import register_tools as reg_file
-from mcp_server.handlers.git_handler import register_tools as reg_git
-from mcp_server.handlers.selection_handler import register_tools as reg_selection
-from mcp_server.handlers.structure_handler import register_tools as reg_structure
-from mcp_server.handlers.token_handler import register_tools as reg_token
-from mcp_server.handlers.workflow_handler import register_tools as reg_workflow
-from mcp_server.handlers.workspace_handler import register_tools as reg_workspace
+from infrastructure.mcp.handlers import register_all_tools
+from infrastructure.mcp.handlers.analysis_handler import register_tools as reg_analysis
+from infrastructure.mcp.handlers.context_handler import register_tools as reg_context
+from infrastructure.mcp.handlers.dependency_handler import register_tools as reg_dependency
+from infrastructure.mcp.handlers.file_handler import register_tools as reg_file
+from infrastructure.mcp.handlers.git_handler import register_tools as reg_git
+from infrastructure.mcp.handlers.selection_handler import register_tools as reg_selection
+from infrastructure.mcp.handlers.structure_handler import register_tools as reg_structure
+from infrastructure.mcp.handlers.token_handler import register_tools as reg_token
+from infrastructure.mcp.handlers.workflow_handler import register_tools as reg_workflow
+from infrastructure.mcp.handlers.workspace_handler import register_tools as reg_workspace
 
 
 def _get_tool_names(register_fn):

@@ -6,7 +6,7 @@ Tests the automatic codemap assignment for transitive dependencies (depth >= 2).
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from mcp_server.handlers.context_handler import register_tools
+from infrastructure.mcp.handlers.context_handler import register_tools
 
 
 class TestAutoCodemapFeature:
@@ -42,9 +42,9 @@ class TestAutoCodemapFeature:
         build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
-            patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
             patch(
-                "mcp_server.handlers.context_handler.resolve_profile_params"
+                "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             # Patch at import location (inside build_prompt function)
             patch(
@@ -107,9 +107,9 @@ class TestAutoCodemapFeature:
         build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
-            patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
             patch(
-                "mcp_server.handlers.context_handler.resolve_profile_params"
+                "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             patch(
                 "application.services.dependency_resolver.DependencyResolver"
@@ -160,9 +160,9 @@ class TestAutoCodemapFeature:
         build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
-            patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
             patch(
-                "mcp_server.handlers.context_handler.resolve_profile_params"
+                "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             patch(
                 "application.services.dependency_resolver.DependencyResolver"
@@ -221,9 +221,9 @@ class TestAutoCodemapFeature:
         (workspace / "db.py").write_text("# database")
 
         with (
-            patch("mcp_server.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
             patch(
-                "mcp_server.handlers.context_handler.resolve_profile_params"
+                "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             patch(
                 "application.services.dependency_resolver.DependencyResolver"

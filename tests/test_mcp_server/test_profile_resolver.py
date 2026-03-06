@@ -16,7 +16,7 @@ Return format: tuple (output_format, include_git_changes, instructions,
 import pytest
 from unittest.mock import patch, MagicMock
 
-from mcp_server.core.profile_resolver import resolve_profile_params
+from infrastructure.mcp.core.profile_resolver import resolve_profile_params
 
 # Index constants cho tuple return value
 FMT = 0  # output_format

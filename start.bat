@@ -50,16 +50,17 @@ if exist "%REQUIREMENTS_FILE%" (
 )
 
 REM Check main_window.py
-if not exist "main_window.py" (
-    echo [ERROR] main_window.py not found!
+if not exist "presentation\main_window.py" (
+    echo [ERROR] presentation\main_window.py not found!
     pause
     exit /b 1
 )
 
 REM Start application
-echo Starting application (PySide6)...
+echo Starting application (Synapse Desktop)...
 echo.
-python main_window.py
+set PYTHONPATH=%PYTHONPATH%;.
+python -m presentation.main_window
 
 set APP_EXIT_CODE=%errorlevel%
 

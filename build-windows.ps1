@@ -36,7 +36,7 @@ $VENV_DIR = Join-Path $SCRIPT_DIR ".venv"
 $VENV_PYTHON = Join-Path $VENV_DIR "Scripts\python.exe"
 $VENV_PIP = Join-Path $VENV_DIR "Scripts\pip.exe"
 $ASSETS_DIR = Join-Path $SCRIPT_DIR "assets"
-$TEMPLATES_DIR = Join-Path $SCRIPT_DIR "core\prompting\templates"
+$TEMPLATES_DIR = Join-Path $SCRIPT_DIR "domain\prompt\templates"
 $ICON_FILE = Join-Path $ASSETS_DIR "icon.ico"
 
 Write-Host "========================================" -ForegroundColor Cyan
@@ -100,8 +100,8 @@ if (Test-Path $ASSETS_DIR) {
 
 # Prompt templates
 if (Test-Path $TEMPLATES_DIR) {
-    $addDataArgs += @("--add-data", "${TEMPLATES_DIR};core\prompting\templates")
-    Write-Host "  + core/prompting/templates/" -ForegroundColor DarkGray
+    $addDataArgs += @("--add-data", "${TEMPLATES_DIR};domain\prompt\templates")
+    Write-Host "  + domain/prompt/templates/" -ForegroundColor DarkGray
 }
 
 # ── Step 5: Determine hidden imports ──────────────────────────
@@ -131,48 +131,48 @@ $hiddenImports = @(
     # --- PySide6 plugins (platform-specific, not always detected) ---
     "PySide6.QtSvg",
     "PySide6.QtSvgWidgets",
-    # --- Services loaded via lazy import in main_window.py ---
-    "services.settings_manager",
-    "services.history_service",
-    "services.file_watcher",
-    "services.prompt_build_service",
-    "services.ai_context_worker",
-    "services.workspace_config",
-    "services.clipboard_utils",
-    "services.preview_analyzer",
-    "services.error_context",
-    "services.cache_registry",
-    # --- Core modules loaded lazily ---
-    "core.opx_parser",
-    "core.file_actions",
-    "core.prompt_generator",
-    "core.security_check",
-    "core.ignore_engine",
-    "core.tokenization.cache",
-    "core.tokenization.cancellation",
-    "core.smart_context.parser",
-    "core.ai.openai_provider",
-    "core.prompting.template_manager",
-    "core.prompting.context_builder_prompts",
-    "core.utils.safe_timer",
-    "core.utils.git_utils",
-    "core.utils.file_utils",
-    "core.utils.repo_manager",
-    "core.theme_qss",
-    # --- View mixins (imported inside ContextViewQt) ---
-    "views.context._ui_builder",
-    "views.context._copy_actions",
-    "views.context._related_files",
-    "views.context._tree_management",
+    # --- Services loaded via lazy import ---
+    "application.services.settings_manager",
+    "application.services.history_service",
+    "application.services.file_watcher",
+    "application.services.prompt_build_service",
+    "application.services.ai_context_worker",
+    "application.services.workspace_config",
+    "shared.utils.clipboard_utils",
+    "application.services.preview_analyzer",
+    "shared.utils.error_context",
+    "infrastructure.persistence.cache_registry",
+    # --- Core/Domain modules loaded lazily ---
+    "domain.opx.parser",
+    "infrastructure.adapters.file_actions",
+    "domain.prompt.generator",
+    "domain.security.security_check",
+    "domain.ignore.ignore_engine",
+    "infrastructure.persistence.token_cache",
+    "shared.concurrency.cancellation",
+    "domain.smart_context.parser",
+    "infrastructure.adapters.openai_provider",
+    "domain.prompt.template_manager",
+    "domain.prompt.context_builder_prompts",
+    "shared.concurrency.safe_timer",
+    "infrastructure.adapters.git_utils",
+    "shared.utils.file_utils",
+    "infrastructure.adapters.repo_manager",
+    "presentation.theme_qss",
+    # --- View mixins ---
+    "presentation.views.context._ui_builder",
+    "presentation.views.context._copy_actions",
+    "presentation.views.context._related_files",
+    "presentation.views.context._tree_management",
     # --- Components loaded lazily ---
-    "components.diff_viewer_qt",
-    "components.toggle_switch",
-    "components.tag_chips_widget",
-    "components.custom_template_dialog",
-    "components.file_tree_widget",
+    "presentation.components.diff_viewer_qt",
+    "presentation.components.toggle_switch",
+    "presentation.components.tag_chips_widget",
+    "presentation.components.custom_template_dialog",
+    "presentation.components.file_tree_widget",
     # --- Config ---
-    "config.output_format",
-    "config.model_config",
+    "presentation.config.output_format",
+    "presentation.config.model_config",
     # --- Optional Rust-accelerated libraries ---
     "scandir_rs",
     "rs_bpe",
@@ -246,7 +246,7 @@ if ($Debug) {
 # PyInstaller can embed version info via --version-file, but we skip for simplicity
 
 # Entry point
-$pyinstallerArgs += "main_window.py"
+$pyinstallerArgs += "presentation\main_window.py"
 
 Write-Host "  Running: python $($pyinstallerArgs -join ' ')" -ForegroundColor DarkGray
 Write-Host ""

@@ -40,14 +40,14 @@ pyinstaller \
     --noconfirm \
     --clean \
     --add-data "$SCRIPT_DIR/assets:assets" \
-    --add-data "$SCRIPT_DIR/core/prompting/templates:core/prompting/templates" \
+    --add-data "$SCRIPT_DIR/domain/prompt/templates:domain/prompt/templates" \
     --hidden-import tiktoken_ext \
     --hidden-import tiktoken_ext.openai_public \
     --collect-all tiktoken_ext \
     --distpath "$BUILD_DIR/dist" \
     --workpath "$BUILD_DIR/work" \
     --specpath "$BUILD_DIR" \
-    main_window.py
+    presentation/main_window.py
 
 echo "[3/6] Copying files to AppDir..."
 cp -r "$BUILD_DIR/dist/$APP_NAME"/* "$APPDIR/usr/bin/"

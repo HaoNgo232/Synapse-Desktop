@@ -76,14 +76,16 @@ else
 fi
 
 # Check main_window.py (PySide6 entry point)
-if [ ! -f "main_window.py" ]; then
-    echo -e "${RED}Error: main_window.py not found!${NC}"
+if [ ! -f "presentation/main_window.py" ]; then
+    echo -e "${RED}Error: presentation/main_window.py not found!${NC}"
     exit 1
 fi
 
 # Start application
-echo -e "${GREEN}Starting application (PySide6)...${NC}\n"
-python3 main_window.py
+echo -e "${GREEN}Starting application (Synapse Desktop)...${NC}\n"
+# Set PYTHONPATH to current directory to ensure modules are found
+export PYTHONPATH=$PYTHONPATH:.
+python3 -m presentation.main_window
 
 # Save exit code
 APP_EXIT_CODE=$?

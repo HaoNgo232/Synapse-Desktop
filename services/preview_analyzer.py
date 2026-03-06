@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from core.opx_parser import FileAction
-from components.diff_viewer import (
+from presentation.components.diff_viewer import (
     DiffLine,
     generate_diff_lines,
     generate_create_diff_lines,

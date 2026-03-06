@@ -55,6 +55,12 @@ class FakeFileTreeWidget(QWidget):
     def add_paths_to_selection(self, paths):
         pass
 
+    def set_selected_paths(self, paths):
+        pass
+
+    def set_expanded_paths(self, paths):
+        pass
+
 
 class FakeTokenStatsPanel(QWidget):
     """Fake TokenStatsPanelQt cho testing."""

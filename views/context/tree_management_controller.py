@@ -14,7 +14,7 @@ Xu ly:
 """
 
 from pathlib import Path
-from typing import Protocol, List, Optional, runtime_checkable
+from typing import Protocol, List, Optional, Set, runtime_checkable
 
 from PySide6.QtCore import QObject
 
@@ -33,12 +33,22 @@ class TreeManagementViewProtocol(Protocol):
         """Tra ve workspace path hien tai."""
         ...
 
-    def get_all_selected_paths(self) -> "set[str]":
+    def get_all_selected_paths(self) -> Set[str]:
         """Tra ve tat ca selected paths."""
+        ...
+
+    def get_expanded_paths(self) -> List[str]:
+        """Tra ve danh sach cac folder dang expanded."""
         ...
 
     def load_tree(self, workspace: Path) -> None:
         """Reload file tree cho workspace."""
+        ...
+
+    def restore_tree_state(
+        self, selected_files: List[str], expanded_folders: List[str]
+    ) -> None:
+        """Restore selection va expanded state sau khi reload tree."""
         ...
 
     def on_workspace_changed(self, workspace_path: Path) -> None:
@@ -89,10 +99,26 @@ class TreeManagementController(QObject):
     # ===== Public API =====
 
     def refresh_tree(self) -> None:
-        """Refresh file tree tu workspace hien tai."""
+        """Refresh file tree tu workspace hien tai.
+
+        Save/Restore pattern: Luu selection + expanded state truoc khi
+        rebuild tree, restore lai sau do. Dam bao user khong mat
+        trang thai khi FileWatcher trigger refresh.
+        """
         workspace = self._view.get_workspace()
-        if workspace:
-            self._view.load_tree(workspace)
+        if not workspace:
+            return
+
+        # Luu state truoc khi rebuild
+        saved_selection = list(self._view.get_all_selected_paths())
+        saved_expanded = self._view.get_expanded_paths()
+
+        # Rebuild tree tu filesystem
+        self._view.load_tree(workspace)
+
+        # Restore state da luu (chi restore paths con ton tai tren disk)
+        if saved_selection or saved_expanded:
+            self._view.restore_tree_state(saved_selection, saved_expanded)
 
     def add_to_ignore(self) -> None:
         """Them cac selected files/folders vao ignore list."""

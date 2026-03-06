@@ -9,11 +9,25 @@ from pathlib import Path
 
 
 def test_refresh_tree(context_view):
-    """Kiem tra _refresh_tree goi file_tree_widget.load_tree."""
+    """Kiem tra refresh_tree save/restore selection + expanded state."""
     view = context_view
     view.file_tree_widget.load_tree = MagicMock()
+    view.file_tree_widget.get_all_selected_paths = MagicMock(
+        return_value={"/fake/workspace/src/main.py"}
+    )
+    view.file_tree_widget.get_expanded_paths = MagicMock(
+        return_value=["/fake/workspace/src"]
+    )
+    view.file_tree_widget.set_selected_paths = MagicMock()
+    view.file_tree_widget.set_expanded_paths = MagicMock()
+
     view._tree_controller.refresh_tree()
+
+    # Verify tree duoc rebuild
     view.file_tree_widget.load_tree.assert_called_once_with(Path("/fake/workspace"))
+
+    # Verify state duoc save truoc reload (get_all_selected_paths duoc goi)
+    view.file_tree_widget.get_all_selected_paths.assert_called()
 
 
 def test_refresh_tree_no_workspace(qtbot):

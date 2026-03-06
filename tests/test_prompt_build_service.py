@@ -10,7 +10,7 @@ Verify:
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from services.service_interfaces import IPromptBuilder, IClipboardService
+from application.services.service_interfaces import IPromptBuilder, IClipboardService
 from application.services.prompt_build_service import (
     PromptBuildService,
     QtClipboardService,
@@ -147,7 +147,7 @@ class TestPromptBuildService:
         normal_file.write_text("print('hello')")
 
         # Mark .cursorrules as a project rule
-        from services.workspace_rules import add_rule_file
+        from application.services.workspace_rules import add_rule_file
 
         add_rule_file(tmp_path, str(rule_file))
 

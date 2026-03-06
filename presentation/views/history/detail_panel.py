@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from presentation.config.theme import ThemeColors
-from services.history_service import HistoryEntry, delete_entry
+from infrastructure.persistence.history_service import HistoryEntry, delete_entry
 from infrastructure.adapters.clipboard_utils import copy_to_clipboard
 from presentation.views.history.widgets import (
     FileChangeRow,

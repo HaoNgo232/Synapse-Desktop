@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from infrastructure.filesystem.file_watcher.service import FileWatcher
-from services.interfaces.file_watcher_service import (
+from application.interfaces.file_watcher_port import (
     IIgnoreStrategy,
     WatcherCallbacks,
 )

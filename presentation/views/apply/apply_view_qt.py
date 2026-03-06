@@ -27,19 +27,19 @@ from infrastructure.adapters.clipboard_utils import (
     copy_to_clipboard,
     get_clipboard_text,
 )
-from services.history_service import add_history_entry
-from services.preview_analyzer import (
+from infrastructure.persistence.history_service import add_history_entry
+from application.services.preview_analyzer import (
     analyze_file_actions,
     PreviewRow,
     PreviewData,
     generate_preview_diff_lines,
 )
-from services.error_context import (
+from application.services.error_context import (
     build_error_context_for_ai,
     build_general_error_context,
     ApplyRowResult,
 )
-from services.apply_service import convert_to_row_results, save_memory_block
+from application.services.apply_service import convert_to_row_results, save_memory_block
 from presentation.components.diff_viewer_qt import DiffViewerWidget
 from presentation.components.toast.toast_qt import toast_success, toast_error
 

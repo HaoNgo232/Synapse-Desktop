@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QTimer
 
 from presentation.config.theme import ThemeColors
-from services.history_service import (
+from infrastructure.persistence.history_service import (
     get_history_entries,
     get_entry_by_id,
     clear_history,

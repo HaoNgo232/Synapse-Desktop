@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QIcon, QPixmap
 
 from presentation.config.theme import ThemeColors
-from services.history_service import HistoryEntry
+from infrastructure.persistence.history_service import HistoryEntry
 
 
 # ═══════════════════════════════════════════════════════════════

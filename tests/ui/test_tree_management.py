@@ -68,7 +68,7 @@ def test_refresh_tree_no_workspace(qtbot):
         view.file_tree_widget.load_tree.assert_not_called()
 
 
-@patch("services.workspace_config.add_excluded_patterns", return_value=True)
+@patch("application.services.workspace_config.add_excluded_patterns", return_value=True)
 def test_add_to_ignore(mock_add, context_view):
     """Kiem tra _add_to_ignore them patterns va refresh tree."""
     view = context_view
@@ -107,11 +107,11 @@ def test_add_to_ignore_value_error_in_relative(context_view):
         return_value={"/completely/different/path/file.py"}
     )
     view.file_tree_widget.load_tree = MagicMock()
-    with patch("services.workspace_config.add_excluded_patterns", return_value=True):
+    with patch("application.services.workspace_config.add_excluded_patterns", return_value=True):
         view._tree_controller.add_to_ignore()
 
 
-@patch("services.workspace_config.remove_excluded_patterns", return_value=True)
+@patch("application.services.workspace_config.remove_excluded_patterns", return_value=True)
 def test_undo_ignore(mock_remove, context_view):
     """Kiem tra _undo_ignore xoa patterns da them."""
     view = context_view

@@ -16,7 +16,7 @@ De import HistoryViewQt:
 
 from PySide6.QtWidgets import QMessageBox
 from infrastructure.adapters.clipboard_utils import copy_to_clipboard
-from services.history_service import (
+from infrastructure.persistence.history_service import (
     get_history_entries,
     get_entry_by_id,
     clear_history,

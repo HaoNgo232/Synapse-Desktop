@@ -27,7 +27,7 @@ class TestServiceContainerCreation:
     def test_creates_prompt_builder(self):
         """Container phai tao PromptBuildService instance."""
         from application.services.service_container import ServiceContainer
-        from services.service_interfaces import IPromptBuilder
+        from application.services.service_interfaces import IPromptBuilder
 
         container = ServiceContainer()
         assert isinstance(container.prompt_builder, IPromptBuilder)
@@ -35,7 +35,7 @@ class TestServiceContainerCreation:
     def test_creates_clipboard_service(self):
         """Container phai tao QtClipboardService instance."""
         from application.services.service_container import ServiceContainer
-        from services.service_interfaces import IClipboardService
+        from application.services.service_interfaces import IClipboardService
 
         container = ServiceContainer()
         assert isinstance(container.clipboard, IClipboardService)
@@ -52,7 +52,7 @@ class TestServiceContainerCreation:
     def test_creates_owned_tokenization_service(self):
         """Container phai tao TokenizationService rieng (khong dung global singleton)."""
         from application.services.service_container import ServiceContainer
-        from services.interfaces.tokenization_service import ITokenizationService
+        from application.interfaces.tokenization_port import ITokenizationService
 
         container = ServiceContainer()
         # tokenization property tra ve instance do container so huu

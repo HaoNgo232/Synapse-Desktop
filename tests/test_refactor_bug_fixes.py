@@ -166,7 +166,7 @@ class TestClipboardServiceAPI:
 
     def test_interface_accepts_tuple_return(self):
         """IClipboardService protocol chap nhan tuple[bool, str]."""
-        from services.service_interfaces import IClipboardService
+        from application.services.service_interfaces import IClipboardService
 
         # Tao mock tra ve tuple
         mock = Mock()

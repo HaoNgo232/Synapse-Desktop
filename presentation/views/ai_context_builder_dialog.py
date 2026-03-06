@@ -35,7 +35,7 @@ from domain.prompt.generator import generate_file_map
 from infrastructure.filesystem.file_utils import TreeItem
 from infrastructure.git.git_utils import get_git_diffs
 from domain.prompt.context_builder_prompts import build_full_tree_string
-from services.ai_context_worker import AIContextWorker
+from application.services.ai_context_worker import AIContextWorker
 from infrastructure.persistence.settings_manager import (
     load_app_settings,
     save_app_settings,

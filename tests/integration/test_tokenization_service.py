@@ -19,7 +19,7 @@ from unittest.mock import patch
 import pytest
 
 from application.services.tokenization_service import TokenizationService
-from services.interfaces.tokenization_service import ITokenizationService
+from application.interfaces.tokenization_port import ITokenizationService
 
 
 # ================================================================
@@ -74,7 +74,7 @@ class TestEncoderRegistrySingleton:
 
     def test_returns_same_instance(self):
         """get_tokenization_service() luon tra ve cung 1 instance."""
-        import services.encoder_registry as reg
+        import infrastructure.adapters.encoder_registry as reg
 
         svc1 = reg.get_tokenization_service()
         svc2 = reg.get_tokenization_service()
@@ -82,14 +82,14 @@ class TestEncoderRegistrySingleton:
 
     def test_returns_interface_type(self):
         """get_tokenization_service() tra ve ITokenizationService."""
-        import services.encoder_registry as reg
+        import infrastructure.adapters.encoder_registry as reg
 
         svc = reg.get_tokenization_service()
         assert isinstance(svc, ITokenizationService)
 
     def test_thread_safe_init(self):
         """Concurrent calls to get_tokenization_service() tra ve cung 1 instance."""
-        import services.encoder_registry as reg
+        import infrastructure.adapters.encoder_registry as reg
 
         results = []
 

@@ -35,7 +35,7 @@ from core.utils.qt_utils import (
     get_signal_bridge,
 )
 from core.utils.threading_utils import shutdown_all, set_active_view
-from services.recent_folders import (
+from infrastructure.persistence.recent_folders import (
     load_recent_folders,
     add_recent_folder,
     get_folder_display_name,
@@ -655,7 +655,7 @@ class SynapseMainWindow(QMainWindow):
         CLEAN SESSION MODE: Only restore workspace path and instructions text.
         Other state (selected files, expanded folders) starts fresh.
         """
-        from services.recent_folders import load_recent_folders
+        from infrastructure.persistence.recent_folders import load_recent_folders
 
         session = load_session_state()
 

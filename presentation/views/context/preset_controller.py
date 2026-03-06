@@ -12,7 +12,7 @@ from typing import Optional, List, Protocol, runtime_checkable
 
 from PySide6.QtCore import QObject, Signal
 
-from services.preset_store import PresetStore, PresetEntry
+from infrastructure.persistence.preset_store import PresetStore, PresetEntry
 
 import logging
 

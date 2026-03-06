@@ -33,7 +33,7 @@ from domain.prompt.generator import (
 from domain.prompt.file_collector import collect_files
 from infrastructure.filesystem.file_utils import TreeItem
 from infrastructure.git.git_utils import get_git_diffs, get_git_logs
-from services.prompt_types import BuildResult, FileTokenInfo
+from shared.types.prompt_types_extra import BuildResult, FileTokenInfo
 
 
 # Mapping output_format string -> OutputStyle enum

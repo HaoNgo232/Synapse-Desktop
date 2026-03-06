@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 
-from services.file_watcher import FileWatcher
+from infrastructure.filesystem.file_watcher_facade import FileWatcher
 
 
 class TestFileWatcher:

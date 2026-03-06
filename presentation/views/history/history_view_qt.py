@@ -10,7 +10,7 @@ Logic da duoc di chuyen sang `views/history/` package:
   views/history/_view.py          - HistoryViewQt (composition root)
 
 De import HistoryViewQt:
-  from views.history import HistoryViewQt  (preferred)
+  from presentation.views.history import HistoryViewQt  (preferred)
   from presentation.views.history.history_view_qt import HistoryViewQt  (van hoat dong)
 """
 

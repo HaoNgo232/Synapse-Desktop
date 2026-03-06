@@ -99,7 +99,9 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         try:
-            from infrastructure.mcp.handlers.structure_handler import _get_project_structure
+            from infrastructure.mcp.handlers.structure_handler import (
+                _get_project_structure,
+            )
             from infrastructure.mcp.handlers.analysis_handler import _find_todos
             from application.services.workspace_index import collect_files_from_disk
 

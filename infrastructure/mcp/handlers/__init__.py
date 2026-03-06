@@ -5,16 +5,30 @@ Moi handler module chiu trach nhiem cho mot nhom tools lien quan,
 va expose function register_tools(mcp) de dang ky tools voi MCP server.
 """
 
-from infrastructure.mcp.handlers.workspace_handler import register_tools as register_workspace
+from infrastructure.mcp.handlers.workspace_handler import (
+    register_tools as register_workspace,
+)
 from infrastructure.mcp.handlers.file_handler import register_tools as register_file
-from infrastructure.mcp.handlers.selection_handler import register_tools as register_selection
+from infrastructure.mcp.handlers.selection_handler import (
+    register_tools as register_selection,
+)
 from infrastructure.mcp.handlers.token_handler import register_tools as register_token
-from infrastructure.mcp.handlers.analysis_handler import register_tools as register_analysis
-from infrastructure.mcp.handlers.structure_handler import register_tools as register_structure
-from infrastructure.mcp.handlers.dependency_handler import register_tools as register_dependency
+from infrastructure.mcp.handlers.analysis_handler import (
+    register_tools as register_analysis,
+)
+from infrastructure.mcp.handlers.structure_handler import (
+    register_tools as register_structure,
+)
+from infrastructure.mcp.handlers.dependency_handler import (
+    register_tools as register_dependency,
+)
 from infrastructure.mcp.handlers.git_handler import register_tools as register_git
-from infrastructure.mcp.handlers.context_handler import register_tools as register_context
-from infrastructure.mcp.handlers.workflow_handler import register_tools as register_workflow
+from infrastructure.mcp.handlers.context_handler import (
+    register_tools as register_context,
+)
+from infrastructure.mcp.handlers.workflow_handler import (
+    register_tools as register_workflow,
+)
 
 
 def register_all_tools(mcp_instance) -> None:

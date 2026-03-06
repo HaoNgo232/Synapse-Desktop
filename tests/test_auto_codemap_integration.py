@@ -42,7 +42,9 @@ class TestAutoCodemapFeature:
         build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
-            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch(
+                "infrastructure.mcp.handlers.context_handler.WorkspaceManager"
+            ) as mock_ws,
             patch(
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
@@ -107,7 +109,9 @@ class TestAutoCodemapFeature:
         build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
-            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch(
+                "infrastructure.mcp.handlers.context_handler.WorkspaceManager"
+            ) as mock_ws,
             patch(
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
@@ -160,7 +164,9 @@ class TestAutoCodemapFeature:
         build_prompt_func = mock_mcp.registered_tools["build_prompt"]
 
         with (
-            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch(
+                "infrastructure.mcp.handlers.context_handler.WorkspaceManager"
+            ) as mock_ws,
             patch(
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
@@ -221,7 +227,9 @@ class TestAutoCodemapFeature:
         (workspace / "db.py").write_text("# database")
 
         with (
-            patch("infrastructure.mcp.handlers.context_handler.WorkspaceManager") as mock_ws,
+            patch(
+                "infrastructure.mcp.handlers.context_handler.WorkspaceManager"
+            ) as mock_ws,
             patch(
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,

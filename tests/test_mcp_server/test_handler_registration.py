@@ -10,14 +10,22 @@ from mcp.server.fastmcp import FastMCP
 from infrastructure.mcp.handlers import register_all_tools
 from infrastructure.mcp.handlers.analysis_handler import register_tools as reg_analysis
 from infrastructure.mcp.handlers.context_handler import register_tools as reg_context
-from infrastructure.mcp.handlers.dependency_handler import register_tools as reg_dependency
+from infrastructure.mcp.handlers.dependency_handler import (
+    register_tools as reg_dependency,
+)
 from infrastructure.mcp.handlers.file_handler import register_tools as reg_file
 from infrastructure.mcp.handlers.git_handler import register_tools as reg_git
-from infrastructure.mcp.handlers.selection_handler import register_tools as reg_selection
-from infrastructure.mcp.handlers.structure_handler import register_tools as reg_structure
+from infrastructure.mcp.handlers.selection_handler import (
+    register_tools as reg_selection,
+)
+from infrastructure.mcp.handlers.structure_handler import (
+    register_tools as reg_structure,
+)
 from infrastructure.mcp.handlers.token_handler import register_tools as reg_token
 from infrastructure.mcp.handlers.workflow_handler import register_tools as reg_workflow
-from infrastructure.mcp.handlers.workspace_handler import register_tools as reg_workspace
+from infrastructure.mcp.handlers.workspace_handler import (
+    register_tools as reg_workspace,
+)
 
 
 def _get_tool_names(register_fn):

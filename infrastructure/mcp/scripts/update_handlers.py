@@ -43,7 +43,10 @@ def add_imports(content: str) -> str:
     # Chen imports moi sau dong import cuoi
     lines.insert(last_import_idx + 1, "")
     lines.insert(last_import_idx + 2, "from mcp.server.fastmcp import Context")
-    if "from infrastructure.mcp.core.workspace_manager import WorkspaceManager" not in content:
+    if (
+        "from infrastructure.mcp.core.workspace_manager import WorkspaceManager"
+        not in content
+    ):
         lines.insert(
             last_import_idx + 3,
             "from infrastructure.mcp.core.workspace_manager import WorkspaceManager",

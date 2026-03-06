@@ -212,7 +212,9 @@ class TestBug4RaceCondition:
 
     def test_concurrent_session_file_creation(self, tmp_path):
         """Test race condition khi nhiều threads tạo session file đồng thời."""
-        from infrastructure.mcp.handlers.selection_handler import _locked_read_modify_write
+        from infrastructure.mcp.handlers.selection_handler import (
+            _locked_read_modify_write,
+        )
 
         # Arrange
         session_file = tmp_path / ".synapse" / "selection.json"

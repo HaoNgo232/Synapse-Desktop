@@ -239,7 +239,9 @@ class SecurityCheckWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         try:
-            from infrastructure.adapters.security_check import scan_secrets_in_files_cached
+            from infrastructure.adapters.security_check import (
+                scan_secrets_in_files_cached,
+            )
 
             matches = scan_secrets_in_files_cached(self.paths)
             try:

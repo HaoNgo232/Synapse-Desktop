@@ -182,8 +182,14 @@ class TestBuildSearchIndex:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 return_value=False,
@@ -221,8 +227,14 @@ class TestBuildSearchIndex:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 side_effect=mock_is_binary,
@@ -257,8 +269,14 @@ class TestBuildSearchIndex:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 return_value=False,
@@ -289,8 +307,14 @@ class TestBuildSearchIndex:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 return_value=False,
@@ -319,8 +343,14 @@ class TestBuildSearchIndex:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
@@ -353,8 +383,14 @@ class TestCollectFilesFromDisk:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 return_value=False,
@@ -392,8 +428,14 @@ class TestCollectFilesFromDisk:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 side_effect=mock_is_binary,
@@ -424,8 +466,14 @@ class TestCollectFilesFromDisk:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.file_utils.is_binary_file",
                 return_value=False,
@@ -454,8 +502,14 @@ class TestCollectFilesFromDisk:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
@@ -476,8 +530,14 @@ class TestCollectFilesFromDisk:
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
-            patch("application.services.workspace_config.get_excluded_patterns", return_value=[]),
-            patch("application.services.workspace_config.get_use_gitignore", return_value=False),
+            patch(
+                "application.services.workspace_config.get_excluded_patterns",
+                return_value=[],
+            ),
+            patch(
+                "application.services.workspace_config.get_use_gitignore",
+                return_value=False,
+            ),
             patch(
                 "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,

@@ -1,12 +1,71 @@
-"""Forward bridge: re-export tu mcp_server.utils.logging_utils
+"""
+Logging Utilities - Cau hinh logging cho MCP server.
 
-Cho phep import tu vi tri moi (Clean Architecture) trong khi code goc
-van nam tai vi tri cu. Se duoc thay the bang code thuc khi migrate xong.
+Module nay dam bao tat ca log output ghi ra stderr thay vi stdout,
+vi MCP stdio transport su dung stdout cho JSON-RPC communication.
 """
 
-import importlib as _importlib
+import logging
+import sys
 
-_mod = _importlib.import_module("mcp_server.utils.logging_utils")
-for _name in dir(_mod):
-    if not _name.startswith("__"):
-        globals()[_name] = getattr(_mod, _name)
+
+def force_all_logging_to_stderr() -> None:
+    """Ep buoc tat ca logging handlers ghi ra stderr thay vi stdout.
+
+    MCP stdio transport su dung stdout de giao tiep JSON-RPC.
+    Bat ky log message nao roi vao stdout se lam hong protocol.
+
+    Quy trinh:
+        1. Set MCP flag trong logging_config de bat ky get_logger() call nao
+           trong tuong lai (lazy import) cung se dung stderr.
+        2. Cau hinh root logger voi stderr handler.
+        3. Patch cac Synapse singleton loggers da duoc tao truoc do.
+    """
+    # 0. Set MCP flag trong logging_config de bat ky get_logger() call nao
+    #    trong tuong lai (lazy import) cung se dung stderr thay vi stdout.
+    import core.logging_config as _lc
+
+    _lc._MCP_MODE = True
+
+    # Neu logger singleton da duoc tao truoc, reset no de re-create voi stderr
+    if _lc._logger is not None:
+        _lc._logger = None
+
+    # 1. Cau hinh root logger
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    # Xoa tat ca handlers cu cua root logger
+    for h in root.handlers[:]:
+        root.removeHandler(h)
+
+    # Them handler moi ghi ra stderr
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(
+        logging.Formatter("[%(levelname)s] %(name)s: %(message)s")
+    )
+    root.addHandler(stderr_handler)
+
+    # 2. Patch Synapse singleton logger (neu da duoc tao truoc do)
+    # CẢNH BÁO: Không loop qua tắt cả các loggers (kể cả của thư viện mcp/fastmcp)
+    # vì mcp.server tự động thiết lập transport qua stdout. Nếu ta thay stdout
+    # của nó thành stderr, FastMCP sẽ ném lỗi "I/O operation on closed file".
+
+    # Chỉ patch "synapse-desktop" và "synapse.mcp"
+    for name in ["synapse-desktop", "synapse.mcp"]:
+        lg = logging.getLogger(name)
+        for h in lg.handlers[:]:
+            if (
+                isinstance(h, logging.StreamHandler)
+                and getattr(h, "stream", None) is sys.stdout
+            ):
+                lg.removeHandler(h)
+                new_h = logging.StreamHandler(sys.stderr)
+                new_h.setFormatter(h.formatter)
+                new_h.setLevel(h.level)
+                lg.addHandler(new_h)
+
+    # NOTE: KHONG thay the sys.stdout o day!
+    # MCP StdioServerTransport doc sys.stdout.buffer ben trong mcp.run().
+    # Neu ta thay sys.stdout = devnull truoc do, MCP se ghi response vao devnull
+    # va AI client se timeout. Handler patching o tren da du de chan log pollution.

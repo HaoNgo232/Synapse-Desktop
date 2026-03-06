@@ -3,18 +3,20 @@ Handlers package - Chua cac handler modules cho MCP tools.
 
 Moi handler module chiu trach nhiem cho mot nhom tools lien quan,
 va expose function register_tools(mcp) de dang ky tools voi MCP server.
+
+NOTE: Imports tu infrastructure.mcp.handlers.* (vi tri moi sau refactor).
 """
 
-from mcp_server.handlers.workspace_handler import register_tools as register_workspace
-from mcp_server.handlers.file_handler import register_tools as register_file
-from mcp_server.handlers.selection_handler import register_tools as register_selection
-from mcp_server.handlers.token_handler import register_tools as register_token
-from mcp_server.handlers.analysis_handler import register_tools as register_analysis
-from mcp_server.handlers.structure_handler import register_tools as register_structure
-from mcp_server.handlers.dependency_handler import register_tools as register_dependency
-from mcp_server.handlers.git_handler import register_tools as register_git
-from mcp_server.handlers.context_handler import register_tools as register_context
-from mcp_server.handlers.workflow_handler import register_tools as register_workflow
+from infrastructure.mcp.handlers.workspace_handler import register_tools as register_workspace
+from infrastructure.mcp.handlers.file_handler import register_tools as register_file
+from infrastructure.mcp.handlers.selection_handler import register_tools as register_selection
+from infrastructure.mcp.handlers.token_handler import register_tools as register_token
+from infrastructure.mcp.handlers.analysis_handler import register_tools as register_analysis
+from infrastructure.mcp.handlers.structure_handler import register_tools as register_structure
+from infrastructure.mcp.handlers.dependency_handler import register_tools as register_dependency
+from infrastructure.mcp.handlers.git_handler import register_tools as register_git
+from infrastructure.mcp.handlers.context_handler import register_tools as register_context
+from infrastructure.mcp.handlers.workflow_handler import register_tools as register_workflow
 
 
 def register_all_tools(mcp_instance) -> None:

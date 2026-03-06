@@ -1,5 +1,9 @@
-# Synapse MCP Server Package
+"""
+MCP Server Package - Backward compatibility wrapper.
 
-from mcp_server.config_installer import auto_update_installed_configs
+Code thuc da migrate sang infrastructure.mcp.*
+"""
+
+from infrastructure.mcp.config_installer import auto_update_installed_configs
 
 __all__ = ["auto_update_installed_configs"]

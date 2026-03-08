@@ -10,6 +10,7 @@ Features:
 """
 
 from typing import List, Optional
+import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -29,7 +30,11 @@ from presentation.config.theme import ThemeColors
 
 
 # Icon paths
-ASSETS_DIR = Path(__file__).parent.parent / "assets"
+if hasattr(sys, "_MEIPASS"):
+    ASSETS_DIR = Path(sys._MEIPASS) / "assets"
+else:
+    ASSETS_DIR = Path(__file__).parent.parent / "assets"
+
 ICON_ADD = str(ASSETS_DIR / "add.svg")
 ICON_REMOVE = str(ASSETS_DIR / "remove.svg")
 

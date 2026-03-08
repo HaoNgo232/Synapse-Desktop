@@ -102,12 +102,16 @@ class UIBuilderMixin:
         layout.setContentsMargins(8, 2, 8, 2)
         layout.setSpacing(4)
 
-        assets_dir = os.path.join(
-            os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            ),
-            "assets",
-        )
+        import sys
+        if hasattr(sys, "_MEIPASS"):
+            assets_dir = os.path.join(sys._MEIPASS, "assets")
+        else:
+            assets_dir = os.path.join(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                ),
+                "assets",
+            )
 
         # Style cho toolbar icon buttons
         icon_btn_style = (

@@ -291,7 +291,10 @@ class SynapseMainWindow(QMainWindow):
         layout.addWidget(clear_btn)
 
         # ── Recent folders button (outline style with dropdown) ──
-        assets_dir = Path(__file__).parent / "assets"
+        if hasattr(sys, "_MEIPASS"):
+            assets_dir = Path(sys._MEIPASS) / "assets"
+        else:
+            assets_dir = Path(__file__).parent / "assets"
         self._recent_btn = QToolButton()
         self._recent_btn.setIcon(QIcon(str(assets_dir / "clock-arrow-down.svg")))
         self._recent_btn.setIconSize(QSize(18, 18))

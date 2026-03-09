@@ -20,9 +20,8 @@ A Root Cause Analysis containing:
 
 ## Key Tools
 - `get_symbols` — understand structure of files mentioned in error trace
-- `get_callers` — trace backwards from error point (who calls the broken function?)
+- `blast_radius` — trace backwards from error point (find dependents)
 - `get_imports_graph` — understand dependency chain
-- `find_references` — find all usages of suspected symbols
 - `get_related_tests` — check if failing code has tests
 - `manage_selection` — accumulate suspect files during investigation
 - `build_prompt` — package investigation context (use `profile="bugfix"`)

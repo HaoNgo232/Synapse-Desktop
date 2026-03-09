@@ -20,7 +20,6 @@ context optimized for writing new tests.
 - `get_symbols` — extract functions/classes from source AND test files
 - `get_related_tests` — find existing test files for source files
 - `batch_codemap` — scan module APIs to identify all testable targets
-- `get_file_metrics` — assess complexity (higher complexity = higher test priority)
 - `estimate_tokens` — check budget before packaging
 - `build_prompt` — package source + existing tests for test generation
 

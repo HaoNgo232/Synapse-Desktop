@@ -17,15 +17,14 @@ Two phases:
 2. **Refactoring plan**: ordered list of atomic changes, each with expected test verification
 
 ## Key Tools
-- `find_references` / `get_callers` — map all usages of target code
+- `blast_radius` — analyze impact and find all callers/dependents
 - `get_imports_graph` — trace dependency chain
 - `get_related_tests` — identify existing test coverage
-- `get_file_metrics` — assess complexity and risk
 - `batch_codemap` — understand module APIs
 - `build_prompt` — package context per refactoring phase
 
 ## Constraints
 - Never refactor everything in one pass. Break into atomic phases: extract → update callers one by one → remove deprecated code.
 - Each phase must be independently testable. If tests fail, the phase can be reverted without affecting other phases.
-- Always map callers before modifying any public interface. Callers you miss will break silently.
+- Always map blast radius before modifying any public interface. Callers you miss will break silently.
 - When updating callers, produce one context per caller (or small group) rather than bundling all callers into one massive prompt.

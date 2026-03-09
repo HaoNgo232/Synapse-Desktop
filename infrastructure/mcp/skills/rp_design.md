@@ -22,7 +22,7 @@ A `build_prompt()` result containing:
 ## Key Tools
 - `explain_architecture` / `start_session` — understand project layout and norms
 - `batch_codemap` — scan existing APIs without reading full files
-- `get_callers` / `find_references` — assess impact on dependent modules
+- `blast_radius` — assess impact on dependent modules
 - `get_contract_pack` — check existing constraints and conventions to respect
 - `estimate_tokens` — verify context fits token budget BEFORE packaging
 - `build_prompt` — package context into a structured design prompt

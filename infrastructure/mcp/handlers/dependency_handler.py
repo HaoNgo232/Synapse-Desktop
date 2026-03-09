@@ -1,12 +1,12 @@
 """
 Dependency Handler - Xu ly cac tool lien quan den dependency analysis.
 
-Bao gom: get_imports_graph, get_callers, get_related_tests, blast_radius.
+Bao gom: get_imports_graph, get_related_tests, blast_radius.
+        (get_callers da go bo - dung built-in lsp_find_references.)
 """
 
 import asyncio
 import os
-import re
 from pathlib import Path
 from typing import Annotated, List, Optional
 
@@ -14,11 +14,7 @@ from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
-from infrastructure.mcp.core.constants import (
-    INLINE_COMMENT_RE,
-    STRING_LITERAL_RE,
-    logger,
-)
+from infrastructure.mcp.core.constants import logger
 
 
 def _get_test_candidates(stem: str, ext: str) -> list[str]:
@@ -151,153 +147,6 @@ def register_tools(mcp_instance) -> None:
             return "\n".join(result)
         except Exception as e:
             logger.error("get_imports_graph error: %s", e)
-            return f"Error: {e}"
-
-    @mcp_instance.tool()
-    async def get_callers(
-        symbol_name: Annotated[
-            str,
-            Field(
-                description="Function, method, or class name to find callers of (e.g., 'validate_token', 'UserService.save')."
-            ),
-        ],
-        workspace_path: Annotated[
-            Optional[str],
-            Field(
-                description="Absolute path to workspace root. Auto-detected if omitted."
-            ),
-        ] = None,
-        ctx: Optional[Context] = None,
-        file_extensions: Annotated[
-            Optional[List[str]],
-            Field(
-                description='Optional file extensions to search (e.g., [".py", ".ts"]). Searches all code files if omitted.'
-            ),
-        ] = None,
-        max_results: Annotated[
-            int,
-            Field(
-                description="Maximum number of caller entries to return. Default: 30."
-            ),
-        ] = 30,
-    ) -> str:
-        """Find all functions/methods that CALL a given symbol, with caller context.
-
-        For each call site, shows the enclosing function name, file path, line number, and code snippet.
-        Use this to understand blast radius before modifying a function.
-        """
-        try:
-            ws = await WorkspaceManager.resolve(workspace_path, ctx)
-        except ValueError as e:
-            return f"Error: {e}"
-
-        try:
-            from application.services.workspace_index import collect_files_from_disk
-            from domain.codemap.symbol_extractor import extract_symbols
-            from domain.codemap.types import SymbolKind
-
-            all_files = collect_files_from_disk(ws, workspace_path=ws)
-
-            # Filter by extension
-            if file_extensions:
-                ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
-                all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
-            else:
-                code_exts = {
-                    ".py",
-                    ".js",
-                    ".ts",
-                    ".jsx",
-                    ".tsx",
-                    ".go",
-                    ".rs",
-                    ".java",
-                    ".c",
-                    ".cpp",
-                    ".h",
-                }
-                all_files = [
-                    f for f in all_files if Path(f).suffix.lower() in code_exts
-                ]
-
-            callers: list[
-                tuple[str, str, int, str]
-            ] = []  # (caller_name, file, line, snippet)
-            pattern = re.compile(rf"\b{re.escape(symbol_name)}\s*[\(.]")
-
-            for file_path_str in all_files:
-                try:
-                    fp = Path(file_path_str)
-                    content = fp.read_text(encoding="utf-8", errors="replace")
-                    lines = content.splitlines()
-
-                    # Extract symbols to know which function/method each line belongs to
-                    symbols = extract_symbols(file_path_str, content)
-                    func_symbols = [
-                        s
-                        for s in symbols
-                        if s.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD)
-                    ]
-
-                    for i, line in enumerate(lines, start=1):
-                        # Skip definitions of the symbol itself
-                        stripped = line.strip()
-                        if stripped.startswith(
-                            ("def ", "function ", "func ", "class ")
-                        ):
-                            if symbol_name in stripped.split("(")[0]:
-                                continue
-                        # Skip comments
-                        if stripped.startswith(("#", "//", "/*", "*")):
-                            continue
-
-                        # Clean strings and inline comments
-                        cleaned = STRING_LITERAL_RE.sub("", line)
-                        cleaned = INLINE_COMMENT_RE.sub("", cleaned)
-
-                        if pattern.search(cleaned):
-                            # Find enclosing function
-                            caller_name = "(top-level)"
-                            for sym in func_symbols:
-                                if sym.line_start <= i <= sym.line_end:
-                                    caller_name = f"{sym.parent + '.' if sym.parent else ''}{sym.name}"
-                                    break
-
-                            rel_path = os.path.relpath(file_path_str, ws)
-                            snippet = stripped[:80]
-                            callers.append(
-                                (
-                                    caller_name,
-                                    rel_path,
-                                    i,
-                                    snippet,
-                                )
-                            )
-
-                            if len(callers) >= max_results:
-                                break
-                except (OSError, UnicodeDecodeError):
-                    continue
-
-                if len(callers) >= max_results:
-                    break
-
-            if not callers:
-                return f"No callers found for: {symbol_name}"
-
-            # Group by file
-            result_lines = [f"Found {len(callers)} callers of `{symbol_name}`:\n"]
-            current_file = ""
-            for caller_name, rel_path, line_num, snippet in callers:
-                if rel_path != current_file:
-                    current_file = rel_path
-                    result_lines.append(f"\n{rel_path}:")
-                result_lines.append(f"  L{line_num} {caller_name}: {snippet}")
-
-            return "\n".join(result_lines)
-
-        except Exception as e:
-            logger.error("get_callers error: %s", e)
             return f"Error: {e}"
 
     @mcp_instance.tool()

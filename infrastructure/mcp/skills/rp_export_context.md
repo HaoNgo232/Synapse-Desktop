@@ -18,7 +18,7 @@ token count, and included files, then STOPS.
 
 ## Key Tools
 - `explain_architecture` / `batch_codemap` — understand which files are relevant
-- `get_imports_graph` / `get_callers` — trace dependencies to ensure complete context
+- `get_imports_graph` / `blast_radius` — trace dependencies to ensure complete context
 - `estimate_tokens` — verify context fits the target LLM's context window
 - `build_prompt` — package and write to file (use `output_file="context.xml"` or similar)
 

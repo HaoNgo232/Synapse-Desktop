@@ -1,7 +1,8 @@
 """
 Analysis Handler - Xu ly cac tool phan tich code.
 
-Bao gom: find_references, get_symbols. (find_todos da go bo - dung built-in grep TODO|FIXME|HACK.)
+Bao gom: get_symbols. (find_references da go bo - dung built-in lsp_find_references.)
+         (find_todos da go bo - dung built-in grep TODO|FIXME|HACK.)
 """
 
 import os
@@ -12,66 +13,9 @@ from typing import Annotated, List, Optional
 from mcp.server.fastmcp import Context
 from pydantic import Field
 
-from infrastructure.mcp.core.constants import (
-    INLINE_COMMENT_RE,
-    STRING_LITERAL_RE,
-    logger,
-)
+from infrastructure.mcp.core.constants import logger
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
 import asyncio
-
-
-def _find_references(
-    ws: Path, symbol_name: str, file_extensions: Optional[List[str]]
-) -> str:
-    """Internal implementation cho find_references, dung asyncio.to_thread."""
-    from application.services.workspace_index import collect_files_from_disk
-
-    all_files = collect_files_from_disk(ws, workspace_path=ws)
-    if file_extensions:
-        ext_set = {e if e.startswith(".") else f".{e}" for e in file_extensions}
-        all_files = [f for f in all_files if Path(f).suffix.lower() in ext_set]
-
-    references: list[tuple[str, int, str]] = []
-    pattern = rf"\b{re.escape(symbol_name)}\b"
-
-    for file_path in all_files:
-        try:
-            fp = Path(file_path)
-            content = fp.read_text(encoding="utf-8", errors="replace")
-            lines = content.splitlines()
-
-            for i, line in enumerate(lines, start=1):
-                stripped = line.strip()
-                if stripped.startswith(("#", "//", "/*", "*")):
-                    continue
-                cleaned = STRING_LITERAL_RE.sub("", line)
-                cleaned = INLINE_COMMENT_RE.sub("", cleaned)
-                if re.search(pattern, cleaned):
-                    rel_path = os.path.relpath(file_path, ws)
-                    snippet = line.strip()[:80]
-                    references.append((rel_path, i, snippet))
-        except (OSError, UnicodeDecodeError):
-            continue
-
-    if not references:
-        return f"No references found for: {symbol_name}"
-
-    by_file: dict[str, list[tuple[int, str]]] = {}
-    for file, line, snippet in references:
-        if file not in by_file:
-            by_file[file] = []
-        by_file[file].append((line, snippet))
-
-    result = [f"Found {len(references)} references in {len(by_file)} files:\n"]
-    for file in sorted(by_file.keys()):
-        result.append(f"\n{file}:")
-        for line, snippet in by_file[file][:5]:
-            result.append(f"  Line {line}: {snippet}")
-        if len(by_file[file]) > 5:
-            result.append(f"  ... +{len(by_file[file]) - 5} more")
-
-    return "\n".join(result)
 
 
 def _find_todos(
@@ -170,46 +114,6 @@ def _find_todos(
 
 def register_tools(mcp_instance) -> None:
     """Dang ky analysis tools voi MCP server."""
-
-    @mcp_instance.tool()
-    async def find_references(
-        symbol_name: Annotated[
-            str,
-            Field(
-                description="Name of the symbol (function, class, variable) to find references for."
-            ),
-        ],
-        file_extensions: Annotated[
-            Optional[List[str]],
-            Field(
-                description='Optional file extensions to filter (e.g., [".py", ".ts"]). Searches all code files if omitted.'
-            ),
-        ] = None,
-        workspace_path: Annotated[
-            Optional[str],
-            Field(
-                description="Absolute path to workspace root. Auto-detected if omitted."
-            ),
-        ] = None,
-        ctx: Optional[Context] = None,
-    ) -> str:
-        """Find all locations where a symbol is used across the codebase.
-
-        Filters out comments and string literals to reduce false positives.
-        Groups results by file with line numbers and code snippets.
-        """
-        try:
-            ws = await WorkspaceManager.resolve(workspace_path, ctx)
-        except ValueError as e:
-            return f"Error: {e}"
-
-        try:
-            return await asyncio.to_thread(
-                _find_references, ws, symbol_name, file_extensions
-            )
-        except Exception as e:
-            logger.error("find_references error: %s", e)
-            return f"Error: {e}"
 
     @mcp_instance.tool()
     async def get_symbols(

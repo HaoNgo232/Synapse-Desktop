@@ -21,8 +21,7 @@ A `build_prompt()` result containing:
 ## Key Tools
 - `explain_architecture` / `start_session` — understand project layout
 - `batch_codemap` — scan module APIs without reading full files
-- `get_imports_graph` / `get_callers` — trace dependencies and impact
-- `find_references` — locate where symbols are used
+- `get_imports_graph` / `blast_radius` — trace dependencies and impact
 - `estimate_tokens` — verify context fits token budget BEFORE packaging
 - `build_prompt` — package files into final prompt (supports `output_file` for cross-agent handoff)
 

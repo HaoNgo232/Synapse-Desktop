@@ -33,7 +33,7 @@ def _get_test_candidates(stem: str, ext: str) -> list[str]:
     elif ext == ".go":
         return [f"{stem}_test.go"]
     elif ext == ".rs":
-        return [f"{stem}_test.rs", f"{stem}.rs"]
+        return [f"{stem}_test.rs", f"test_{stem}.rs"]
     elif ext == ".java":
         return [f"{stem}Test.java", f"{stem}Tests.java", f"Test{stem}.java"]
     elif ext in (".c", ".cpp", ".h", ".hpp"):
@@ -464,13 +464,21 @@ def register_tools(mcp_instance) -> None:
                 resolver.build_file_index(None)
 
                 code_exts = {
-                    ".py", ".js", ".ts", ".jsx", ".tsx",
-                    ".go", ".rs", ".java", ".c", ".cpp", ".h",
+                    ".py",
+                    ".js",
+                    ".ts",
+                    ".jsx",
+                    ".tsx",
+                    ".go",
+                    ".rs",
+                    ".java",
+                    ".c",
+                    ".cpp",
+                    ".h",
                 }
                 all_files = collect_files_from_disk(ws, workspace_path=ws)
                 code_files = [
-                    Path(f) for f in all_files
-                    if Path(f).suffix.lower() in code_exts
+                    Path(f) for f in all_files if Path(f).suffix.lower() in code_exts
                 ]
 
                 # Build reverse dependency map: file -> set of files that import it
@@ -566,9 +574,7 @@ def register_tools(mcp_instance) -> None:
                     tok_svc = TokenizationService()
                     for fp in depth_map:
                         try:
-                            content = fp.read_text(
-                                encoding="utf-8", errors="replace"
-                            )
+                            content = fp.read_text(encoding="utf-8", errors="replace")
                             token_count += tok_svc.count_tokens(content)
                         except OSError:
                             continue
@@ -610,24 +616,18 @@ def register_tools(mcp_instance) -> None:
 
             lines = ["# Blast Radius Analysis\n"]
 
-            lines.append(
-                f"## Directly Affected Files ({len(data['changed'])})"
-            )
+            lines.append(f"## Directly Affected Files ({len(data['changed'])})")
             for f in data["changed"]:
                 lines.append(f"  - {f}")
 
-            lines.append(
-                f"\n## First-Order Dependents ({len(data['first_order'])})"
-            )
+            lines.append(f"\n## First-Order Dependents ({len(data['first_order'])})")
             if data["first_order"]:
                 for f in data["first_order"]:
                     lines.append(f"  - {f}")
             else:
                 lines.append("  (none)")
 
-            lines.append(
-                f"\n## Transitive Dependents ({len(data['transitive'])})"
-            )
+            lines.append(f"\n## Transitive Dependents ({len(data['transitive'])})")
             if data["transitive"]:
                 for f, d in data["transitive"]:
                     lines.append(f"  - {f} (depth {d})")
@@ -635,9 +635,7 @@ def register_tools(mcp_instance) -> None:
                 lines.append("  (none)")
 
             if include_tests:
-                lines.append(
-                    f"\n## Related Test Files ({len(data['test_files'])})"
-                )
+                lines.append(f"\n## Related Test Files ({len(data['test_files'])})")
                 if data["test_files"]:
                     for f in data["test_files"]:
                         lines.append(f"  - {f}")
@@ -648,9 +646,7 @@ def register_tools(mcp_instance) -> None:
             lines.append(f"Total affected files: {total_affected}")
 
             if include_token_estimate:
-                lines.append(
-                    f"Estimated tokens to review: {data['token_count']:,}"
-                )
+                lines.append(f"Estimated tokens to review: {data['token_count']:,}")
 
             lines.append("\n## Summary")
             lines.append(

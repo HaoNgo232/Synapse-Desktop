@@ -5,12 +5,14 @@ Kết hợp workspace rules, past error patterns, và conventions
 để build "contract pack" mà agent phải tuân theo.
 """
 
+import fcntl
 import json
 import logging
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -121,23 +123,59 @@ def load_contract_pack(workspace_root: Path) -> ContractPack:
 
 
 def save_contract_pack(workspace_root: Path, pack: ContractPack) -> None:
-    """Save contract pack to .synapse/contract_pack.json."""
+    """Save contract pack to .synapse/contract_pack.json safely using tempfile."""
     synapse_dir = workspace_root / ".synapse"
     synapse_dir.mkdir(parents=True, exist_ok=True)
     contract_file = synapse_dir / "contract_pack.json"
-    tmp = contract_file.with_suffix(".tmp")
+    tmp_path = None
     try:
-        tmp.write_text(
-            json.dumps(pack.to_dict(), indent=2, ensure_ascii=False),
-            encoding="utf-8",
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(synapse_dir), suffix=".tmp", prefix="contract_pack_"
         )
-        os.replace(str(tmp), str(contract_file))
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(pack.to_dict(), f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, str(contract_file))
     except OSError as e:
         logger.error("Failed to save contract pack: %s", e)
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def locked_modify_contract_pack(
+    workspace_root: Path, modifier_fn: Callable[[ContractPack], ContractPack]
+) -> ContractPack:
+    """Read, modify, and write contract pack securely with cross-process file lock."""
+    synapse_dir = workspace_root / ".synapse"
+    synapse_dir.mkdir(parents=True, exist_ok=True)
+    contract_file = synapse_dir / "contract_pack.json"
+
+    with open(contract_file, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
         try:
-            tmp.unlink(missing_ok=True)
-        except OSError:
-            pass
+            f.seek(0)
+            raw = f.read()
+            pack = ContractPack()
+            if raw.strip():
+                try:
+                    pack = ContractPack.from_dict(json.loads(raw))
+                except (json.JSONDecodeError, OSError) as e:
+                    logger.warning(
+                        "Failed to parse contract pack during locked_modify: %s", e
+                    )
+
+            pack = modifier_fn(pack)
+
+            f.seek(0)
+            f.truncate()
+            json.dump(pack.to_dict(), f, indent=2, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+            return pack
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def build_contract_pack(

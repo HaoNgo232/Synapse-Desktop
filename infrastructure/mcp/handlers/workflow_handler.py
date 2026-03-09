@@ -682,7 +682,7 @@ def register_tools(mcp_instance) -> None:
                 await asyncio.to_thread(
                     add_memory,
                     workspace_root=ws,
-                    layer=layer,
+                    layer=layer,  # type: ignore[arg-type]
                     content=content,
                     linked_files=linked_files,
                     linked_symbols=linked_symbols,
@@ -726,7 +726,7 @@ def register_tools(mcp_instance) -> None:
                 valid_layers = ("action", "decision", "constraint")
                 if not layer or layer not in valid_layers:
                     return f"Error: 'layer' must be one of: {', '.join(valid_layers)}"
-                matches = store.get_by_layer(layer)
+                matches = store.get_by_layer(layer)  # type: ignore[arg-type]
                 if not matches:
                     return f"No memory entries for layer '{layer}'."
                 entries_data = [e.to_dict() for e in matches]
@@ -814,19 +814,41 @@ def register_tools(mcp_instance) -> None:
 
         from domain.contracts.contract_pack import (
             load_contract_pack,
-            save_contract_pack,
+            locked_modify_contract_pack,
         )
 
         try:
-            pack = await asyncio.to_thread(load_contract_pack, ws)
+            # Lấy toàn bộ contract pack dạng JSON
+            if action == "get":
+                pack = await asyncio.to_thread(load_contract_pack, ws)
+                pack_data = pack.to_dict()
+                return (
+                    f"Contract Pack\n"
+                    f"{'=' * 40}\n"
+                    f"{json.dumps(pack_data, indent=2, ensure_ascii=False)}"
+                )
+
+            # Format cho prompt inclusion
+            if action == "format_for_prompt":
+                pack = await asyncio.to_thread(load_contract_pack, ws)
+                formatted = pack.format_for_prompt()
+                if not formatted:
+                    return "No contract pack entries to format."
+                return f"Prompt-Ready Contract Pack\n{'=' * 40}\n{formatted}"
 
             # Thêm convention mới
             if action == "add_convention":
                 if not content:
                     return "Error: 'content' is required for 'add_convention' action."
-                if content not in pack.conventions:
-                    pack.conventions.append(content)
-                    await asyncio.to_thread(save_contract_pack, ws, pack)
+
+                def mod_conv(p):
+                    if content not in p.conventions:
+                        p.conventions.append(content)
+                    return p
+
+                pack = await asyncio.to_thread(
+                    locked_modify_contract_pack, ws, mod_conv
+                )
                 return (
                     f"Convention Added\n"
                     f"{'=' * 40}\n"
@@ -839,9 +861,15 @@ def register_tools(mcp_instance) -> None:
             if action == "add_anti_pattern":
                 if not content:
                     return "Error: 'content' is required for 'add_anti_pattern' action."
-                if content not in pack.anti_patterns:
-                    pack.anti_patterns.append(content)
-                    await asyncio.to_thread(save_contract_pack, ws, pack)
+
+                def mod_anti(p):
+                    if content not in p.anti_patterns:
+                        p.anti_patterns.append(content)
+                    return p
+
+                pack = await asyncio.to_thread(
+                    locked_modify_contract_pack, ws, mod_anti
+                )
                 return (
                     f"Anti-Pattern Added\n"
                     f"{'=' * 40}\n"
@@ -854,13 +882,20 @@ def register_tools(mcp_instance) -> None:
             if action == "add_guarded_path":
                 if not paths:
                     return "Error: 'paths' is required for 'add_guarded_path' action."
+
                 added = []
-                for p in paths:
-                    if p and p not in pack.guarded_paths:
-                        pack.guarded_paths.append(p)
-                        added.append(p)
-                if added:
-                    await asyncio.to_thread(save_contract_pack, ws, pack)
+
+                def mod_guard(p):
+                    safe_paths = paths if paths else []
+                    for path in safe_paths:
+                        if path and path not in p.guarded_paths:
+                            p.guarded_paths.append(path)
+                            added.append(path)
+                    return p
+
+                pack = await asyncio.to_thread(
+                    locked_modify_contract_pack, ws, mod_guard
+                )
                 return (
                     f"Guarded Paths Updated\n"
                     f"{'=' * 40}\n"
@@ -873,9 +908,13 @@ def register_tools(mcp_instance) -> None:
             if action == "add_review_item":
                 if not content:
                     return "Error: 'content' is required for 'add_review_item' action."
-                if content not in pack.review_checklist:
-                    pack.review_checklist.append(content)
-                    await asyncio.to_thread(save_contract_pack, ws, pack)
+
+                def mod_rev(p):
+                    if content not in p.review_checklist:
+                        p.review_checklist.append(content)
+                    return p
+
+                pack = await asyncio.to_thread(locked_modify_contract_pack, ws, mod_rev)
                 return (
                     f"Review Item Added\n"
                     f"{'=' * 40}\n"
@@ -883,22 +922,6 @@ def register_tools(mcp_instance) -> None:
                     f"Total review items: {len(pack.review_checklist)}\n"
                     f"{'=' * 40}"
                 )
-
-            # Lấy toàn bộ contract pack dạng JSON
-            if action == "get":
-                pack_data = pack.to_dict()
-                return (
-                    f"Contract Pack\n"
-                    f"{'=' * 40}\n"
-                    f"{json.dumps(pack_data, indent=2, ensure_ascii=False)}"
-                )
-
-            # Format cho prompt inclusion
-            if action == "format_for_prompt":
-                formatted = pack.format_for_prompt()
-                if not formatted:
-                    return "No contract pack entries to format."
-                return f"Prompt-Ready Contract Pack\n{'=' * 40}\n{formatted}"
 
             return f"Error: Unhandled action '{action}'."
 
@@ -913,7 +936,7 @@ def register_tools(mcp_instance) -> None:
             Field(
                 description="List of relative file paths that were planned to be changed.",
             ),
-        ],
+        ] = [],
         workspace_path: Annotated[
             Optional[str],
             Field(
@@ -959,7 +982,7 @@ def register_tools(mcp_instance) -> None:
                             files.add(line.strip())
                 return sorted(files)
 
-            actual_changed = await asyncio.to_thread(_get_changed_files, ws)
+            actual_changed = await asyncio.to_thread(_get_changed_files, str(ws))
 
             if not actual_changed and not planned_files:
                 return "No planned files and no git changes detected."
@@ -975,13 +998,19 @@ def register_tools(mcp_instance) -> None:
                 try:
                     from domain.codemap.symbol_extractor import extract_symbols
                 except ImportError:
-                    logger.warning("symbol_extractor not available, drift detection will proceed without symbol analysis")
+                    logger.warning(
+                        "symbol_extractor not available, drift detection will proceed without symbol analysis"
+                    )
                     return symbols_map, deps_map
 
                 try:
-                    from domain.codemap.relationship_extractor import extract_relationships
+                    from domain.codemap.relationship_extractor import (
+                        extract_relationships,
+                    )
                 except ImportError:
-                    logger.warning("relationship_extractor not available, drift detection will proceed without dependency analysis")
+                    logger.warning(
+                        "relationship_extractor not available, drift detection will proceed without dependency analysis"
+                    )
                     extract_relationships = None  # type: ignore[assignment]
 
                 for rel_path in file_list:
@@ -989,7 +1018,9 @@ def register_tools(mcp_instance) -> None:
                     if not full_path.is_file():
                         continue
                     try:
-                        content = full_path.read_text(encoding="utf-8", errors="replace")
+                        content = full_path.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
                     except OSError:
                         continue
 
@@ -1014,7 +1045,7 @@ def register_tools(mcp_instance) -> None:
 
             all_files = sorted(set(planned_files) | set(actual_changed))
             post_symbols, post_deps = await asyncio.to_thread(
-                _extract_file_info, ws, all_files
+                _extract_file_info, str(ws), all_files
             )
 
             # Gọi detect_drift
@@ -1032,28 +1063,28 @@ def register_tools(mcp_instance) -> None:
 
             # Format kết quả
             result_lines = [
-                f"Design Drift Report",
+                "Design Drift Report",
                 f"{'=' * 40}",
                 report.summary,
             ]
 
             if report.out_of_scope_files:
-                result_lines.append(f"\nOut-of-scope files:")
+                result_lines.append("\nOut-of-scope files:")
                 for f in report.out_of_scope_files:
                     result_lines.append(f"  - {f}")
 
             if report.new_dependencies:
-                result_lines.append(f"\nNew dependencies:")
+                result_lines.append("\nNew dependencies:")
                 for d in report.new_dependencies:
                     result_lines.append(f"  - {d}")
 
             if report.public_api_changes:
-                result_lines.append(f"\nPublic API changes:")
+                result_lines.append("\nPublic API changes:")
                 for c in report.public_api_changes:
                     result_lines.append(f"  {c}")
 
             if report.coupling_warnings:
-                result_lines.append(f"\nCoupling warnings:")
+                result_lines.append("\nCoupling warnings:")
                 for w in report.coupling_warnings:
                     result_lines.append(f"  ⚠ {w}")
 

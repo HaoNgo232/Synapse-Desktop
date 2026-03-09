@@ -11,6 +11,7 @@ import os
 from presentation.config.theme import ThemeColors, ThemeSpacing, ThemeRadius, ThemeFonts
 
 import sys
+
 if hasattr(sys, "_MEIPASS"):
     _ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
 else:

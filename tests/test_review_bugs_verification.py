@@ -224,9 +224,11 @@ class TestBug4RaceCondition:
         def add_file(file_path: str):
             """Helper function to add file to selection."""
             try:
+                from domain.selection.provenance import SelectionState
 
-                def modifier(current: list[str]) -> list[str]:
-                    return current + [file_path]
+                def modifier(current: SelectionState) -> SelectionState:
+                    current.add_paths([file_path], "agent")
+                    return current
 
                 result = _locked_read_modify_write(session_file, modifier)
                 results.append(result)

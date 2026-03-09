@@ -154,6 +154,7 @@ class FileTreeWidget(QWidget):
         actions_layout.setSpacing(4)
 
         import sys
+
         if hasattr(sys, "_MEIPASS"):
             assets_dir = os.path.join(sys._MEIPASS, "assets")
         else:

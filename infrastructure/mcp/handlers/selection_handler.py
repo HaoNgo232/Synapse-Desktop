@@ -24,31 +24,39 @@ def _locked_read_modify_write(
 ) -> SelectionState:
     """Read the selection JSON, pass it to modifier_fn, write back, all under cross-process lock."""
     # Ensure file exists so we can open it in r+
-    if not session_file.exists():
-        session_file.parent.mkdir(parents=True, exist_ok=True)
-        session_file.write_text(json.dumps(SelectionState().to_dict()))
+    session_file.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(session_file, "r+", encoding="utf-8") as f:
+    with open(session_file, "a+", encoding="utf-8") as f:
         # Cross-process exclusive lock
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
-            try:
-                data = json.load(f)
-                # Backward compat: v1 format wraps list in {"selected_files": [...]}
-                if isinstance(data, dict) and "selected_files" in data and "version" not in data:
-                    state = SelectionState.from_dict(data["selected_files"])
-                else:
-                    state = SelectionState.from_dict(data)
-            except (json.JSONDecodeError, OSError):
+            f.seek(0)
+            raw = f.read()
+            if not raw.strip():
                 state = SelectionState()
+            else:
+                try:
+                    data = json.loads(raw)
+                    # Backward compat: v1 format wraps list in {"selected_files": [...]}
+                    if (
+                        isinstance(data, dict)
+                        and "selected_files" in data
+                        and "version" not in data
+                    ):
+                        state = SelectionState.from_dict(data["selected_files"])
+                    else:
+                        state = SelectionState.from_dict(data)
+                except (json.JSONDecodeError, OSError):
+                    state = SelectionState()
 
             new_state = modifier_fn(state)
 
             # Always write v2 format
             f.seek(0)
+            f.truncate()
             json.dump(new_state.to_dict(), f, indent=2)
             f.write("\n")
-            f.truncate()
+            f.flush()
 
             return new_state
         finally:
@@ -115,7 +123,11 @@ def register_tools(mcp_instance) -> None:
                     )
                     data = json.loads(raw_text)
                     # Backward compat: v1 format wraps list in {"selected_files": [...]}
-                    if isinstance(data, dict) and "selected_files" in data and "version" not in data:
+                    if (
+                        isinstance(data, dict)
+                        and "selected_files" in data
+                        and "version" not in data
+                    ):
                         state = SelectionState.from_dict(data["selected_files"])
                     else:
                         state = SelectionState.from_dict(data)
@@ -136,7 +148,11 @@ def register_tools(mcp_instance) -> None:
                         session_file.read_text, encoding="utf-8"
                     )
                     data = json.loads(raw_text)
-                    if isinstance(data, dict) and "selected_files" in data and "version" not in data:
+                    if (
+                        isinstance(data, dict)
+                        and "selected_files" in data
+                        and "version" not in data
+                    ):
                         state = SelectionState.from_dict(data["selected_files"])
                     else:
                         state = SelectionState.from_dict(data)

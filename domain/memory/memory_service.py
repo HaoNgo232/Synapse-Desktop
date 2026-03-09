@@ -4,18 +4,15 @@ Memory Service - Quản lý đọc/ghi memory store cho workspace.
 Lưu tại .synapse/memory_v2.json, tương thích với memory.xml cũ.
 """
 
+import fcntl
 import json
 import logging
-import os
-import threading
 from pathlib import Path
 from typing import Optional
 
 from domain.memory.memory_types import MemoryEntry, MemoryLayer, MemoryStore
 
 logger = logging.getLogger(__name__)
-
-_write_lock = threading.Lock()
 
 
 def load_memory_store(workspace_root: Path) -> MemoryStore:
@@ -33,23 +30,21 @@ def load_memory_store(workspace_root: Path) -> MemoryStore:
 
 
 def save_memory_store(workspace_root: Path, store: MemoryStore) -> None:
-    """Save memory store to .synapse/memory_v2.json."""
+    """Save memory store to .synapse/memory_v2.json using cross-process lock."""
     synapse_dir = workspace_root / ".synapse"
+    synapse_dir.mkdir(parents=True, exist_ok=True)
     memory_file = synapse_dir / "memory_v2.json"
 
-    with _write_lock:
-        synapse_dir.mkdir(parents=True, exist_ok=True)
-        tmp_file = memory_file.with_suffix(".tmp")
+    with open(memory_file, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
         try:
-            tmp_file.write_text(
-                json.dumps(store.to_dict(), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            os.replace(str(tmp_file), str(memory_file))
-        except OSError as e:
-            logger.error("Failed to save memory store: %s", e)
-            if tmp_file.exists():
-                tmp_file.unlink(missing_ok=True)
+            f.seek(0)
+            f.truncate()
+            json.dump(store.to_dict(), f, indent=2, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def add_memory(
@@ -62,24 +57,47 @@ def add_memory(
     tags: Optional[list] = None,
     max_entries: int = 100,
 ) -> None:
-    """Add a memory entry and persist."""
-    store = load_memory_store(workspace_root)
-    entry = MemoryEntry(
-        layer=layer,
-        content=content,
-        linked_files=linked_files or [],
-        linked_symbols=linked_symbols or [],
-        workflow=workflow,
-        tags=tags or [],
-    )
-    store.add(entry)
+    """Add a memory entry and persist securely with cross-process locking."""
+    memory_file = workspace_root / ".synapse" / "memory_v2.json"
+    memory_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Trim old entries per layer
-    for layer_name in ("action", "decision", "constraint"):
-        layer_entries = store.get_by_layer(layer_name)
-        if len(layer_entries) > max_entries:
-            excess = len(layer_entries) - max_entries
-            to_remove = layer_entries[:excess]
-            store.entries = [e for e in store.entries if e not in to_remove]
+    with open(memory_file, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            raw = f.read()
+            store = MemoryStore()
+            if raw.strip():
+                try:
+                    data = json.loads(raw)
+                    store = MemoryStore.from_dict(data)
+                except (OSError, json.JSONDecodeError, KeyError) as e:
+                    logger.warning(
+                        "Failed to parse memory store during add_memory: %s", e
+                    )
 
-    save_memory_store(workspace_root, store)
+            entry = MemoryEntry(
+                layer=layer,
+                content=content,
+                linked_files=linked_files or [],
+                linked_symbols=linked_symbols or [],
+                workflow=workflow,
+                tags=tags or [],
+            )
+            store.add(entry)
+
+            # Trim old entries per layer
+            for layer_name in ("action", "decision", "constraint"):
+                layer_entries = store.get_by_layer(layer_name)
+                if len(layer_entries) > max_entries:
+                    excess = len(layer_entries) - max_entries
+                    to_remove = layer_entries[:excess]
+                    store.entries = [e for e in store.entries if e not in to_remove]
+
+            f.seek(0)
+            f.truncate()
+            json.dump(store.to_dict(), f, indent=2, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)

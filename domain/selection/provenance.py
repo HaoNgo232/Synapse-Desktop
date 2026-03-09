@@ -33,7 +33,11 @@ class SelectionState:
         self.provenance.clear()
 
     def to_dict(self) -> dict:
-        return {"version": self.version, "paths": self.paths, "provenance": self.provenance}
+        return {
+            "version": self.version,
+            "paths": self.paths,
+            "provenance": self.provenance,
+        }
 
     @classmethod
     def from_dict(cls, data: object) -> "SelectionState":

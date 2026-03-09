@@ -9,7 +9,7 @@ So sánh trạng thái trước/sau edit để báo:
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 from pathlib import Path
 import logging
 
@@ -103,9 +103,7 @@ def detect_drift(
 
     # 3. Tìm thay đổi public API
     if pre_edit_symbols and post_edit_symbols:
-        all_files = set(
-            list(pre_edit_symbols.keys()) + list(post_edit_symbols.keys())
-        )
+        all_files = set(list(pre_edit_symbols.keys()) + list(post_edit_symbols.keys()))
         for fp in all_files:
             old_syms = set(pre_edit_symbols.get(fp, []))
             new_syms = set(post_edit_symbols.get(fp, []))

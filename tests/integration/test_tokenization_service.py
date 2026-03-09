@@ -500,35 +500,38 @@ class TestBatchProcessing:
 
 
 class TestMmapReading:
-    """Test _read_file_mmap() doc file hieu qua."""
+    """Test _read_file_mmap() doc file hieu qua (consolidated in domain.tokenization.counter)."""
 
     def test_read_normal_file(self, tmp_path):
         """Doc file binh thuong qua mmap."""
-        service = TokenizationService()
+        from domain.tokenization.counter import _read_file_mmap
+
         f = tmp_path / "normal.txt"
         content = "Hello, world!\nLine 2"
         f.write_text(content)
 
-        result = service._read_file_mmap(f)
+        result = _read_file_mmap(f)
         assert result == content
 
     def test_read_empty_file(self, tmp_path):
         """Doc empty file -> return empty string."""
-        service = TokenizationService()
+        from domain.tokenization.counter import _read_file_mmap
+
         f = tmp_path / "empty.txt"
         f.write_text("")
 
-        result = service._read_file_mmap(f)
+        result = _read_file_mmap(f)
         assert result == ""
 
     def test_read_large_file(self, tmp_path):
         """Doc file lon qua mmap van dung."""
-        service = TokenizationService()
+        from domain.tokenization.counter import _read_file_mmap
+
         f = tmp_path / "large.txt"
         content = "A" * 100_000
         f.write_text(content)
 
-        result = service._read_file_mmap(f)
+        result = _read_file_mmap(f)
         assert result is not None
         assert len(result) == 100_000
 

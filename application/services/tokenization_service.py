@@ -11,11 +11,15 @@ Fallback Strategy (Option 2b):
   2. Emit warning log de UI/developer biet rang dang dung gia tri uoc luong
 
 Dependency Flow:
-  encoder_registry -> TokenizationService -> core.encoders (pure functions)
-                                          -> core.tokenization.cache (TokenCache)
+  encoder_registry -> TokenizationService -> domain.tokenization.counter (pure functions)
+                                          -> domain.tokenization.cache (TokenCache)
+
+Consolidation:
+  Service delegates to domain/tokenization/counter.py for core counting logic.
+  Service adds orchestration: encoder lifecycle, cache management, batch strategies,
+  Claude-specific corrections.
 """
 
-import mmap
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,10 +36,13 @@ from infrastructure.adapters.encoders import (
 from shared.logging_config import log_error, log_info, log_warning
 from domain.tokenization.cache import TokenCache
 from domain.tokenization.cancellation import is_counting_tokens
+from domain.tokenization.counter import (
+    count_tokens as _core_count_tokens,
+    _read_file_mmap,
+    _count_tokens_for_file_no_cache as _core_count_file_no_cache,
+    MAX_BYTES,
+)
 from application.interfaces.tokenization_port import ITokenizationService
-
-# Guardrail: bo qua files lon hon 5MB
-MAX_BYTES = 5 * 1024 * 1024
 
 # Worker config cho batch processing
 TASKS_PER_WORKER = 100
@@ -73,8 +80,8 @@ class TokenizationService(ITokenizationService):
         """
         Dem so token trong text.
 
-        Tu dong chon encoder phu hop va fallback ve estimation
-        neu encoder khong kha dung (Option 2b: warning + estimate).
+        Delegates to domain.tokenization.counter.count_tokens() for base counting,
+        then applies service-level corrections (e.g. Claude whitespace penalty).
 
         Args:
             text: Doan text can dem token
@@ -95,27 +102,20 @@ class TokenizationService(ITokenizationService):
                 self._using_estimation = True
             return _estimate_tokens(text)
 
-        try:
-            # Phân tách cách lấy base token count
-            if getattr(self, "_encoder_type", "") == "hf":
-                # HF tokenizer
-                base_count = len(encoder.encode(text).ids)
-            else:
-                # rs-bpe va tiktoken
-                base_count = len(encoder.encode(text))
+        # Delegate base counting to domain counter pure function
+        base_count = _core_count_tokens(
+            text, encoder=encoder, encoder_type=self._encoder_type
+        )
 
-            # --- DINH CHINH CLAUDE HEAVY WHITESPACE PENALTY ---
-            # Khi luong khoang trang nhiu, Claude tokenizer tokenization hieu qua rat thap
-            if self._tokenizer_repo == "Xenova/claude-tokenizer":
-                whitespace_count = text.count(" ") + text.count("\t") + text.count("\n")
-                # Cong them 3% mac dinh (cấu trúc hệ thống) va khoang 0.25 token cho moi whitespace/tab/newline
-                claude_corrected = int(base_count * 1.03) + int(whitespace_count * 0.25)
-                return claude_corrected
+        # --- DINH CHINH CLAUDE HEAVY WHITESPACE PENALTY ---
+        # Khi luong khoang trang nhiu, Claude tokenizer tokenization hieu qua rat thap
+        if self._tokenizer_repo == "Xenova/claude-tokenizer":
+            whitespace_count = text.count(" ") + text.count("\t") + text.count("\n")
+            # Cong them 3% mac dinh va khoang 0.25 token cho moi whitespace/tab/newline
+            claude_corrected = int(base_count * 1.03) + int(whitespace_count * 0.25)
+            return claude_corrected
 
-            return base_count
-        except Exception:
-            # Fallback neu encode that bai
-            return _estimate_tokens(text)
+        return base_count
 
     def count_tokens_for_file(self, file_path: Path) -> int:
         """
@@ -272,38 +272,11 @@ class TokenizationService(ITokenizationService):
                 self._using_estimation = False
             return self._encoder
 
-    def _read_file_mmap(self, file_path: Path) -> Optional[str]:
-        """
-        Doc file su dung mmap - nhanh hon read() thong thuong.
-
-        mmap map file truc tiep vao virtual memory,
-        giam so lan copy data giua kernel va user space.
-
-        Args:
-            file_path: Duong dan file can doc
-
-        Returns:
-            Content cua file hoac None neu khong doc duoc
-        """
-        try:
-            with open(file_path, "rb") as f:
-                if f.seek(0, 2) == 0:
-                    return ""
-                f.seek(0)
-                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                    content_bytes = mm.read()
-                    return content_bytes.decode("utf-8", errors="replace")
-        except Exception:
-            try:
-                return file_path.read_text(encoding="utf-8", errors="replace")
-            except Exception:
-                return None
-
     def _count_tokens_for_file_no_cache(self, file_path: Path) -> int:
         """
         Dem token cho file KHONG update cache (parallel-safe).
 
-        Caller chiu trach nhiem update cache sau.
+        Delegates to domain.tokenization.counter._count_tokens_for_file_no_cache().
 
         Args:
             file_path: Duong dan file
@@ -311,34 +284,12 @@ class TokenizationService(ITokenizationService):
         Returns:
             So token hoac 0 neu khong dem duoc
         """
-        try:
-            if not file_path.exists() or not file_path.is_file():
-                return 0
-
-            stat = file_path.stat()
-            if stat.st_size > MAX_BYTES or stat.st_size == 0:
-                return 0
-
-            path_str = str(file_path)
-
-            # Check cache truoc (read-only, khong move LRU)
-            cached = self._cache.get_no_move(path_str, stat.st_mtime)
-            if cached is not None:
-                return cached
-
-            from infrastructure.filesystem.file_utils import is_binary_file
-
-            if is_binary_file(file_path):
-                return 0
-
-            content = self._read_file_mmap(file_path)
-            if content is None:
-                return 0
-
-            return self.count_tokens(content)
-
-        except Exception:
-            return 0
+        return _core_count_file_no_cache(
+            file_path,
+            encoder=self._get_or_create_encoder(),
+            encoder_type=self._encoder_type,
+            cache=self._cache,
+        )
 
     def _count_tokens_parallel_standard(
         self,
@@ -481,7 +432,7 @@ class TokenizationService(ITokenizationService):
                     results[path_str] = cached
                     continue
 
-                content = self._read_file_mmap(path)
+                content = _read_file_mmap(path)
                 if content is None:
                     results[path_str] = 0
                     continue

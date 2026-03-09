@@ -2,8 +2,8 @@
 Skill Installer - Tu dong cai dat Synapse Agent Skills vao cac IDE.
 
 Agent Skills la open standard (agentskills.io) cho phep AI agents
-su dung cac workflow chuyen biet. Module nay tao 5 skill folders
-(rp_build, rp_review, rp_refactor, rp_investigate, rp_test)
+su dung cac workflow chuyen biet. Module nay tao 7 skill folders
+(rp_build, rp_design, rp_review, rp_refactor, rp_investigate, rp_test, rp_export_context)
 trong thu muc skills tuong ung cua tung IDE.
 
 Ho tro:
@@ -62,13 +62,14 @@ SKILL_TARGETS: dict[str, dict] = {
 
 # ---------------------------------------------------------------------------
 # Thu muc chua cac file .md cua tung skill
-# Cau truc: mcp_server/skills/<skill_name>.md
+# Cau truc: infrastructure/mcp/skills/<skill_name>.md
 # ---------------------------------------------------------------------------
 _SKILLS_DIR = Path(__file__).parent / "skills"
 
-# Danh sach 5 skills duoc ho tro - thu tu doc file .md tuong ung
+# Danh sach 7 skills duoc ho tro - thu tu doc file .md tuong ung
 SKILL_KEYS: list[str] = [
     "rp_build",
+    "rp_design",
     "rp_review",
     "rp_refactor",
     "rp_investigate",
@@ -82,7 +83,7 @@ def _load_skill_file(skill_key: str) -> str:
 
     Args:
         skill_key: Ten skill (vd: "rp_build") tuong ung voi file
-                   `mcp_server/skills/rp_build.md`.
+                   `infrastructure/mcp/skills/rp_build.md`.
 
     Returns:
         Noi dung day du cua file SKILL.md.
@@ -95,7 +96,7 @@ def _load_skill_file(skill_key: str) -> str:
 
 
 def _load_all_skills() -> dict[str, str]:
-    """Doc tat ca 5 skills tu disk va tra ve dict {skill_key: content}.
+    """Doc tat ca 7 skills tu disk va tra ve dict {skill_key: content}.
 
     Returns:
         Dict map tu skill_key sang noi dung SKILL.md hoan chinh.
@@ -154,11 +155,10 @@ def _resolve_skills_dir(target_name: str, workspace_path: str | None = None) -> 
 def install_skills_for_target(
     target_name: str, workspace_path: str | None = None
 ) -> tuple[bool, str]:
-    """Cai dat 5 Synapse skills vao thu muc skills cua IDE.
+    """Cai dat 7 Synapse skills vao thu muc skills cua IDE.
 
-    Doc noi dung tu cac file .md trong `mcp_server/skills/` va tao
-    5 folder (rp_build, rp_review, rp_refactor, rp_investigate, rp_test)
-    trong thu muc skills tuong ung, moi folder chua 1 file SKILL.md.
+    Doc noi dung tu cac file .md trong `infrastructure/mcp/skills/` va tao
+    7 folder trong thu muc skills tuong ung, moi folder chua 1 file SKILL.md.
 
     Args:
         target_name: Ten IDE target (vd: "Claude Code", "Cursor").
@@ -203,20 +203,20 @@ def install_skills_for_target(
             errors.append(error_msg)
 
     if errors:
-        return False, f"Cai dat {installed_count}/5 skills. Loi: {'; '.join(errors)}"
+        return False, f"Cai dat {installed_count}/7 skills. Loi: {'; '.join(errors)}"
 
     return True, f"Da cai dat {installed_count} Synapse skills vao {skills_dir}"
 
 
 def check_skills_installed(target_name: str, workspace_path: str | None = None) -> bool:
-    """Kiem tra xem tat ca 5 Synapse skills da duoc cai dat chua.
+    """Kiem tra xem tat ca 7 Synapse skills da duoc cai dat chua.
 
     Args:
         target_name: Ten IDE target.
         workspace_path: Duong dan workspace (chi can cho VS Code/Copilot).
 
     Returns:
-        True neu tat ca 5 skills deu co file SKILL.md.
+        True neu tat ca 7 skills deu co file SKILL.md.
     """
     try:
         skills_dir = _resolve_skills_dir(target_name, workspace_path)

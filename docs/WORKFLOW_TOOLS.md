@@ -2,7 +2,7 @@
 
 ## Overview
 
-Synapse Desktop provides 5 advanced workflow tools designed for AI agent handoff and complex coding tasks. These tools automate context gathering, scope detection, and prompt generation.
+Synapse Desktop provides 6 advanced workflow tools designed for AI agent handoff and complex coding tasks. These tools automate context gathering, scope detection, and prompt generation.
 
 ## Tools
 
@@ -200,18 +200,46 @@ rp_test(
 
 ---
 
+### 6. `rp_design` — Architectural Design Planner
+
+**Purpose:** Produce an architectural design and implementation plan based on task requirements, identifying scope, dependencies, impact, and a step-by-step rollout strategy.
+
+**What it does:**
+- Analyzes existing conventions, anti-patterns, and project structure (via Contract Pack)
+- Extracts APIs and current architectural references
+- Assesses the blast radius of proposed changes
+- Identifies migration needs and rollout steps
+- Defines a comprehensive plan including a "do-not-touch" list to prevent drift
+- Packages all guidelines and constraints into learning material for building the architecture
+
+**Usage:**
+```python
+rp_design(
+    workspace_path="/path/to/project",
+    task_description="Migrate local SQLite memory storage to a remote Redis implementation",
+    max_tokens=80_000
+)
+```
+
+**When to use:**
+- Starting a brand new subsystem or feature that impacts multiple domains
+- Deciding between architectural choices before making code changes
+- Establishing API contracts and planning large-scale application structural updates
+
+---
+
 ## Agent Skills vs MCP Workflow Tools
 
 **Important Distinction:**
 
-**MCP Workflow Tools (5 tools):** These are the core workflow tools exposed via MCP server (`mcp_server/handlers/workflow_handler.py`):
-- `rp_build`, `rp_review`, `rp_refactor`, `rp_investigate`, `rp_test`
+**MCP Workflow Tools (6 tools):** These are the core workflow tools exposed via MCP server (`infrastructure/mcp/handlers/workflow_handler.py`):
+- `rp_build`, `rp_design`, `rp_review`, `rp_refactor`, `rp_investigate`, `rp_test`
 - Called directly by AI clients via MCP protocol
 - Implemented as Python functions in the MCP server
 
-**Agent Skills (6 skills):** These are workflow templates installed to IDE skill directories:
-- Stored as Markdown files in `mcp_server/skills/*.md`
-- Include all 5 MCP tools above PLUS `rp_export_context`
+**Agent Skills (7 skills):** These are workflow templates installed to IDE skill directories:
+- Stored as Markdown files in `infrastructure/mcp/skills/*.md`
+- Include all 6 MCP tools above PLUS `rp_export_context`
 - `rp_export_context` is NOT a separate MCP tool—it's a workflow that uses the existing `build_prompt` tool
 - Installed via Settings → Skills System → Install to [IDE]
 
@@ -268,7 +296,7 @@ Test coverage:
 
 ## Integration with MCP
 
-All 5 workflow tools are exposed via MCP server (`mcp_server/server.py`).
+All 6 workflow tools are exposed via MCP server (`infrastructure/mcp/server.py`).
 
 AI clients (Cursor, GitHub Copilot, Claude Code, Antigravity, Kiro CLI, OpenCode) can call them directly:
 
@@ -279,6 +307,7 @@ python main_window.py --run-mcp /path/to/workspace
 
 Tools appear in AI client's tool list as:
 - `rp_build`
+- `rp_design`
 - `rp_review`
 - `rp_refactor`
 - `rp_investigate`
@@ -293,6 +322,7 @@ Tools appear in AI client's tool list as:
 | Tool | Output Size | Token Estimate |
 |------|-------------|----------------|
 | `rp_build` | File map + sliced contents + relationships | 30K-80K |
+| `rp_design` | Contract pack + codemaps + constraints | 30K-70K |
 | `rp_review` | Diff + changed files + context | 40K-100K |
 | `rp_refactor` (discover) | Codemap + dependency graph | 20K-60K |
 | `rp_refactor` (plan) | Discovery + full files | 40K-70K |

@@ -11,10 +11,10 @@ Cach chay:
 
 Architecture:
     server.py la lightweight entry point. Logic duoc tach ra:
-    - mcp_server/core/     : constants, workspace_manager, session_manager, profile_resolver
-    - mcp_server/handlers/ : workspace, file, selection, token, analysis, structure,
-                             dependency, git, context, workflow handlers
-    - mcp_server/utils/    : logging_utils, file_utils
+    - infrastructure/mcp/core/     : constants, workspace_manager, session_manager, profile_resolver
+    - infrastructure/mcp/handlers/ : workspace, file, selection, token, analysis, structure,
+                                     dependency, git, context, workflow handlers
+    - infrastructure/mcp/utils/    : logging_utils, file_utils
 """
 
 import sys
@@ -46,7 +46,7 @@ mcp = FastMCP(
         "expansion and token budget management.\n"
         "  - Project intelligence: explain_architecture generates architecture summaries, "
         "start_session auto-discovers project structure and technical debt.\n"
-        "  - Workflow tools: rp_build, rp_review, rp_refactor, rp_investigate, rp_test "
+        "  - Workflow tools: rp_build, rp_design, rp_review, rp_refactor, rp_investigate, rp_test "
         "automate multi-step analysis workflows with scope detection and token optimization.\n"
         "\n"
         "For basic file reading, directory listing, text search, and command execution, "

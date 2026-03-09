@@ -11,7 +11,7 @@ A desktop application that bridges your codebase and AI assistants (ChatGPT, Cla
 
 **Now supports Model Context Protocol (MCP):** Run Synapse as a headless server to expose your workspace directly to AI clients (Cursor, GitHub Copilot, Claude Code, Antigravity, Kiro CLI, OpenCode) via standardized tools, enabling seamless AI-codebase integration without manual copy/paste workflows.
 
-**Agent Skills Workflows:** Synapse includes 6 pre-built workflow skills (rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_export_context) that can be auto-installed to AI IDEs, providing structured multi-step workflows for complex coding tasks.
+**Agent Skills Workflows:** Synapse includes 7 pre-built workflow skills (rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_export_context, rp_design) that can be auto-installed to AI IDEs, providing structured multi-step workflows for complex coding tasks.
 
 > ⚠️ **Platform Status:** Currently stable on **Linux**. The **Windows** version is in experimental/beta phase. **macOS** is currently unsupported/untested due to lack of testing environments.
 
@@ -53,11 +53,12 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 ### MCP Server Integration (IDE Backend for AI Agents)
 - **Direct AI Access**: Run Synapse as an MCP server to expose specialized workspace analysis tools directly to AI clients.
 - **Auto-Detection**: Workspace path is automatically detected from MCP Context roots (no manual configuration needed).
-- **24 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
+- **21 Comprehensive Tools**: Provides a suite of tools categorized for optimal usage by AI agents.
 
   **Workflow Tools (NEW)**
   *Advanced multi-step workflows for AI agent handoff:*
   - `rp_build` — Context Builder: Auto-detect scope, optimize token budget, generate handoff prompt
+  - `rp_design` — Architectural Design Planner: Produce an architectural design and implementation plan based on task requirements
   - `rp_review` — Code Review: Deep review with surrounding context (imports, callers, tests)
   - `rp_refactor` — Two-Pass Refactor: Analyze first (discover), then plan (safe refactoring)
   - `rp_investigate` — Bug Investigation: Trace execution path from error traces
@@ -68,28 +69,22 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 
   **Advanced Tools**
   *Tools providing capabilities like AST parsing and accurate token counting:*
-  - `get_project_structure` — Project summary with frameworks and file stats.
+  - `start_session` — Project discovery (structure + tree + todos).
+  - `explain_architecture` — High-level architecture summary based on file and module analysis.
   - `get_codemap` — Extract AST code structure (function/class signatures only).
+  - `batch_codemap` — Mass extract code structures for all code files in a directory.
   - `get_symbols` — Structured JSON symbol list for programmatic analysis.
   - `estimate_tokens` — Accurate LLM token counting using proper tokenizers.
   - `get_imports_graph` — Cross-file dependency graph resolution.
-  - `diff_summary` — Function-level git change analysis.
-  - `build_prompt` — Package files into a structured prompt format (Ideal for Cross-Agent Delegation).
-  - `find_references` — Find symbol usages (filters out comments and strings).
-  - `manage_selection` — Track selected files for context building.
-  - `get_callers` — Function-level reverse dependency lookup (find functions that call a symbol).
   - `get_related_tests` — Discovery of test files corresponding to source files.
-  - `batch_codemap` — Mass extract code structures for all code files in a directory.
-  - `explain_architecture` — High-level architecture summary based on file and module analysis.
+  - `blast_radius` — Assess impact of changes on dependent modules.
+  - `detect_design_drift` — Compare planned vs actual changes and detect structural drift.
+  - `get_contract_pack` — Check existing constraints, conventions, and anti-patterns for AI compliance.
+  - `build_prompt` — Package files into a structured prompt format (Ideal for Cross-Agent Delegation).
+  - `manage_selection` — Track selected files for context building.
+  - `manage_memory` — Manage cross-session AI interaction memory and guidelines.
 
-  **Basic Operations**
-  *Standard filesystem operations. AI clients (like Cursor or Copilot) with native file-reading tools should prioritize their built-in tools over these to reduce MCP overhead:*
-  - `start_session` — Project discovery (structure + tree + todos).
-  - `list_files` — List all workspace files respecting `.gitignore`.
-  - `list_directories` — Show directory tree structure.
-  - `read_file_range` — Read file contents with line range support.
-  - `get_file_metrics` — LOC, functions/classes count, TODO/FIXME/HACK, complexity.
-  - `find_todos` — Scan entire project for TODO/FIXME/HACK comments.
+  *Note: For basic file reading, directory listing, and text search, AI clients should utilize their built-in native tools as they have lower overhead.*
 
 - **Auto-Configuration**: One-click installation of MCP config files via Settings tab (supports Cursor, VS Code, Claude Code, Antigravity, Kiro CLI, OpenCode). Auto-updates command paths when binary is moved (AppImage/exe builds).
 - **Headless Operation**: No GUI overhead when running in MCP mode — pure stdio transport for maximum efficiency.
@@ -105,7 +100,7 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 
 ### 2. MCP Server Workflow (Autonomous)
 1. **Setup MCP Integration** (Settings → MCP Server Integration). Click **Install to Cursor** (or your preferred AI client).
-2. **Use AI Client**: Open your AI client. Synapse tools are now available directly in AI conversations. Example: *"Use `get_project_structure` to analyze this codebase."*
+2. **Use AI Client**: Open your AI client. Synapse tools are now available directly in AI conversations. Example: *"Use `start_session` to analyze this codebase."*
 3. **AI Explores Autonomously**: The AI client spawns Synapse in headless mode (`--run-mcp`). No manual copy/paste—the AI uses Synapse's advanced AST and dependency parsing natively.
 4. **Cross-Agent Delegation (Pro Tip)**: Ask your Planning Agent to use the `build_prompt` tool to generate a `spec.xml` file containing the full project architecture. Then, tell your Coding Agent to read that file. This transfers massive context between AI agents efficiently without crashing the chat window!
 
@@ -149,12 +144,12 @@ Python 3.10+, Git (optional, for branch detection and diff context).
 ```bash
 git clone https://github.com/HaoNgo232/Synapse-Desktop.git
 cd Synapse-Desktop
-chmod +x scripts/start.sh
-./scripts/start.sh
+chmod +x start.sh
+./start.sh
 ```
 
 **Windows (Experimental)**
-Double-click `scripts/start.bat`, or use `scripts/build-windows.ps1` to compile into a `.exe`.
+Double-click `start.bat`, or use `build-windows.ps1` to compile into a `.exe`.
 
 **Building AppImage (Linux)**
 To build a standalone executable AppImage for Linux, run the included script:
@@ -261,19 +256,16 @@ This section is intended for developers who wish to understand or contribute to 
 - **Service Container**: Pure dependency injection via `ServiceContainer` instead of massive global singletons.
 - **Thread-safe**: Aggressive use of global cancellation flags, `threading.Lock`, and `SignalBridge` for pushing background updates to the main thread securely.
 - **Skills as Markdown**: Workflow definitions stored as `.md` files for easy editing without touching Python code.
-- **MCP Auto-Detection**: Workspace path resolved from MCP Context roots, eliminating manual configuration.
-- **Auto-Update Configs**: MCP config commands automatically updated when binary path changes (AppImage/exe builds).
 
 ### Key Modules
 - `main_window.py`: Entry point for GUI and MCP mode.
-- `views/`: Qt UI modules (`context_view_qt`, `apply_view_qt`, `history_view_qt`, etc).
-- `services/`: Core logic (`token_display`, `prompt_build_service`, `workspace_index`).
-- `core/`: Base infrastructure (`theme`, `file_scanner`, `threading_utils`).
-- `mcp_server/`: FastMCP implementation (`server.py`, `config_installer.py`, `skill_installer.py`).
-- `mcp_server/handlers/`: 10 handler modules for MCP tools (workspace, file, selection, token, analysis, structure, dependency, git, context, workflow).
-- `mcp_server/skills/`: 6 workflow skill definitions (Markdown files).
-- `mcp_server/core/`: Core MCP infrastructure (workspace_manager, session_manager, profile_resolver, constants).
-- `core/workflows/`: Advanced workflow implementations (`context_builder`, `code_reviewer`, `bug_investigator`, `refactor_workflow`, `test_builder`).
+- `presentation/`: Qt UI modules, themes, and presentation logic (`views`, `components`, `config`).
+- `application/`: Application layer connecting UI with domain logic (`session`, `settings`, `history`).
+- `domain/`: Core business logic (`prompt`, `tokenization`, `smart_context`, `drift`, `contracts`).
+- `infrastructure/mcp/`: FastMCP implementation (`server.py`, `config_installer.py`, `skill_installer.py`).
+- `infrastructure/mcp/handlers/`: MCP tools and handlers (workspace, file, selection, git, analysis).
+- `infrastructure/mcp/skills/`: 7 workflow skill definitions (Markdown files).
+- `domain/workflow/`: Advanced workflow implementations (`context_builder`, `code_reviewer`, `bug_investigator`, `refactor_workflow`, `test_builder`).
 
 ### Development
 - Code Style: Type hints everywhere.

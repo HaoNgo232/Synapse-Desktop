@@ -30,6 +30,9 @@ def test_register_all_tools(mcp_instance):
         "estimate_tokens",
         "rp_build",
         "start_session",
+        "simulate_patch",
+        "manage_execution_contract",
+        "verify_assumptions",
     ]
 
     for tool_name in expected_tools:

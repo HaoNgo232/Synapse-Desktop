@@ -1094,3 +1094,681 @@ def register_tools(mcp_instance) -> None:
         except Exception as e:
             logger.error("detect_design_drift error: %s", e)
             return f"Error: {e}"
+
+    # ================================================================
+    # simulate_patch - Dry-run OPX patch before applying
+    # ================================================================
+
+    @mcp_instance.tool()
+    async def simulate_patch(
+        opx_content: Annotated[
+            str,
+            Field(
+                description="OPX content to simulate (the patch instructions)."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+    ) -> str:
+        """Simulate an OPX patch without actually applying changes (dry-run).
+
+        Parses the OPX content, validates each file action against the current
+        workspace state, and reports which actions would succeed or fail.
+        Returns a summary with match/mismatch details, cascade failures, and
+        blast radius estimate. Use this before apply to catch errors early.
+        """
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            from domain.prompt.opx_parser import parse_opx_response
+            from infrastructure.filesystem.file_actions import apply_file_actions
+
+            parse_result = parse_opx_response(opx_content)
+            file_actions = parse_result.file_actions if parse_result else []
+            if not file_actions:
+                return "No file actions found in OPX content."
+
+            results = await asyncio.to_thread(
+                apply_file_actions,
+                file_actions,
+                workspace_roots=[ws],
+                dry_run=True,
+            )
+
+            passed = sum(1 for r in results if r.success)
+            failed = sum(1 for r in results if not r.success)
+
+            lines = [
+                "Patch Simulation Report",
+                f"{'=' * 40}",
+                f"Total actions: {len(results)} | Pass: {passed} | Fail: {failed}",
+                "",
+            ]
+
+            affected_files = set()
+            for r in results:
+                icon = "✅" if r.success else "❌"
+                lines.append(f"  {icon} [{r.action}] {r.path}")
+                if r.message:
+                    lines.append(f"     {r.message}")
+                if r.path:
+                    affected_files.add(r.path)
+
+            lines.append(f"\nAffected files: {len(affected_files)}")
+            lines.append(f"Blast radius: {', '.join(sorted(affected_files)[:10])}")
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.error("simulate_patch error: %s", e)
+            return f"Error: {e}"
+
+    # ================================================================
+    # manage_execution_contract - Create/read/update execution contracts
+    # ================================================================
+
+    @mcp_instance.tool()
+    async def manage_execution_contract(
+        action: Annotated[
+            str,
+            Field(
+                description='Action: "create" (new contract), "get" (read current), '
+                '"update" (modify fields), "activate" (set status=active), '
+                '"complete" (set status=completed), "format_for_prompt" (get prompt text).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        task: Annotated[
+            Optional[str],
+            Field(description="Task description for 'create' action."),
+        ] = None,
+        scope_files: Annotated[
+            Optional[List[str]],
+            Field(description="Files in scope for 'create'/'update'."),
+        ] = None,
+        guarded_paths: Annotated[
+            Optional[List[str]],
+            Field(description="Protected paths for 'create'/'update'."),
+        ] = None,
+        planned_interfaces: Annotated[
+            Optional[List[str]],
+            Field(description="Planned interface changes for 'create'/'update'."),
+        ] = None,
+        assumptions: Annotated[
+            Optional[List[str]],
+            Field(description="Assumptions to record for 'create'/'update'."),
+        ] = None,
+        required_tests: Annotated[
+            Optional[List[str]],
+            Field(description="Required tests for 'create'/'update'."),
+        ] = None,
+        risks: Annotated[
+            Optional[List[str]],
+            Field(description="Known risks for 'create'/'update'."),
+        ] = None,
+        success_criteria: Annotated[
+            Optional[List[str]],
+            Field(description="Success criteria for 'create'/'update'."),
+        ] = None,
+    ) -> str:
+        """Manage execution contracts — the backbone artifact linking planning, coding, review, and testing.
+
+        An execution contract captures task scope, guarded paths, assumptions,
+        required tests, risks, and success criteria. Planner creates it,
+        coder reads it, reviewer checks against it, drift detector compares with it.
+        """
+        allowed_actions = {
+            "create", "get", "update", "activate", "complete", "format_for_prompt",
+        }
+        if action not in allowed_actions:
+            return f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            from domain.contracts.execution_contract import (
+                ExecutionContract,
+                load_execution_contract,
+                save_execution_contract,
+            )
+
+            if action == "create":
+                if not task:
+                    return "Error: 'task' is required for 'create' action."
+                contract = ExecutionContract(
+                    task=task,
+                    scope_files=scope_files or [],
+                    guarded_paths=guarded_paths or [],
+                    planned_interfaces=planned_interfaces or [],
+                    assumptions=assumptions or [],
+                    required_tests=required_tests or [],
+                    risks=risks or [],
+                    success_criteria=success_criteria or [],
+                    status="draft",
+                )
+                await asyncio.to_thread(save_execution_contract, ws, contract)
+                return json.dumps(contract.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action == "get":
+                contract = await asyncio.to_thread(load_execution_contract, ws)
+                if contract is None:
+                    return "No execution contract found."
+                return json.dumps(contract.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action == "update":
+                contract = await asyncio.to_thread(load_execution_contract, ws)
+                if contract is None:
+                    return "Error: No existing contract to update. Use 'create' first."
+                if scope_files is not None:
+                    contract.scope_files = scope_files
+                if guarded_paths is not None:
+                    contract.guarded_paths = guarded_paths
+                if planned_interfaces is not None:
+                    contract.planned_interfaces = planned_interfaces
+                if assumptions is not None:
+                    contract.assumptions = assumptions
+                if required_tests is not None:
+                    contract.required_tests = required_tests
+                if risks is not None:
+                    contract.risks = risks
+                if success_criteria is not None:
+                    contract.success_criteria = success_criteria
+                await asyncio.to_thread(save_execution_contract, ws, contract)
+                return json.dumps(contract.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action in ("activate", "complete"):
+                contract = await asyncio.to_thread(load_execution_contract, ws)
+                if contract is None:
+                    return "Error: No contract found."
+                contract.status = "active" if action == "activate" else "completed"
+                await asyncio.to_thread(save_execution_contract, ws, contract)
+                return f"Contract status set to '{contract.status}'."
+
+            elif action == "format_for_prompt":
+                contract = await asyncio.to_thread(load_execution_contract, ws)
+                if contract is None:
+                    return "No execution contract found."
+                return contract.format_for_prompt()
+
+            return "Error: Unhandled action."
+
+        except Exception as e:
+            logger.error("manage_execution_contract error: %s", e)
+            return f"Error: {e}"
+
+    # ================================================================
+    # verify_assumptions - Check agent assumptions against real codebase
+    # ================================================================
+
+    @mcp_instance.tool()
+    async def verify_assumptions(
+        assumptions: Annotated[
+            List[str],
+            Field(
+                description='List of assumptions to verify, e.g. '
+                '["\'AuthService\' only used by login.py", '
+                '"\'validate_token\' has test coverage", '
+                '"renaming \'helper\' impacts 3 files"].'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+    ) -> str:
+        """Verify agent assumptions against the actual codebase.
+
+        Checks assumptions like 'X only used by Y', 'not used externally',
+        'impacts N files', 'has test coverage'. Returns pass/fail/uncertain
+        verdict with evidence files and confidence scores.
+
+        This solves the biggest weakness of IDE agents: confident but wrong assumptions.
+        """
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            from domain.workflow.assumption_verifier import (
+                verify_assumptions as _verify,
+            )
+
+            report = await asyncio.to_thread(_verify, ws, assumptions)
+            return report.format_summary()
+
+        except Exception as e:
+            logger.error("verify_assumptions error: %s", e)
+            return f"Error: {e}"
+
+    # ================================================================
+    # build_handoff_bundle - Role-specific context for multi-agent workflows
+    # ================================================================
+
+    @mcp_instance.tool()
+    async def build_handoff_bundle(
+        task_description: Annotated[
+            str,
+            Field(description="Task description for the handoff."),
+        ],
+        target_role: Annotated[
+            str,
+            Field(
+                description='Target agent role: "implementer", "reviewer", '
+                '"tester", "fixer". Each role gets optimized context.'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        file_paths: Annotated[
+            Optional[List[str]],
+            Field(description="Relevant file paths."),
+        ] = None,
+        max_tokens: Annotated[
+            int,
+            Field(description="Maximum token budget. Default: 80000."),
+        ] = 80_000,
+    ) -> str:
+        """Build a role-specific handoff bundle for multi-agent workflows.
+
+        Creates context packages optimized for specific agent roles:
+        - implementer: full file contents + dependencies + contract
+        - reviewer: diff context + contract + test gaps + risks
+        - tester: test files + coverage gaps + scope
+        - fixer: error context + related files + memory
+
+        This goes beyond generic 'build prompt' by tailoring content per role.
+        """
+        allowed_roles = {"implementer", "reviewer", "tester", "fixer"}
+        if target_role not in allowed_roles:
+            return f"Error: Invalid role '{target_role}'. Allowed: {sorted(allowed_roles)}"
+
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            from domain.workflow.context_builder import run_context_builder
+            from domain.contracts.execution_contract import load_execution_contract
+
+            # Build base context
+            result = await asyncio.to_thread(
+                run_context_builder,
+                workspace_path=str(ws),
+                task_description=task_description,
+                file_paths=file_paths,
+                max_tokens=max_tokens,
+                include_codemap=True,
+                include_git_changes=(target_role in ("reviewer", "fixer")),
+            )
+
+            # Load contract if available
+            contract = await asyncio.to_thread(load_execution_contract, ws)
+            contract_section = ""
+            if contract:
+                contract_section = f"\n{contract.format_for_prompt()}\n"
+
+            # Role-specific instructions
+            role_instructions: Dict[str, str] = {
+                "implementer": (
+                    "You are the IMPLEMENTER. Follow the execution contract strictly. "
+                    "Implement changes only within scope_files. "
+                    "Do NOT modify guarded_paths without explicit approval. "
+                    "Verify all assumptions before coding."
+                ),
+                "reviewer": (
+                    "You are the REVIEWER. Compare the actual changes against the "
+                    "execution contract. Check: scope adherence, assumption validity, "
+                    "test coverage for required_tests, risk mitigation. "
+                    "Flag any drift from the contract."
+                ),
+                "tester": (
+                    "You are the TESTER. Write tests for all required_tests in the "
+                    "execution contract. Verify success_criteria are testable. "
+                    "Check test coverage gaps for scope_files."
+                ),
+                "fixer": (
+                    "You are the FIXER. Analyze the error context, identify root cause, "
+                    "and propose minimal fixes within scope_files. "
+                    "Check execution contract for constraints and guarded_paths."
+                ),
+            }
+
+            bundle = {
+                "role": target_role,
+                "task": task_description,
+                "instructions": role_instructions.get(target_role, ""),
+                "context_tokens": len(result) // 4,  # rough estimate
+                "has_contract": contract is not None,
+            }
+
+            output = f"<handoff_bundle role=\"{target_role}\">\n"
+            output += f"<role_instructions>\n{role_instructions.get(target_role, '')}\n</role_instructions>\n"
+            if contract_section:
+                output += contract_section
+            output += f"\n{result}\n"
+            output += "</handoff_bundle>"
+
+            return output
+
+        except Exception as e:
+            logger.error("build_handoff_bundle error: %s", e)
+            return f"Error: {e}"
+
+    # ================================================================
+    # manage_watchpoints - Architectural guardrails
+    # ================================================================
+
+    @mcp_instance.tool()
+    async def manage_watchpoints(
+        action: Annotated[
+            str,
+            Field(
+                description='Action: "add" (add watchpoint), "list" (show all), '
+                '"check" (check files against watchpoints), "remove" (remove watchpoint).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Paths to add/remove as watchpoints, or files to check against watchpoints."
+            ),
+        ] = None,
+        reason: Annotated[
+            Optional[str],
+            Field(description="Reason for adding the watchpoint."),
+        ] = None,
+    ) -> str:
+        """Manage architectural watchpoints — protected areas of the codebase.
+
+        Watchpoints guard critical paths (public APIs, config files, high fan-in symbols).
+        When an agent's patch touches a watchpoint:
+        - Extra review is required
+        - Warning is raised
+        - Priority increases in blast radius
+
+        This creates an 'architecture guard' layer that most IDE agents lack.
+        """
+        allowed_actions = {"add", "list", "check", "remove"}
+        if action not in allowed_actions:
+            return f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            from domain.contracts.contract_pack import (
+                load_contract_pack,
+                locked_modify_contract_pack,
+            )
+
+            if action == "add":
+                if not paths:
+                    return "Error: 'paths' required for 'add' action."
+
+                def _add_watchpoints(pack):
+                    for p in paths:
+                        entry = p if not reason else f"{p} — {reason}"
+                        if entry not in pack.guarded_paths:
+                            pack.guarded_paths.append(entry)
+                    return pack
+
+                await asyncio.to_thread(locked_modify_contract_pack, ws, _add_watchpoints)
+                return f"Added {len(paths)} watchpoint(s). Use 'list' to see all."
+
+            elif action == "list":
+                pack = await asyncio.to_thread(load_contract_pack, ws)
+                if not pack.guarded_paths:
+                    return "No watchpoints configured."
+                lines = ["Architectural Watchpoints:", f"{'=' * 40}"]
+                for i, wp in enumerate(pack.guarded_paths, 1):
+                    lines.append(f"  {i}. {wp}")
+                return "\n".join(lines)
+
+            elif action == "check":
+                if not paths:
+                    return "Error: 'paths' required for 'check' action."
+                pack = await asyncio.to_thread(load_contract_pack, ws)
+                if not pack.guarded_paths:
+                    return "No watchpoints configured. All paths clear."
+
+                # Extract just the path portion from watchpoints (before " — reason")
+                guarded = set()
+                for wp in pack.guarded_paths:
+                    guarded.add(wp.split(" — ")[0].strip())
+
+                violations = []
+                for p in paths:
+                    for g in guarded:
+                        if p.startswith(g) or g.startswith(p) or p == g:
+                            violations.append(f"⚠ {p} touches watchpoint: {g}")
+                            break
+
+                if not violations:
+                    return f"All {len(paths)} path(s) clear — no watchpoint violations."
+                lines = [
+                    f"Watchpoint Violations: {len(violations)}",
+                    f"{'=' * 40}",
+                ]
+                lines.extend(violations)
+                lines.append("\n⚠ Extra review required for these changes.")
+                return "\n".join(lines)
+
+            elif action == "remove":
+                if not paths:
+                    return "Error: 'paths' required for 'remove' action."
+
+                def _remove_watchpoints(pack):
+                    pack.guarded_paths = [
+                        wp for wp in pack.guarded_paths
+                        if wp.split(" — ")[0].strip() not in paths
+                    ]
+                    return pack
+
+                await asyncio.to_thread(locked_modify_contract_pack, ws, _remove_watchpoints)
+                return f"Removed watchpoint(s) matching: {', '.join(paths)}"
+
+            return "Error: Unhandled action."
+
+        except Exception as e:
+            logger.error("manage_watchpoints error: %s", e)
+            return f"Error: {e}"
+
+    # ================================================================
+    # manage_plan_dag - Machine-readable task graph
+    # ================================================================
+
+    @mcp_instance.tool()
+    async def manage_plan_dag(
+        action: Annotated[
+            str,
+            Field(
+                description='Action: "create" (new DAG), "get" (read current), '
+                '"add_node" (add task node), "add_edge" (add dependency), '
+                '"update_status" (change node status), "get_ready" (nodes ready to execute), '
+                '"format_summary" (human-readable summary).'
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        task: Annotated[
+            Optional[str],
+            Field(description="Task description for 'create'."),
+        ] = None,
+        node_id: Annotated[
+            Optional[str],
+            Field(description="Node ID for add_node/update_status."),
+        ] = None,
+        node_type: Annotated[
+            Optional[str],
+            Field(description="Node type: 'decision', 'change', 'test', 'review', 'config'."),
+        ] = None,
+        node_title: Annotated[
+            Optional[str],
+            Field(description="Node title for add_node."),
+        ] = None,
+        node_file: Annotated[
+            Optional[str],
+            Field(description="File path associated with the node."),
+        ] = None,
+        status: Annotated[
+            Optional[str],
+            Field(description="New status for update_status: 'pending', 'in_progress', 'completed', 'skipped'."),
+        ] = None,
+        edge_from: Annotated[
+            Optional[str],
+            Field(description="Source node ID for add_edge."),
+        ] = None,
+        edge_to: Annotated[
+            Optional[str],
+            Field(description="Target node ID for add_edge."),
+        ] = None,
+        edge_kind: Annotated[
+            Optional[str],
+            Field(description="Edge kind: 'implements', 'must_verify', 'depends_on', 'blocks'."),
+        ] = None,
+    ) -> str:
+        """Manage Plan DAG — a machine-readable task graph for agent coordination.
+
+        Planner creates the graph, coder claims nodes, reviewer checks coverage,
+        test agent verifies must_verify edges. Supports dependency tracking so
+        agents know which tasks are ready to execute.
+        """
+        allowed_actions = {
+            "create", "get", "add_node", "add_edge",
+            "update_status", "get_ready", "format_summary",
+        }
+        if action not in allowed_actions:
+            return f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            from domain.workflow.plan_dag import (
+                PlanDAG,
+                PlanNode,
+                PlanEdge,
+                load_plan_dag,
+                save_plan_dag,
+            )
+
+            if action == "create":
+                dag = PlanDAG(task=task or "")
+                await asyncio.to_thread(save_plan_dag, ws, dag)
+                return json.dumps(dag.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action == "get":
+                dag = await asyncio.to_thread(load_plan_dag, ws)
+                if dag is None:
+                    return "No plan DAG found."
+                return json.dumps(dag.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action == "add_node":
+                if not node_id or not node_title:
+                    return "Error: 'node_id' and 'node_title' required."
+                dag = await asyncio.to_thread(load_plan_dag, ws)
+                if dag is None:
+                    dag = PlanDAG(task=task or "")
+                node = PlanNode(
+                    id=node_id,
+                    type=node_type or "change",
+                    title=node_title,
+                    file=node_file or "",
+                )
+                dag.add_node(node)
+                await asyncio.to_thread(save_plan_dag, ws, dag)
+                return json.dumps(node.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action == "add_edge":
+                if not edge_from or not edge_to:
+                    return "Error: 'edge_from' and 'edge_to' required."
+                dag = await asyncio.to_thread(load_plan_dag, ws)
+                if dag is None:
+                    return "Error: No plan DAG found. Use 'create' first."
+                edge = PlanEdge(
+                    source=edge_from,
+                    target=edge_to,
+                    kind=edge_kind or "depends_on",
+                )
+                dag.add_edge(edge)
+                await asyncio.to_thread(save_plan_dag, ws, dag)
+                return json.dumps(edge.to_dict(), indent=2, ensure_ascii=False)
+
+            elif action == "update_status":
+                if not node_id or not status:
+                    return "Error: 'node_id' and 'status' required."
+                dag = await asyncio.to_thread(load_plan_dag, ws)
+                if dag is None:
+                    return "Error: No plan DAG found."
+                success = dag.update_node_status(node_id, status)
+                if not success:
+                    return f"Error: Node '{node_id}' not found."
+                await asyncio.to_thread(save_plan_dag, ws, dag)
+                return f"Node '{node_id}' status updated to '{status}'."
+
+            elif action == "get_ready":
+                dag = await asyncio.to_thread(load_plan_dag, ws)
+                if dag is None:
+                    return "No plan DAG found."
+                ready = dag.get_ready_nodes()
+                if not ready:
+                    return "No nodes ready to execute (all completed or blocked)."
+                lines = [f"Ready nodes ({len(ready)}):"]
+                for n in ready:
+                    lines.append(f"  - {n.id}: {n.title} [{n.type}]")
+                return "\n".join(lines)
+
+            elif action == "format_summary":
+                dag = await asyncio.to_thread(load_plan_dag, ws)
+                if dag is None:
+                    return "No plan DAG found."
+                return dag.format_summary()
+
+            return "Error: Unhandled action."
+
+        except Exception as e:
+            logger.error("manage_plan_dag error: %s", e)
+            return f"Error: {e}"

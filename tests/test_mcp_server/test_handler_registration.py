@@ -83,7 +83,7 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 3
 
     def test_workflow_handler_tools(self):
-        """workflow_handler dang ky 9 tools."""
+        """workflow_handler dang ky 15 tools."""
         names = _get_tool_names(reg_workflow)
         assert "rp_build" in names
         assert "rp_review" in names
@@ -94,18 +94,24 @@ class TestIndividualHandlerRegistration:
         assert "manage_memory" in names
         assert "get_contract_pack" in names
         assert "detect_design_drift" in names
-        assert len(names) == 9
+        assert "simulate_patch" in names
+        assert "manage_execution_contract" in names
+        assert "verify_assumptions" in names
+        assert "build_handoff_bundle" in names
+        assert "manage_watchpoints" in names
+        assert "manage_plan_dag" in names
+        assert len(names) == 15
 
 
 class TestRegisterAllTools:
     """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 20 (removed: file_handler, git_handler, find_references, get_callers)."""
+        """Tong so tools phai la 26 (added: simulate_patch, manage_execution_contract, verify_assumptions, build_handoff_bundle, manage_watchpoints, manage_plan_dag)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 20
+        assert len(tools) == 26
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -116,7 +122,7 @@ class TestRegisterAllTools:
         assert len(names) == len(set(names)), f"Duplicate tools: {names}"
 
     def test_all_expected_tools_present(self):
-        """Tat ca 20 tools duoc dang ky dung ten."""
+        """Tat ca 26 tools duoc dang ky dung ten."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         names = {t.name for t in mcp._tool_manager.list_tools()}
@@ -140,7 +146,7 @@ class TestRegisterAllTools:
             "get_codemap",
             "batch_codemap",
             "build_prompt",
-            # workflow_handler
+            # workflow_handler (core)
             "rp_build",
             "rp_review",
             "rp_refactor",
@@ -150,6 +156,13 @@ class TestRegisterAllTools:
             "manage_memory",
             "get_contract_pack",
             "detect_design_drift",
+            # workflow_handler (new agent-native tools)
+            "simulate_patch",
+            "manage_execution_contract",
+            "verify_assumptions",
+            "build_handoff_bundle",
+            "manage_watchpoints",
+            "manage_plan_dag",
         }
 
         missing = expected_tools - names

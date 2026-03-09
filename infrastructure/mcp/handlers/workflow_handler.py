@@ -1,18 +1,20 @@
 """
 Workflow Handler - Xu ly cac workflow tools cho AI agent handoff.
 
-Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design, manage_memory, get_contract_pack.
+Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design, manage_memory, get_contract_pack, detect_design_drift.
 """
 
 import asyncio
 import json
-from typing import Annotated, List, Optional
+import subprocess
+from pathlib import Path
+from typing import Annotated, Dict, List, Optional
 
 from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
-from infrastructure.mcp.core.constants import SAFE_GIT_REF, logger
+from infrastructure.mcp.core.constants import GIT_TIMEOUT, SAFE_GIT_REF, logger
 
 
 def register_tools(mcp_instance) -> None:
@@ -902,4 +904,162 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("get_contract_pack error: %s", e)
+            return f"Error: {e}"
+
+    @mcp_instance.tool()
+    async def detect_design_drift(
+        planned_files: Annotated[
+            List[str],
+            Field(
+                description="List of relative file paths that were planned to be changed.",
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted.",
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+    ) -> str:
+        """Detect design drift by comparing planned changes vs actual git changes.
+
+        Auto-detects changed files from git diff (staged + unstaged), extracts
+        current symbols and dependencies, then reports out-of-scope files,
+        new dependency edges, public API changes, and coupling warnings.
+        """
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            # Lấy danh sách files thực tế thay đổi từ git (unstaged + staged)
+            def _get_changed_files(ws_path: str) -> List[str]:
+                unstaged = subprocess.run(
+                    ["git", "diff", "--name-only"],
+                    cwd=ws_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=GIT_TIMEOUT,
+                    check=False,
+                )
+                staged = subprocess.run(
+                    ["git", "diff", "--cached", "--name-only"],
+                    cwd=ws_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=GIT_TIMEOUT,
+                    check=False,
+                )
+                files: set[str] = set()
+                for output in [unstaged.stdout, staged.stdout]:
+                    for line in output.strip().split("\n"):
+                        if line.strip():
+                            files.add(line.strip())
+                return sorted(files)
+
+            actual_changed = await asyncio.to_thread(_get_changed_files, ws)
+
+            if not actual_changed and not planned_files:
+                return "No planned files and no git changes detected."
+
+            # Extract symbols và dependencies cho các files thay đổi
+            def _extract_file_info(
+                ws_path: str, file_list: List[str]
+            ) -> tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+                symbols_map: Dict[str, List[str]] = {}
+                deps_map: Dict[str, List[str]] = {}
+                root = Path(ws_path)
+
+                try:
+                    from domain.codemap.symbol_extractor import extract_symbols
+                except ImportError:
+                    logger.warning("symbol_extractor not available, skipping symbol extraction")
+                    return symbols_map, deps_map
+
+                try:
+                    from domain.codemap.relationship_extractor import extract_relationships
+                except ImportError:
+                    logger.warning("relationship_extractor not available, skipping dep extraction")
+                    extract_relationships = None  # type: ignore[assignment]
+
+                for rel_path in file_list:
+                    full_path = root / rel_path
+                    if not full_path.is_file():
+                        continue
+                    try:
+                        content = full_path.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+
+                    # Extract symbols
+                    try:
+                        syms = extract_symbols(rel_path, content)
+                        symbols_map[rel_path] = [s.name for s in syms]
+                    except Exception:
+                        pass
+
+                    # Extract relationships -> dependencies
+                    if extract_relationships is not None:
+                        try:
+                            rels = extract_relationships(rel_path, content)
+                            deps_map[rel_path] = [
+                                r.target for r in rels if r.target != rel_path
+                            ]
+                        except Exception:
+                            pass
+
+                return symbols_map, deps_map
+
+            all_files = sorted(set(planned_files) | set(actual_changed))
+            post_symbols, post_deps = await asyncio.to_thread(
+                _extract_file_info, ws, all_files
+            )
+
+            # Gọi detect_drift
+            from domain.drift.drift_detector import detect_drift
+
+            report = detect_drift(
+                workspace_root=Path(ws),
+                planned_files=planned_files,
+                actual_changed_files=actual_changed,
+                pre_edit_symbols=None,
+                post_edit_symbols=post_symbols,
+                pre_edit_deps=None,
+                post_edit_deps=post_deps,
+            )
+
+            # Format kết quả
+            result_lines = [
+                f"Design Drift Report",
+                f"{'=' * 40}",
+                report.summary,
+            ]
+
+            if report.out_of_scope_files:
+                result_lines.append(f"\nOut-of-scope files:")
+                for f in report.out_of_scope_files:
+                    result_lines.append(f"  - {f}")
+
+            if report.new_dependencies:
+                result_lines.append(f"\nNew dependencies:")
+                for d in report.new_dependencies:
+                    result_lines.append(f"  - {d}")
+
+            if report.public_api_changes:
+                result_lines.append(f"\nPublic API changes:")
+                for c in report.public_api_changes:
+                    result_lines.append(f"  {c}")
+
+            if report.coupling_warnings:
+                result_lines.append(f"\nCoupling warnings:")
+                for w in report.coupling_warnings:
+                    result_lines.append(f"  ⚠ {w}")
+
+            result_lines.append(f"\n{'=' * 40}")
+            return "\n".join(result_lines)
+
+        except Exception as e:
+            logger.error("detect_design_drift error: %s", e)
             return f"Error: {e}"

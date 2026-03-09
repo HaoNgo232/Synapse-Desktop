@@ -1,10 +1,11 @@
 """
 Workflow Handler - Xu ly cac workflow tools cho AI agent handoff.
 
-Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design.
+Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design, manage_memory.
 """
 
 import asyncio
+import json
 from typing import Annotated, List, Optional
 
 from mcp.server.fastmcp import Context
@@ -570,4 +571,177 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_design error: %s", e)
+            return f"Error: {e}"
+
+    @mcp_instance.tool()
+    async def manage_memory(
+        action: Annotated[
+            str,
+            Field(
+                description=(
+                    "Action to perform: 'add' to store a new memory entry, "
+                    "'get' to retrieve all entries formatted, "
+                    "'get_by_file' to retrieve entries linked to a specific file, "
+                    "'get_by_layer' to retrieve entries for a specific layer, "
+                    "'format_for_prompt' to get prompt-ready memory text."
+                ),
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted.",
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        layer: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Memory layer: 'action' (what was changed), "
+                    "'decision' (why approach A over B), "
+                    "'constraint' (invariants/rules/domain assumptions). "
+                    "Required for 'add' and 'get_by_layer' actions."
+                ),
+            ),
+        ] = None,
+        content: Annotated[
+            Optional[str],
+            Field(
+                description="Content of the memory entry. Required for 'add' action.",
+            ),
+        ] = None,
+        linked_files: Annotated[
+            Optional[List[str]],
+            Field(
+                description="List of file paths related to this memory entry.",
+            ),
+        ] = None,
+        linked_symbols: Annotated[
+            Optional[List[str]],
+            Field(
+                description="List of code symbols (functions, classes) related to this memory entry.",
+            ),
+        ] = None,
+        workflow: Annotated[
+            Optional[str],
+            Field(
+                description="Workflow that produced this memory (e.g., 'rp_build', 'rp_review').",
+            ),
+        ] = None,
+        tags: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Tags for categorizing this memory entry.",
+            ),
+        ] = None,
+        file_path: Annotated[
+            Optional[str],
+            Field(
+                description="File path to filter memories by. Used with 'get_by_file' action.",
+            ),
+        ] = None,
+    ) -> str:
+        """Manage the Decision Memory v2 system with three layers: action, decision, and constraint.
+
+        Use this tool to record and retrieve project memory across three layers:
+        - **action**: Track what was changed (files modified, features added).
+        - **decision**: Record why a particular approach was chosen over alternatives.
+        - **constraint**: Store invariants, rules, and domain assumptions that must be respected.
+        """
+        valid_actions = (
+            "add",
+            "get",
+            "get_by_file",
+            "get_by_layer",
+            "format_for_prompt",
+        )
+        if action not in valid_actions:
+            return f"Error: Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}"
+
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        from domain.memory.memory_service import (
+            add_memory,
+            load_memory_store,
+        )
+
+        try:
+            if action == "add":
+                if not content:
+                    return "Error: 'content' is required for 'add' action."
+                valid_layers = ("action", "decision", "constraint")
+                if not layer or layer not in valid_layers:
+                    return f"Error: 'layer' must be one of: {', '.join(valid_layers)}"
+
+                await asyncio.to_thread(
+                    add_memory,
+                    workspace_root=ws,
+                    layer=layer,
+                    content=content,
+                    linked_files=linked_files,
+                    linked_symbols=linked_symbols,
+                    workflow=workflow or "",
+                    tags=tags,
+                )
+                return (
+                    f"Memory Added\n"
+                    f"{'=' * 40}\n"
+                    f"Layer: {layer}\n"
+                    f"Content: {content}\n"
+                    f"{'=' * 40}"
+                )
+
+            store = await asyncio.to_thread(load_memory_store, ws)
+
+            if action == "get":
+                if not store.entries:
+                    return "No memory entries found."
+                entries_data = [e.to_dict() for e in store.entries]
+                return (
+                    f"Memory Store ({len(store.entries)} entries)\n"
+                    f"{'=' * 40}\n"
+                    f"{json.dumps(entries_data, indent=2, ensure_ascii=False)}"
+                )
+
+            if action == "get_by_file":
+                if not file_path:
+                    return "Error: 'file_path' is required for 'get_by_file' action."
+                matches = store.get_by_file(file_path)
+                if not matches:
+                    return f"No memory entries linked to '{file_path}'."
+                entries_data = [e.to_dict() for e in matches]
+                return (
+                    f"Memory entries for '{file_path}' ({len(matches)} entries)\n"
+                    f"{'=' * 40}\n"
+                    f"{json.dumps(entries_data, indent=2, ensure_ascii=False)}"
+                )
+
+            if action == "get_by_layer":
+                valid_layers = ("action", "decision", "constraint")
+                if not layer or layer not in valid_layers:
+                    return f"Error: 'layer' must be one of: {', '.join(valid_layers)}"
+                matches = store.get_by_layer(layer)
+                if not matches:
+                    return f"No memory entries for layer '{layer}'."
+                entries_data = [e.to_dict() for e in matches]
+                return (
+                    f"Memory entries for layer '{layer}' ({len(matches)} entries)\n"
+                    f"{'=' * 40}\n"
+                    f"{json.dumps(entries_data, indent=2, ensure_ascii=False)}"
+                )
+
+            if action == "format_for_prompt":
+                formatted = store.format_for_prompt()
+                if not formatted:
+                    return "No memory entries to format."
+                return f"Prompt-Ready Memory\n{'=' * 40}\n{formatted}"
+
+            return f"Error: Unhandled action '{action}'."
+
+        except Exception as e:
+            logger.error("manage_memory error: %s", e)
             return f"Error: {e}"

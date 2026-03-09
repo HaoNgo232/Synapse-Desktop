@@ -15,6 +15,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Drift scoring thresholds
+HIGH_SCOPE_RATIO = 0.5
+MEDIUM_SCOPE_RATIO = 0.2
+HIGH_ISSUE_COUNT = 10
+MEDIUM_ISSUE_COUNT = 5
+# Coupling: cảnh báo khi imports tăng hơn ngưỡng này
+COUPLING_INCREASE_THRESHOLD = 2
+
 
 @dataclass
 class DriftReport:
@@ -114,7 +122,7 @@ def detect_drift(
             old_deps = pre_edit_deps.get(file_path, []) if pre_edit_deps else []
             new_count = len(deps)
             old_count = len(old_deps)
-            if new_count > old_count + 2:
+            if new_count > old_count + COUPLING_INCREASE_THRESHOLD:
                 report.coupling_warnings.append(
                     f"{file_path}: imports increased from {old_count} to {new_count}"
                 )
@@ -127,9 +135,9 @@ def detect_drift(
         + len(report.coupling_warnings)
     )
 
-    if out_of_scope_ratio > 0.5 or issues > 10:
+    if out_of_scope_ratio > HIGH_SCOPE_RATIO or issues > HIGH_ISSUE_COUNT:
         report.drift_score = "HIGH"
-    elif out_of_scope_ratio > 0.2 or issues > 5:
+    elif out_of_scope_ratio > MEDIUM_SCOPE_RATIO or issues > MEDIUM_ISSUE_COUNT:
         report.drift_score = "MEDIUM"
     else:
         report.drift_score = "LOW"

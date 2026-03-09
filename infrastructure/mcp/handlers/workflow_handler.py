@@ -975,13 +975,13 @@ def register_tools(mcp_instance) -> None:
                 try:
                     from domain.codemap.symbol_extractor import extract_symbols
                 except ImportError:
-                    logger.warning("symbol_extractor not available, skipping symbol extraction")
+                    logger.warning("symbol_extractor not available, drift detection will proceed without symbol analysis")
                     return symbols_map, deps_map
 
                 try:
                     from domain.codemap.relationship_extractor import extract_relationships
                 except ImportError:
-                    logger.warning("relationship_extractor not available, skipping dep extraction")
+                    logger.warning("relationship_extractor not available, drift detection will proceed without dependency analysis")
                     extract_relationships = None  # type: ignore[assignment]
 
                 for rel_path in file_list:

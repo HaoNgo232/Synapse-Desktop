@@ -99,7 +99,7 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 3
 
     def test_workflow_handler_tools(self):
-        """workflow_handler dang ky 6 tools."""
+        """workflow_handler dang ky 9 tools."""
         names = _get_tool_names(reg_workflow)
         assert "rp_build" in names
         assert "rp_review" in names
@@ -107,18 +107,21 @@ class TestIndividualHandlerRegistration:
         assert "rp_investigate" in names
         assert "rp_test" in names
         assert "rp_design" in names
-        assert len(names) == 6
+        assert "manage_memory" in names
+        assert "get_contract_pack" in names
+        assert "detect_design_drift" in names
+        assert len(names) == 9
 
 
 class TestRegisterAllTools:
     """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 21 (them blast_radius va rp_design)."""
+        """Tong so tools phai la 24 (them blast_radius, rp_design, manage_memory, get_contract_pack, detect_design_drift)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 21
+        assert len(tools) == 24
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -129,7 +132,7 @@ class TestRegisterAllTools:
         assert len(names) == len(set(names)), f"Duplicate tools: {names}"
 
     def test_all_expected_tools_present(self):
-        """Tat ca 21 tools duoc dang ky dung ten."""
+        """Tat ca 24 tools duoc dang ky dung ten."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         names = {t.name for t in mcp._tool_manager.list_tools()}
@@ -166,6 +169,9 @@ class TestRegisterAllTools:
             "rp_investigate",
             "rp_test",
             "rp_design",
+            "manage_memory",
+            "get_contract_pack",
+            "detect_design_drift",
         }
 
         missing = expected_tools - names

@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 Verdict = Literal["pass", "fail", "uncertain"]
 
+# Limits for evidence display in reports
+MAX_EVIDENCE_DISPLAY = 5
+MAX_EVIDENCE_RESULTS = 10
+
 
 @dataclass
 class AssumptionResult:
@@ -75,10 +79,10 @@ class VerificationReport:
             if r.details:
                 lines.append(f"   {r.details}")
             if r.evidence_files:
-                lines.append(f"   Evidence files: {', '.join(r.evidence_files[:5])}")
+                lines.append(f"   Evidence files: {', '.join(r.evidence_files[:MAX_EVIDENCE_DISPLAY])}")
             if r.evidence_symbols:
                 lines.append(
-                    f"   Evidence symbols: {', '.join(r.evidence_symbols[:5])}"
+                    f"   Evidence symbols: {', '.join(r.evidence_symbols[:MAX_EVIDENCE_DISPLAY])}"
                 )
             lines.append(f"   Confidence: {r.confidence:.0%}")
             lines.append("")
@@ -260,9 +264,9 @@ def _verify_usage_scope(
         return AssumptionResult(
             assumption=assumption,
             verdict="fail",
-            evidence_files=refs[:10],
+            evidence_files=refs[:MAX_EVIDENCE_RESULTS],
             confidence=0.7,
-            details=f"'{symbol}' found in {len(refs)} files, more than expected scope.",
+            details=f"'{symbol}' found in {len(refs)} files, exceeds expected usage scope.",
         )
 
 
@@ -293,7 +297,7 @@ def _verify_no_external_usage(
         return AssumptionResult(
             assumption=assumption,
             verdict="fail",
-            evidence_files=refs[:10],
+            evidence_files=refs[:MAX_EVIDENCE_RESULTS],
             confidence=0.7,
             details=f"'{symbol}' found in {len(refs)} files — external usage detected.",
         )
@@ -324,17 +328,17 @@ def _verify_impact_count(
         return AssumptionResult(
             assumption=assumption,
             verdict="pass",
-            evidence_files=refs[:10],
+            evidence_files=refs[:MAX_EVIDENCE_RESULTS],
             confidence=0.8,
-            details=f"'{symbol}' found in {actual_count} files (expected <= {expected_count}).",
+            details=f"'{symbol}' found in {actual_count} files, within limit of {expected_count}.",
         )
     else:
         return AssumptionResult(
             assumption=assumption,
             verdict="fail",
-            evidence_files=refs[:10],
+            evidence_files=refs[:MAX_EVIDENCE_RESULTS],
             confidence=0.8,
-            details=f"'{symbol}' found in {actual_count} files (expected <= {expected_count}).",
+            details=f"'{symbol}' found in {actual_count} files, exceeds limit of {expected_count}.",
         )
 
 
@@ -365,8 +369,9 @@ def _verify_test_coverage(
         return AssumptionResult(
             assumption=assumption,
             verdict="pass",
-            evidence_files=refs_in_tests[:5],
-            confidence=0.7,
+            evidence_files=refs_in_tests[:MAX_EVIDENCE_DISPLAY],
+            # Confidence 0.75: string-based reference detection is not as reliable as AST analysis
+            confidence=0.75,
             details=f"'{symbol}' referenced in {len(refs_in_tests)} test file(s).",
         )
     else:

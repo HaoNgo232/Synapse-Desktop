@@ -278,10 +278,12 @@ class TestManagePlanDAG:
         )
         await tool(
             action="add_node", node_id="N1", node_title="Decision",
+            node_type="decision",
             workspace_path=str(mock_workspace),
         )
         await tool(
             action="add_node", node_id="N2", node_title="Change",
+            node_type="change",
             workspace_path=str(mock_workspace),
         )
         result = await tool(
@@ -305,6 +307,7 @@ class TestManagePlanDAG:
         )
         await tool(
             action="add_node", node_id="N1", node_title="Step 1",
+            node_type="change",
             workspace_path=str(mock_workspace),
         )
         result = await tool(
@@ -321,6 +324,7 @@ class TestManagePlanDAG:
         )
         await tool(
             action="add_node", node_id="N1", node_title="First step",
+            node_type="change",
             workspace_path=str(mock_workspace),
         )
         result = await tool(

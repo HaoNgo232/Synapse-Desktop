@@ -1163,7 +1163,8 @@ def register_tools(mcp_instance) -> None:
                     affected_files.add(r.path)
 
             lines.append(f"\nAffected files: {len(affected_files)}")
-            lines.append(f"Blast radius: {', '.join(sorted(affected_files)[:10])}")
+            max_display = 10
+            lines.append(f"Blast radius: {', '.join(sorted(affected_files)[:max_display])}")
 
             return "\n".join(lines)
 
@@ -1464,7 +1465,7 @@ def register_tools(mcp_instance) -> None:
                 "role": target_role,
                 "task": task_description,
                 "instructions": role_instructions.get(target_role, ""),
-                "context_tokens": len(result) // 4,  # rough estimate
+                "context_tokens": len(result) // 4,  # ~4 chars per token estimate
                 "has_contract": contract is not None,
             }
 

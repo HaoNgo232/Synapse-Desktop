@@ -1,7 +1,7 @@
 """
 Workflow Handler - Xu ly cac workflow tools cho AI agent handoff.
 
-Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design, manage_memory.
+Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design, manage_memory, get_contract_pack.
 """
 
 import asyncio
@@ -744,4 +744,162 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("manage_memory error: %s", e)
+            return f"Error: {e}"
+
+    @mcp_instance.tool()
+    async def get_contract_pack(
+        action: Annotated[
+            str,
+            Field(
+                description=(
+                    "Action to perform: "
+                    "'get' to retrieve the full contract pack as JSON, "
+                    "'add_convention' to add a convention rule, "
+                    "'add_anti_pattern' to add an anti-pattern from past errors, "
+                    "'add_guarded_path' to add a guarded/watched path, "
+                    "'add_review_item' to add a review checklist item, "
+                    "'format_for_prompt' to get prompt-ready contract text."
+                ),
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted.",
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        content: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Content to add. Required for 'add_convention', "
+                    "'add_anti_pattern', and 'add_review_item' actions."
+                ),
+            ),
+        ] = None,
+        paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description="List of file/folder paths. Used with 'add_guarded_path' action.",
+            ),
+        ] = None,
+    ) -> str:
+        """Manage the Contract Pack system for workspace-level AI agent compliance.
+
+        Contract packs combine conventions, anti-patterns from past errors,
+        co-change groups, review checklists, required tests, and guarded paths
+        into a single contract that the AI agent must follow.
+        """
+        valid_actions = (
+            "get",
+            "add_convention",
+            "add_anti_pattern",
+            "add_guarded_path",
+            "add_review_item",
+            "format_for_prompt",
+        )
+        if action not in valid_actions:
+            return (
+                f"Error: Invalid action '{action}'. "
+                f"Must be one of: {', '.join(valid_actions)}"
+            )
+
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        from domain.contracts.contract_pack import (
+            load_contract_pack,
+            save_contract_pack,
+        )
+
+        try:
+            pack = await asyncio.to_thread(load_contract_pack, ws)
+
+            # Thêm convention mới
+            if action == "add_convention":
+                if not content:
+                    return "Error: 'content' is required for 'add_convention' action."
+                if content not in pack.conventions:
+                    pack.conventions.append(content)
+                    await asyncio.to_thread(save_contract_pack, ws, pack)
+                return (
+                    f"Convention Added\n"
+                    f"{'=' * 40}\n"
+                    f"Content: {content}\n"
+                    f"Total conventions: {len(pack.conventions)}\n"
+                    f"{'=' * 40}"
+                )
+
+            # Thêm anti-pattern từ lỗi trước đó
+            if action == "add_anti_pattern":
+                if not content:
+                    return "Error: 'content' is required for 'add_anti_pattern' action."
+                if content not in pack.anti_patterns:
+                    pack.anti_patterns.append(content)
+                    await asyncio.to_thread(save_contract_pack, ws, pack)
+                return (
+                    f"Anti-Pattern Added\n"
+                    f"{'=' * 40}\n"
+                    f"Content: {content}\n"
+                    f"Total anti-patterns: {len(pack.anti_patterns)}\n"
+                    f"{'=' * 40}"
+                )
+
+            # Thêm guarded path cần cẩn thận khi sửa
+            if action == "add_guarded_path":
+                if not paths:
+                    return "Error: 'paths' is required for 'add_guarded_path' action."
+                added = []
+                for p in paths:
+                    if p and p not in pack.guarded_paths:
+                        pack.guarded_paths.append(p)
+                        added.append(p)
+                if added:
+                    await asyncio.to_thread(save_contract_pack, ws, pack)
+                return (
+                    f"Guarded Paths Updated\n"
+                    f"{'=' * 40}\n"
+                    f"Added: {', '.join(added) if added else '(none, already existed)'}\n"
+                    f"Total guarded paths: {len(pack.guarded_paths)}\n"
+                    f"{'=' * 40}"
+                )
+
+            # Thêm review checklist item
+            if action == "add_review_item":
+                if not content:
+                    return "Error: 'content' is required for 'add_review_item' action."
+                if content not in pack.review_checklist:
+                    pack.review_checklist.append(content)
+                    await asyncio.to_thread(save_contract_pack, ws, pack)
+                return (
+                    f"Review Item Added\n"
+                    f"{'=' * 40}\n"
+                    f"Content: {content}\n"
+                    f"Total review items: {len(pack.review_checklist)}\n"
+                    f"{'=' * 40}"
+                )
+
+            # Lấy toàn bộ contract pack dạng JSON
+            if action == "get":
+                pack_data = pack.to_dict()
+                return (
+                    f"Contract Pack\n"
+                    f"{'=' * 40}\n"
+                    f"{json.dumps(pack_data, indent=2, ensure_ascii=False)}"
+                )
+
+            # Format cho prompt inclusion
+            if action == "format_for_prompt":
+                formatted = pack.format_for_prompt()
+                if not formatted:
+                    return "No contract pack entries to format."
+                return f"Prompt-Ready Contract Pack\n{'=' * 40}\n{formatted}"
+
+            return f"Error: Unhandled action '{action}'."
+
+        except Exception as e:
+            logger.error("get_contract_pack error: %s", e)
             return f"Error: {e}"

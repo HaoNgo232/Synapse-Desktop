@@ -1,7 +1,7 @@
 """
 Workflow Handler - Xu ly cac workflow tools cho AI agent handoff.
 
-Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test.
+Bao gom: rp_build, rp_review, rp_refactor, rp_investigate, rp_test, rp_design.
 """
 
 import asyncio
@@ -472,4 +472,102 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_test error: %s", e)
+            return f"Error: {e}"
+
+    @mcp_instance.tool()
+    async def rp_design(
+        task_description: Annotated[
+            str,
+            Field(
+                description="Description of the architectural change or feature to plan (e.g., 'Migrate authentication from session-based to JWT tokens')."
+            ),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted."
+            ),
+        ] = None,
+        ctx: Optional[Context] = None,
+        file_paths: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Optional list of known relevant relative file paths to seed the context."
+            ),
+        ] = None,
+        max_tokens: Annotated[
+            int,
+            Field(
+                description="Maximum token budget for the generated context. Default: 100,000."
+            ),
+        ] = 100_000,
+        include_tests: Annotated[
+            bool,
+            Field(description="Include test files in the design scope. Default: True."),
+        ] = True,
+        output_file: Annotated[
+            Optional[str],
+            Field(
+                description="Relative path to write the prompt file (e.g., 'design.xml'). Returns inline if omitted."
+            ),
+        ] = None,
+    ) -> str:
+        """Produce an architectural design and implementation plan for a feature or change.
+
+        Detects scope, traces dependencies, identifies impacted modules and risk areas,
+        and packages everything into a structured prompt that instructs an AI to produce
+        a full design plan covering architecture goals, API contracts, migration needs,
+        test strategy, rollout plan, and a do-not-touch list.
+        """
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        if output_file:
+            out_path = (ws / output_file).resolve()
+            if not out_path.is_relative_to(ws):
+                return "Error: output_file path traversal detected."
+
+        from domain.workflow.design_planner import run_design_planner
+
+        try:
+            result = await asyncio.to_thread(
+                run_design_planner,
+                workspace_path=str(ws),
+                task_description=task_description,
+                file_paths=file_paths,
+                max_tokens=max_tokens,
+                include_tests=include_tests,
+                output_file=output_file,
+            )  # type: ignore
+
+            summary = (
+                f"Design Planner Complete\n"
+                f"{'=' * 40}\n"
+                f"Files included: {result.files_included}\n"
+                f"Files sliced: {result.files_sliced}\n"
+                f"Files smart-only: {result.files_smart_only}\n"
+                f"Total tokens: {result.total_tokens:,}\n"
+                f"Scope: {result.scope_summary}\n"
+            )
+
+            if result.impacted_modules:
+                summary += f"Impacted modules: {', '.join(result.impacted_modules)}\n"
+
+            if result.risk_areas:
+                summary += f"Risk areas: {len(result.risk_areas)}\n"
+
+            if result.optimizations:
+                summary += f"Optimizations: {', '.join(result.optimizations)}\n"
+
+            if output_file:
+                summary += f"\nPrompt written to: {output_file}\n"
+            else:
+                summary += f"\n{'=' * 40}\n{result.prompt}"
+
+            return summary
+
+        except Exception as e:
+            logger.error("rp_design error: %s", e)
             return f"Error: {e}"

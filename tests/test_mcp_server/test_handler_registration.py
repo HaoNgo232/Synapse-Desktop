@@ -13,8 +13,6 @@ from infrastructure.mcp.handlers.context_handler import register_tools as reg_co
 from infrastructure.mcp.handlers.dependency_handler import (
     register_tools as reg_dependency,
 )
-from infrastructure.mcp.handlers.file_handler import register_tools as reg_file
-from infrastructure.mcp.handlers.git_handler import register_tools as reg_git
 from infrastructure.mcp.handlers.selection_handler import (
     register_tools as reg_selection,
 )
@@ -44,12 +42,6 @@ class TestIndividualHandlerRegistration:
         assert "start_session" in names
         assert len(names) == 1
 
-    def test_file_handler_tools(self):
-        """file_handler dang ky 1 tool (read_file_range da go bo)."""
-        names = _get_tool_names(reg_file)
-        assert "get_file_metrics" in names
-        assert len(names) == 1
-
     def test_selection_handler_tools(self):
         """selection_handler dang ky 1 tool."""
         names = _get_tool_names(reg_selection)
@@ -63,11 +55,10 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 1
 
     def test_analysis_handler_tools(self):
-        """analysis_handler dang ky 2 tools (find_todos da go bo)."""
+        """analysis_handler dang ky 1 tool (find_references da go bo)."""
         names = _get_tool_names(reg_analysis)
-        assert "find_references" in names
         assert "get_symbols" in names
-        assert len(names) == 2
+        assert len(names) == 1
 
     def test_structure_handler_tools(self):
         """structure_handler dang ky 1 tool (get_project_structure da go bo)."""
@@ -76,19 +67,12 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 1
 
     def test_dependency_handler_tools(self):
-        """dependency_handler dang ky 4 tools."""
+        """dependency_handler dang ky 3 tools (get_callers da go bo)."""
         names = _get_tool_names(reg_dependency)
         assert "get_imports_graph" in names
-        assert "get_callers" in names
         assert "get_related_tests" in names
         assert "blast_radius" in names
-        assert len(names) == 4
-
-    def test_git_handler_tools(self):
-        """git_handler dang ky 1 tool."""
-        names = _get_tool_names(reg_git)
-        assert "diff_summary" in names
-        assert len(names) == 1
+        assert len(names) == 3
 
     def test_context_handler_tools(self):
         """context_handler dang ky 3 tools."""
@@ -117,11 +101,11 @@ class TestRegisterAllTools:
     """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 24 (them blast_radius, rp_design, manage_memory, get_contract_pack, detect_design_drift)."""
+        """Tong so tools phai la 20 (removed: file_handler, git_handler, find_references, get_callers)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 24
+        assert len(tools) == 20
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -132,7 +116,7 @@ class TestRegisterAllTools:
         assert len(names) == len(set(names)), f"Duplicate tools: {names}"
 
     def test_all_expected_tools_present(self):
-        """Tat ca 24 tools duoc dang ky dung ten."""
+        """Tat ca 20 tools duoc dang ky dung ten."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         names = {t.name for t in mcp._tool_manager.list_tools()}
@@ -140,24 +124,18 @@ class TestRegisterAllTools:
         expected_tools = {
             # workspace_handler
             "start_session",
-            # file_handler
-            "get_file_metrics",
             # selection_handler
             "manage_selection",
             # token_handler
             "estimate_tokens",
-            # analysis_handler
-            "find_references",
+            # analysis_handler (find_references da go bo)
             "get_symbols",
             # structure_handler
             "explain_architecture",
-            # dependency_handler
+            # dependency_handler (get_callers da go bo)
             "get_imports_graph",
-            "get_callers",
             "get_related_tests",
             "blast_radius",
-            # git_handler
-            "diff_summary",
             # context_handler
             "get_codemap",
             "batch_codemap",

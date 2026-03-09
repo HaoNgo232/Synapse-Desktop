@@ -3,12 +3,15 @@ Handlers package - Chua cac handler modules cho MCP tools.
 
 Moi handler module chiu trach nhiem cho mot nhom tools lien quan,
 va expose function register_tools(mcp) de dang ky tools voi MCP server.
+
+Removed handlers (deprecated, no longer register any tools):
+- file_handler: get_file_metrics removed — use read_file + line count
+- git_handler: diff_summary removed — use git diff command directly
 """
 
 from infrastructure.mcp.handlers.workspace_handler import (
     register_tools as register_workspace,
 )
-from infrastructure.mcp.handlers.file_handler import register_tools as register_file
 from infrastructure.mcp.handlers.selection_handler import (
     register_tools as register_selection,
 )
@@ -22,7 +25,6 @@ from infrastructure.mcp.handlers.structure_handler import (
 from infrastructure.mcp.handlers.dependency_handler import (
     register_tools as register_dependency,
 )
-from infrastructure.mcp.handlers.git_handler import register_tools as register_git
 from infrastructure.mcp.handlers.context_handler import (
     register_tools as register_context,
 )
@@ -41,12 +43,10 @@ def register_all_tools(mcp_instance) -> None:
         mcp_instance: FastMCP server instance.
     """
     register_workspace(mcp_instance)
-    register_file(mcp_instance)
     register_selection(mcp_instance)
     register_token(mcp_instance)
     register_analysis(mcp_instance)
     register_structure(mcp_instance)
     register_dependency(mcp_instance)
-    register_git(mcp_instance)
     register_context(mcp_instance)
     register_workflow(mcp_instance)

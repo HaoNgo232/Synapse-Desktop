@@ -21,12 +21,10 @@ def test_register_all_tools(mcp_instance):
     # Should have tools from all handlers
     assert len(tools) > 0
 
-    # Check for key tools from each handler (da go: read_file_range, get_project_structure)
+    # Check for key tools from each handler (removed: get_file_metrics, diff_summary, find_references)
     expected_tools = [
-        "find_references",
         "get_codemap",
         "get_imports_graph",
-        "diff_summary",
         "manage_selection",
         "explain_architecture",
         "estimate_tokens",

@@ -71,39 +71,6 @@ async def test_get_imports_graph_path_traversal(mcp_instance, mock_workspace):
 
 
 @pytest.mark.asyncio
-async def test_get_callers_basic(mcp_instance, mock_workspace):
-    """Test get_callers finds function callers"""
-    tool = get_tool(mcp_instance, "get_callers")
-    result = await tool(symbol_name="helper", workspace_path=str(mock_workspace))
-
-    assert "helper" in result or "callers" in result or "No callers" in result
-
-
-@pytest.mark.asyncio
-async def test_get_callers_no_results(mcp_instance, mock_workspace):
-    """Test get_callers with no callers found"""
-    tool = get_tool(mcp_instance, "get_callers")
-    result = await tool(
-        symbol_name="nonexistent_func", workspace_path=str(mock_workspace)
-    )
-
-    assert "No callers found" in result
-
-
-@pytest.mark.asyncio
-async def test_get_callers_with_extension_filter(mcp_instance, mock_workspace):
-    """Test get_callers with file extension filter"""
-    tool = get_tool(mcp_instance, "get_callers")
-    result = await tool(
-        symbol_name="helper",
-        file_extensions=[".py"],
-        workspace_path=str(mock_workspace),
-    )
-
-    assert isinstance(result, str)
-
-
-@pytest.mark.asyncio
 async def test_get_related_tests_basic(mcp_instance, mock_workspace):
     """Test get_related_tests finds test files"""
     tool = get_tool(mcp_instance, "get_related_tests")
@@ -148,22 +115,3 @@ async def test_get_imports_graph_empty_workspace(mcp_instance, tmp_path, monkeyp
     result = await tool(workspace_path=str(tmp_path))
 
     assert "0" in result or "analyzed" in result.lower()
-
-
-@pytest.mark.asyncio
-async def test_get_callers_max_results(mcp_instance, mock_workspace, monkeypatch):
-    """Test get_callers respects max_results limit"""
-
-    def mock_collect(ws, workspace_path=None):
-        return [str(mock_workspace / "main.py")]
-
-    monkeypatch.setattr(
-        "application.services.workspace_index.collect_files_from_disk", mock_collect
-    )
-
-    tool = get_tool(mcp_instance, "get_callers")
-    result = await tool(
-        symbol_name="helper", max_results=1, workspace_path=str(mock_workspace)
-    )
-
-    assert isinstance(result, str)

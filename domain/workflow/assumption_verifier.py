@@ -12,7 +12,7 @@ Tool nay verify tung assumption bang cach quet codebase thuc te.
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Set
+from typing import List, Literal, Optional
 
 logger = logging.getLogger(__name__)
 

@@ -1461,14 +1461,6 @@ def register_tools(mcp_instance) -> None:
                 ),
             }
 
-            bundle = {
-                "role": target_role,
-                "task": task_description,
-                "instructions": role_instructions.get(target_role, ""),
-                "context_tokens": len(result) // 4,  # ~4 chars per token estimate
-                "has_contract": contract is not None,
-            }
-
             output = f"<handoff_bundle role=\"{target_role}\">\n"
             output += f"<role_instructions>\n{role_instructions.get(target_role, '')}\n</role_instructions>\n"
             if contract_section:

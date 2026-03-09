@@ -76,12 +76,13 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 1
 
     def test_dependency_handler_tools(self):
-        """dependency_handler dang ky 3 tools."""
+        """dependency_handler dang ky 4 tools."""
         names = _get_tool_names(reg_dependency)
         assert "get_imports_graph" in names
         assert "get_callers" in names
         assert "get_related_tests" in names
-        assert len(names) == 3
+        assert "blast_radius" in names
+        assert len(names) == 4
 
     def test_git_handler_tools(self):
         """git_handler dang ky 1 tool."""
@@ -98,25 +99,26 @@ class TestIndividualHandlerRegistration:
         assert len(names) == 3
 
     def test_workflow_handler_tools(self):
-        """workflow_handler dang ky 5 tools."""
+        """workflow_handler dang ky 6 tools."""
         names = _get_tool_names(reg_workflow)
         assert "rp_build" in names
         assert "rp_review" in names
         assert "rp_refactor" in names
         assert "rp_investigate" in names
         assert "rp_test" in names
-        assert len(names) == 5
+        assert "rp_design" in names
+        assert len(names) == 6
 
 
 class TestRegisterAllTools:
     """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 19 (sau khi go 5 tools: list_files, list_directories, read_file_range, get_project_structure, find_todos)."""
+        """Tong so tools phai la 21 (them blast_radius va rp_design)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 19
+        assert len(tools) == 21
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -127,7 +129,7 @@ class TestRegisterAllTools:
         assert len(names) == len(set(names)), f"Duplicate tools: {names}"
 
     def test_all_expected_tools_present(self):
-        """Tat ca 19 tools duoc dang ky dung ten."""
+        """Tat ca 21 tools duoc dang ky dung ten."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         names = {t.name for t in mcp._tool_manager.list_tools()}
@@ -150,6 +152,7 @@ class TestRegisterAllTools:
             "get_imports_graph",
             "get_callers",
             "get_related_tests",
+            "blast_radius",
             # git_handler
             "diff_summary",
             # context_handler
@@ -162,6 +165,7 @@ class TestRegisterAllTools:
             "rp_refactor",
             "rp_investigate",
             "rp_test",
+            "rp_design",
         }
 
         missing = expected_tools - names

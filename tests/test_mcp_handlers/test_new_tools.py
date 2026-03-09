@@ -44,7 +44,9 @@ class TestSimulatePatch:
     async def test_no_actions(self, mcp_instance, mock_workspace):
         """Empty OPX content returns no actions message."""
         tool = get_tool(mcp_instance, "simulate_patch")
-        result = await tool(opx_content="no valid opx", workspace_path=str(mock_workspace))
+        result = await tool(
+            opx_content="no valid opx", workspace_path=str(mock_workspace)
+        )
         assert "No file actions" in result
 
     @pytest.mark.asyncio
@@ -154,9 +156,7 @@ class TestVerifyAssumptions:
     async def test_invalid_workspace(self, mcp_instance):
         """Invalid workspace returns error."""
         tool = get_tool(mcp_instance, "verify_assumptions")
-        result = await tool(
-            assumptions=["test"], workspace_path="/nonexistent"
-        )
+        result = await tool(assumptions=["test"], workspace_path="/nonexistent")
         assert "Error" in result
 
 
@@ -254,9 +254,7 @@ class TestManagePlanDAG:
     async def test_add_node(self, mcp_instance, mock_workspace):
         """Add a node to the DAG."""
         tool = get_tool(mcp_instance, "manage_plan_dag")
-        await tool(
-            action="create", task="test", workspace_path=str(mock_workspace)
-        )
+        await tool(action="create", task="test", workspace_path=str(mock_workspace))
         result = await tool(
             action="add_node",
             node_id="N1",
@@ -273,16 +271,18 @@ class TestManagePlanDAG:
     async def test_add_edge(self, mcp_instance, mock_workspace):
         """Add an edge between nodes."""
         tool = get_tool(mcp_instance, "manage_plan_dag")
+        await tool(action="create", task="test", workspace_path=str(mock_workspace))
         await tool(
-            action="create", task="test", workspace_path=str(mock_workspace)
-        )
-        await tool(
-            action="add_node", node_id="N1", node_title="Decision",
+            action="add_node",
+            node_id="N1",
+            node_title="Decision",
             node_type="decision",
             workspace_path=str(mock_workspace),
         )
         await tool(
-            action="add_node", node_id="N2", node_title="Change",
+            action="add_node",
+            node_id="N2",
+            node_title="Change",
             node_type="change",
             workspace_path=str(mock_workspace),
         )
@@ -302,17 +302,15 @@ class TestManagePlanDAG:
     async def test_get_ready_nodes(self, mcp_instance, mock_workspace):
         """Get nodes ready to execute."""
         tool = get_tool(mcp_instance, "manage_plan_dag")
+        await tool(action="create", task="test", workspace_path=str(mock_workspace))
         await tool(
-            action="create", task="test", workspace_path=str(mock_workspace)
-        )
-        await tool(
-            action="add_node", node_id="N1", node_title="Step 1",
+            action="add_node",
+            node_id="N1",
+            node_title="Step 1",
             node_type="change",
             workspace_path=str(mock_workspace),
         )
-        result = await tool(
-            action="get_ready", workspace_path=str(mock_workspace)
-        )
+        result = await tool(action="get_ready", workspace_path=str(mock_workspace))
         assert "N1" in result
 
     @pytest.mark.asyncio
@@ -323,13 +321,13 @@ class TestManagePlanDAG:
             action="create", task="Test task", workspace_path=str(mock_workspace)
         )
         await tool(
-            action="add_node", node_id="N1", node_title="First step",
+            action="add_node",
+            node_id="N1",
+            node_title="First step",
             node_type="change",
             workspace_path=str(mock_workspace),
         )
-        result = await tool(
-            action="format_summary", workspace_path=str(mock_workspace)
-        )
+        result = await tool(action="format_summary", workspace_path=str(mock_workspace))
         assert "Plan DAG Summary" in result
         assert "N1" in result
 

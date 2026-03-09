@@ -79,7 +79,9 @@ class VerificationReport:
             if r.details:
                 lines.append(f"   {r.details}")
             if r.evidence_files:
-                lines.append(f"   Evidence files: {', '.join(r.evidence_files[:MAX_EVIDENCE_DISPLAY])}")
+                lines.append(
+                    f"   Evidence files: {', '.join(r.evidence_files[:MAX_EVIDENCE_DISPLAY])}"
+                )
             if r.evidence_symbols:
                 lines.append(
                     f"   Evidence symbols: {', '.join(r.evidence_symbols[:MAX_EVIDENCE_DISPLAY])}"
@@ -119,7 +121,7 @@ def verify_assumptions(
         try:
             from application.services.workspace_index import collect_files_from_disk
 
-            all_files = collect_files_from_disk(str(workspace_root))
+            all_files = collect_files_from_disk(workspace_root)
         except Exception:
             all_files = []
 
@@ -155,17 +157,21 @@ def _verify_single(
 
     try:
         # Pattern: "X only used by Y" / "X chi duoc dung boi Y"
-        if "only used by" in assumption_lower or "chi duoc dung boi" in assumption_lower:
+        if (
+            "only used by" in assumption_lower
+            or "chi duoc dung boi" in assumption_lower
+        ):
             return _verify_usage_scope(workspace_root, assumption, rel_files)
 
         # Pattern: "not used externally" / "not used outside"
-        if "not used external" in assumption_lower or "not used outside" in assumption_lower:
+        if (
+            "not used external" in assumption_lower
+            or "not used outside" in assumption_lower
+        ):
             return _verify_no_external_usage(workspace_root, assumption, rel_files)
 
         # Pattern: "impacts N files" / "anh huong N file"
-        if "impact" in assumption_lower and any(
-            c.isdigit() for c in assumption_lower
-        ):
+        if "impact" in assumption_lower and any(c.isdigit() for c in assumption_lower):
             return _verify_impact_count(workspace_root, assumption, rel_files)
 
         # Pattern: "has test" / "test coverage" / "co test"
@@ -235,6 +241,29 @@ def _extract_symbol_from_assumption(assumption: str) -> str:
     return ""
 
 
+def _find_definition_file(
+    workspace_root: Path, symbol: str, rel_files: List[str]
+) -> Optional[str]:
+    """Tim file chua định nghĩa của symbol."""
+    import re
+
+    # Simplified definition patterns for common local symbols
+    def_pattern = re.compile(
+        rf"(?:def|class|function|const|let|var)\s+{re.escape(symbol)}\b"
+    )
+    for rel_path in rel_files:
+        full_path = workspace_root / rel_path
+        if not full_path.is_file():
+            continue
+        try:
+            content = full_path.read_text(encoding="utf-8", errors="replace")
+            if def_pattern.search(content):
+                return rel_path
+        except (OSError, UnicodeDecodeError):
+            continue
+    return None
+
+
 def _verify_usage_scope(
     workspace_root: Path, assumption: str, rel_files: List[str]
 ) -> AssumptionResult:
@@ -249,8 +278,10 @@ def _verify_usage_scope(
         )
 
     refs = _find_references_in_files(workspace_root, symbol, rel_files)
-    # Filter out the definition file itself
-    refs_without_def = [f for f in refs if symbol.lower() not in f.lower()]
+
+    # Filter out the definition file itself accurately
+    def_file = _find_definition_file(workspace_root, symbol, rel_files)
+    refs_without_def = [f for f in refs if f != def_file]
 
     if len(refs_without_def) <= 1:
         return AssumptionResult(

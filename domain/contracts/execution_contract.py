@@ -7,9 +7,10 @@ reviewer agent so patch voi contract, drift detector so ket qua voi contract.
 Luu tai .synapse/execution_contract.json
 """
 
-import fcntl
 import json
 import logging
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -66,7 +67,7 @@ class ExecutionContract:
             return ""
 
         sections: List[str] = [
-            f"<execution_contract>",
+            "<execution_contract>",
             f"  <task>{self.task}</task>",
             f"  <status>{self.status}</status>",
         ]
@@ -131,21 +132,23 @@ def load_execution_contract(workspace_root: Path) -> Optional[ExecutionContract]
         return None
 
 
-def save_execution_contract(
-    workspace_root: Path, contract: ExecutionContract
-) -> None:
-    """Save execution contract to .synapse/execution_contract.json."""
+def save_execution_contract(workspace_root: Path, contract: ExecutionContract) -> None:
+    """Save execution contract to .synapse/execution_contract.json using atomic write."""
     synapse_dir = workspace_root / ".synapse"
     synapse_dir.mkdir(parents=True, exist_ok=True)
     contract_file = synapse_dir / EXECUTION_CONTRACT_FILE
 
-    with open(contract_file, "a+", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        try:
-            f.seek(0)
-            f.truncate()
+    # Atomic write pattern
+    fd, tmp_path = tempfile.mkstemp(dir=str(synapse_dir), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(contract.to_dict(), f, indent=2, ensure_ascii=False)
             f.write("\n")
             f.flush()
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            os.fsync(f.fileno())
+        os.replace(tmp_path, str(contract_file))
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        logger.error("Failed to save execution contract: %s", e)
+        raise

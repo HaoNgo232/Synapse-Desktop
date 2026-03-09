@@ -1103,9 +1103,7 @@ def register_tools(mcp_instance) -> None:
     async def simulate_patch(
         opx_content: Annotated[
             str,
-            Field(
-                description="OPX content to simulate (the patch instructions)."
-            ),
+            Field(description="OPX content to simulate (the patch instructions)."),
         ],
         workspace_path: Annotated[
             Optional[str],
@@ -1164,7 +1162,9 @@ def register_tools(mcp_instance) -> None:
 
             lines.append(f"\nAffected files: {len(affected_files)}")
             max_display = 10
-            lines.append(f"Blast radius: {', '.join(sorted(affected_files)[:max_display])}")
+            lines.append(
+                f"Blast radius: {', '.join(sorted(affected_files)[:max_display])}"
+            )
 
             return "\n".join(lines)
 
@@ -1233,10 +1233,17 @@ def register_tools(mcp_instance) -> None:
         coder reads it, reviewer checks against it, drift detector compares with it.
         """
         allowed_actions = {
-            "create", "get", "update", "activate", "complete", "format_for_prompt",
+            "create",
+            "get",
+            "update",
+            "activate",
+            "complete",
+            "format_for_prompt",
         }
         if action not in allowed_actions:
-            return f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+            return (
+                f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+            )
 
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -1277,6 +1284,8 @@ def register_tools(mcp_instance) -> None:
                 contract = await asyncio.to_thread(load_execution_contract, ws)
                 if contract is None:
                     return "Error: No existing contract to update. Use 'create' first."
+                if task is not None:
+                    contract.task = task
                 if scope_files is not None:
                     contract.scope_files = scope_files
                 if guarded_paths is not None:
@@ -1323,10 +1332,10 @@ def register_tools(mcp_instance) -> None:
         assumptions: Annotated[
             List[str],
             Field(
-                description='List of assumptions to verify, e.g. '
-                '["\'AuthService\' only used by login.py", '
-                '"\'validate_token\' has test coverage", '
-                '"renaming \'helper\' impacts 3 files"].'
+                description="List of assumptions to verify, e.g. "
+                "[\"'AuthService' only used by login.py\", "
+                "\"'validate_token' has test coverage\", "
+                "\"renaming 'helper' impacts 3 files\"]."
             ),
         ],
         workspace_path: Annotated[
@@ -1407,7 +1416,9 @@ def register_tools(mcp_instance) -> None:
         """
         allowed_roles = {"implementer", "reviewer", "tester", "fixer"}
         if target_role not in allowed_roles:
-            return f"Error: Invalid role '{target_role}'. Allowed: {sorted(allowed_roles)}"
+            return (
+                f"Error: Invalid role '{target_role}'. Allowed: {sorted(allowed_roles)}"
+            )
 
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -1461,7 +1472,7 @@ def register_tools(mcp_instance) -> None:
                 ),
             }
 
-            output = f"<handoff_bundle role=\"{target_role}\">\n"
+            output = f'<handoff_bundle role="{target_role}">\n'
             output += f"<role_instructions>\n{role_instructions.get(target_role, '')}\n</role_instructions>\n"
             if contract_section:
                 output += contract_section
@@ -1517,7 +1528,9 @@ def register_tools(mcp_instance) -> None:
         """
         allowed_actions = {"add", "list", "check", "remove"}
         if action not in allowed_actions:
-            return f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+            return (
+                f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+            )
 
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -1535,13 +1548,16 @@ def register_tools(mcp_instance) -> None:
                     return "Error: 'paths' required for 'add' action."
 
                 def _add_watchpoints(pack):
-                    for p in paths:
-                        entry = p if not reason else f"{p} — {reason}"
-                        if entry not in pack.guarded_paths:
-                            pack.guarded_paths.append(entry)
+                    if paths:
+                        for p in paths:
+                            entry = p if not reason else f"{p} — {reason}"
+                            if entry not in pack.guarded_paths:
+                                pack.guarded_paths.append(entry)
                     return pack
 
-                await asyncio.to_thread(locked_modify_contract_pack, ws, _add_watchpoints)
+                await asyncio.to_thread(
+                    locked_modify_contract_pack, ws, _add_watchpoints
+                )
                 return f"Added {len(paths)} watchpoint(s). Use 'list' to see all."
 
             elif action == "list":
@@ -1587,13 +1603,17 @@ def register_tools(mcp_instance) -> None:
                     return "Error: 'paths' required for 'remove' action."
 
                 def _remove_watchpoints(pack):
-                    pack.guarded_paths = [
-                        wp for wp in pack.guarded_paths
-                        if wp.split(" — ")[0].strip() not in paths
-                    ]
+                    if paths:
+                        pack.guarded_paths = [
+                            wp
+                            for wp in pack.guarded_paths
+                            if wp.split(" — ")[0].strip() not in paths
+                        ]
                     return pack
 
-                await asyncio.to_thread(locked_modify_contract_pack, ws, _remove_watchpoints)
+                await asyncio.to_thread(
+                    locked_modify_contract_pack, ws, _remove_watchpoints
+                )
                 return f"Removed watchpoint(s) matching: {', '.join(paths)}"
 
             return "Error: Unhandled action."
@@ -1634,7 +1654,9 @@ def register_tools(mcp_instance) -> None:
         ] = None,
         node_type: Annotated[
             Optional[str],
-            Field(description="Node type: 'decision', 'change', 'test', 'review', 'config'."),
+            Field(
+                description="Node type: 'decision', 'change', 'test', 'review', 'config'."
+            ),
         ] = None,
         node_title: Annotated[
             Optional[str],
@@ -1646,7 +1668,9 @@ def register_tools(mcp_instance) -> None:
         ] = None,
         status: Annotated[
             Optional[str],
-            Field(description="New status for update_status: 'pending', 'in_progress', 'completed', 'skipped'."),
+            Field(
+                description="New status for update_status: 'pending', 'in_progress', 'completed', 'skipped'."
+            ),
         ] = None,
         edge_from: Annotated[
             Optional[str],
@@ -1658,7 +1682,9 @@ def register_tools(mcp_instance) -> None:
         ] = None,
         edge_kind: Annotated[
             Optional[str],
-            Field(description="Edge kind: 'implements', 'must_verify', 'depends_on', 'blocks'."),
+            Field(
+                description="Edge kind: 'implements', 'must_verify', 'depends_on', 'blocks'."
+            ),
         ] = None,
     ) -> str:
         """Manage Plan DAG — a machine-readable task graph for agent coordination.
@@ -1668,11 +1694,18 @@ def register_tools(mcp_instance) -> None:
         agents know which tasks are ready to execute.
         """
         allowed_actions = {
-            "create", "get", "add_node", "add_edge",
-            "update_status", "get_ready", "format_summary",
+            "create",
+            "get",
+            "add_node",
+            "add_edge",
+            "update_status",
+            "get_ready",
+            "format_summary",
         }
         if action not in allowed_actions:
-            return f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+            return (
+                f"Error: Invalid action '{action}'. Allowed: {sorted(allowed_actions)}"
+            )
 
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
@@ -1705,9 +1738,14 @@ def register_tools(mcp_instance) -> None:
                 dag = await asyncio.to_thread(load_plan_dag, ws)
                 if dag is None:
                     dag = PlanDAG(task=task or "")
+
+                # Validate node_type
+                valid_types = {"decision", "change", "test", "review", "config"}
+                validated_type = node_type if node_type in valid_types else "change"
+
                 node = PlanNode(
                     id=node_id,
-                    type=node_type or "change",
+                    type=validated_type,  # type: ignore[arg-type]
                     title=node_title,
                     file=node_file or "",
                 )
@@ -1721,10 +1759,15 @@ def register_tools(mcp_instance) -> None:
                 dag = await asyncio.to_thread(load_plan_dag, ws)
                 if dag is None:
                     return "Error: No plan DAG found. Use 'create' first."
+
+                # Validate edge_kind
+                valid_kinds = {"implements", "must_verify", "depends_on", "blocks"}
+                validated_kind = edge_kind if edge_kind in valid_kinds else "depends_on"
+
                 edge = PlanEdge(
                     source=edge_from,
                     target=edge_to,
-                    kind=edge_kind or "depends_on",
+                    kind=validated_kind,  # type: ignore[arg-type]
                 )
                 dag.add_edge(edge)
                 await asyncio.to_thread(save_plan_dag, ws, dag)

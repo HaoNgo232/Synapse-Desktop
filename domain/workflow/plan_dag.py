@@ -188,20 +188,25 @@ def load_plan_dag(workspace_root: Path) -> Optional[PlanDAG]:
 
 
 def save_plan_dag(workspace_root: Path, dag: PlanDAG) -> None:
-    """Save plan DAG to .synapse/plan_dag.json."""
-    import fcntl
+    """Save plan DAG to .synapse/plan_dag.json using atomic write."""
+    import os
+    import tempfile
 
     synapse_dir = workspace_root / ".synapse"
     synapse_dir.mkdir(parents=True, exist_ok=True)
     dag_file = synapse_dir / PLAN_DAG_FILE
 
-    with open(dag_file, "a+", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        try:
-            f.seek(0)
-            f.truncate()
+    # Atomic write pattern
+    fd, tmp_path = tempfile.mkstemp(dir=str(synapse_dir), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(dag.to_dict(), f, indent=2, ensure_ascii=False)
             f.write("\n")
             f.flush()
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            os.fsync(f.fileno())
+        os.replace(tmp_path, str(dag_file))
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        logger.error("Failed to save plan DAG: %s", e)
+        raise

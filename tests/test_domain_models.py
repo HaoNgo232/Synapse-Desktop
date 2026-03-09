@@ -1,9 +1,5 @@
 """Tests for domain models: execution_contract, assumption_verifier, plan_dag."""
 
-import json
-import pytest
-from pathlib import Path
-
 from domain.contracts.execution_contract import (
     ExecutionContract,
     load_execution_contract,
@@ -108,7 +104,10 @@ class TestAssumptionVerifier:
         report = verify_assumptions(
             tmp_path,
             ["'login' has test coverage"],
-            all_files=[str(tmp_path / "auth.py"), str(tmp_path / "tests" / "test_auth.py")],
+            all_files=[
+                str(tmp_path / "auth.py"),
+                str(tmp_path / "tests" / "test_auth.py"),
+            ],
         )
         assert report.total == 1
         assert report.results[0].verdict == "pass"
@@ -132,7 +131,11 @@ class TestAssumptionVerifier:
         report = verify_assumptions(
             tmp_path,
             ["'helper' impacts 3 files"],
-            all_files=[str(tmp_path / "a.py"), str(tmp_path / "b.py"), str(tmp_path / "c.py")],
+            all_files=[
+                str(tmp_path / "a.py"),
+                str(tmp_path / "b.py"),
+                str(tmp_path / "c.py"),
+            ],
         )
         assert report.total == 1
         # helper found in 2 files, expected <= 3, so pass
@@ -246,9 +249,7 @@ class TestPlanDAG:
         """Format as human-readable summary."""
         dag = PlanDAG(task="Build auth")
         dag.add_node(PlanNode(id="N1", type="decision", title="Design auth"))
-        dag.add_node(
-            PlanNode(id="N2", type="change", title="Impl", file="auth.py")
-        )
+        dag.add_node(PlanNode(id="N2", type="change", title="Impl", file="auth.py"))
         dag.add_edge(PlanEdge(source="N1", target="N2", kind="implements"))
 
         summary = dag.format_summary()

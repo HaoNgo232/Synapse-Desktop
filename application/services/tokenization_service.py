@@ -284,9 +284,23 @@ class TokenizationService(ITokenizationService):
         Returns:
             So token hoac 0 neu khong dem duoc
         """
+        encoder = self._get_or_create_encoder()
+        if encoder is None:
+            # Fallback level 2: Encoder None (Option 2b)
+            try:
+                if not file_path.exists() or not file_path.is_file():
+                    return 0
+                stat = file_path.stat()
+                if stat.st_size > MAX_BYTES or stat.st_size == 0:
+                    return 0
+                content = file_path.read_text(encoding="utf-8", errors="replace")
+                return _estimate_tokens(content)
+            except Exception:
+                return 0
+
         return _core_count_file_no_cache(
             file_path,
-            encoder=self._get_or_create_encoder(),
+            encoder=encoder,
             encoder_type=self._encoder_type,
             cache=self._cache,
         )

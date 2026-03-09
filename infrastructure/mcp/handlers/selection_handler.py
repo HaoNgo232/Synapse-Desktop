@@ -2,6 +2,7 @@
 Selection Handler - Xu ly manage_selection tool.
 
 Quan ly danh sach file duoc chon (ticked) trong Synapse session.
+Supports v2 format with provenance tracking (backward compatible with v1 list format).
 """
 
 import asyncio
@@ -13,18 +14,19 @@ from typing import Annotated, List, Optional, Callable
 from mcp.server.fastmcp import Context
 from pydantic import Field
 
+from domain.selection.provenance import SelectionSource, SelectionState, VALID_SOURCES
 from infrastructure.mcp.core.constants import logger
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
 
 
 def _locked_read_modify_write(
-    session_file: Path, modifier_fn: Callable[[list[str]], list[str]]
-) -> list[str]:
+    session_file: Path, modifier_fn: Callable[[SelectionState], SelectionState]
+) -> SelectionState:
     """Read the selection JSON, pass it to modifier_fn, write back, all under cross-process lock."""
     # Ensure file exists so we can open it in r+
     if not session_file.exists():
         session_file.parent.mkdir(parents=True, exist_ok=True)
-        session_file.write_text(json.dumps({"selected_files": []}))
+        session_file.write_text(json.dumps(SelectionState().to_dict()))
 
     with open(session_file, "r+", encoding="utf-8") as f:
         # Cross-process exclusive lock
@@ -32,19 +34,23 @@ def _locked_read_modify_write(
         try:
             try:
                 data = json.load(f)
-                current_selection = data.get("selected_files", [])
+                # Backward compat: v1 format wraps list in {"selected_files": [...]}
+                if isinstance(data, dict) and "selected_files" in data and "version" not in data:
+                    state = SelectionState.from_dict(data["selected_files"])
+                else:
+                    state = SelectionState.from_dict(data)
             except (json.JSONDecodeError, OSError):
-                current_selection = []
+                state = SelectionState()
 
-            new_selection = modifier_fn(current_selection)
+            new_state = modifier_fn(state)
 
-            # Write back
+            # Always write v2 format
             f.seek(0)
-            json.dump({"selected_files": new_selection}, f, indent=2)
+            json.dump(new_state.to_dict(), f, indent=2)
             f.write("\n")
             f.truncate()
 
-            return new_selection
+            return new_state
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
 
@@ -57,13 +63,19 @@ def register_tools(mcp_instance) -> None:
         action: Annotated[
             str,
             Field(
-                description='Action to perform: "get" (list current selection), "set" (replace selection), "add" (append to selection), "clear" (remove all).'
+                description='Action to perform: "get" (list current selection), "set" (replace selection), "add" (append to selection), "clear" (remove all), "get_provenance" (return provenance map).'
             ),
         ] = "get",
         paths: Annotated[
             Optional[List[str]],
             Field(
                 description='List of relative file paths for "set" and "add" actions (e.g., ["src/main.py", "src/utils.py"]).'
+            ),
+        ] = None,
+        source: Annotated[
+            Optional[str],
+            Field(
+                description='Provenance source for "set" and "add" actions: "user", "agent", "dependency", "review". Defaults to "agent".'
             ),
         ] = None,
         workspace_path: Annotated[
@@ -78,7 +90,15 @@ def register_tools(mcp_instance) -> None:
 
         Use this to track files across multiple exploration steps, then pass them to build_prompt with use_selection=True.
         Thread-safe with cross-process file locking.
+        Supports provenance tracking (v2 format) with backward compatibility for v1 format.
         """
+        effective_source: SelectionSource = "agent"
+        if source is not None:
+            if source not in VALID_SOURCES:
+                return f"Error: Invalid source '{source}'. Use: user, agent, dependency, or review."
+            # source is validated to be a valid SelectionSource literal above
+            effective_source = source  # type: ignore[assignment]
+
         try:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
@@ -87,27 +107,50 @@ def register_tools(mcp_instance) -> None:
         session_file = WorkspaceManager.get_session_file(ws)
 
         if action == "get":
-            current_selection = []
+            state = SelectionState()
             if session_file.exists():
                 try:
                     raw_text = await asyncio.to_thread(
                         session_file.read_text, encoding="utf-8"
                     )
                     data = json.loads(raw_text)
-                    current_selection = data.get("selected_files", [])
+                    # Backward compat: v1 format wraps list in {"selected_files": [...]}
+                    if isinstance(data, dict) and "selected_files" in data and "version" not in data:
+                        state = SelectionState.from_dict(data["selected_files"])
+                    else:
+                        state = SelectionState.from_dict(data)
                 except (OSError, json.JSONDecodeError) as e:
                     logger.warning("Failed to load selection: %s", e)
 
-            if not current_selection:
+            if not state.paths:
                 return "No files currently selected."
-            return f"Selected files ({len(current_selection)}):\n" + "\n".join(
-                f"  {p}" for p in current_selection
+            return f"Selected files ({len(state.paths)}):\n" + "\n".join(
+                f"  {p}" for p in state.paths
             )
+
+        elif action == "get_provenance":
+            state = SelectionState()
+            if session_file.exists():
+                try:
+                    raw_text = await asyncio.to_thread(
+                        session_file.read_text, encoding="utf-8"
+                    )
+                    data = json.loads(raw_text)
+                    if isinstance(data, dict) and "selected_files" in data and "version" not in data:
+                        state = SelectionState.from_dict(data["selected_files"])
+                    else:
+                        state = SelectionState.from_dict(data)
+                except (OSError, json.JSONDecodeError) as e:
+                    logger.warning("Failed to load selection provenance: %s", e)
+
+            if not state.provenance:
+                return "No provenance data available."
+            return json.dumps(state.provenance, indent=2)
 
         elif action == "clear":
 
-            def clear_modifier(_: list[str]) -> list[str]:
-                return []
+            def clear_modifier(_: SelectionState) -> SelectionState:
+                return SelectionState()
 
             await asyncio.to_thread(
                 _locked_read_modify_write, session_file, clear_modifier
@@ -127,25 +170,30 @@ def register_tools(mcp_instance) -> None:
                     return f"Error: File not found: {rp}"
 
             if action == "set":
+                src = effective_source
 
-                def set_modifier(_: list[str]) -> list[str]:
-                    return paths if paths is not None else []
+                def set_modifier(_: SelectionState) -> SelectionState:
+                    new_state = SelectionState()
+                    safe_paths = paths if paths is not None else []
+                    new_state.add_paths(safe_paths, src)
+                    return new_state
 
-                new_selection = await asyncio.to_thread(
+                new_state = await asyncio.to_thread(
                     _locked_read_modify_write, session_file, set_modifier
                 )
             else:  # add
+                src = effective_source
 
-                def add_modifier(current: list[str]) -> list[str]:
-                    existing_set = set(current)
+                def add_modifier(current: SelectionState) -> SelectionState:
                     safe_paths = paths if paths is not None else []
-                    return current + [p for p in safe_paths if p not in existing_set]
+                    current.add_paths(safe_paths, src)
+                    return current
 
-                new_selection = await asyncio.to_thread(
+                new_state = await asyncio.to_thread(
                     _locked_read_modify_write, session_file, add_modifier
                 )
 
-            return f"Selection updated: {len(new_selection)} files selected."
+            return f"Selection updated: {len(new_state.paths)} files selected."
 
         else:
-            return f"Error: Invalid action '{action}'. Use: get, set, add, or clear."
+            return f"Error: Invalid action '{action}'. Use: get, set, add, clear, or get_provenance."

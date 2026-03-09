@@ -157,7 +157,7 @@ def assemble_smart_prompt(
         git_diffs: Optional git diffs
         git_logs: Optional git logs
         project_rules: Quy tac project
-        memory_content: Noi dung memory.xml
+        memory_content: Noi dung memory store
 
     Returns:
         Prompt string day du

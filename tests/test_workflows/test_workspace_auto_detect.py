@@ -6,7 +6,6 @@ from mcp.server.fastmcp import FastMCP
 from infrastructure.mcp.handlers.workspace_handler import register_tools as _reg_ws
 from infrastructure.mcp.handlers.analysis_handler import register_tools as _reg_analysis
 from infrastructure.mcp.handlers.structure_handler import register_tools as _reg_struct
-from infrastructure.mcp.handlers.git_handler import register_tools as _reg_git
 from infrastructure.mcp.handlers.workflow_handler import register_tools as _reg_workflow
 
 # Setup a mock MCP instance
@@ -14,7 +13,6 @@ _test_mcp = FastMCP("test_auto_detect")
 _reg_ws(_test_mcp)
 _reg_analysis(_test_mcp)
 _reg_struct(_test_mcp)
-_reg_git(_test_mcp)
 _reg_workflow(_test_mcp)
 
 

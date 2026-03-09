@@ -1,7 +1,8 @@
 """
 Memory Service - Quản lý đọc/ghi memory store cho workspace.
 
-Lưu tại .synapse/memory_v2.json, tương thích với memory.xml cũ.
+Lưu tại .synapse/memory_v2.json — nguồn dữ liệu duy nhất cho memory.
+Legacy memory.xml đã được hợp nhất vào đây.
 """
 
 import fcntl

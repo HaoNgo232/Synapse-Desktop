@@ -718,7 +718,7 @@ def build_smart_prompt(
         git_diffs: Optional git diffs
         git_logs: Optional git logs
         project_rules: Project rules
-        workspace_root: Optional workspace root de doc memory.xml
+        workspace_root: Optional workspace root de doc memory
 
     Returns:
         Prompt string day du
@@ -764,7 +764,7 @@ def generate_prompt(
         git_logs: Optional git logs
         output_style: Dinh dang dau ra
         project_rules: Project rules
-        workspace_root: Optional workspace root de doc memory.xml
+        workspace_root: Optional workspace root de doc memory
 
     Returns:
         Prompt hoan chinh
@@ -776,14 +776,17 @@ def generate_prompt(
 
     memory_content = None
     if enable_ai_memory and workspace_root and include_xml_formatting:
-        memory_file = workspace_root / ".synapse" / "memory.xml"
-        if memory_file.exists():
-            try:
-                memory_content = memory_file.read_text(encoding="utf-8").strip()
-            except Exception as e:
-                import logging
+        try:
+            from domain.memory.memory_service import load_memory_store
 
-                logging.getLogger(__name__).warning("Failed to read memory file: %s", e)
+            store = load_memory_store(workspace_root)
+            formatted = store.format_for_prompt()
+            if formatted and formatted.strip():
+                memory_content = formatted.strip()
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning("Failed to read memory store: %s", e)
 
     return assemble_prompt(
         file_map=file_map,

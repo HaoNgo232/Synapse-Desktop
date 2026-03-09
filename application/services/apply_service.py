@@ -4,12 +4,10 @@ Apply Service — Business logic for OPX apply operations.
 Extracted from views/apply_view_qt.py to separate concerns.
 View layer should only handle UI; this module handles:
 - Converting ActionResult to ApplyRowResult (with cascade detection)
-- Saving continuous memory blocks to .synapse/memory.xml
+- Saving continuous memory blocks to unified .synapse/memory_v2.json
 """
 
-import re
 import logging
-import threading
 from pathlib import Path
 from typing import List
 
@@ -17,9 +15,6 @@ from infrastructure.filesystem.file_actions import ActionResult
 from application.services.error_context import ApplyRowResult
 
 logger = logging.getLogger(__name__)
-
-# Lock for concurrent memory writes
-_memory_write_lock = threading.Lock()
 
 
 def convert_to_row_results(
@@ -67,10 +62,10 @@ def save_memory_block(
     max_blocks: int = 5,
 ) -> None:
     """
-    Save a memory block to .synapse/memory.xml.
+    Save a memory block to unified .synapse/memory_v2.json.
 
-    Maintains a rolling window of the last `max_blocks` memory blocks.
-    Thread-safe via module-level lock.
+    Uses the structured JSON memory store (action layer) instead of the
+    legacy XML format. Maintains backward compatibility for callers.
 
     Args:
         workspace: Workspace root path
@@ -81,59 +76,16 @@ def save_memory_block(
     if not new_block:
         return
 
-    with _memory_write_lock:
-        try:
-            synapse_dir = workspace / ".synapse"
-            synapse_dir.mkdir(exist_ok=True, parents=True)
-            memory_file = synapse_dir / "memory.xml"
+    try:
+        from domain.memory.memory_service import add_memory
 
-            blocks: List[str] = []
-            if memory_file.exists():
-                try:
-                    content = memory_file.read_text(encoding="utf-8")
-                    blocks = re.findall(
-                        r"<synapse_memory>\s*(.*?)\s*</synapse_memory>",
-                        content,
-                        re.IGNORECASE | re.DOTALL,
-                    )
-                    # Filter out empty/too-short blocks (regex artifacts)
-                    blocks = [
-                        b.strip()
-                        for b in blocks
-                        if b and b.strip() and len(b.strip()) > 10
-                    ]
-                    # Fallback: if parsing failed but file has content
-                    if not blocks and content.strip():
-                        logger.warning(
-                            "Could not parse existing synapse memory blocks, "
-                            "preserving truncated raw content."
-                        )
-                        blocks = [content.strip()[:2000]]
-                except Exception as parse_e:
-                    logger.warning(
-                        "Failed to parse existing synapse memory: %s", parse_e
-                    )
-                    blocks = []
-
-            blocks.append(new_block)
-            blocks = blocks[-max_blocks:]
-
-            formatted_blocks = [
-                f"<synapse_memory>\n{b.strip()}\n</synapse_memory>" for b in blocks
-            ]
-
-            # Atomic write using temp file
-            import os
-
-            tmp_file = memory_file.with_suffix(".tmp")
-            try:
-                tmp_file.write_text(
-                    "\n\n".join(formatted_blocks) + "\n", encoding="utf-8"
-                )
-                os.replace(str(tmp_file), str(memory_file))
-            except Exception:
-                if tmp_file.exists():
-                    tmp_file.unlink()
-                raise
-        except Exception as e:
-            logger.error("Failed to save synapse memory: %s", e)
+        add_memory(
+            workspace_root=workspace,
+            layer="action",
+            content=new_block,
+            workflow="apply",
+            tags=["opx_memory"],
+            max_entries=max_blocks,
+        )
+    except Exception as e:
+        logger.error("Failed to save synapse memory: %s", e)

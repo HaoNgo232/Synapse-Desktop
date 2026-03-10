@@ -8,11 +8,14 @@ Su dung SelectionState v2 lam schema chuan duy nhat, backward-compatible voi v1.
 """
 
 import json
+import threading
 from pathlib import Path
 
 from domain.selection.provenance import SelectionState
 from domain.selection.selection_reader import read_selection_state
 from infrastructure.mcp.utils.file_utils import atomic_write
+
+_selection_lock = threading.Lock()
 
 
 class SessionManager:
@@ -68,19 +71,20 @@ class SessionManager:
         Returns:
             String ket qua.
         """
-        valid = []
-        for rp in paths:
-            fp = (workspace / rp).resolve()
-            if not fp.is_relative_to(workspace):
-                return f"Error: Path traversal detected for: {rp}"
-            if not fp.is_file():
-                return f"Error: File not found: {rp}"
-            valid.append(rp)
+        with _selection_lock:
+            valid = []
+            for rp in paths:
+                fp = (workspace / rp).resolve()
+                if not fp.is_relative_to(workspace):
+                    return f"Error: Path traversal detected for: {rp}"
+                if not fp.is_file():
+                    return f"Error: File not found: {rp}"
+                valid.append(rp)
 
-        state = SelectionState()
-        state.add_paths(valid, "user")
-        atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
-        return f"Selection updated: {len(valid)} files selected."
+            state = SelectionState()
+            state.add_paths(valid, "user")
+            atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
+            return f"Selection updated: {len(valid)} files selected."
 
     @staticmethod
     def add_selection(session_file: Path, workspace: Path, paths: list[str]) -> str:
@@ -96,21 +100,22 @@ class SessionManager:
         Returns:
             String ket qua.
         """
-        state = read_selection_state(session_file)
+        with _selection_lock:
+            state = read_selection_state(session_file)
 
-        added = 0
-        for rp in paths:
-            fp = (workspace / rp).resolve()
-            if not fp.is_relative_to(workspace):
-                return f"Error: Path traversal detected for: {rp}"
-            if not fp.is_file():
-                return f"Error: File not found: {rp}"
-            if rp not in state.paths:
-                added += 1
-            state.add_paths([rp], "user")
+            added = 0
+            for rp in paths:
+                fp = (workspace / rp).resolve()
+                if not fp.is_relative_to(workspace):
+                    return f"Error: Path traversal detected for: {rp}"
+                if not fp.is_file():
+                    return f"Error: File not found: {rp}"
+                if rp not in state.paths:
+                    added += 1
+                state.add_paths([rp], "user")
 
-        atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
-        return f"Added {added} files. Total selection: {len(state.paths)} files."
+            atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
+            return f"Added {added} files. Total selection: {len(state.paths)} files."
 
     @staticmethod
     def clear_selection(session_file: Path) -> str:
@@ -124,6 +129,7 @@ class SessionManager:
         Returns:
             String xac nhan da xoa.
         """
-        state = SelectionState()
-        atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
-        return "Selection cleared."
+        with _selection_lock:
+            state = SelectionState()
+            atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
+            return "Selection cleared."

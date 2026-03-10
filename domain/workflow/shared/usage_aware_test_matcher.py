@@ -8,6 +8,7 @@ Usage-Aware Test Matcher - Nâng cấp từ name-heuristic sang semantic matchin
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Dict, List
 
@@ -61,6 +62,9 @@ def _match_by_name(source_symbol: str, test_files: List[str]) -> List[str]:
     """Tầng 1: Name-based heuristic matching."""
     matches: List[str] = []
     sym_lower = source_symbol.lower()
+
+    if len(sym_lower) < 3:
+        return matches
 
     for test_file in test_files:
         test_name = Path(test_file).stem.lower()
@@ -123,6 +127,11 @@ def _match_by_call(
     """Tầng 3: Call-aware matching - test body gọi source symbol."""
     matches: List[str] = []
 
+    if len(source_symbol) < 3:
+        return matches
+
+    pattern = re.compile(r"\b" + re.escape(source_symbol) + r"\b")
+
     for test_file in test_files:
         test_abs = (workspace_root / test_file).resolve()
         if not test_abs.is_file():
@@ -130,8 +139,7 @@ def _match_by_call(
 
         try:
             content = test_abs.read_text(encoding="utf-8", errors="ignore")
-            # Simple check: symbol name appears in test body
-            if source_symbol in content:
+            if pattern.search(content):
                 matches.append(test_file)
         except Exception:
             continue

@@ -118,7 +118,27 @@ def run_context_builder(
     file_map = generate_file_map(tree, selected_paths, workspace_root=ws)
 
     # Step 3: Optimize content to fit budget
-    budget_mgr = TokenBudgetManager(tok_service, max_tokens)
+    from domain.workflow.shared.contract_injector import load_and_format_contract_pack
+    from infrastructure.git.git_utils import get_git_diffs
+
+    contract_text = load_and_format_contract_pack(ws)
+    contract_tokens = tok_service.count_tokens(contract_text) if contract_text else 0
+
+    git_tokens = 0
+    git_diff_result = None
+    if include_git_changes:
+        git_diff_result = get_git_diffs(ws)
+        if git_diff_result and (
+            git_diff_result.work_tree_diff or git_diff_result.staged_diff
+        ):
+            git_tokens = tok_service.count_tokens(
+                (git_diff_result.staged_diff or "")
+                + "\n"
+                + (git_diff_result.work_tree_diff or "")
+            )
+
+    effective_budget = max(1000, max_tokens - contract_tokens - git_tokens - 500)
+    budget_mgr = TokenBudgetManager(tok_service, effective_budget)
 
     primary_paths = [ws / p for p in scope.primary_files]
     dep_paths = [ws / p for p in scope.dependency_files]
@@ -160,25 +180,24 @@ def run_context_builder(
     )
 
     # Inject contract pack vào extra_sections
-    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
-
-    inject_contract_pack_to_handoff(context, ws)
+    if contract_text:
+        context.extra_sections["contract_pack"] = contract_text
 
     # Inject git changes nếu include_git_changes=True
-    if include_git_changes:
-        from infrastructure.git.git_utils import get_git_diffs
-
-        git_diff = get_git_diffs(ws)
-        if git_diff and (git_diff.work_tree_diff or git_diff.staged_diff):
-            git_section = "<git_changes>\n"
-            if git_diff.staged_diff:
-                git_section += "<staged>\n" + git_diff.staged_diff + "\n</staged>\n"
-            if git_diff.work_tree_diff:
-                git_section += (
-                    "<unstaged>\n" + git_diff.work_tree_diff + "\n</unstaged>\n"
-                )
-            git_section += "</git_changes>"
-            context.extra_sections["git_changes"] = git_section
+    if (
+        include_git_changes
+        and git_diff_result
+        and (git_diff_result.work_tree_diff or git_diff_result.staged_diff)
+    ):
+        git_section = "<git_changes>\n"
+        if git_diff_result.staged_diff:
+            git_section += "<staged>\n" + git_diff_result.staged_diff + "\n</staged>\n"
+        if git_diff_result.work_tree_diff:
+            git_section += (
+                "<unstaged>\n" + git_diff_result.work_tree_diff + "\n</unstaged>\n"
+            )
+        git_section += "</git_changes>"
+        context.extra_sections["git_changes"] = git_section
 
     prompt = format_handoff_xml(context)
 

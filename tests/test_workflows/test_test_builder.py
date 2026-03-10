@@ -134,9 +134,9 @@ class TestAnalyzeTestCoverage:
     def test_partial_coverage(self, python_workspace):
         """Source co 3 functions, test file cover 1 -> partial coverage.
 
-        Note: Usage-aware matcher match tất cả vì test file import auth module
-        và có 'login', 'logout', 'validate_token' trong body (hoặc import).
-        Nên test này expect full coverage với usage-aware matching.
+        Note: Usage-aware matcher hien tai da duoc fix loi false positive
+        (Bug #4). Do do, gio no chi match 'login', va testcoverage that su
+        la 33% (1/3 symbols).
         """
         result = analyze_test_coverage(python_workspace, ["auth.py"])
 
@@ -146,6 +146,7 @@ class TestAnalyzeTestCoverage:
         cov = result.file_coverages[0]
         assert cov.source_file == "auth.py"
         assert len(cov.test_files) >= 1
+
         # Usage-aware matcher match tất cả symbols
         assert cov.coverage_pct >= 33.0  # At least 1/3
         assert "login" in cov.tested_symbols

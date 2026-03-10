@@ -18,9 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.workflow.shared.file_slicer import slice_file_by_line_range
 from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
-from application.services.dependency_resolver import DependencyResolver
 from application.services.tokenization_service import TokenizationService
 
 logger = logging.getLogger(__name__)
@@ -164,12 +162,13 @@ def run_bug_investigation(
             depth=node.depth,
         )
         for node in investigation_nodes
+        if file_contents.get(node.file_path, "")
     ]
 
     # Step 3: Assemble investigation prompt
-    file_contents = {}
-    for step in trace_steps:
-        file_contents[step.file_path] = step.content
+    file_contents = {
+        step.file_path: step.content for step in trace_steps if step.content
+    }
 
     action_instructions = (
         "Analyze the traced execution path and identify the root cause of the bug. "
@@ -263,127 +262,3 @@ def _parse_error_trace(
 
     # Reverse to get bottom-up order (root cause first)
     return list(reversed(entry_points))
-
-
-def _trace_execution_bfs(
-    workspace_path: Path,
-    entry_points: List[Dict[str, object]],
-    max_depth: int,
-    token_budget_remaining: int,
-    tokenization_service: TokenizationService,
-) -> List[TraceStep]:
-    """BFS trace tu entry points, mo rong theo callers/callees.
-
-    Su dung 'queued' set de tranh duplicate entries trong queue,
-    va iteration limit de dam bao khong bi resource exhaustion.
-
-    Args:
-        workspace_path: Workspace root
-        entry_points: Parsed entry points
-        max_depth: Do sau toi da
-        token_budget_remaining: Tokens con lai
-        tokenization_service: Service dem token
-
-    Returns:
-        List[TraceStep] theo thu tu BFS
-    """
-    trace_steps = []
-    visited = set()
-    # Track files da queued de tranh duplicate entries
-    queued: set = set()
-    queue = list(entry_points)
-
-    # Khoi tao queued set tu entry_points
-    for ep in entry_points:
-        file_path = str(ep.get("file", ""))
-        if file_path:
-            queued.add(file_path)
-
-    resolver = DependencyResolver(workspace_path)
-    resolver.build_file_index_from_disk(workspace_path)
-
-    # Safety net: gioi han so iterations de tranh resource exhaustion
-    max_iterations = 1000
-    iteration_count = 0
-
-    while queue and token_budget_remaining > 0 and iteration_count < max_iterations:
-        iteration_count += 1
-        current = queue.pop(0)
-        file_path_obj = current.get("file", "")
-        line_num_obj = current.get("line", 1)
-        depth_obj = current.get("depth", 0)
-
-        file_path = str(file_path_obj) if file_path_obj else ""
-        line_num = int(line_num_obj) if isinstance(line_num_obj, (int, str)) else 1
-        depth = int(depth_obj) if isinstance(depth_obj, (int, str)) else 0
-
-        if depth > max_depth:
-            continue
-
-        if file_path in visited:
-            continue
-
-        visited.add(file_path)
-
-        # Doc file content
-        full_path = (workspace_path / file_path).resolve()
-        if not full_path.exists():
-            continue
-
-        try:
-            # Slice quanh error line
-            slice_result = slice_file_by_line_range(
-                full_path,
-                start_line=max(1, line_num - 10),
-                end_line=line_num + 10,
-                context_padding=5,
-                workspace_root=workspace_path,
-            )
-
-            content = slice_result.content
-            tokens = tokenization_service.count_tokens(content)
-
-            if tokens > token_budget_remaining:
-                break
-
-            token_budget_remaining -= tokens
-
-            trace_steps.append(
-                TraceStep(
-                    file_path=file_path,
-                    symbols=[],
-                    content=content,
-                    reason=f"Error at line {line_num}"
-                    if depth == 0
-                    else f"Dependency (depth {depth})",
-                    depth=depth,
-                )
-            )
-
-            # Mo rong: them dependencies vao queue
-            if depth < max_depth:
-                try:
-                    related = resolver.get_related_files(full_path, max_depth=1)
-                except Exception as e:
-                    logger.warning(
-                        "Failed to resolve dependencies for %s: %s", file_path, e
-                    )
-                    continue
-
-                for dep_path in related:
-                    try:
-                        dep_rel = dep_path.relative_to(workspace_path).as_posix()
-                        # Check ca visited VA queued de tranh duplicate
-                        if dep_rel not in visited and dep_rel not in queued:
-                            queue.append(
-                                {"file": dep_rel, "line": 1, "depth": depth + 1}
-                            )
-                            queued.add(dep_rel)
-                    except ValueError:
-                        pass
-
-        except Exception as e:
-            logger.error(f"Error tracing {file_path}: {e}")
-            continue
-
-    return trace_steps

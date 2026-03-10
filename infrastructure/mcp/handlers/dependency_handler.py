@@ -5,6 +5,7 @@ Bao gom: get_imports_graph, get_related_tests, blast_radius.
         (get_callers da go bo - dung built-in lsp_find_references.)
 """
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Annotated, List, Optional
@@ -305,7 +306,8 @@ def register_tools(mcp_instance) -> None:
                 return "Error: No valid file paths provided."
 
             # Use risk engine
-            result = analyze_blast_radius(
+            result = await asyncio.to_thread(
+                analyze_blast_radius,
                 ws,
                 target_files,
                 max_depth=max_depth,

@@ -123,13 +123,48 @@ def run_bug_investigation(
             entry_points=[],
         )
 
-    # Step 2: BFS trace execution
+    # Step 2: Build hybrid investigation graph
+    from domain.workflow.shared.hybrid_investigation_graph import (
+        build_hybrid_investigation_graph,
+    )
+
+    investigation_nodes = build_hybrid_investigation_graph(
+        ws, entry_points, max_depth=max_depth
+    )
+
+    # Convert nodes to file contents
+    file_contents = {}
     token_budget_remaining = (
         max_tokens - tok_service.count_tokens(bug_description) - 1000
     )
-    trace_steps = _trace_execution_bfs(
-        ws, entry_points, max_depth, token_budget_remaining, tok_service
-    )
+
+    for node in investigation_nodes:
+        if token_budget_remaining <= 0:
+            break
+
+        try:
+            file_path = (ws / node.file_path).resolve()
+            if file_path.is_file():
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                tokens = tok_service.count_tokens(content)
+
+                if tokens <= token_budget_remaining:
+                    file_contents[node.file_path] = content
+                    token_budget_remaining -= tokens
+        except Exception:
+            continue
+
+    # Build trace steps from investigation nodes
+    trace_steps = [
+        TraceStep(
+            file_path=node.file_path,
+            symbols=[node.symbol_name] if node.symbol_name else [],
+            content=file_contents.get(node.file_path, ""),
+            reason=node.reason,
+            depth=node.depth,
+        )
+        for node in investigation_nodes
+    ]
 
     # Step 3: Assemble investigation prompt
     file_contents = {}

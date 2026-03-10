@@ -161,8 +161,13 @@ def build_hybrid_investigation_graph(
             from infrastructure.git.git_utils import get_git_logs
 
             logs = get_git_logs(workspace_root, max_commits=10)
-            if logs and logs.changed_files:
-                for changed_file in logs.changed_files[:5]:
+            if logs and logs.commits:
+                changed_files_set: Set[str] = set()
+                for commit in logs.commits[:10]:
+                    for file_path in commit.files:
+                        changed_files_set.add(file_path)
+
+                for changed_file in list(changed_files_set)[:5]:
                     if changed_file not in visited:
                         visited.add(changed_file)
                         nodes.append(

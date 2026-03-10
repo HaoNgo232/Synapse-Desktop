@@ -133,7 +133,7 @@ class TestAnalyzeTestCoverage:
 
     def test_partial_coverage(self, python_workspace):
         """Source co 3 functions, test file cover 1 -> partial coverage.
-        
+
         Note: Usage-aware matcher match tất cả vì test file import auth module
         và có 'login', 'logout', 'validate_token' trong body (hoặc import).
         Nên test này expect full coverage với usage-aware matching.

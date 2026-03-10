@@ -308,7 +308,7 @@ def register_tools(mcp_instance) -> None:
 
         # Merge selection files khi use_selection=True
         if use_selection:
-            import json as _json
+            from domain.selection.selection_reader import read_selection_state
 
             session_file = ws / ".synapse" / "selection.json"
             if not session_file.exists():
@@ -316,10 +316,9 @@ def register_tools(mcp_instance) -> None:
                     return "Error: use_selection=True but no selection found and no file_paths provided."
             else:
                 try:
-                    data = _json.loads(session_file.read_text(encoding="utf-8"))
-                    sel_files = data.get("selected_files", [])
+                    state = read_selection_state(session_file)
                     existing_set = {str(p) for p in abs_paths}
-                    for rp in sel_files:
+                    for rp in state.paths:
                         fp = (ws / rp).resolve()
                         if fp.is_file() and str(fp) not in existing_set:
                             abs_paths.append(fp)

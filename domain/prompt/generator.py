@@ -776,14 +776,10 @@ def generate_prompt(
 
     memory_content = None
     if enable_ai_memory and workspace_root and include_xml_formatting:
-        memory_file = workspace_root / ".synapse" / "memory.xml"
-        if memory_file.exists():
-            try:
-                memory_content = memory_file.read_text(encoding="utf-8").strip()
-            except Exception as e:
-                import logging
+        # Dùng memory prompt adapter: ưu tiên memory_v2.json, fallback memory.xml
+        from domain.memory.memory_prompt_adapter import load_memory_for_prompt
 
-                logging.getLogger(__name__).warning("Failed to read memory file: %s", e)
+        memory_content = load_memory_for_prompt(workspace_root)
 
     return assemble_prompt(
         file_map=file_map,

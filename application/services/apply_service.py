@@ -67,9 +67,9 @@ def save_memory_block(
     max_blocks: int = 5,
 ) -> None:
     """
-    Save a memory block to .synapse/memory.xml.
+    Save a memory block to memory v2 (primary) và memory.xml (legacy fallback).
 
-    Maintains a rolling window of the last `max_blocks` memory blocks.
+    Dual-write trong giai đoạn migration: ghi cả v2 và XML để backward-compatible.
     Thread-safe via module-level lock.
 
     Args:
@@ -82,6 +82,26 @@ def save_memory_block(
         return
 
     with _memory_write_lock:
+        # Primary: ghi vào memory v2
+        try:
+            from domain.memory.memory_service import (
+                load_memory_store,
+                save_memory_store,
+            )
+
+            store = load_memory_store(workspace)
+            store.add_entry(
+                layer="action",
+                content=new_block,
+                linked_files=[],
+                linked_symbols=[],
+                tags=["apply_operation"],
+            )
+            save_memory_store(workspace, store)
+        except Exception as e:
+            logger.warning("Failed to save memory to v2: %s", e)
+
+        # Legacy: ghi vào memory.xml để backward-compatible
         try:
             synapse_dir = workspace / ".synapse"
             synapse_dir.mkdir(exist_ok=True, parents=True)
@@ -96,13 +116,11 @@ def save_memory_block(
                         content,
                         re.IGNORECASE | re.DOTALL,
                     )
-                    # Filter out empty/too-short blocks (regex artifacts)
                     blocks = [
                         b.strip()
                         for b in blocks
                         if b and b.strip() and len(b.strip()) > 10
                     ]
-                    # Fallback: if parsing failed but file has content
                     if not blocks and content.strip():
                         logger.warning(
                             "Could not parse existing synapse memory blocks, "

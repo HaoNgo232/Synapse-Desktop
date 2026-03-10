@@ -62,6 +62,18 @@ def build_hybrid_investigation_graph(
 
     codemap = CodeMapBuilder(workspace_root)
 
+    _all_files_cache = None
+
+    def _get_all_files():
+        nonlocal _all_files_cache
+        if _all_files_cache is None:
+            from application.services.workspace_index import collect_files_from_disk
+
+            _all_files_cache = collect_files_from_disk(
+                workspace_root, workspace_path=workspace_root
+            )
+        return _all_files_cache
+
     # Depth 0: Entry points + same-file symbols
     for ep in entry_points:
         file_path = str(ep.get("file", ""))
@@ -143,7 +155,9 @@ def build_hybrid_investigation_graph(
             if node.depth >= 1:
                 continue
 
-            test_files = _find_related_tests(workspace_root, node.file_path)
+            test_files = _find_related_tests(
+                workspace_root, node.file_path, _get_all_files()
+            )
             for test_file in test_files:
                 if test_file not in visited:
                     visited.add(test_file)
@@ -189,10 +203,10 @@ def build_hybrid_investigation_graph(
     return nodes
 
 
-def _find_related_tests(workspace_root: Path, source_file: str) -> List[str]:
+def _find_related_tests(
+    workspace_root: Path, source_file: str, all_files: List[str]
+) -> List[str]:
     """Find test files related to source file."""
-    from application.services.workspace_index import collect_files_from_disk
-
     stem = Path(source_file).stem
     test_candidates = [
         f"test_{stem}.py",
@@ -203,13 +217,15 @@ def _find_related_tests(workspace_root: Path, source_file: str) -> List[str]:
         f"{stem}.test.js",
     ]
 
-    all_files = collect_files_from_disk(workspace_root, workspace_path=workspace_root)
     test_files: List[str] = []
 
     for test_candidate in test_candidates:
         for file_path in all_files:
             if Path(file_path).name.lower() == test_candidate.lower():
-                rel_path = Path(file_path).relative_to(workspace_root).as_posix()
-                test_files.append(rel_path)
+                try:
+                    rel_path = Path(file_path).relative_to(workspace_root).as_posix()
+                    test_files.append(rel_path)
+                except ValueError:
+                    continue
 
     return test_files

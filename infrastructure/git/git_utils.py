@@ -143,9 +143,12 @@ def get_git_diffs(
 
     try:
         if base_ref:
+            if base_ref.startswith("-"):
+                logger.warning("Rejected suspicious base_ref: %s", base_ref)
+                return None
             # Diff against specific ref
             diff_cmd = subprocess.run(
-                ["git", "-C", str(root_path), "diff", base_ref, "--no-color"],
+                ["git", "-C", str(root_path), "diff", "--no-color", base_ref, "--"],
                 capture_output=True,
                 text=True,
                 timeout=10,

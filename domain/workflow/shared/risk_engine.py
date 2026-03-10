@@ -98,6 +98,11 @@ def analyze_blast_radius(
             for f in current_level:
                 for dep in reverse_deps.get(f, set()):
                     if dep not in depth_map:
+                        try:
+                            if not dep.is_relative_to(workspace_root):
+                                continue
+                        except (ValueError, TypeError):
+                            continue
                         depth_map[dep] = depth
                         next_level.add(dep)
             current_level = next_level
@@ -106,6 +111,11 @@ def analyze_blast_radius(
 
         # Categorize by depth
         for fp, d in depth_map.items():
+            try:
+                if not fp.is_relative_to(workspace_root):
+                    continue
+            except (ValueError, TypeError):
+                continue
             rel = os.path.relpath(fp, workspace_root)
             if d == 0:
                 result.changed.append(rel)

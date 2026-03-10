@@ -9,13 +9,36 @@ Su dung SelectionState v2 lam schema chuan duy nhat, backward-compatible voi v1.
 
 import json
 import threading
+from contextlib import contextmanager
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 from domain.selection.provenance import SelectionState
 from domain.selection.selection_reader import read_selection_state
 from infrastructure.mcp.utils.file_utils import atomic_write
 
 _selection_lock = threading.Lock()
+
+
+@contextmanager
+def _cross_process_lock(session_file: Path):
+    """Lock bao ve ca thread lan process."""
+    lock_path = session_file.with_suffix(".lock")
+    with _selection_lock:
+        if fcntl:
+            lock_fd = open(lock_path, "w")
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                yield
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+        else:
+            yield
 
 
 class SessionManager:
@@ -71,7 +94,7 @@ class SessionManager:
         Returns:
             String ket qua.
         """
-        with _selection_lock:
+        with _cross_process_lock(session_file):
             valid = []
             for rp in paths:
                 fp = (workspace / rp).resolve()
@@ -100,7 +123,7 @@ class SessionManager:
         Returns:
             String ket qua.
         """
-        with _selection_lock:
+        with _cross_process_lock(session_file):
             state = read_selection_state(session_file)
 
             added = 0
@@ -129,7 +152,7 @@ class SessionManager:
         Returns:
             String xac nhan da xoa.
         """
-        with _selection_lock:
+        with _cross_process_lock(session_file):
             state = SelectionState()
             atomic_write(session_file, json.dumps(state.to_dict(), indent=2))
             return "Selection cleared."

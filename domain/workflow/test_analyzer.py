@@ -205,7 +205,7 @@ def analyze_test_coverage(
         coverage.test_files = test_files
         all_existing_tests.update(test_files)
 
-        # Buoc 3: Extract test symbols va match voi source symbols
+        # Buoc 3: Extract test symbols va match voi source symbols (usage-aware)
         test_symbol_names: Set[str] = set()
         for test_rel in test_files:
             test_full = workspace_path / test_rel
@@ -218,14 +218,21 @@ def analyze_test_coverage(
             except Exception:
                 logger.debug("Khong the parse test file: %s", test_rel)
 
-        # Buoc 4: Match test functions voi source symbols
+        # Buoc 4: Match test functions voi source symbols (usage-aware)
+        from domain.workflow.shared.usage_aware_test_matcher import (
+            match_tests_to_source_usage_aware,
+        )
+
         tested: Dict[str, List[str]] = {}
         untested: List[Symbol] = []
 
         for sym in testable_symbols:
-            matching_tests = _match_test_to_source(sym, test_symbol_names)
-            if matching_tests:
-                tested[sym.name] = matching_tests
+            # Use usage-aware matcher
+            matching_test_files = match_tests_to_source_usage_aware(
+                workspace_path, source_rel, sym.name, test_files
+            )
+            if matching_test_files:
+                tested[sym.name] = matching_test_files
             else:
                 untested.append(sym)
 

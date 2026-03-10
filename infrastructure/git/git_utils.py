@@ -123,35 +123,55 @@ def is_git_repo(root_path: Path) -> bool:
         return False
 
 
-def get_git_diffs(root_path: Path) -> Optional[GitDiffResult]:
+def get_git_diffs(
+    root_path: Path, base_ref: Optional[str] = None
+) -> Optional[GitDiffResult]:
     """
     Get git diff for working tree and staged changes.
     Equivalent to Repomix getGitDiffs.
+
+    Args:
+        root_path: Git repository root
+        base_ref: Optional git ref to diff against (e.g., "main", "HEAD~1")
+                 If None, diffs working tree and staged changes.
+
+    Returns:
+        GitDiffResult with work_tree_diff and staged_diff
     """
     if not is_git_repo(root_path):
         return None
 
     try:
-        # Working tree diff (unstaged)
-        # --no-color is important to avoid ANSI codes in output
-        work_tree = subprocess.run(
-            ["git", "-C", str(root_path), "diff", "--no-color"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        if base_ref:
+            # Diff against specific ref
+            diff_cmd = subprocess.run(
+                ["git", "-C", str(root_path), "diff", base_ref, "--no-color"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return GitDiffResult(work_tree_diff=diff_cmd.stdout or "", staged_diff="")
+        else:
+            # Working tree diff (unstaged)
+            # --no-color is important to avoid ANSI codes in output
+            work_tree = subprocess.run(
+                ["git", "-C", str(root_path), "diff", "--no-color"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
-        # Staged diff
-        staged = subprocess.run(
-            ["git", "-C", str(root_path), "diff", "--staged", "--no-color"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+            # Staged diff
+            staged = subprocess.run(
+                ["git", "-C", str(root_path), "diff", "--staged", "--no-color"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
-        return GitDiffResult(
-            work_tree_diff=work_tree.stdout or "", staged_diff=staged.stdout or ""
-        )
+            return GitDiffResult(
+                work_tree_diff=work_tree.stdout or "", staged_diff=staged.stdout or ""
+            )
     except subprocess.TimeoutExpired:
         logger.warning("Git diff timed out")
         return None

@@ -23,6 +23,27 @@ from application.services.workspace_index import collect_files_from_disk
 logger = logging.getLogger(__name__)
 
 
+def _calculate_diff_stats(diff_text: str) -> Dict[str, int]:
+    """Tính insertions/deletions từ diff text.
+
+    Args:
+        diff_text: Unified diff format text
+
+    Returns:
+        Dict với keys "insertions" và "deletions"
+    """
+    insertions = 0
+    deletions = 0
+
+    for line in diff_text.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            insertions += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            deletions += 1
+
+    return {"insertions": insertions, "deletions": deletions}
+
+
 @dataclass
 class ReviewResult:
     """
@@ -75,9 +96,9 @@ def run_code_review(
 
     tok_service = tokenization_service or TokenizationService()
 
-    # Step 1: Pull git diff
+    # Step 1: Pull git diff (với base_ref nếu có)
     try:
-        diff_result = get_git_diffs(ws)
+        diff_result = get_git_diffs(ws, base_ref=base_ref)
         if not diff_result:
             return ReviewResult(
                 prompt="[No changes detected in git diff]",
@@ -182,12 +203,17 @@ def run_code_review(
         if file_path in scope.relevant_symbols:
             changed_symbols.extend(scope.relevant_symbols[file_path])
 
+    # Calculate diff stats từ actual diff
+    diff_stats = _calculate_diff_stats(
+        diff_result.work_tree_diff + diff_result.staged_diff
+    )
+
     return ReviewResult(
         prompt=prompt,
         total_tokens=total_tokens,
         files_changed=len(scope.primary_files),
         files_context=len(caller_files) + len(test_files),
-        diff_stats={"insertions": 0, "deletions": 0},  # TODO: parse from diff
+        diff_stats=diff_stats,
         changed_symbols=changed_symbols,
     )
 

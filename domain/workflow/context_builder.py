@@ -200,6 +200,7 @@ def run_context_builder(
         context.extra_sections["git_changes"] = git_section
 
     prompt = format_handoff_xml(context)
+    actual_total_tokens = tok_service.count_tokens(prompt)
 
     # Step 6: Write to output file if specified
     if output_file:
@@ -215,7 +216,7 @@ def run_context_builder(
 
     return BuildResult(
         prompt=prompt,
-        total_tokens=budget_result.total_tokens,
+        total_tokens=actual_total_tokens,
         files_included=len(budget_result.file_contents),
         files_sliced=len(budget_result.files_sliced),
         files_smart_only=len(budget_result.files_smartified),

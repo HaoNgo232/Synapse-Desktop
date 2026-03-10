@@ -55,7 +55,7 @@ def analyze_blast_radius(
 
     try:
         resolver = DependencyResolver(workspace_root)
-        resolver.build_file_index(None)
+        resolver.build_file_index_from_disk(workspace_root)
 
         code_exts = {
             ".py",
@@ -150,7 +150,8 @@ def _find_related_tests(
 
     for af in depth_map:
         stem = af.stem
-        candidates = _get_test_candidates(stem)
+        ext = af.suffix.lower()
+        candidates = _get_test_candidates(stem, ext)
 
         for c in candidates:
             c_lower = c.lower()
@@ -164,9 +165,9 @@ def _find_related_tests(
     return test_files
 
 
-def _get_test_candidates(stem: str) -> List[str]:
+def _get_test_candidates(stem: str, ext: str = "") -> List[str]:
     """Generate test file name candidates."""
-    return [
+    candidates = [
         f"test_{stem}.py",
         f"{stem}_test.py",
         f"test_{stem}.ts",
@@ -174,6 +175,15 @@ def _get_test_candidates(stem: str) -> List[str]:
         f"test_{stem}.js",
         f"{stem}.test.js",
     ]
+    if ext == ".go":
+        candidates.append(f"{stem}_test.go")
+    elif ext == ".rs":
+        candidates.extend([f"{stem}_test.rs", f"test_{stem}.rs"])
+    elif ext == ".java":
+        candidates.extend([f"{stem}Test.java", f"{stem}Tests.java", f"Test{stem}.java"])
+    elif ext in (".c", ".cpp", ".h", ".hpp"):
+        candidates.extend([f"test_{stem}.cpp", f"{stem}_test.cpp", f"test_{stem}.c"])
+    return candidates
 
 
 def _calculate_risk_score(result: BlastRadiusResult) -> float:

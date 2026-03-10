@@ -8,6 +8,16 @@ import os
 import tempfile
 from pathlib import Path
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore
+
 
 def atomic_write(path: Path, data: str) -> None:
     """Ghi file du lieu theo kieu atomic de tranh mat du lieu khi ghi dong thoi.
@@ -35,7 +45,21 @@ def atomic_write(path: Path, data: str) -> None:
         f = os.fdopen(tmp_fd, "w", encoding="utf-8")
         fd_owned = True  # os.fdopen thanh cong, no se quan ly fd tu gio
         try:
+            if fcntl:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            elif msvcrt:
+                # Windows simple locking (e.g. lock from beginning, say 10MB)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 10485760)  # type: ignore
+
             f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+
+            if fcntl:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            elif msvcrt:
+                # Windows unlock
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 10485760)  # type: ignore
         finally:
             f.close()
         os.replace(tmp_path, str(path))

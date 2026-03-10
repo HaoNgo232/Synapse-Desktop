@@ -169,6 +169,12 @@ def build_hybrid_investigation_graph(
 
                 for changed_file in list(changed_files_set)[:5]:
                     if changed_file not in visited:
+                        # Kiem tra file con ton tai truoc khi them
+                        changed_abs = (workspace_root / changed_file).resolve()
+                        if not changed_abs.is_file():
+                            continue
+                        if not changed_abs.is_relative_to(workspace_root):
+                            continue
                         visited.add(changed_file)
                         nodes.append(
                             InvestigationNode(

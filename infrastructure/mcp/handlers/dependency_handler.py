@@ -5,7 +5,6 @@ Bao gom: get_imports_graph, get_related_tests, blast_radius.
         (get_callers da go bo - dung built-in lsp_find_references.)
 """
 
-import asyncio
 import os
 from pathlib import Path
 from typing import Annotated, List, Optional
@@ -290,10 +289,7 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         try:
-            from application.services.dependency_resolver import DependencyResolver
-            from application.services.workspace_index import collect_files_from_disk
-
-            max_depth = max(1, min(max_depth, 5))
+            from domain.workflow.shared.risk_engine import analyze_blast_radius
 
             # Validate all file paths
             target_files: list[Path] = []
@@ -308,201 +304,70 @@ def register_tools(mcp_instance) -> None:
             if not target_files:
                 return "Error: No valid file paths provided."
 
-            def _analyze() -> dict:
-                resolver = DependencyResolver(ws)
-                resolver.build_file_index(None)
-
-                code_exts = {
-                    ".py",
-                    ".js",
-                    ".ts",
-                    ".jsx",
-                    ".tsx",
-                    ".go",
-                    ".rs",
-                    ".java",
-                    ".c",
-                    ".cpp",
-                    ".h",
-                }
-                all_files = collect_files_from_disk(ws, workspace_path=ws)
-                code_files = [
-                    Path(f) for f in all_files if Path(f).suffix.lower() in code_exts
-                ]
-
-                # Build reverse dependency map: file -> set of files that import it
-                reverse_deps: dict[Path, set[Path]] = {}
-                for cf in code_files:
-                    try:
-                        imports = resolver.get_related_files(cf, max_depth=1)
-                        for imp in imports:
-                            if imp not in reverse_deps:
-                                reverse_deps[imp] = set()
-                            reverse_deps[imp].add(cf)
-                    except Exception:
-                        continue
-
-                # BFS from target files to find dependents at each depth level
-                depth_map: dict[Path, int] = {}
-                for tf in target_files:
-                    depth_map[tf] = 0
-
-                current_level = set(target_files)
-                for depth in range(1, max_depth + 1):
-                    next_level: set[Path] = set()
-                    for f in current_level:
-                        for dep in reverse_deps.get(f, set()):
-                            if dep not in depth_map:
-                                depth_map[dep] = depth
-                                next_level.add(dep)
-                    current_level = next_level
-                    if not current_level:
-                        break
-
-                # Categorize by depth
-                changed: list[str] = []
-                first_order: list[str] = []
-                transitive: list[tuple[str, int]] = []
-                for fp, d in depth_map.items():
-                    rel = os.path.relpath(fp, ws)
-                    if d == 0:
-                        changed.append(rel)
-                    elif d == 1:
-                        first_order.append(rel)
-                    else:
-                        transitive.append((rel, d))
-
-                # Find related test files
-                test_files: list[str] = []
-                if include_tests:
-                    file_index: dict[str, list[str]] = {}
-                    for f in all_files:
-                        name = Path(f).name.lower()
-                        if name not in file_index:
-                            file_index[name] = []
-                        file_index[name].append(f)
-
-                    seen_tests: set[str] = set()
-                    for af in depth_map:
-                        stem = af.stem
-                        ext = af.suffix.lower()
-                        candidates = _get_test_candidates(stem, ext)
-
-                        for c in candidates:
-                            c_lower = c.lower()
-                            if c_lower in file_index:
-                                for mp in file_index[c_lower]:
-                                    rel = os.path.relpath(mp, ws)
-                                    if rel not in seen_tests:
-                                        seen_tests.add(rel)
-                                        test_files.append(rel)
-
-                        # Also search in test/spec directories
-                        stem_lower = stem.lower()
-                        for fname, fpaths in file_index.items():
-                            if stem_lower in fname and (
-                                "test" in fname or "spec" in fname
-                            ):
-                                for mp in fpaths:
-                                    rel = os.path.relpath(mp, ws)
-                                    if rel not in seen_tests:
-                                        if any(
-                                            part in rel.lower()
-                                            for part in ["test", "spec", "__test"]
-                                        ):
-                                            seen_tests.add(rel)
-                                            test_files.append(rel)
-
-                # Token estimate
-                token_count = 0
-                if include_token_estimate:
-                    from application.services.tokenization_service import (
-                        TokenizationService,
-                    )
-
-                    tok_svc = TokenizationService()
-                    for fp in depth_map:
-                        try:
-                            content = fp.read_text(encoding="utf-8", errors="replace")
-                            token_count += tok_svc.count_tokens(content)
-                        except OSError:
-                            continue
-                    for tf_rel in test_files:
-                        try:
-                            content = (ws / tf_rel).read_text(
-                                encoding="utf-8", errors="replace"
-                            )
-                            token_count += tok_svc.count_tokens(content)
-                        except OSError:
-                            continue
-
-                return {
-                    "changed": sorted(changed),
-                    "first_order": sorted(first_order),
-                    "transitive": sorted(transitive, key=lambda x: (x[1], x[0])),
-                    "test_files": sorted(test_files),
-                    "token_count": token_count,
-                }
-
-            data = await asyncio.to_thread(_analyze)
-
-            # Build the report
-            total_affected = (
-                len(data["changed"])
-                + len(data["first_order"])
-                + len(data["transitive"])
-                + len(data["test_files"])
+            # Use risk engine
+            result = analyze_blast_radius(
+                ws,
+                target_files,
+                max_depth=max_depth,
+                include_tests=include_tests,
+                include_token_estimate=include_token_estimate,
             )
 
-            if total_affected <= 3:
-                risk = "LOW"
-            elif total_affected <= 10:
-                risk = "MEDIUM"
-            elif total_affected <= 25:
-                risk = "HIGH"
-            else:
-                risk = "CRITICAL"
-
-            lines = ["# Blast Radius Analysis\n"]
-
-            lines.append(f"## Directly Affected Files ({len(data['changed'])})")
-            for f in data["changed"]:
+            # Format output
+            lines = ["# Blast Radius Analysis"]
+            lines.append(f"\n## Changed Files ({len(result.changed)})")
+            for f in result.changed:
                 lines.append(f"  - {f}")
 
-            lines.append(f"\n## First-Order Dependents ({len(data['first_order'])})")
-            if data["first_order"]:
-                for f in data["first_order"]:
+            lines.append(
+                f"\n## First-Order Dependents ({len(result.first_order_dependents)})"
+            )
+            if result.first_order_dependents:
+                for f in result.first_order_dependents:
                     lines.append(f"  - {f}")
             else:
                 lines.append("  (none)")
 
-            lines.append(f"\n## Transitive Dependents ({len(data['transitive'])})")
-            if data["transitive"]:
-                for f, d in data["transitive"]:
+            lines.append(
+                f"\n## Transitive Dependents ({len(result.transitive_dependents)})"
+            )
+            if result.transitive_dependents:
+                for f, d in result.transitive_dependents:
                     lines.append(f"  - {f} (depth {d})")
             else:
                 lines.append("  (none)")
 
             if include_tests:
-                lines.append(f"\n## Related Test Files ({len(data['test_files'])})")
-                if data["test_files"]:
-                    for f in data["test_files"]:
+                lines.append(f"\n## Related Test Files ({len(result.related_tests)})")
+                if result.related_tests:
+                    for f in result.related_tests:
                         lines.append(f"  - {f}")
                 else:
                     lines.append("  (none)")
 
-            lines.append(f"\n## Risk Assessment: {risk}")
+            lines.append("\n## Risk Assessment")
+            lines.append(f"Risk Score: {result.risk_score:.2f}/1.0")
+            if result.risk_reasons:
+                lines.append("Risk Reasons:")
+                for reason in result.risk_reasons:
+                    lines.append(f"  - {reason}")
+
+            total_affected = (
+                len(result.changed)
+                + len(result.first_order_dependents)
+                + len(result.transitive_dependents)
+            )
             lines.append(f"Total affected files: {total_affected}")
 
             if include_token_estimate:
-                lines.append(f"Estimated tokens to review: {data['token_count']:,}")
+                lines.append(f"Estimated tokens to review: {result.token_estimate:,}")
 
             lines.append("\n## Summary")
             lines.append(
-                f"Changed: {len(data['changed'])} | "
-                f"Direct dependents: {len(data['first_order'])} | "
-                f"Transitive: {len(data['transitive'])} | "
-                f"Tests: {len(data['test_files'])}"
+                f"Changed: {len(result.changed)} | "
+                f"Direct dependents: {len(result.first_order_dependents)} | "
+                f"Transitive: {len(result.transitive_dependents)} | "
+                f"Tests: {len(result.related_tests)}"
             )
 
             return "\n".join(lines)

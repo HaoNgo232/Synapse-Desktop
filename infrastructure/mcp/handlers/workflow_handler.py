@@ -65,6 +65,12 @@ def register_tools(mcp_instance) -> None:
                 description="Relative path to write the prompt file (e.g., 'context.xml'). Returns inline if omitted."
             ),
         ] = None,
+        response_format: Annotated[
+            str,
+            Field(
+                description='Response format: "text" (human summary) or "json" (machine-readable metadata). Default: "text".'
+            ),
+        ] = "text",
     ) -> str:
         """Prepare optimized implementation context for an AI agent to build a feature.
 
@@ -98,6 +104,22 @@ def register_tools(mcp_instance) -> None:
                 output_file=output_file,
             )  # type: ignore
 
+            if response_format == "json":
+                import json
+
+                return json.dumps(
+                    {
+                        "files_included": result.files_included,
+                        "files_sliced": result.files_sliced,
+                        "files_smart_only": result.files_smart_only,
+                        "total_tokens": result.total_tokens,
+                        "scope_summary": result.scope_summary,
+                        "optimizations": result.optimizations,
+                        "output_file": output_file,
+                    }
+                )
+
+            # Default: text format
             summary = (
                 f"Context Builder Complete\n"
                 f"{'=' * 40}\n"

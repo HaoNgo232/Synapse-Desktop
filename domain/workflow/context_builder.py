@@ -164,6 +164,22 @@ def run_context_builder(
 
     inject_contract_pack_to_handoff(context, ws)
 
+    # Inject git changes nếu include_git_changes=True
+    if include_git_changes:
+        from infrastructure.git.git_utils import get_git_diffs
+
+        git_diff = get_git_diffs(ws)
+        if git_diff and (git_diff.work_tree_diff or git_diff.staged_diff):
+            git_section = "<git_changes>\n"
+            if git_diff.staged_diff:
+                git_section += "<staged>\n" + git_diff.staged_diff + "\n</staged>\n"
+            if git_diff.work_tree_diff:
+                git_section += (
+                    "<unstaged>\n" + git_diff.work_tree_diff + "\n</unstaged>\n"
+                )
+            git_section += "</git_changes>"
+            context.extra_sections["git_changes"] = git_section
+
     prompt = format_handoff_xml(context)
 
     # Step 6: Write to output file if specified

@@ -235,6 +235,11 @@ def run_test_builder(
         extra_sections={"test_analysis": test_analysis_xml},
     )
 
+    # Inject contract pack vào extra_sections
+    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+
+    inject_contract_pack_to_handoff(context, ws)
+
     prompt = format_handoff_xml(context)
 
     # Ghi ra file neu duoc yeu cau

@@ -154,6 +154,11 @@ def run_bug_investigation(
         },
     )
 
+    # Inject contract pack vào extra_sections
+    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+
+    inject_contract_pack_to_handoff(context, ws)
+
     prompt = format_handoff_xml(context)
     total_tokens = tok_service.count_tokens(prompt)
 

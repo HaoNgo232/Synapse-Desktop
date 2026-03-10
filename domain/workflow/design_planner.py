@@ -307,6 +307,11 @@ def run_design_planner(
         },
     )
 
+    # Inject contract pack vào extra_sections
+    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+
+    inject_contract_pack_to_handoff(context, ws)
+
     prompt = format_handoff_xml(context)
 
     # Step 10: Write to output file if specified

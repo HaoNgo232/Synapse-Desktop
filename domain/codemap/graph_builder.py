@@ -37,6 +37,8 @@ class CodeMapBuilder:
         """
         self.workspace_root = workspace_root
         self.codemaps: dict[str, CodeMap] = {}
+        self._callers_index: dict[str, list[str]] = {}
+        self._callees_index: dict[str, list[str]] = {}
 
     def build_for_file(
         self, file_path: str, content: Optional[str] = None
@@ -76,6 +78,12 @@ class CodeMapBuilder:
 
         # Cache it
         self.codemaps[file_path] = codemap
+
+        # Update indexes
+        for rel in relationships:
+            if rel.kind.value == "calls":
+                self._callers_index.setdefault(rel.target, []).append(rel.source)
+                self._callees_index.setdefault(rel.source, []).append(rel.target)
 
         return codemap
 
@@ -175,14 +183,7 @@ class CodeMapBuilder:
         Returns:
             List of caller names
         """
-        callers: list[str] = []
-
-        for codemap in self.codemaps.values():
-            for rel in codemap.relationships:
-                if rel.target == function_name and rel.kind.value == "calls":
-                    callers.append(rel.source)
-
-        return callers
+        return self._callers_index.get(function_name, [])
 
     def get_callees(self, function_name: str) -> list[str]:
         """
@@ -194,18 +195,13 @@ class CodeMapBuilder:
         Returns:
             List of callee names
         """
-        callees: list[str] = []
-
-        for codemap in self.codemaps.values():
-            for rel in codemap.relationships:
-                if rel.source == function_name and rel.kind.value == "calls":
-                    callees.append(rel.target)
-
-        return callees
+        return self._callees_index.get(function_name, [])
 
     def clear_cache(self) -> None:
         """Clear tất cả cached CodeMaps."""
         self.codemaps.clear()
+        self._callers_index.clear()
+        self._callees_index.clear()
 
     def invalidate_file(self, file_path: str) -> None:
         """
@@ -215,4 +211,18 @@ class CodeMapBuilder:
             file_path: File path cần invalidate
         """
         if file_path in self.codemaps:
+            codemap = self.codemaps[file_path]
+            # Remove from indexes
+            for rel in codemap.relationships:
+                if rel.kind.value == "calls":
+                    if rel.target in self._callers_index:
+                        try:
+                            self._callers_index[rel.target].remove(rel.source)
+                        except ValueError:
+                            pass
+                    if rel.source in self._callees_index:
+                        try:
+                            self._callees_index[rel.source].remove(rel.target)
+                        except ValueError:
+                            pass
             del self.codemaps[file_path]

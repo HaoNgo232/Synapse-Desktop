@@ -55,8 +55,9 @@ def extract_symbols(file_path: str, content: str) -> list[Symbol]:
 
         # Extract symbols từ AST
         symbols: list[Symbol] = []
+        lines = content.split("\n")
         _extract_symbols_recursive(
-            tree.root_node, content, file_path, symbols, parent=None
+            tree.root_node, lines, file_path, symbols, parent=None
         )
 
         return symbols
@@ -67,7 +68,7 @@ def extract_symbols(file_path: str, content: str) -> list[Symbol]:
 
 def _extract_symbols_recursive(
     node: Node,
-    content: str,
+    lines: list[str],
     file_path: str,
     symbols: list[Symbol],
     parent: Optional[str] = None,
@@ -77,12 +78,11 @@ def _extract_symbols_recursive(
 
     Args:
         node: Current AST node
-        content: File content
+        lines: Split file content into lines
         file_path: File path
         symbols: List để append symbols vào
         parent: Parent symbol name (for methods)
     """
-    lines = content.split("\n")
 
     # Check node type và extract symbol
     symbol = _node_to_symbol(node, lines, file_path, parent)
@@ -94,7 +94,7 @@ def _extract_symbols_recursive(
 
     # Recursively process children
     for child in node.children:
-        _extract_symbols_recursive(child, content, file_path, symbols, parent)
+        _extract_symbols_recursive(child, lines, file_path, symbols, parent)
 
 
 def _node_to_symbol(

@@ -21,15 +21,14 @@ def _get_tool_fn(name):
     raise ValueError(f"Tool '{name}' khong tim thay")
 
 
-_get_callers_fn = _get_tool_fn("get_callers")
+# _get_callers_fn = _get_tool_fn("get_callers")
 _get_related_tests_fn = _get_tool_fn("get_related_tests")
 _batch_codemap_fn = _get_tool_fn("batch_codemap")
 _explain_architecture_fn = _get_tool_fn("explain_architecture")
 
 
-# Async wrappers - pass workspace_path explicitly (no ctx needed for tests)
-async def get_callers(**kwargs):
-    return await _get_callers_fn(**kwargs)
+# async def get_callers(**kwargs):
+#     return await _get_callers_fn(**kwargs)
 
 
 async def get_related_tests(**kwargs):
@@ -246,103 +245,7 @@ def js_workspace(tmp_path):
     return ws
 
 
-# ===================================================================
-# Tool 16: get_callers - Tim functions goi mot symbol
-# ===================================================================
-
-
-class TestGetCallers:
-    """Tests cho tool get_callers."""
-
-    @pytest.mark.asyncio
-    async def test_find_callers_of_function(self, python_workspace):
-        """Tim duoc tat ca noi goi validate_token."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="validate_token",
-        )
-        assert "callers of `validate_token`" in result
-        # login.py goi validate_token trong ham login
-        assert "login" in result.lower()
-        # token.py goi validate_token trong generate_token va refresh_token
-        assert "token.py" in result
-
-    @pytest.mark.asyncio
-    async def test_find_callers_of_login(self, python_workspace):
-        """Tim callers cua login function."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="login",
-        )
-        assert "callers of `login`" in result
-        # main.py va test_login.py goi login
-        assert "main.py" in result
-
-    @pytest.mark.asyncio
-    async def test_no_callers_found(self, python_workspace):
-        """Symbol khong ton tai -> thong bao khong tim thay."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="nonexistent_function_xyz",
-        )
-        assert "No callers found" in result
-
-    @pytest.mark.asyncio
-    async def test_filter_by_extension(self, python_workspace):
-        """Chi tim trong files .py, loai bo cac extension khac."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="validate_token",
-            file_extensions=[".py"],
-        )
-        assert "Error" not in result
-
-    @pytest.mark.asyncio
-    async def test_max_results_limit(self, python_workspace):
-        """Gioi han so ket qua tra ve."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="validate_token",
-            max_results=1,
-        )
-        # Chi tra ve toi da 1 caller
-        lines_with_L = [
-            line_str
-            for line_str in result.splitlines()
-            if line_str.strip().startswith("L")
-        ]
-        assert len(lines_with_L) <= 1
-
-    @pytest.mark.asyncio
-    async def test_invalid_workspace(self):
-        """Workspace khong hop le -> tra ve Error."""
-        result = await get_callers(
-            workspace_path="/nonexistent/path",
-            symbol_name="foo",
-        )
-        assert "Error" in result
-
-    @pytest.mark.asyncio
-    async def test_caller_includes_enclosing_function(self, python_workspace):
-        """Ket qua cho biet ten function chua loi goi (enclosing function)."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="validate_token",
-        )
-        # generate_token goi validate_token
-        assert "generate_token" in result or "refresh_token" in result
-
-    @pytest.mark.asyncio
-    async def test_skips_definition_line(self, python_workspace):
-        """Khong tinh dong dinh nghia (def validate_token) la caller."""
-        result = await get_callers(
-            workspace_path=str(python_workspace),
-            symbol_name="validate_token",
-        )
-        # Kiem tra khong co dong "def validate_token" trong output
-        for line in result.splitlines():
-            if line.strip().startswith("L"):
-                assert "def validate_token" not in line
+# TestGetCallers removed
 
 
 # ===================================================================

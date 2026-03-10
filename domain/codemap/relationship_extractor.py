@@ -214,31 +214,37 @@ def _extract_inheritance(
 
         relationships: list[Relationship] = []
 
-        # Group captures by class
-        class_bases: dict[str, list[tuple[str, int]]] = {}
-
+        # Flatten and sort captures by document order to match class with its bases
+        flat_captures = []
         for capture_name, nodes in captures.items():
             for node in nodes:
-                start_row = node.start_point[0]
-                start_col = node.start_point[1]
-                end_col = node.end_point[1]
+                flat_captures.append((node, capture_name))
+        flat_captures.sort(key=lambda x: (x[0].start_point[0], x[0].start_point[1]))
 
-                if start_row >= len(lines):
-                    continue
+        # Group captures by class
+        class_bases: dict[str, list[tuple[str, int]]] = {}
+        current_class: Optional[str] = None
 
-                name = lines[start_row][start_col:end_col]
+        for node, capture_name in flat_captures:
+            start_row = node.start_point[0]
+            start_col = node.start_point[1]
+            end_col = node.end_point[1]
 
-                if "class.name" in capture_name:
-                    if name not in class_bases:
-                        class_bases[name] = []
-                elif (
-                    "class.base" in capture_name
-                    or "class.base_attr" in capture_name
-                    or "impl.trait" in capture_name
-                ):
-                    # Find corresponding class name
-                    for class_name in class_bases.keys():
-                        class_bases[class_name].append((name, start_row + 1))
+            if start_row >= len(lines):
+                continue
+
+            name = lines[start_row][start_col:end_col]
+
+            if "class.name" in capture_name:
+                current_class = name
+                if name not in class_bases:
+                    class_bases[name] = []
+            elif current_class and (
+                "class.base" in capture_name
+                or "class.base_attr" in capture_name
+                or "impl.trait" in capture_name
+            ):
+                class_bases[current_class].append((name, start_row + 1))
 
         # Convert to Relationship objects
         for class_name, bases in class_bases.items():

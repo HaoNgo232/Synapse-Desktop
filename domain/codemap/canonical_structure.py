@@ -90,10 +90,13 @@ def build_canonical_summary(
         use_relative_paths=use_relative_paths,
     )
 
+    # 1.5 Build is_dir_map 1 lan
+    is_dir_map = _build_is_dir_map(tree)
+
     # 2. Tao repo map neu duoc yeu cau
     repo_map = ""
     if include_repo_map:
-        source_files = _filter_file_paths(selected_paths, tree)
+        source_files = _filter_file_paths(selected_paths, is_dir_map)
         if source_files:
             repo_map = generate_repo_map(
                 source_files,
@@ -111,7 +114,7 @@ def build_canonical_summary(
         )
 
     # 4. Tinh stats
-    stats = _compute_stats(selected_paths, tree)
+    stats = _compute_stats(selected_paths, is_dir_map)
 
     return WorkspaceSummary(
         file_tree=file_tree,
@@ -171,39 +174,35 @@ def _determine_format(include_repo_map: bool, include_git_changes: bool) -> str:
     return "tree"
 
 
-def _filter_file_paths(selected_paths: set[str], tree: TreeItem) -> list[str]:
+def _build_is_dir_map(tree: TreeItem) -> dict[str, bool]:
+    result: dict[str, bool] = {}
+
+    def _walk(item: TreeItem) -> None:
+        result[item.path] = item.is_dir
+        for child in item.children:
+            _walk(child)
+
+    _walk(tree)
+    return result
+
+
+def _filter_file_paths(
+    selected_paths: set[str], is_dir_map: dict[str, bool]
+) -> list[str]:
     """
     Loc chi file paths (loai bo folders) tu selected_paths.
 
-    Su dung tree de xac dinh dau la file, dau la folder.
+    Su dung is_dir_map de xac dinh dau la file, dau la folder.
     """
-    is_dir_map: dict[str, bool] = {}
-
-    def _build_map(item: TreeItem) -> None:
-        is_dir_map[item.path] = item.is_dir
-        for child in item.children:
-            _build_map(child)
-
-    _build_map(tree)
-
     return [p for p in sorted(selected_paths) if not is_dir_map.get(p, False)]
 
 
-def _compute_stats(selected_paths: set[str], tree: TreeItem) -> dict:
+def _compute_stats(selected_paths: set[str], is_dir_map: dict[str, bool]) -> dict:
     """
     Tinh thong ke file/folder counts tu selected_paths.
 
     Returns dict voi keys: file_count, folder_count, total_selected
     """
-    is_dir_map: dict[str, bool] = {}
-
-    def _build_map(item: TreeItem) -> None:
-        is_dir_map[item.path] = item.is_dir
-        for child in item.children:
-            _build_map(child)
-
-    _build_map(tree)
-
     file_count = sum(1 for p in selected_paths if not is_dir_map.get(p, False))
     total_selected = len(selected_paths)
     folder_count = total_selected - file_count

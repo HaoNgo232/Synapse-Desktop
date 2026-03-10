@@ -88,15 +88,17 @@ def save_memory_block(
                 load_memory_store,
                 save_memory_store,
             )
+            from domain.memory.memory_types import MemoryEntry
 
             store = load_memory_store(workspace)
-            store.add_entry(
+            entry = MemoryEntry(
                 layer="action",
                 content=new_block,
                 linked_files=[],
                 linked_symbols=[],
                 tags=["apply_operation"],
             )
+            store.add(entry)
             save_memory_store(workspace, store)
         except Exception as e:
             logger.warning("Failed to save memory to v2: %s", e)

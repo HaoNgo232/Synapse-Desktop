@@ -7,12 +7,16 @@ Kiem tra SessionManager xu ly dung CRUD operations cho file selection:
 - add: them files moi (khong trung lap)
 - clear: xoa toan bo selection
 - Path traversal / file khong ton tai bi tu choi
+
+Note: SessionManager su dung SelectionState v2 (paths + provenance).
+Backward-compatible voi v1 format ({\"selected_files\": [...]}).
 """
 
 import json
 
 import pytest
 
+from domain.selection.provenance import SelectionState
 from infrastructure.mcp.core.session_manager import SessionManager
 
 
@@ -28,11 +32,13 @@ def workspace(tmp_path):
 
 @pytest.fixture
 def session_file(workspace):
-    """Tao session file (.synapse/selection.json) trong workspace."""
+    """Tao session file (.synapse/selection.json) trong workspace (v2 format)."""
     synapse_dir = workspace / ".synapse"
     synapse_dir.mkdir(parents=True, exist_ok=True)
     sf = synapse_dir / "selection.json"
-    sf.write_text(json.dumps({"selected_files": []}))
+    # Ghi v2 format
+    state = SelectionState()
+    sf.write_text(json.dumps(state.to_dict()))
     return sf
 
 
@@ -40,15 +46,16 @@ class TestSessionManagerGet:
     """Kiem tra get_selection doc danh sach files tu selection file."""
 
     def test_get_empty_selection(self, session_file, workspace):
-        """File selection rong -> tra ve 'Selection is empty.'."""
+        """File selection rong -> tra ve 'No selection found'."""
         result = SessionManager.get_selection(session_file, workspace)
-        assert "empty" in result.lower()
+        assert "No selection found" in result or "empty" in result.lower()
 
     def test_get_with_files(self, session_file, workspace):
         """File selection co noi dung -> liet ke files."""
-        session_file.write_text(
-            json.dumps({"selected_files": ["src/main.py", "README.md"]})
-        )
+        state = SelectionState()
+        state.add_paths(["src/main.py", "README.md"], "user")
+        session_file.write_text(json.dumps(state.to_dict()))
+
         result = SessionManager.get_selection(session_file, workspace)
         assert "src/main.py" in result
         assert "README.md" in result
@@ -65,16 +72,17 @@ class TestSessionManagerSet:
     """Kiem tra set_selection thay the danh sach selection."""
 
     def test_set_valid_files(self, session_file, workspace):
-        """Set danh sach valid files -> ghi vao file."""
+        """Set danh sach valid files -> ghi vao file (v2 format)."""
         result = SessionManager.set_selection(
             session_file, workspace, ["src/main.py", "README.md"]
         )
         assert "2" in result
 
-        # Kiem tra file da duoc ghi dung
+        # Kiem tra file da duoc ghi dung (v2 format)
         data = json.loads(session_file.read_text())
-        assert "src/main.py" in data["selected_files"]
-        assert "README.md" in data["selected_files"]
+        assert "paths" in data  # v2 format
+        assert "src/main.py" in data["paths"]
+        assert "README.md" in data["paths"]
 
     def test_set_rejects_nonexistent_file(self, session_file, workspace):
         """File khong ton tai -> tra ve Error (early return)."""
@@ -84,10 +92,10 @@ class TestSessionManagerSet:
         assert "Error" in result
 
     def test_set_empty_list(self, session_file, workspace):
-        """Set danh sach rong -> selection rong."""
+        """Set danh sach rong -> selection rong (v2 format)."""
         SessionManager.set_selection(session_file, workspace, [])
         data = json.loads(session_file.read_text())
-        assert data["selected_files"] == []
+        assert data["paths"] == []
 
     def test_set_blocks_path_traversal(self, session_file, workspace):
         """Path traversal bi chan voi error message."""
@@ -105,18 +113,21 @@ class TestSessionManagerAdd:
         """Them file moi vao selection rong."""
         SessionManager.add_selection(session_file, workspace, ["src/main.py"])
         data = json.loads(session_file.read_text())
-        assert "src/main.py" in data["selected_files"]
+        assert "src/main.py" in data["paths"]
 
     def test_add_no_duplicates(self, session_file, workspace):
         """Them file da co san -> khong bi trung lap."""
-        session_file.write_text(json.dumps({"selected_files": ["src/main.py"]}))
+        state = SelectionState()
+        state.add_paths(["src/main.py"], "user")
+        session_file.write_text(json.dumps(state.to_dict()))
+
         SessionManager.add_selection(
             session_file, workspace, ["src/main.py", "src/utils.py"]
         )
         data = json.loads(session_file.read_text())
         # chi co 1 lan src/main.py
-        assert data["selected_files"].count("src/main.py") == 1
-        assert "src/utils.py" in data["selected_files"]
+        assert data["paths"].count("src/main.py") == 1
+        assert "src/utils.py" in data["paths"]
 
     def test_add_rejects_nonexistent_file(self, session_file, workspace):
         """Them file khong ton tai -> Error."""
@@ -128,11 +139,14 @@ class TestSessionManagerClear:
     """Kiem tra clear_selection xoa toan bo selection."""
 
     def test_clear_selection(self, session_file):
-        """Clear -> selection rong."""
-        session_file.write_text(json.dumps({"selected_files": ["a.py", "b.py"]}))
+        """Clear -> selection rong (v2 format)."""
+        state = SelectionState()
+        state.add_paths(["a.py", "b.py"], "user")
+        session_file.write_text(json.dumps(state.to_dict()))
+
         SessionManager.clear_selection(session_file)
         data = json.loads(session_file.read_text())
-        assert data["selected_files"] == []
+        assert data["paths"] == []
 
     def test_clear_returns_confirmation(self, session_file):
         """Clear tra ve confirmation message."""

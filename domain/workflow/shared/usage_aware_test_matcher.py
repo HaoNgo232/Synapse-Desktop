@@ -127,9 +127,6 @@ def _match_by_call(
     """Tầng 3: Call-aware matching - test body gọi source symbol."""
     matches: List[str] = []
 
-    if len(source_symbol) < 3:
-        return matches
-
     pattern = re.compile(r"\b" + re.escape(source_symbol) + r"\b")
 
     for test_file in test_files:

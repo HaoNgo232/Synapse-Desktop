@@ -183,6 +183,20 @@ class RelatedFilesController(QObject):
         all_selected = self._view.get_all_selected_paths()
         user_selected = all_selected - self._last_added_related_files
 
+        # Expand folders thành files (nếu user select folder)
+        expanded_files: Set[str] = set()
+        for path_str in user_selected:
+            p = Path(path_str)
+            if p.is_dir():
+                # Scan tất cả files trong folder (recursive)
+                for file_path in p.rglob("*"):
+                    if file_path.is_file():
+                        expanded_files.add(str(file_path))
+            elif p.is_file():
+                expanded_files.add(path_str)
+
+        user_selected = expanded_files
+
         # Filter to supported file types
         supported_exts = {
             ".py",

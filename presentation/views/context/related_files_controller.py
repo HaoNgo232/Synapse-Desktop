@@ -13,6 +13,7 @@ from typing import Any, Protocol, Set, runtime_checkable, Optional
 from PySide6.QtCore import QObject
 
 from application.services.dependency_resolver import DependencyResolver
+from domain.relationships.port import IRelationshipGraphProvider
 from infrastructure.adapters.qt_utils import run_on_main_thread, schedule_background
 
 
@@ -70,7 +71,10 @@ class RelatedFilesController(QObject):
     """
 
     def __init__(
-        self, view: RelatedFilesViewProtocol, parent: Optional[QObject] = None
+        self,
+        view: RelatedFilesViewProtocol,
+        graph_provider: Optional[IRelationshipGraphProvider] = None,
+        parent: Optional[QObject] = None,
     ) -> None:
         """
         Khoi tao controller voi view reference.
@@ -80,6 +84,7 @@ class RelatedFilesController(QObject):
         """
         super().__init__(parent)
         self._view = view
+        self._graph_provider = graph_provider
 
         # State
         self._mode_active: bool = False
@@ -179,14 +184,27 @@ class RelatedFilesController(QObject):
         user_selected = all_selected - self._last_added_related_files
 
         # Filter to supported file types
-        supported_exts = {".py", ".js", ".jsx", ".ts", ".tsx"}
-        source_files = [
-            Path(p)
+        supported_exts = {
+            ".py",
+            ".js",
+            ".jsx",
+            ".ts",
+            ".tsx",
+            ".go",
+            ".rs",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+            ".hpp",
+        }
+        user_selected = {
+            p
             for p in user_selected
             if Path(p).is_file() and Path(p).suffix in supported_exts
-        ]
+        }
 
-        if not source_files:
+        if not user_selected:
             if self._last_added_related_files:
                 self._view.remove_paths_from_selection(self._last_added_related_files)
                 self._last_added_related_files.clear()
@@ -194,31 +212,46 @@ class RelatedFilesController(QObject):
             return
 
         depth = self._depth
-
-        # Chay trong background de tranh block UI
-        # workspace da duoc check None o tren - capture lai de closure type safety
         workspace_path: Path = workspace  # type: ignore[assignment]
+        graph_provider = self._graph_provider
 
-        def resolve():
+        def resolve() -> None:
             try:
-                # Scan full tree de dam bao file index day du
-                full_tree = self._view.scan_full_tree(workspace_path)
-                resolver = DependencyResolver(workspace_path)
-                resolver.build_file_index(full_tree)
+                related_strs: Set[str] = set()
 
-                all_related: Set[Path] = set()
-                for file_path in source_files:
-                    related = resolver.get_related_files(file_path, max_depth=depth)
-                    all_related.update(related)
+                # Ưu tiên dùng RelationshipGraph nếu có
+                graph = graph_provider.get_graph() if graph_provider else None
 
-                # Convert sang string paths
-                related_strs = {str(p) for p in all_related if p.exists()}
-                # Loai tru files da duoc user chon
-                new_related = related_strs - user_selected
+                if graph is not None:
+                    for file_path_str in user_selected:
+                        p = Path(file_path_str)
+                        if not p.is_file():
+                            continue
+                        related = graph.get_related_files(
+                            str(p.resolve()),
+                            max_depth=depth,
+                        )
+                        related_strs.update(related)
+                else:
+                    # Fallback: DependencyResolver (behavior cũ, chỉ IMPORTS)
+                    full_tree = self._view.scan_full_tree(workspace_path)
+                    resolver = DependencyResolver(workspace_path)
+                    resolver.build_file_index(full_tree)
 
-                # Apply tren main thread de dam bao thread safety
+                    for file_path_str in user_selected:
+                        p = Path(file_path_str)
+                        if not p.is_file():
+                            continue
+                        related = resolver.get_related_files(p, max_depth=depth)
+                        for target in related:
+                            if target.exists():
+                                related_strs.add(str(target.resolve()))
+
+                # Loại bỏ những file user đã chọn trực tiếp
+                new_related = {s for s in related_strs if s not in user_selected}
+
                 run_on_main_thread(lambda: self._apply_results(new_related))
-            except Exception as err:
+            except Exception as err:  # pragma: no cover - defensive path
                 error_msg = f"Related files error: {err}"
                 run_on_main_thread(
                     lambda: self._view.show_status(error_msg, is_error=True)

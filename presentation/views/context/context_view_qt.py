@@ -13,6 +13,7 @@ from typing import Optional, Set, List, Callable, TYPE_CHECKING
 if TYPE_CHECKING:
     from infrastructure.filesystem.ignore_engine import IgnoreEngine
     from application.interfaces.tokenization_port import ITokenizationService
+    from domain.relationships.port import IRelationshipGraphProvider
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer
@@ -55,6 +56,7 @@ class ContextViewQt(
         clipboard_service=None,
         ignore_engine: Optional["IgnoreEngine"] = None,
         tokenization_service: Optional["ITokenizationService"] = None,
+        graph_provider: Optional["IRelationshipGraphProvider"] = None,
     ):
         super().__init__(parent)
         self.get_workspace = get_workspace
@@ -74,6 +76,7 @@ class ContextViewQt(
 
             tokenization_service = get_tokenization_service()
         self._tokenization_service: "ITokenizationService" = tokenization_service
+        self._graph_provider: Optional["IRelationshipGraphProvider"] = graph_provider
 
         # State
         self.tree: Optional[TreeItem] = None
@@ -105,7 +108,10 @@ class ContextViewQt(
         # RelatedFilesController: quan ly logic auto-select related files
         # TreeManagementController: quan ly refresh tree, ignore patterns, file watchers
         # NOTE: parent=None de tranh QObject init phuc tap khi QWidget.__init__ bi mock trong tests
-        self._related_controller: RelatedFilesController = RelatedFilesController(self)
+        self._related_controller: RelatedFilesController = RelatedFilesController(
+            self,
+            graph_provider=self._graph_provider,
+        )
         self._tree_controller: TreeManagementController = TreeManagementController(
             self, parent=None
         )
@@ -241,6 +247,10 @@ class ContextViewQt(
                 ),
                 debounce_seconds=0.5,
             )
+
+        # 8. Trigger RelationshipGraph build cho workspace moi (background)
+        if hasattr(self, "_graph_provider") and self._graph_provider is not None:
+            self._graph_provider.on_workspace_changed(workspace_path)
 
     def restore_tree_state(
         self, selected_files: List[str], expanded_folders: List[str]

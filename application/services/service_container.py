@@ -31,6 +31,7 @@ from application.services.tokenization_service import TokenizationService
 from application.services.service_interfaces import IPromptBuilder, IClipboardService
 from application.interfaces.tokenization_port import ITokenizationService
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from application.services.graph_service import GraphService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,12 @@ class ServiceContainer:
         # IgnoreEngine - quan ly tat ca logic ignore/gitignore
         # Khoi tao tai day de tranh module-level state
         self.ignore_engine: IgnoreEngine = IgnoreEngine()
+
+        # GraphService - quan ly RelationshipGraph o application layer
+        # Inject IgnoreEngine de ton trong cac exclude patterns khi scan files
+        self.graph_service: GraphService = GraphService(
+            ignore_engine=self.ignore_engine
+        )
 
         # TokenizationService - khoi tao noi bo thay vi dung global singleton
         # Lay tokenizer_repo tu settings hien tai
@@ -107,6 +114,11 @@ class ServiceContainer:
             self.cache_registry.invalidate_for_workspace()
         except Exception as e:
             logger.warning("Failed to invalidate caches during shutdown: %s", e)
+
+        try:
+            self.graph_service.invalidate()
+        except Exception as e:
+            logger.warning("Failed to invalidate graph service during shutdown: %s", e)
 
         logger.info("ServiceContainer shut down")
 

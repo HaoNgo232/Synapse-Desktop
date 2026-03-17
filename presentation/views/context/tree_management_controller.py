@@ -220,13 +220,19 @@ class TreeManagementController(QObject):
         # Prompt cache la instance-level (khong nam trong registry)
         self._view.invalidate_prompt_cache()
 
+        # Notify graph service cho incremental update
+        if hasattr(self._view, "_graph_provider") and self._view._graph_provider:
+            self._view._graph_provider.on_files_changed([path])
+
     def on_file_created(self, path: str) -> None:
         """
         Xu ly khi file moi duoc tao.
 
         Khong can invalidate cache cho files moi.
         """
-        pass  # No cache to invalidate for new files
+        # Notify graph service de them file moi vao graph
+        if hasattr(self._view, "_graph_provider") and self._view._graph_provider:
+            self._view._graph_provider.on_files_changed([path])
 
     def on_file_deleted(self, path: str) -> None:
         """
@@ -235,6 +241,10 @@ class TreeManagementController(QObject):
         Delegate sang on_file_modified vi can invalidate cache tuong tu.
         """
         self.on_file_modified(path)
+
+        # Notify graph service de xoa stale edges
+        if hasattr(self._view, "_graph_provider") and self._view._graph_provider:
+            self._view._graph_provider.on_files_deleted([path])
 
     def on_file_system_changed(self) -> None:
         """

@@ -333,3 +333,33 @@ EXTENDED_IGNORE_PATTERNS = [
     "**/repopack-output.*",
     "**/synapse-output.*",
 ]
+
+# Diff auto-exclude patterns (untick by default trong Copy Diff flow)
+DIFF_AUTO_EXCLUDE_PATTERNS: list[str] = [
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    "bun.lockb",
+    "bun.lock",
+    "Cargo.lock",
+    "Gemfile.lock",
+    "composer.lock",
+    "poetry.lock",
+    "Pipfile.lock",
+    "go.sum",
+    "mix.lock",
+    "uv.lock",
+    "stack.yaml.lock",
+    "cabal.project.freeze",
+]
+
+# Glob patterns cho auto-exclude diff
+DIFF_AUTO_EXCLUDE_GLOBS: list[str] = [
+    "*.lock",
+    "*.min.js",
+    "*.min.css",
+    "*.map",
+    "*.generated.*",
+    "*.pb.go",
+    "*.pb.ts",
+]

@@ -16,5 +16,6 @@
     "dist"
   ],
   "stubPath": "stubs",
+  "extraPaths": ["."],
   "typeCheckingMode": "strict"
 }

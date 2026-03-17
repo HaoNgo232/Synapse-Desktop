@@ -27,6 +27,7 @@ def test_edge_with_metadata() -> None:
         kind=EdgeKind.CALLS,
         metadata={"symbol": "process", "line": 42},
     )
+    assert edge.metadata is not None
     assert edge.metadata["symbol"] == "process"
     assert edge.metadata["line"] == 42
 

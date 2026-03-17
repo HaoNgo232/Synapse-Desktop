@@ -982,7 +982,12 @@ class CopyActionController(QObject):
             self._save_instruction_to_history(instructions)
 
             def _build_diff_prompt(
-                diff_result, instructions, include_content, include_tree
+                diff_result,
+                instructions,
+                include_content,
+                include_tree,
+                include_related=False,
+                related_depth=1,
             ):
                 return build_diff_only_prompt(
                     diff_result,
@@ -991,6 +996,8 @@ class CopyActionController(QObject):
                     include_tree,
                     workspace_root=workspace,
                     use_relative_paths=get_use_relative_paths(),
+                    include_related_files=include_related,
+                    related_depth=related_depth,
                 )
 
             dialog = DiffOnlyDialogQt(

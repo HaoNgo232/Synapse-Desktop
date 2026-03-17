@@ -23,6 +23,8 @@ from infrastructure.git.git_utils import (
     GitDiffResult,
     GitLogResult,
     GitCommit,
+    extract_changed_files_from_diff,
+    filter_diff_by_files,
 )
 
 
@@ -290,6 +292,78 @@ class TestIntegration:
         assert isinstance(result, GitLogResult)
         # Repo có commits nên phải có data
         assert len(result.commits) > 0
+
+
+class TestDiffFiltering:
+    """Test filter_diff_by_files() va extract_changed_files_from_diff()."""
+
+    def test_filter_diff_by_files_basic(self):
+        diff = """diff --git a/src/app.py b/src/app.py
+index abc..def 100644
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,3 +1,4 @@
++import os
+ import sys
+
+ def main():
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 111..222 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -1,100 +1,150 @@
+-old lock content
++new lock content
+diff --git a/src/utils.py b/src/utils.py
+index 333..444 100644
+--- a/src/utils.py
++++ b/src/utils.py
+@@ -5,3 +5,5 @@
+ def helper():
+-    pass
++    return True
++    # added comment
+"""
+        result = filter_diff_by_files(diff, ["src/app.py", "src/utils.py"])
+        assert "src/app.py" in result
+        assert "src/utils.py" in result
+        assert "pnpm-lock.yaml" not in result
+
+    def test_filter_diff_empty_selection(self):
+        diff = "diff --git a/file.py b/file.py\n..."
+        result = filter_diff_by_files(diff, [])
+        assert result == ""
+
+    def test_filter_diff_all_selected(self):
+        diff = """diff --git a/a.py b/a.py
+--- a/a.py
++++ b/a.py
+@@ -1 +1 @@
+-old
++new
+"""
+        result = filter_diff_by_files(diff, ["a.py"])
+        assert "a.py" in result
+
+    def test_extract_changed_files(self):
+        diff = """diff --git a/src/app.py b/src/app.py
+index abc..def
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 111..222
+diff --git a/src/utils.py b/src/utils.py
+index 333..444
+"""
+        files = extract_changed_files_from_diff(diff)
+        assert files == ["src/app.py", "pnpm-lock.yaml", "src/utils.py"]
+
+    def test_extract_renamed_files(self):
+        diff = """diff --git a/old_name.py b/new_name.py
+similarity index 95%
+rename from old_name.py
+rename to new_name.py
+"""
+        files = extract_changed_files_from_diff(diff)
+        assert "new_name.py" in files
 
 
 if __name__ == "__main__":

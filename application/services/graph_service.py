@@ -157,12 +157,11 @@ class GraphService(IRelationshipGraphProvider):
             if current_generation != self._generation:
                 return  # Workspace đã thay đổi, discard result
 
-            if self._graph is None:
-                self._graph = incremental_graph
-                return
+            # Khi generation không đổi thì _graph không thể None do đã check ở đầu method.
+            current_graph = self._graph
 
             # Copy-on-write: Clone graph trước khi mutate để tránh race với readers
-            new_graph = self._clone_graph(self._graph)
+            new_graph = self._clone_graph(current_graph)
 
             for file_path in normalized:
                 new_graph.remove_edges_for_file(file_path)
@@ -259,23 +258,10 @@ class GraphService(IRelationshipGraphProvider):
         all_files = collect_files_from_disk(
             workspace_root,
             workspace_path=workspace_root,
+            ignore_engine=self._ignore_engine,  # Truyền ignore_engine để respect excluded patterns
         )
 
-        # Áp dụng ignore_engine nếu có
-        file_paths: list[str] = []
-        pathspec = None
-        if self._ignore_engine is not None:
-            pathspec = self._ignore_engine.build_pathspec(workspace_root)
-
-        for path_str in all_files:
-            p = Path(path_str)
-            if not p.is_file():
-                continue
-            if pathspec is not None:
-                rel_path = p.relative_to(workspace_root)
-                if pathspec.match_file(str(rel_path)):
-                    continue
-            file_paths.append(str(p))
+        file_paths = [p for p in all_files if Path(p).is_file()]
 
         builder = GraphBuilder(workspace_root=workspace_root)
         graph = builder.build(

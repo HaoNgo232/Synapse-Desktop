@@ -4,11 +4,23 @@ Dialogs Qt - PySide6 versions of all dialogs.
 
 import json
 import threading
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Callable, TYPE_CHECKING
+from typing import (
+    Optional,
+    Callable,
+    TYPE_CHECKING,
+    Protocol,
+    Sequence,
+    TypeAlias,
+    Any,
+    cast,
+)
 
 if TYPE_CHECKING:
+    from infrastructure.adapters.security_check import SecretMatch
     from infrastructure.git.repo_manager import RepoManager
+    from infrastructure.git.git_utils import DiffOnlyResult
     from application.interfaces.tokenization_port import ITokenizationService
 
 from PySide6.QtWidgets import (
@@ -26,6 +38,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QGridLayout,
+    QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer
 from PySide6.QtGui import QFont
@@ -33,6 +46,31 @@ from PySide6.QtGui import QFont
 from presentation.config.theme import ThemeColors
 from infrastructure.adapters.qt_utils import run_on_main_thread
 from infrastructure.adapters.clipboard_utils import copy_to_clipboard
+from shared.utils.diff_filter_utils import should_auto_exclude as _should_auto_exclude
+
+
+class SecurityMatchLike(Protocol):
+    """Protocol cho security match objects de tranh Unknown type cascade."""
+
+    secret_type: str
+    file_path: Optional[str]
+    line_number: int
+    redacted_preview: str
+
+
+class CachedRepoLike(Protocol):
+    """Protocol cho cached repo entry trong cache management dialog."""
+
+    name: str
+    size_bytes: int
+    last_modified: Optional[datetime]
+    path: Path
+
+
+BuildDiffPromptCallback: TypeAlias = Callable[
+    ["DiffOnlyResult", str, bool, bool, bool, int],
+    str,
+]
 
 
 # ============================================================
@@ -92,12 +130,12 @@ class SecurityDialogQt(BaseDialogQt):
         self,
         parent: QWidget,
         prompt: str,
-        matches: list,
+        matches: Sequence["SecretMatch"],
         on_copy_anyway: Callable[[str], None],
     ):
         super().__init__(parent, "Security Warning")
         self.prompt = prompt
-        self.matches = matches
+        self.matches: list["SecretMatch"] = list(matches)
         self.on_copy_anyway = on_copy_anyway
         self.setMinimumWidth(550)
         self._build_ui()
@@ -201,7 +239,7 @@ class SecurityDialogQt(BaseDialogQt):
 
     @Slot()
     def _copy_results(self) -> None:
-        results_data = [
+        results_data: list[dict[str, str | int]] = [
             {
                 "type": m.secret_type,
                 "file": m.file_path or "N/A",
@@ -230,7 +268,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self,
         parent: QWidget,
         workspace: Path,
-        build_prompt_callback: Callable,
+        build_prompt_callback: BuildDiffPromptCallback,
         tokenization_service: "ITokenizationService",
         instructions: str = "",
         on_success: Optional[Callable[[str], None]] = None,
@@ -241,7 +279,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self._tokenization_service = tokenization_service
         self.instructions = instructions
         self.on_success = on_success
+        self._file_checkboxes: dict[str, QCheckBox] = {}
         self._build_ui()
+        QTimer.singleShot(0, self._refresh_changed_files)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -284,7 +324,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         form.addWidget(QLabel("Filter files:"), 0, 2)
         self._file_pattern = QLineEdit()
-        self._file_pattern.setPlaceholderText("e.g., *.py, src/*.ts")
+        self._file_pattern.setPlaceholderText(
+            "Optional include glob(s), e.g. *.py,src/*.ts"
+        )
         form.addWidget(self._file_pattern, 0, 3)
         layout.addLayout(form)
 
@@ -312,6 +354,56 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self._include_tree.setChecked(True)
         layout.addWidget(self._include_tree)
 
+        related_row = QHBoxLayout()
+        self._include_related_files = QCheckBox("Include related files content")
+        self._include_related_files.setChecked(False)
+        related_row.addWidget(self._include_related_files)
+
+        related_row.addWidget(QLabel("Depth:"))
+        self._related_depth = QLineEdit("1")
+        self._related_depth.setFixedWidth(50)
+        self._related_depth.setPlaceholderText("1")
+        related_row.addWidget(self._related_depth)
+        related_row.addStretch()
+        layout.addLayout(related_row)
+
+        layout.addWidget(
+            self._make_label(
+                "Changed files (tick/untick before copy, noisy files auto-unticked):"
+            )
+        )
+
+        files_action_row = QHBoxLayout()
+        refresh_files_btn = self._make_outlined_btn("Refresh Files")
+        refresh_files_btn.clicked.connect(self._refresh_changed_files)
+        files_action_row.addWidget(refresh_files_btn)
+
+        select_all_btn = self._make_outlined_btn("Select All")
+        select_all_btn.clicked.connect(self._select_all_files)
+        files_action_row.addWidget(select_all_btn)
+
+        select_recommended_btn = self._make_outlined_btn("Select Recommended")
+        select_recommended_btn.clicked.connect(self._select_recommended_files)
+        files_action_row.addWidget(select_recommended_btn)
+        files_action_row.addStretch()
+        layout.addLayout(files_action_row)
+
+        self._files_scroll = QScrollArea()
+        self._files_scroll.setWidgetResizable(True)
+        self._files_scroll.setMinimumHeight(130)
+        self._files_scroll.setMaximumHeight(220)
+        self._files_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._files_scroll.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+
+        self._files_widget = QWidget()
+        self._files_layout = QVBoxLayout(self._files_widget)
+        self._files_layout.setContentsMargins(4, 4, 4, 4)
+        self._files_layout.setSpacing(6)
+        self._files_scroll.setWidget(self._files_widget)
+        layout.addWidget(self._files_scroll)
+
         self._status = self._make_status_label()
         layout.addWidget(self._status)
 
@@ -328,20 +420,32 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
     @Slot()
     def _do_copy(self) -> None:
-        from infrastructure.git.git_utils import get_diff_only
+        from infrastructure.adapters.qt_utils import schedule_background
 
         commits = self._get_num_commits()
+        include_staged = self._include_staged.isChecked()
+        include_unstaged = self._include_unstaged.isChecked()
 
         self._status.setText("Getting diff...")
         self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
 
-        result = get_diff_only(
-            self.workspace,
-            num_commits=commits,
-            include_staged=self._include_staged.isChecked(),
-            include_unstaged=self._include_unstaged.isChecked(),
+        def _work():
+            from infrastructure.git.git_utils import get_diff_only
+
+            return get_diff_only(
+                self.workspace,
+                num_commits=commits,
+                include_staged=include_staged,
+                include_unstaged=include_unstaged,
+            )
+
+        schedule_background(
+            _work,
+            on_result=self._on_copy_result,
+            on_error=lambda msg: self._on_copy_error(str(msg)),
         )
 
+    def _on_copy_result(self, result: "DiffOnlyResult") -> None:
         if result.error:
             self._status.setText(f"Error: {result.error}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
@@ -352,11 +456,18 @@ class DiffOnlyDialogQt(BaseDialogQt):
             self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
             return
 
+        filtered = self._prepare_result_with_file_filter(result)
+        if filtered is None:
+            return
+        result = filtered
+
         prompt = self.build_prompt_callback(
             result,
             self.instructions,
             self._include_file_content.isChecked(),
             self._include_tree.isChecked(),
+            self._include_related_files.isChecked(),
+            self._get_related_depth(),
         )
 
         success, message = copy_to_clipboard(prompt)
@@ -373,6 +484,10 @@ class DiffOnlyDialogQt(BaseDialogQt):
             self._status.setText(f"Copy failed: {message}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
 
+    def _on_copy_error(self, msg: str) -> None:
+        self._status.setText(f"Error: {msg}")
+        self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
+
     def _get_num_commits(self) -> int:
         try:
             return max(0, int(self._num_commits.text() or "0"))
@@ -382,6 +497,165 @@ class DiffOnlyDialogQt(BaseDialogQt):
     def _adjust_commits(self, delta: int) -> None:
         commits = max(0, self._get_num_commits() + delta)
         self._num_commits.setText(str(commits))
+
+    def _get_related_depth(self) -> int:
+        try:
+            return max(1, int(self._related_depth.text() or "1"))
+        except ValueError:
+            return 1
+
+    def _clear_file_checkboxes(self) -> None:
+        while self._files_layout.count():
+            item = self._files_layout.takeAt(0)
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self._file_checkboxes = {}
+
+    def _populate_file_checkboxes(self, files: list[str]) -> None:
+        previous_state = {
+            path: checkbox.isChecked()
+            for path, checkbox in self._file_checkboxes.items()
+        }
+        self._clear_file_checkboxes()
+
+        for file_path in files:
+            checkbox = QCheckBox(file_path)
+            checkbox.setChecked(
+                previous_state.get(file_path, not _should_auto_exclude(file_path))
+            )
+            self._files_layout.addWidget(checkbox)
+            self._file_checkboxes[file_path] = checkbox
+
+        self._files_layout.addStretch()
+
+    def _get_selected_files(self) -> list[str]:
+        return [
+            path
+            for path, checkbox in self._file_checkboxes.items()
+            if checkbox.isChecked()
+        ]
+
+    def _apply_file_pattern_filter(self, selected_files: list[str]) -> list[str]:
+        import fnmatch
+
+        raw = (self._file_pattern.text() or "").strip()
+        if not raw:
+            return selected_files
+
+        patterns = [part.strip() for part in raw.split(",") if part.strip()]
+        if not patterns:
+            return selected_files
+
+        filtered: list[str] = []
+        for file_path in selected_files:
+            if any(fnmatch.fnmatch(file_path, pattern) for pattern in patterns):
+                filtered.append(file_path)
+        return filtered
+
+    def _prepare_result_with_file_filter(
+        self,
+        result: "DiffOnlyResult",
+    ) -> Optional["DiffOnlyResult"]:
+        from dataclasses import replace
+        from infrastructure.git.git_utils import filter_diff_by_files
+
+        # Không re-populate checkboxes — dùng trạng thái hiện tại của user
+        selected_files = self._get_selected_files()
+        if not selected_files:
+            self._status.setText(
+                "No files selected. Tick at least one file to copy diff."
+            )
+            self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
+            return None
+
+        selected_files = self._apply_file_pattern_filter(selected_files)
+        if not selected_files:
+            self._status.setText("Pattern filter removed all selected files.")
+            self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
+            return None
+
+        filtered_diff = filter_diff_by_files(result.diff_content, selected_files)
+        if not filtered_diff.strip():
+            self._status.setText("Selected files have no diff blocks to copy.")
+            self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
+            return None
+
+        return replace(
+            result,
+            diff_content=filtered_diff,
+            changed_files=selected_files,
+            files_changed=len(selected_files),
+        )
+
+    @Slot()
+    def _refresh_changed_files(self) -> None:
+        from infrastructure.adapters.qt_utils import schedule_background
+
+        commits = self._get_num_commits()
+        include_staged = self._include_staged.isChecked()
+        include_unstaged = self._include_unstaged.isChecked()
+
+        self._status.setText("Refreshing changed files...")
+        self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
+
+        def _work():
+            from infrastructure.git.git_utils import get_diff_only
+
+            return get_diff_only(
+                self.workspace,
+                num_commits=commits,
+                include_staged=include_staged,
+                include_unstaged=include_unstaged,
+            )
+
+        schedule_background(
+            _work,
+            on_result=self._on_refresh_result,
+            on_error=lambda msg: self._on_refresh_error(str(msg)),
+        )
+
+    def _on_refresh_result(self, result: "DiffOnlyResult") -> None:
+        from infrastructure.git.git_utils import extract_changed_files_from_diff
+
+        if result.error:
+            self._status.setText(f"Error: {result.error}")
+            self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
+            return
+
+        changed_files = extract_changed_files_from_diff(result.diff_content)
+        if not changed_files and result.changed_files:
+            changed_files = result.changed_files
+
+        if not changed_files:
+            self._clear_file_checkboxes()
+            self._status.setText("No changed files detected")
+            self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
+            return
+
+        self._populate_file_checkboxes(changed_files)
+        selected_count = len(self._get_selected_files())
+        self._status.setText(
+            f"Loaded {len(changed_files)} files ({selected_count} selected by default)"
+        )
+        self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
+
+    def _on_refresh_error(self, msg: str) -> None:
+        self._status.setText(f"Refresh error: {msg}")
+        self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
+
+    @Slot()
+    def _select_all_files(self) -> None:
+        for checkbox in self._file_checkboxes.values():
+            checkbox.setChecked(True)
+
+    @Slot()
+    def _select_recommended_files(self) -> None:
+        for path, checkbox in self._file_checkboxes.items():
+            checkbox.setChecked(not _should_auto_exclude(path))
 
 
 # ============================================================
@@ -498,7 +772,7 @@ class CacheManagementDialogQt(BaseDialogQt):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        cached_repos = self.repo_manager.get_cached_repos()
+        cached_repos = cast(list[CachedRepoLike], self.repo_manager.get_cached_repos())
         total_size = self.repo_manager.get_cache_size()
         total_size_str = self.repo_manager.format_size(total_size)
 
@@ -545,7 +819,7 @@ class CacheManagementDialogQt(BaseDialogQt):
             if item and (widget := item.widget()):
                 widget.deleteLater()
 
-        cached_repos = self.repo_manager.get_cached_repos()
+        cached_repos = cast(list[CachedRepoLike], self.repo_manager.get_cached_repos())
         if not cached_repos:
             self._list_layout.addWidget(
                 self._make_label("No repositories cloned yet.", muted=True)
@@ -556,7 +830,7 @@ class CacheManagementDialogQt(BaseDialogQt):
             card = self._build_repo_card(repo)
             self._list_layout.addWidget(card)
 
-    def _build_repo_card(self, repo) -> QFrame:
+    def _build_repo_card(self, repo: CachedRepoLike) -> QFrame:
         card = QFrame()
         card.setStyleSheet(
             f"background-color: {ThemeColors.BG_SURFACE}; "
@@ -583,13 +857,15 @@ class CacheManagementDialogQt(BaseDialogQt):
         card_layout.addLayout(info_layout, stretch=1)
 
         open_btn = self._make_outlined_btn("Open")
-        open_btn.clicked.connect(lambda checked=False, p=repo.path: self._open_repo(p))
+        open_btn.clicked.connect(lambda _checked=False, p=repo.path: self._open_repo(p))
         card_layout.addWidget(open_btn)
 
         del_btn = QPushButton("🗑")
         del_btn.setFixedWidth(32)
         del_btn.setStyleSheet(f"color: {ThemeColors.ERROR}; border: none;")
-        del_btn.clicked.connect(lambda checked=False, n=repo.name: self._delete_repo(n))
+        del_btn.clicked.connect(
+            lambda _checked=False, n=repo.name: self._delete_repo(n)
+        )
         card_layout.addWidget(del_btn)
 
         return card
@@ -683,7 +959,7 @@ class DirtyRepoDialogQt(BaseDialogQt):
         def work():
             try:
                 self.repo_manager.stash_changes(self.repo_path)
-                self.repo_manager._update_repo(self.repo_path, None, None)
+                self.repo_manager._update_repo(self.repo_path, None, None)  # pyright: ignore[reportPrivateUsage]
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (stashed)")
                 )
@@ -711,7 +987,7 @@ class DirtyRepoDialogQt(BaseDialogQt):
         def work():
             try:
                 self.repo_manager.discard_changes(self.repo_path)
-                self.repo_manager._update_repo(self.repo_path, None, None)
+                self.repo_manager._update_repo(self.repo_path, None, None)  # pyright: ignore[reportPrivateUsage]
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (discarded)")
                 )
@@ -894,17 +1170,27 @@ class FilePreviewDialogQt(BaseDialogQt):
     def _highlight_code(content: str, language: str) -> Optional[str]:
         """Apply Pygments syntax highlighting with Dracula theme."""
         try:
-            from pygments import highlight
-            from pygments.lexers import get_lexer_by_name, TextLexer
-            from pygments.formatters import HtmlFormatter
+            # Dung dynamic import de giu runtime behavior, dong thoi tranh unknown stubs.
+            pygments_mod: Any = __import__("pygments", fromlist=["highlight"])
+            lexers_mod: Any = __import__(
+                "pygments.lexers", fromlist=["get_lexer_by_name", "TextLexer"]
+            )
+            formatters_mod: Any = __import__(
+                "pygments.formatters", fromlist=["HtmlFormatter"]
+            )
+
+            highlight_fn: Any = getattr(pygments_mod, "highlight")
+            get_lexer_by_name_fn: Any = getattr(lexers_mod, "get_lexer_by_name")
+            text_lexer_cls: Any = getattr(lexers_mod, "TextLexer")
+            html_formatter_cls: Any = getattr(formatters_mod, "HtmlFormatter")
 
             try:
-                lexer = get_lexer_by_name(language, stripall=True)
+                lexer = get_lexer_by_name_fn(language, stripall=True)
             except Exception:
-                lexer = TextLexer()
+                lexer = text_lexer_cls()
 
             # Dracula-inspired inline styles
-            formatter = HtmlFormatter(
+            formatter = html_formatter_cls(
                 style="dracula",
                 noclasses=True,  # Use inline styles
                 nowrap=False,
@@ -918,7 +1204,7 @@ class FilePreviewDialogQt(BaseDialogQt):
                     "line-height: 1.5;"
                 ),
             )
-            return highlight(content, lexer, formatter)
+            return highlight_fn(content, lexer, formatter)
         except ImportError:
             return None
         except Exception:

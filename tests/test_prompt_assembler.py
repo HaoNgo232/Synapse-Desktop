@@ -259,6 +259,39 @@ class TestAssembleDiffOnlyPrompt:
         assert "</changed_files_content>" in prompt
         assert "<directory_structure>" not in prompt
 
+    def test_build_diff_only_with_related_files(self, tmp_path):
+        """Verify related files are included when include_related_files is enabled."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "app.py").write_text("from src.utils import helper\n", encoding="utf-8")
+        (src / "utils.py").write_text(
+            "def helper():\n    return True\n", encoding="utf-8"
+        )
+
+        diff_result = DiffOnlyResult(
+            diff_content="diff --git a/src/app.py b/src/app.py\n+new line",
+            files_changed=1,
+            insertions=1,
+            deletions=0,
+            commits_included=0,
+            changed_files=["src/app.py"],
+        )
+
+        prompt = build_diff_only_prompt(
+            diff_result=diff_result,
+            instructions="",
+            include_changed_content=False,
+            include_tree_structure=False,
+            workspace_root=tmp_path,
+            include_related_files=True,
+            related_depth=1,
+        )
+
+        assert "<related_files_content>" in prompt
+        assert "src/utils.py" in prompt
+        assert "def helper()" in prompt
+        assert "</related_files_content>" in prompt
+
 
 class TestAssembleTreeMapPrompt:
     """Test Tree Map Only format structure."""

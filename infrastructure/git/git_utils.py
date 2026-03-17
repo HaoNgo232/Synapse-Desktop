@@ -5,6 +5,7 @@ Git Utilities - Handle git operations (diff, log, status)
 import shutil
 import subprocess
 import sys
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List
@@ -28,7 +29,8 @@ DIFF_SUMMARY_FORMAT = """The content is organized as follows:
 3. Project structure of changed files (if enabled)
 4. Git diff content (unified diff format)
 5. Full content of changed files (if enabled)
-6. User instructions (if provided)"""
+6. Full content of related files by import depth (if enabled)
+7. User instructions (if provided)"""
 
 DIFF_SUMMARY_NOTES = """- Paths are workspace-relative when use_relative_paths is enabled.
 - Binary files may be excluded from changed_files_content."""
@@ -61,6 +63,11 @@ def _generate_diff_summary_xml() -> str:
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+
+_DIFF_GIT_HEADER_RE = re.compile(
+    r'^diff --git (?:"a/(.*?)"|a/(\S+)) (?:"b/(.*?)"|b/(\S+))$'
+)
 
 
 @dataclass
@@ -471,6 +478,101 @@ def get_diff_only(
         )
 
 
+def _normalize_diff_path(path: str) -> str:
+    """Normalize path separators de compare path on all platforms."""
+    return path.replace("\\", "/").strip()
+
+
+def _parse_diff_git_header_line(line: str) -> Optional[tuple[str, str]]:
+    """Parse a `diff --git` header line va tra ve (old_path, new_path)."""
+    match = _DIFF_GIT_HEADER_RE.match(line.strip())
+    if not match:
+        return None
+
+    old_path = match.group(1) or match.group(2) or ""
+    new_path = match.group(3) or match.group(4) or ""
+    return (_normalize_diff_path(old_path), _normalize_diff_path(new_path))
+
+
+def extract_changed_files_from_diff(diff_content: str) -> list[str]:
+    """
+    Extract changed file paths from unified diff content.
+
+    Args:
+        diff_content: Raw unified diff string
+
+    Returns:
+        Ordered unique list of changed file paths
+    """
+    seen: set[str] = set()
+    files: list[str] = []
+
+    for line in diff_content.splitlines():
+        if not line.startswith("diff --git "):
+            continue
+
+        parsed = _parse_diff_git_header_line(line)
+        if not parsed:
+            continue
+
+        old_path, new_path = parsed
+        path = new_path or old_path
+        if path and path not in seen:
+            seen.add(path)
+            files.append(path)
+
+    return files
+
+
+def filter_diff_by_files(diff_content: str, selected_files: list[str]) -> str:
+    """
+    Filter unified diff content and keep only selected file blocks.
+
+    Args:
+        diff_content: Raw unified diff string
+        selected_files: List of selected relative file paths
+
+    Returns:
+        Filtered diff string containing only selected files
+    """
+    if not selected_files:
+        return ""
+
+    selected = {
+        _normalize_diff_path(path)
+        for path in selected_files
+        if _normalize_diff_path(path)
+    }
+    if not selected:
+        return ""
+
+    kept_blocks: list[str] = []
+    current_block: list[str] = []
+    current_path: Optional[str] = None
+
+    for line in diff_content.splitlines(keepends=True):
+        if line.startswith("diff --git "):
+            if current_block and current_path and current_path in selected:
+                kept_blocks.append("".join(current_block))
+
+            current_block = [line]
+            parsed = _parse_diff_git_header_line(line)
+            if parsed:
+                old_path, new_path = parsed
+                current_path = new_path or old_path
+            else:
+                current_path = None
+            continue
+
+        if current_block:
+            current_block.append(line)
+
+    if current_block and current_path and current_path in selected:
+        kept_blocks.append("".join(current_block))
+
+    return "".join(kept_blocks)
+
+
 def _parse_diff_stats(stat_output: str) -> tuple[int, int, int]:
     """
     Parse git diff --stat output để lấy files changed, insertions, deletions.
@@ -478,8 +580,6 @@ def _parse_diff_stats(stat_output: str) -> tuple[int, int, int]:
     Returns:
         (files_changed, insertions, deletions)
     """
-    import re
-
     # Last line format: "X files changed, Y insertions(+), Z deletions(-)"
     lines = stat_output.strip().split("\n")
     if not lines:
@@ -555,6 +655,9 @@ def build_diff_only_prompt(
     include_tree_structure: bool,
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
+    include_related_files: bool = False,
+    related_depth: int = 1,
+    related_max_files: int = 20,
 ) -> str:
     """
     Build prompt from diff result for Copy Diff Only feature.
@@ -566,6 +669,9 @@ def build_diff_only_prompt(
         include_tree_structure: Include changed file tree structure
         workspace_root: Workspace root de resolve path va convert relative (optional)
         use_relative_paths: True = xuat path tuong doi workspace (tranh PII)
+        include_related_files: Include imported related files content
+        related_depth: Import depth for related files
+        related_max_files: Max related files to include
 
     Returns:
         Formatted prompt string
@@ -617,6 +723,51 @@ def build_diff_only_prompt(
                 except Exception:
                     pass
         parts.append("</changed_files_content>")
+
+    if include_related_files and workspace_root and diff_result.changed_files:
+        try:
+            from shared.utils.import_parser import get_related_files
+
+            related_files = get_related_files(
+                changed_files=diff_result.changed_files,
+                workspace_root=workspace_root,
+                depth=max(1, related_depth),
+                max_files=max(1, related_max_files),
+            )
+
+            if related_files:
+                parts.extend(["", "<related_files_content>"])
+                for file_path in related_files:
+                    full_path = workspace_root / file_path
+                    if full_path.exists() and full_path.is_file():
+                        try:
+                            content = full_path.read_text(
+                                encoding="utf-8", errors="replace"
+                            )
+                            if len(content) <= 50000:
+                                from shared.utils.language_utils import (
+                                    get_language_from_path,
+                                )
+
+                                lang = get_language_from_path(str(full_path))
+                                path_display = path_for_display(
+                                    full_path, workspace_root, use_relative_paths
+                                )
+                                parts.extend(
+                                    [
+                                        f'<file path="{path_display}">',
+                                        f"```{lang}",
+                                        content,
+                                        "```",
+                                        "</file>",
+                                    ]
+                                )
+                        except Exception:
+                            pass
+                parts.append("</related_files_content>")
+        except Exception:
+            # Neu parser co van de thi bo qua related files de khong break Copy Diff
+            pass
 
     if instructions and instructions.strip():
         parts.extend(

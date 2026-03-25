@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional
 from domain.contracts.contract_pack import ContractPack
 
 if TYPE_CHECKING:
-    from domain.workflow.shared.handoff_formatter import HandoffContext
+    from application.workflows.shared.handoff_formatter import HandoffContext
 
 logger = logging.getLogger(__name__)
 

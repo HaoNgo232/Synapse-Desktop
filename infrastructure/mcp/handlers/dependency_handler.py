@@ -290,7 +290,7 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         try:
-            from domain.workflow.shared.risk_engine import analyze_blast_radius
+            from application.workflows.shared.risk_engine import analyze_blast_radius
 
             # Validate all file paths
             target_files: list[Path] = []

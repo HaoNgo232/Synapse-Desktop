@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.workflow.shared.scope_detector import detect_scope_from_symbols
-from domain.workflow.shared.token_budget_manager import TokenBudgetManager
-from domain.workflow.shared.handoff_formatter import (
+from application.workflows.shared.scope_detector import detect_scope_from_symbols
+from application.workflows.shared.token_budget_manager import TokenBudgetManager
+from application.workflows.shared.handoff_formatter import (
     HandoffContext,
     format_handoff_xml,
     format_relationships_section,
@@ -166,7 +166,9 @@ def run_refactor_discovery(
     )
 
     # Inject contract pack vào extra_sections
-    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+    from application.workflows.shared.contract_injector import (
+        inject_contract_pack_to_handoff,
+    )
 
     inject_contract_pack_to_handoff(context, ws)
 
@@ -271,7 +273,9 @@ def run_refactor_planning(
     )
 
     # Inject contract pack vào extra_sections
-    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+    from application.workflows.shared.contract_injector import (
+        inject_contract_pack_to_handoff,
+    )
 
     inject_contract_pack_to_handoff(context, ws)
 

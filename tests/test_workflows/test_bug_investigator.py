@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from domain.workflow.bug_investigator import (
+from application.workflows.bug_investigator import (
     run_bug_investigation,
     _parse_error_trace,
 )

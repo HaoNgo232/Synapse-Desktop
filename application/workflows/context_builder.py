@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from domain.workflow.shared.scope_detector import detect_scope_from_file_paths
-from domain.workflow.shared.token_budget_manager import TokenBudgetManager
-from domain.workflow.shared.handoff_formatter import (
+from application.workflows.shared.scope_detector import detect_scope_from_file_paths
+from application.workflows.shared.token_budget_manager import TokenBudgetManager
+from application.workflows.shared.handoff_formatter import (
     HandoffContext,
     format_handoff_xml,
     format_relationships_section,
@@ -118,7 +118,9 @@ def run_context_builder(
     file_map = generate_file_map(tree, selected_paths, workspace_root=ws)
 
     # Step 3: Optimize content to fit budget
-    from domain.workflow.shared.contract_injector import load_and_format_contract_pack
+    from application.workflows.shared.contract_injector import (
+        load_and_format_contract_pack,
+    )
     from infrastructure.git.git_utils import get_git_diffs
 
     contract_text = load_and_format_contract_pack(ws)

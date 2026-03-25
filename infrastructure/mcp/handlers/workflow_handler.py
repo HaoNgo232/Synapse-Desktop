@@ -88,7 +88,7 @@ def register_tools(mcp_instance) -> None:
             if not out_path.is_relative_to(ws):
                 return "Error: output_file path traversal detected."
 
-        from domain.workflow.context_builder import (
+        from application.workflows.context_builder import (
             run_context_builder,
         )
 
@@ -197,7 +197,7 @@ def register_tools(mcp_instance) -> None:
         if base_ref and not SAFE_GIT_REF.match(base_ref):
             return f"Error: Invalid git reference: {base_ref}"
 
-        from domain.workflow.code_reviewer import run_code_review
+        from application.workflows.code_reviewer import run_code_review
 
         try:
             result = await asyncio.to_thread(
@@ -278,7 +278,7 @@ def register_tools(mcp_instance) -> None:
         if phase == "plan" and not discovery_report.strip():
             return "Error: discovery_report required for phase='plan'."
 
-        from domain.workflow.refactor_workflow import (
+        from application.workflows.refactor_workflow import (
             run_refactor_discovery,
             run_refactor_planning,
         )
@@ -366,7 +366,7 @@ def register_tools(mcp_instance) -> None:
         except ValueError as e:
             return f"Error: {e}"
 
-        from domain.workflow.bug_investigator import (
+        from application.workflows.bug_investigator import (
             run_bug_investigation,
         )
 
@@ -454,7 +454,7 @@ def register_tools(mcp_instance) -> None:
             if not out_path.is_relative_to(ws):
                 return "Error: output_file path traversal detected."
 
-        from domain.workflow.test_builder import run_test_builder
+        from application.workflows.test_builder import run_test_builder
 
         try:
             result = await asyncio.to_thread(
@@ -554,7 +554,7 @@ def register_tools(mcp_instance) -> None:
             if not out_path.is_relative_to(ws):
                 return "Error: output_file path traversal detected."
 
-        from domain.workflow.design_planner import run_design_planner
+        from application.workflows.design_planner import run_design_planner
 
         try:
             result = await asyncio.to_thread(

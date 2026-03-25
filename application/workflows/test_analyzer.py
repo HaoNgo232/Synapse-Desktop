@@ -219,7 +219,7 @@ def analyze_test_coverage(
                 logger.debug("Khong the parse test file: %s", test_rel)
 
         # Buoc 4: Match test functions voi source symbols (usage-aware)
-        from domain.workflow.shared.usage_aware_test_matcher import (
+        from application.workflows.shared.usage_aware_test_matcher import (
             match_tests_to_source_usage_aware,
         )
 

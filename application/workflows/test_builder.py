@@ -15,16 +15,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from domain.workflow.shared.scope_detector import detect_scope_from_file_paths
-from domain.workflow.shared.token_budget_manager import TokenBudgetManager
-from domain.workflow.shared.handoff_formatter import (
+from application.workflows.shared.scope_detector import detect_scope_from_file_paths
+from application.workflows.shared.token_budget_manager import TokenBudgetManager
+from application.workflows.shared.handoff_formatter import (
     HandoffContext,
     format_handoff_xml,
     format_relationships_section,
 )
 from domain.prompt.generator import generate_file_map
 from infrastructure.filesystem.file_utils import scan_directory
-from domain.workflow.test_analyzer import (
+from application.workflows.test_analyzer import (
     AnalysisResult,
     analyze_test_coverage,
     detect_test_framework,
@@ -236,7 +236,9 @@ def run_test_builder(
     )
 
     # Inject contract pack vào extra_sections
-    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+    from application.workflows.shared.contract_injector import (
+        inject_contract_pack_to_handoff,
+    )
 
     inject_contract_pack_to_handoff(context, ws)
 

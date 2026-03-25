@@ -22,7 +22,7 @@ from shared.utils.path_utils import path_for_display
 
 from shared.utils.language_utils import get_language_from_path
 from infrastructure.git.git_utils import GitDiffResult, GitLogResult
-from presentation.config.output_format import OutputStyle
+from domain.prompt.output_format import OutputStyle
 
 # === Pipeline imports ===
 from domain.prompt.file_collector import collect_files

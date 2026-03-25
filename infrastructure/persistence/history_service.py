@@ -15,7 +15,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
 from shared.logging_config import log_error, log_debug, log_info
-from presentation.config.paths import HISTORY_FILE
+from shared.config.paths import HISTORY_FILE
 
 # Số lượng tối đa entries lưu trữ
 MAX_HISTORY_ENTRIES = 100

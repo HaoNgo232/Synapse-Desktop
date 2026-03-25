@@ -394,6 +394,12 @@ class FileTreeModel(QAbstractItemModel):
 
             if value == Qt.CheckState.Checked:
                 self._select_node(node)
+                # FIX UX: Khi một folder chứa file nhị phân (vốn bị skip), Qt sẽ luôn hiện PartiallyChecked.
+                # Khi click vào PartiallyChecked, Qt luôn gửi state là `Checked`.
+                # Nếu _select_node không adds được file nào mới (before_count == after_count),
+                # thì tức là folder này đã "Max check" và user thực sự muốn uncheck toàn bộ.
+                if node.is_dir and self._selection_mgr.count() == before_count:
+                    self._deselect_node(node)
             else:
                 self._deselect_node(node)
 

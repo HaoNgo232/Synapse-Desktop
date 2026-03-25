@@ -981,6 +981,9 @@ class CopyActionController(QObject):
             instructions = self._view.get_instructions_text()
             self._save_instruction_to_history(instructions)
 
+            # Resolve QSettings-dependent option on main thread to avoid Qt memory corruption
+            use_rel = get_use_relative_paths()
+
             def _build_diff_prompt(
                 diff_result,
                 instructions,
@@ -995,7 +998,7 @@ class CopyActionController(QObject):
                     include_content,
                     include_tree,
                     workspace_root=workspace,
-                    use_relative_paths=get_use_relative_paths(),
+                    use_relative_paths=use_rel,
                     include_related_files=include_related,
                     related_depth=related_depth,
                 )

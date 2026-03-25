@@ -280,6 +280,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self.instructions = instructions
         self.on_success = on_success
         self._file_checkboxes: dict[str, QCheckBox] = {}
+        self.setMinimumWidth(650)
         self._build_ui()
         QTimer.singleShot(0, self._refresh_changed_files)
 
@@ -360,10 +361,23 @@ class DiffOnlyDialogQt(BaseDialogQt):
         related_row.addWidget(self._include_related_files)
 
         related_row.addWidget(QLabel("Depth:"))
+
+        dec_depth_btn = QPushButton("-")
+        dec_depth_btn.setFixedSize(32, 30)
+        dec_depth_btn.setStyleSheet("padding: 0px; font-size: 16px; font-weight: 700;")
+        dec_depth_btn.clicked.connect(lambda: self._adjust_related_depth(-1))
+        related_row.addWidget(dec_depth_btn)
+
         self._related_depth = QLineEdit("1")
         self._related_depth.setFixedWidth(50)
         self._related_depth.setPlaceholderText("1")
         related_row.addWidget(self._related_depth)
+
+        inc_depth_btn = QPushButton("+")
+        inc_depth_btn.setFixedSize(32, 30)
+        inc_depth_btn.setStyleSheet("padding: 0px; font-size: 16px; font-weight: 700;")
+        inc_depth_btn.clicked.connect(lambda: self._adjust_related_depth(1))
+        related_row.addWidget(inc_depth_btn)
         related_row.addStretch()
         layout.addLayout(related_row)
 
@@ -390,8 +404,8 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         self._files_scroll = QScrollArea()
         self._files_scroll.setWidgetResizable(True)
-        self._files_scroll.setMinimumHeight(130)
-        self._files_scroll.setMaximumHeight(220)
+        self._files_scroll.setMinimumHeight(250)
+        self._files_scroll.setMaximumHeight(500)
         self._files_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._files_scroll.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
@@ -425,6 +439,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         commits = self._get_num_commits()
         include_staged = self._include_staged.isChecked()
         include_unstaged = self._include_unstaged.isChecked()
+        workspace = self.workspace
 
         self._status.setText("Getting diff...")
         self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
@@ -433,7 +448,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
             from infrastructure.git.git_utils import get_diff_only
 
             return get_diff_only(
-                self.workspace,
+                workspace,
                 num_commits=commits,
                 include_staged=include_staged,
                 include_unstaged=include_unstaged,
@@ -446,13 +461,20 @@ class DiffOnlyDialogQt(BaseDialogQt):
         )
 
     def _on_copy_result(self, result: "DiffOnlyResult") -> None:
+        """
+        Xử lý kết quả sau khi lấy diff thành công và thực hiện copy vào clipboard.
+        """
         if result.error:
             self._status.setText(f"Error: {result.error}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
             return
 
-        if not (result.diff_content or "").strip():
-            self._status.setText("No changes found")
+        has_diff = bool((result.diff_content or "").strip())
+        num_commits = self._get_num_commits()
+
+        # Nếu không có thay đổi và cũng không chọn include commits thì báo lỗi
+        if not has_diff and num_commits == 0:
+            self._status.setText("Chưa có thay đổi nào")
             self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
             return
 
@@ -461,27 +483,71 @@ class DiffOnlyDialogQt(BaseDialogQt):
             return
         result = filtered
 
+        self._status.setText("Đang tạo prompt và lấy related files...")
+        self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
+
+        # Force UI update trước khi chạy tác vụ nặng đồng bộ
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.processEvents()
+
+        include_related = self._include_related_files.isChecked()
+        related_depth = self._get_related_depth()
+
+        # Thực thi nguyên bản trên Main Thread để tránh crash (Memory corruption khi pass string >=150KB qua Qt Signal)
         prompt = self.build_prompt_callback(
             result,
             self.instructions,
             self._include_file_content.isChecked(),
             self._include_tree.isChecked(),
-            self._include_related_files.isChecked(),
-            self._get_related_depth(),
+            include_related,
+            related_depth,
         )
+
+        from infrastructure.adapters.clipboard_utils import copy_to_clipboard
 
         success, message = copy_to_clipboard(prompt)
         if success:
             self.accept()
             token_count = self._tokenization_service.count_tokens(prompt)
+
+            related_count = 0
+            if include_related:
+                try:
+                    from shared.utils.import_parser import get_related_files
+
+                    related_files = get_related_files(
+                        changed_files=result.changed_files,
+                        workspace_root=self.workspace,
+                        depth=max(1, related_depth),
+                        max_files=20,
+                    )
+                    for f in related_files:
+                        full_path = self.workspace / f
+                        if full_path.exists() and full_path.is_file():
+                            try:
+                                content = full_path.read_text(
+                                    encoding="utf-8", errors="replace"
+                                )
+                                if len(content) <= 50000:
+                                    related_count += 1
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
             if self.on_success:
+                files_str = f"{result.files_changed} files"
+                if related_count > 0:
+                    files_str += f" + {related_count} liên quan"
+
                 self.on_success(
-                    f"Diff copied! ({token_count:,} tokens, "
+                    f"Đã sao chép diff! ({token_count:,} tokens, "
                     f"+{result.insertions}/-{result.deletions} lines, "
-                    f"{result.files_changed} files)"
+                    f"{files_str})"
                 )
         else:
-            self._status.setText(f"Copy failed: {message}")
+            self._status.setText(f"Sao chép thất bại: {message}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
 
     def _on_copy_error(self, msg: str) -> None:
@@ -497,6 +563,11 @@ class DiffOnlyDialogQt(BaseDialogQt):
     def _adjust_commits(self, delta: int) -> None:
         commits = max(0, self._get_num_commits() + delta)
         self._num_commits.setText(str(commits))
+
+    def _adjust_related_depth(self, delta: int) -> None:
+        """Điều chỉnh độ sâu của liên quan file (+/-) và gán vào UI."""
+        depth = max(1, self._get_related_depth() + delta)
+        self._related_depth.setText(str(depth))
 
     def _get_related_depth(self) -> int:
         try:

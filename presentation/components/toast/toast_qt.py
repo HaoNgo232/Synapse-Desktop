@@ -486,11 +486,14 @@ class ToastManager:
             return
 
         parent_rect = self._parent.rect()
-        x = (parent_rect.width() - _TOAST_WIDTH) // 2
+        # Dynamic width: min 280px, max 420px, khong vuot 40% parent width
+        dynamic_width = max(280, min(420, int(parent_rect.width() * 0.35)))
+        x = (parent_rect.width() - dynamic_width) // 2
         y_top = _TOAST_MARGIN
 
         # Dat vi tri tu tren xuong duoi (toast moi nhat o tren cung)
         for i, toast in enumerate(reversed(self._active_toasts)):
+            toast.setFixedWidth(dynamic_width)
             toast.adjustSize()
             toast_height = toast.sizeHint().height()
             toast.move(x, y_top)

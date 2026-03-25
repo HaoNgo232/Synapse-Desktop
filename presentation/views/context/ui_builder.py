@@ -82,7 +82,7 @@ class UIBuilderMixin:
         splitter.setStretchFactor(2, 25)
         splitter.setSizes([420, 630, 350])
 
-        layout.addWidget(splitter)
+        layout.addWidget(splitter, 1)
 
     def _build_toolbar(self: Any) -> QFrame:
         """Build top toolbar chua controls va token counter."""
@@ -716,6 +716,8 @@ class UIBuilderMixin:
 
     def _build_action_buttons(self: Any) -> QWidget:
         """Build copy buttons voi visual hierarchy: CTA -> Secondary -> Tertiary."""
+        from PySide6.QtWidgets import QProgressBar
+
         widget = QWidget()
         widget.setStyleSheet("background-color: transparent; border: none;")
         layout = QVBoxLayout(widget)
@@ -781,6 +783,17 @@ class UIBuilderMixin:
             )
         )
         layout.addWidget(self._opx_btn)
+
+        # Loading indicator (indeterminate progress bar) hien khi dang xu ly
+        self._copy_loading_bar = QProgressBar()
+        self._copy_loading_bar.setRange(0, 0)  # indeterminate mode
+        self._copy_loading_bar.setFixedHeight(3)
+        self._copy_loading_bar.setVisible(False)
+        self._copy_loading_bar.setStyleSheet(
+            f"QProgressBar {{ border: none; background: {ThemeColors.BG_ELEVATED}; border-radius: 1px; }}"
+            f"QProgressBar::chunk {{ background: {ThemeColors.PRIMARY}; border-radius: 1px; }}"
+        )
+        layout.addWidget(self._copy_loading_bar)
 
         # === SECONDARY: Copy Context ===
         self._copy_btn = QPushButton("Copy Context")

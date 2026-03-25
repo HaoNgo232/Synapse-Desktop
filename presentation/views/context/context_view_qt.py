@@ -347,6 +347,11 @@ class ContextViewQt(
         return self
 
     def set_copy_buttons_enabled(self, enabled: bool) -> None:
+        # Hien/an loading bar va cap nhat text button chinh
+        if hasattr(self, "_copy_loading_bar"):
+            self._copy_loading_bar.setVisible(not enabled)
+        if hasattr(self, "_opx_btn"):
+            self._opx_btn.setText("Copy + OPX" if enabled else "Processing...")
         for btn in (
             self._diff_btn,
             self._tree_map_btn,

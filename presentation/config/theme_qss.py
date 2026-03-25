@@ -280,7 +280,7 @@ def generate_app_stylesheet() -> str:
         font-size: {ThemeFonts.SIZE_BODY}px;
     }}
     QTextEdit:focus, QPlainTextEdit:focus {{
-        border-color: {ThemeColors.BORDER_FOCUS};
+        border: 2px solid {ThemeColors.BORDER_FOCUS};
     }}
 
     /* ================================================================
@@ -299,6 +299,7 @@ def generate_app_stylesheet() -> str:
     }}
     QComboBox:focus {{
         border-color: {ThemeColors.BORDER_FOCUS};
+        border-width: 2px;
     }}
     QComboBox::drop-down {{
         border: none;
@@ -413,6 +414,9 @@ def generate_app_stylesheet() -> str:
         outline: 0;
         selection-background-color: transparent;
     }}
+    QTreeView:focus {{
+        border: 2px solid {ThemeColors.BORDER_FOCUS};
+    }}
     QTreeView::item {{
         padding: 2px 0;
         min-height: 28px;
@@ -455,6 +459,9 @@ def generate_app_stylesheet() -> str:
         border: 1px solid {ThemeColors.BORDER};
         border-radius: {ThemeRadius.LG}px;
         outline: 0;
+    }}
+    QListWidget:focus {{
+        border: 2px solid {ThemeColors.BORDER_FOCUS};
     }}
     QListWidget::item {{
         padding: 6px 10px;

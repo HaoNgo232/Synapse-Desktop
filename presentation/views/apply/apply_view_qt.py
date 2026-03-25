@@ -293,21 +293,25 @@ class ApplyViewQt(QWidget):
         header.addStretch()
 
         # Copy error context button (an mac dinh, hien khi co loi)
-        self._copy_error_btn = QPushButton("Copy Error Context")
+        self._copy_error_btn = QPushButton("⚠  Copy Error Context for AI Fix")
         self._copy_error_btn.setStyleSheet(
             f"QPushButton {{"
-            f"  background-color: transparent;"
+            f"  background-color: rgba(248, 113, 113, 0.1);"
             f"  color: {ThemeColors.ERROR};"
             f"  border: 1px solid {ThemeColors.ERROR};"
             f"  border-radius: 6px;"
             f"  padding: 5px 12px;"
-            f"  font-weight: 600;"
+            f"  font-weight: 700;"
             f"  font-size: 11px;"
             f"}}"
             f"QPushButton:hover {{"
             f"  background-color: {ThemeColors.ERROR};"
             f"  color: white;"
             f"}}"
+        )
+        self._copy_error_btn.setToolTip(
+            "Copy full error context bao gồm file content, OPX instruction, "
+            "và error messages để AI có thể fix tự động."
         )
         self._copy_error_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_error_btn.clicked.connect(self._copy_error_context)

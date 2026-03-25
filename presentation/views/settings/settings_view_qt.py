@@ -189,8 +189,10 @@ def _make_separator() -> QFrame:
 
 def _make_ghost_btn(text: str) -> QPushButton:
     """Ghost button style (secondary action)."""
+    from presentation.config.theme import ThemeRadius, ThemeSpacing
+
     btn = QPushButton(text)
-    btn.setFixedHeight(36)
+    btn.setMinimumHeight(36)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     btn.setStyleSheet(
         f"""
@@ -198,8 +200,8 @@ def _make_ghost_btn(text: str) -> QPushButton:
             background: transparent;
             color: {ThemeColors.TEXT_PRIMARY};
             border: 1px solid {ThemeColors.BORDER};
-            border-radius: 8px;
-            padding: 0 16px;
+            border-radius: {ThemeRadius.LG}px;
+            padding: 0 {ThemeSpacing.LG}px;
             font-size: 13px;
             font-weight: 600;
         }}
@@ -217,8 +219,10 @@ def _make_ghost_btn(text: str) -> QPushButton:
 
 def _make_danger_btn(text: str) -> QPushButton:
     """Danger button style (destructive action)."""
+    from presentation.config.theme import ThemeRadius, ThemeSpacing
+
     btn = QPushButton(text)
-    btn.setFixedHeight(36)
+    btn.setMinimumHeight(36)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     btn.setStyleSheet(
         f"""
@@ -226,8 +230,8 @@ def _make_danger_btn(text: str) -> QPushButton:
             background: transparent;
             color: {ThemeColors.ERROR};
             border: 1px solid {ThemeColors.ERROR}50;
-            border-radius: 8px;
-            padding: 0 16px;
+            border-radius: {ThemeRadius.LG}px;
+            padding: 0 {ThemeSpacing.LG}px;
             font-size: 13px;
             font-weight: 600;
         }}

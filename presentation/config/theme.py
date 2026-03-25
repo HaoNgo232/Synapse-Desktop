@@ -84,8 +84,8 @@ class ThemeColors:
 
     # ── Text ──
     TEXT_PRIMARY = "#E0E0F0"
-    TEXT_SECONDARY = "#8888AA"
-    TEXT_MUTED = "#666688"  # very muted (disabled, hints)
+    TEXT_SECONDARY = "#9898BB"  # contrast ~5.1:1 on BG_SURFACE (WCAG AA)
+    TEXT_MUTED = "#7878A8"  # contrast ~4.6:1 on BG_PAGE (WCAG AA)
 
     # ── Borders ──
     BORDER = "#3E3E5E"  # subtle

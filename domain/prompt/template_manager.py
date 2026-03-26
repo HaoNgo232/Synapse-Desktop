@@ -270,6 +270,9 @@ class LocalCustomTemplateProvider(TemplateProvider):
                 available.append(info)
         return available
 
+    _MAX_TEMPLATE_SIZE = 50 * 1024  # 50KB
+    _FORBIDDEN_TEMPLATE_KEYWORDS = ["IGNORE ALL PREVIOUS", "SYSTEM:", "ADMIN MODE"]
+
     def load_template(self, template_id: str) -> str:
         self._ensure_dir()
         template_path = self.directory / f"{template_id}.md"
@@ -277,12 +280,27 @@ class LocalCustomTemplateProvider(TemplateProvider):
             raise FileNotFoundError(
                 f"Custom template '{template_path}' khong ton tai tren disk."
             )
+
+        # Validate kich thuoc truoc khi doc
+        file_size = template_path.stat().st_size
+        if file_size > self._MAX_TEMPLATE_SIZE:
+            raise ValueError(
+                f"Template '{template_id}' qua lon: {file_size} bytes (toi da {self._MAX_TEMPLATE_SIZE} bytes)."
+            )
+
         content = template_path.read_text(encoding="utf-8").strip()
+
+        # Kiem tra forbidden keywords de ngan prompt injection
+        upper_content = content.upper()
+        for keyword in self._FORBIDDEN_TEMPLATE_KEYWORDS:
+            if keyword in upper_content:
+                raise ValueError(
+                    f"Template '{template_id}' chua noi dung khong hop le: '{keyword}'."
+                )
 
         # Strip frontmatter if present
         lines = content.split("\n")
         if lines and lines[0].startswith("<!--") and lines[0].endswith("-->"):
-            # Remove first line (frontmatter)
             content = "\n".join(lines[1:]).strip()
 
         return content

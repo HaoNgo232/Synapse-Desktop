@@ -232,10 +232,11 @@ class ContextTrimmer:
 
     def _trim_level2(self, result: TrimResult) -> TrimResult:
         """
-        Level 2: Cat ngan noi dung primary files (giu 30% dau + note).
+        Level 2: Chuyen primary files sang Smart Context (AST signatures) thay vi cat text mu.
 
         Ap dung tu file lon nhat truoc (greedy by token savings).
-        Moi file bi cat giam se co dong ghi chu de AI biet context khong day du.
+        Neu file ho tro smart_parse, dung AST signatures thay vi truncate 30% dau.
+        Fallback ve truncate 30% neu file khong ho tro smart context.
 
         Args:
             result: TrimResult hien tai
@@ -243,6 +244,9 @@ class ContextTrimmer:
         Returns:
             TrimResult da cap nhat
         """
+        from pathlib import Path as _Path
+        from domain.smart_context import smart_parse, is_supported
+
         comp = result.components
 
         # Sap xep files theo token count giam dan
@@ -257,7 +261,29 @@ class ContextTrimmer:
                 break
 
             content = comp.file_contents[path]
-            # Giu 30% dau cua file
+            ext = _Path(path).suffix.lstrip(".")
+
+            # Thu smart context truoc (AST signatures - giu logic nghiep vu)
+            if is_supported(ext):
+                try:
+                    smart_content = smart_parse(
+                        path, content, include_relationships=False
+                    )
+                    if smart_content:
+                        comp.file_contents[path] = (
+                            smart_content
+                            + "\n\n[NOTE: Converted to Smart Context (AST signatures only) to fit token budget.]"
+                        )
+                        new_tokens = self._count(comp.file_contents[path])
+                        result.notes.append(
+                            f"Smart Context {path}: {original_tokens:,} -> {new_tokens:,} tokens"
+                        )
+                        result.actual_tokens = self._estimate_total(comp)
+                        continue
+                except Exception:
+                    pass  # Fallback ve truncate
+
+            # Fallback: Giu 30% dau cua file
             keep_chars = max(200, len(content) // 3)
             truncated = content[:keep_chars]
             truncated += (

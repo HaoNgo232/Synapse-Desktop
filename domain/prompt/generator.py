@@ -220,10 +220,9 @@ def generate_file_contents_xml(
         for p in selected_paths:
             key = _normalize(p)
             if key in norm_to_orig and norm_to_orig[key] != p:
-                logger.warning(
-                    "Path collision detected: '%s' and '%s' resolve to same file. Using first occurrence.",
-                    norm_to_orig[key],
-                    p,
+                raise ValueError(
+                    f"Path collision: '{norm_to_orig[key]}' and '{p}' resolve to the same file. "
+                    "Please remove the duplicate from your selection."
                 )
             else:
                 norm_to_orig[key] = p
@@ -383,10 +382,9 @@ def generate_file_contents_json(
         for p in selected_paths:
             key = _normalize(p)
             if key in norm_to_orig and norm_to_orig[key] != p:
-                logger.warning(
-                    "Path collision detected: '%s' and '%s' resolve to same file. Using first occurrence.",
-                    norm_to_orig[key],
-                    p,
+                raise ValueError(
+                    f"Path collision: '{norm_to_orig[key]}' and '{p}' resolve to the same file. "
+                    "Please remove the duplicate from your selection."
                 )
             else:
                 norm_to_orig[key] = p
@@ -504,10 +502,9 @@ def generate_file_contents_plain(
         for p in selected_paths:
             key = _normalize(p)
             if key in norm_to_orig and norm_to_orig[key] != p:
-                logger.warning(
-                    "Path collision detected: '%s' and '%s' resolve to same file. Using first occurrence.",
-                    norm_to_orig[key],
-                    p,
+                raise ValueError(
+                    f"Path collision: '{norm_to_orig[key]}' and '{p}' resolve to the same file. "
+                    "Please remove the duplicate from your selection."
                 )
             else:
                 norm_to_orig[key] = p

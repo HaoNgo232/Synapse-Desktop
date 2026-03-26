@@ -66,10 +66,10 @@ class TestBug1TopLevelImportFailure:
 
 
 class TestBug2DictCollision:
-    """Test BUG #2 - Silent data loss do norm_to_orig dict collision."""
+    """Test BUG #2 - Silent data loss do norm_to_orig dict collision (FIXED)."""
 
     def test_duplicate_normalized_paths_cause_collision(self, tmp_path):
-        """Test rằng hai paths khác nhau nhưng normalize về cùng file gây data loss."""
+        """Test rằng hai paths khác nhau nhưng normalize về cùng file raise ValueError."""
         # Arrange: Create a test file
         test_file = tmp_path / "src" / "main.py"
         test_file.parent.mkdir(parents=True)
@@ -82,30 +82,23 @@ class TestBug2DictCollision:
         selected_paths = {relative_path, absolute_path}
         codemap_paths = {relative_path}  # Only one in codemap
 
-        # Act
-        result = generate_file_contents_xml(
-            selected_paths=selected_paths,
-            workspace_root=tmp_path,
-            use_relative_paths=False,
-            codemap_paths=codemap_paths,
-        )
+        # Act & Assert: Should raise ValueError instead of silent data loss
+        import pytest
 
-        # Assert: Check if both paths are processed
-        # If collision occurs, one path will be silently dropped
-        occurrences = result.count("main.py")
-
-        if occurrences < 2:
-            print("\n⚠️  BUG #2 CONFIRMED: Dict collision detected!")
-            print(f"  Expected 2 occurrences of 'main.py', got {occurrences}")
-            print(f"  Selected paths: {selected_paths}")
-            print("  One path was silently dropped due to dict key collision")
-        else:
-            print(
-                f"\n✅ BUG #2 NOT PRESENT: Both paths processed correctly ({occurrences} occurrences)"
+        with pytest.raises(ValueError, match="Path collision"):
+            generate_file_contents_xml(
+                selected_paths=selected_paths,
+                workspace_root=tmp_path,
+                use_relative_paths=False,
+                codemap_paths=codemap_paths,
             )
 
+        print(
+            "\n✅ BUG #2 FIXED: Path collision now raises ValueError instead of silent data loss"
+        )
+
     def test_collision_with_absolute_and_relative_mix(self, tmp_path):
-        """Test collision khi mix absolute và relative paths."""
+        """Test collision khi mix absolute và relative paths raise ValueError."""
         # Arrange
         file1 = tmp_path / "test.py"
         file1.write_text("def foo(): pass")
@@ -119,21 +112,17 @@ class TestBug2DictCollision:
 
         codemap_paths = {"test.py"}
 
-        # Act
-        result = generate_file_contents_xml(
-            selected_paths=paths,
-            workspace_root=tmp_path,
-            codemap_paths=codemap_paths,
-        )
+        # Act & Assert: Should raise ValueError
+        import pytest
 
-        # Count unique file entries
-        file_count = result.count("<file path=")
+        with pytest.raises(ValueError, match="Path collision"):
+            generate_file_contents_xml(
+                selected_paths=paths,
+                workspace_root=tmp_path,
+                codemap_paths=codemap_paths,
+            )
 
-        print(f"\n  Input: {len(paths)} path variations")
-        print(f"  Output: {file_count} file entries")
-
-        if file_count < len(paths):
-            print(f"  ⚠️  Collision detected: {len(paths) - file_count} paths lost")
+        print("\n✅ BUG #2 FIXED: Multiple path representations now raise ValueError")
 
 
 class TestBug3NormalizeWithNoneWorkspace:

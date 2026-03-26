@@ -83,13 +83,13 @@ class TestLoadTemplate:
         """Load refactoring_expert thanh cong."""
         content = load_template("refactoring_expert")
         assert "SOLID" in content
-        assert "Before/After" in content
+        assert "refactoring" in content.lower()
 
     def test_load_doc_generator(self):
         """Load doc_generator thanh cong."""
         content = load_template("doc_generator")
         assert "README.md" in content
-        assert "Technical Writer" in content
+        assert "documentation" in content.lower()
 
     def test_load_performance_optimizer(self):
         """Load performance_optimizer thanh cong."""

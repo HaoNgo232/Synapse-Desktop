@@ -147,6 +147,9 @@ export const config: AppConfig = {
 - Emit OPX inside a fenced ```xml ... ``` block for reliable copy-paste.
 
 # CRITICAL
-Your ENTIRE response must be valid OPX wrapped in ```xml. Do NOT output raw code, explanations, or markdown outside the OPX block.
+Provide your response in the following order:
+1. FIRST: Any analysis, report, or explanation requested by the user or required by the prompt structure.
+2. SECOND: The OPX changes wrapped in a ```xml``` block.
+Do NOT output raw code or markdown outside these two specific blocks.
 
 </opx_instructions>"""

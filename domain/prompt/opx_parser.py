@@ -312,11 +312,13 @@ def _extract_between_markers(text: str, start: str, end: str) -> Optional[str]:
     """
     s = text.strip()
 
-    # Auto-heal truncated markers (giu nguyen logic tu TypeScript)
+    # Conservative auto-heal: Only single < or > to avoid bitshift confusion
+    # Modern LLMs are smart enough to output correct <<< markers
     s = re.sub(r"^[ \t]*<\s*$", "<<<", s, flags=re.MULTILINE)
-    s = re.sub(r"^[ \t]*<<\s*$", "<<<", s, flags=re.MULTILINE)
     s = re.sub(r"^[ \t]*>\s*$", ">>>", s, flags=re.MULTILINE)
-    s = re.sub(r"^[ \t]*>>\s*$", ">>>", s, flags=re.MULTILINE)
+
+    # Removed << and >> auto-heal to prevent bitshift operator corruption
+    # If needed, users can manually fix incomplete markers in AI response
 
     first = s.find(start)
     if first == -1:

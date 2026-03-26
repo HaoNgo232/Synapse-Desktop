@@ -352,7 +352,7 @@ content here
         assert "content here" in result.file_actions[0].changes[0].content
 
     def test_heal_double_less_than(self):
-        """Auto-heal << thanh <<<"""
+        """<< khong duoc auto-heal de tranh bitshift operator corruption."""
         xml = """
         <edit file="test.py" op="new">
             <put>
@@ -365,8 +365,12 @@ more content
 
         result = parse_opx_response(xml)
 
-        assert len(result.errors) == 0
-        assert "more content" in result.file_actions[0].changes[0].content
+        # << khong duoc heal -> parse that bai hoac content rong (expected behavior)
+        # Neu muon parse thanh cong, AI can dung <<< dung chuan
+        if result.file_actions:
+            assert result.file_actions[0].changes[0].content == ""
+        else:
+            assert len(result.errors) > 0
 
 
 class TestSanitization:

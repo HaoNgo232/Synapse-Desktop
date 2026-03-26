@@ -181,6 +181,19 @@ class AIContextWorker(QRunnable):
             # Parse JSON response
             selected_paths, reasoning = self._parse_response(response.content)
 
+            # Validate: loai bo cac paths LLM "bịa" ra khong ton tai trong project
+            if self._all_file_paths:
+                available = set(self._all_file_paths)
+                valid = [p for p in selected_paths if p in available]
+                invalid = [p for p in selected_paths if p not in available]
+                if invalid:
+                    logger.warning(
+                        "LLM returned %d non-existent paths (hallucination), filtered out: %s",
+                        len(invalid),
+                        invalid[:5],
+                    )
+                selected_paths = valid
+
             # Extract usage info
             usage: Dict[str, Any] = response.usage or {}
 

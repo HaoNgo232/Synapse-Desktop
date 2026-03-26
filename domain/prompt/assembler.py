@@ -43,21 +43,40 @@ from domain.prompt.formatters.system_prompts import (
 import re
 
 
+_MAX_MEMORY_LENGTH = 2000
+_MEMORY_FORBIDDEN_KEYWORDS = [
+    "IGNORE ALL PREVIOUS",
+    "SYSTEM:",
+    "ADMIN MODE",
+    "OVERRIDE ALL",
+]
+# Cac OPX/system tags nguy hiem can escape, giu lai generic types nhu List<T>
+_DANGEROUS_TAG_PREFIXES = ["<edit", "<opx", "<put", "<find", "<system", "<synapse"]
+
+
 def _sanitize_memory_content(raw: str) -> str:
     """
     Lam sach noi dung memory de ngan persistent prompt injection.
 
-    Thay vi dung deny-list (chi bo mot so tag cu the), su dung allow-list:
-    - Loai bo TOAN BO XML/HTML-like tags (bat ky chuoi nam trong <...>)
-    - Giu lai chi plain text de LLM su dung lam context tieu su
-
-    Cach lam nay dam bao cac the OPX (<edit>, <put>, <find>, ...) hoac
-    cac the tuy y do LLM tao ra khong the chay vao trong prompt chinh.
+    Thay vi xoa toan bo XML tags (lam mat generic types nhu List<T>, Array<T>),
+    chi escape cac OPX/system tags nguy hiem theo deny-list.
+    Kiem tra forbidden keywords de block prompt injection ro rang.
     """
-    # Remove all XML/HTML-like tags hoan toan
-    cleaned = re.sub(r"<[^>]+>", "", raw)
+    if len(raw) > _MAX_MEMORY_LENGTH:
+        raw = raw[:_MAX_MEMORY_LENGTH] + "..."
+
+    # Kiem tra forbidden keywords truoc
+    upper_raw = raw.upper()
+    for keyword in _MEMORY_FORBIDDEN_KEYWORDS:
+        if keyword in upper_raw:
+            return "[MEMORY BLOCKED: Contains unsafe instructions]"
+
+    # Chi escape cac OPX/system tags nguy hiem, giu lai generic types
+    for tag in _DANGEROUS_TAG_PREFIXES:
+        raw = raw.replace(tag, "&lt;" + tag[1:])
+
     # Collapse nhieu dong trong thanh toi da 2 dong lien tiep
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", raw)
     return cleaned.strip()
 
 

@@ -32,6 +32,7 @@ def collect_files(
     - Kiem tra is_file, is_binary, file_size
     - Doc content (utf-8 with replace)
     - Xac dinh language tu extension
+    - Parallel I/O khi co >5 files de tang toc do
 
     Args:
         selected_paths: Set cac duong dan file duoc tick
@@ -42,87 +43,70 @@ def collect_files(
     Returns:
         List[FileEntry] da sort theo path
     """
+    from concurrent.futures import ThreadPoolExecutor
     from shared.utils.path_utils import path_for_display
 
     sorted_paths = sorted(selected_paths)
-    entries: list[FileEntry] = []
 
-    for path_str in sorted_paths:
+    def _process(path_str: str) -> Optional[FileEntry]:
         path = Path(path_str)
+        display = path_for_display(path, workspace_root, use_relative_paths)
+        language = get_language_from_path(str(path))
 
         try:
-            # Chi xu ly files
             if not path.is_file():
-                continue
+                return None  # Skip, khong them entry (giong behavior cu)
 
-            display = path_for_display(path, workspace_root, use_relative_paths)
-            language = get_language_from_path(str(path))
-
-            # Skip binary files (check magic bytes)
             if is_binary_file(path):
-                entries.append(
-                    FileEntry(
-                        path=path,
-                        display_path=display,
-                        content=None,
-                        error="Binary file",
-                        language=language,
-                    )
-                )
-                continue
-
-            # Skip files qua lon
-            try:
-                file_size = path.stat().st_size
-                if file_size > max_file_size:
-                    entries.append(
-                        FileEntry(
-                            path=path,
-                            display_path=display,
-                            content=None,
-                            error=f"File too large ({file_size // 1024}KB)",
-                            language=language,
-                        )
-                    )
-                    continue
-                # File rong
-                if file_size == 0:
-                    entries.append(
-                        FileEntry(
-                            path=path,
-                            display_path=display,
-                            content="",
-                            error=None,
-                            language=language,
-                        )
-                    )
-                    continue
-            except OSError:
-                pass
-
-            # Doc content
-            content = path.read_text(encoding="utf-8", errors="replace")
-            entries.append(
-                FileEntry(
-                    path=path,
-                    display_path=display,
-                    content=content,
-                    error=None,
-                    language=language,
-                )
-            )
-
-        except (OSError, IOError) as e:
-            display = path_for_display(path, workspace_root, use_relative_paths)
-            language = get_language_from_path(str(path))
-            entries.append(
-                FileEntry(
+                return FileEntry(
                     path=path,
                     display_path=display,
                     content=None,
-                    error=f"Error reading file: {e}",
+                    error="Binary file",
                     language=language,
                 )
+
+            try:
+                file_size = path.stat().st_size
+                if file_size > max_file_size:
+                    return FileEntry(
+                        path=path,
+                        display_path=display,
+                        content=None,
+                        error=f"File too large ({file_size // 1024}KB)",
+                        language=language,
+                    )
+                if file_size == 0:
+                    return FileEntry(
+                        path=path,
+                        display_path=display,
+                        content="",
+                        error=None,
+                        language=language,
+                    )
+            except OSError:
+                pass
+
+            content = path.read_text(encoding="utf-8", errors="replace")
+            return FileEntry(
+                path=path,
+                display_path=display,
+                content=content,
+                error=None,
+                language=language,
             )
 
-    return entries
+        except (OSError, IOError) as e:
+            return FileEntry(
+                path=path,
+                display_path=display,
+                content=None,
+                error=f"Error reading file: {e}",
+                language=language,
+            )
+
+    if len(sorted_paths) > 5:
+        with ThreadPoolExecutor(max_workers=min(8, len(sorted_paths))) as executor:
+            return [e for e in executor.map(_process, sorted_paths) if e is not None]
+    else:
+        return [e for e in (_process(p) for p in sorted_paths) if e is not None]

@@ -20,7 +20,7 @@ from typing import Optional
 from infrastructure.git.git_utils import GitDiffResult, GitLogResult
 
 from domain.prompt.opx_instruction import XML_FORMATTING_INSTRUCTIONS
-from presentation.config.output_format import OutputStyle
+from domain.prompt.output_format import OutputStyle
 from domain.prompt.formatters.xml import (
     generate_file_summary_xml,
     generate_smart_summary_xml,

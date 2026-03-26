@@ -13,9 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.workflow.shared.scope_detector import detect_scope_from_git_diff
-from domain.workflow.shared.token_budget_manager import TokenBudgetManager
-from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
+from application.workflows.shared.scope_detector import detect_scope_from_git_diff
+from application.workflows.shared.token_budget_manager import TokenBudgetManager
+from application.workflows.shared.handoff_formatter import (
+    HandoffContext,
+    format_handoff_xml,
+)
 from infrastructure.git.git_utils import get_git_diffs, GitDiffResult
 from application.services.tokenization_service import TokenizationService
 from application.services.workspace_index import collect_files_from_disk
@@ -190,7 +193,9 @@ def run_code_review(
     )
 
     # Inject contract pack vào extra_sections
-    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+    from application.workflows.shared.contract_injector import (
+        inject_contract_pack_to_handoff,
+    )
 
     inject_contract_pack_to_handoff(context, ws)
 

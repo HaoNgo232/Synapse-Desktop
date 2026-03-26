@@ -10,7 +10,7 @@ from typing import List
 from datetime import datetime
 
 from shared.logging_config import log_error, log_debug
-from presentation.config.paths import RECENT_FOLDERS_FILE
+from shared.config.paths import RECENT_FOLDERS_FILE
 
 # Số lượng tối đa folders lưu trữ
 MAX_RECENT_FOLDERS = 10

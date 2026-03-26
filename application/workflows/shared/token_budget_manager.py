@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING
 if TYPE_CHECKING:
     from application.interfaces.tokenization_port import ITokenizationService
 
-from domain.workflow.shared.file_slicer import auto_slice_file
+from application.workflows.shared.file_slicer import auto_slice_file
 from domain.smart_context.parser import smart_parse
 
 logger = logging.getLogger(__name__)

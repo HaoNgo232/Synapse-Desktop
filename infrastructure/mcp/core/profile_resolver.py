@@ -46,7 +46,7 @@ def resolve_profile_params(
             None,
         )
 
-    from presentation.config.prompt_profiles import get_profile, list_profiles
+    from application.config.prompt_profiles import get_profile, list_profiles
 
     prof = get_profile(profile_name)
     if prof is None:

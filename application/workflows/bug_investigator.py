@@ -18,7 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
+from application.workflows.shared.handoff_formatter import (
+    HandoffContext,
+    format_handoff_xml,
+)
 from application.services.tokenization_service import TokenizationService
 
 logger = logging.getLogger(__name__)
@@ -122,7 +125,7 @@ def run_bug_investigation(
         )
 
     # Step 2: Build hybrid investigation graph
-    from domain.workflow.shared.hybrid_investigation_graph import (
+    from application.workflows.shared.hybrid_investigation_graph import (
         build_hybrid_investigation_graph,
     )
 
@@ -189,7 +192,9 @@ def run_bug_investigation(
     )
 
     # Inject contract pack vào extra_sections
-    from domain.workflow.shared.contract_injector import inject_contract_pack_to_handoff
+    from application.workflows.shared.contract_injector import (
+        inject_contract_pack_to_handoff,
+    )
 
     inject_contract_pack_to_handoff(context, ws)
 

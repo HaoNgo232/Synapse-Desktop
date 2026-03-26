@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from presentation.config.paths import APP_DIR
+from shared.config.paths import APP_DIR
 
 # Thư mục chứa các file template .md mặc định
 _TEMPLATES_DIR = Path(__file__).parent / "templates"

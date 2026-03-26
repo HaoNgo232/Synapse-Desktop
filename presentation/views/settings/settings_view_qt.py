@@ -670,6 +670,39 @@ class SettingsViewQt(QWidget):
         card4_layout.addWidget(ai_memory_toggle)
         self._ai_memory_toggle = ai_memory_toggle
 
+        # Output language selector
+        card4_layout.addSpacing(16)
+        lang_label = QLabel("Report Output Language")
+        lang_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        card4_layout.addWidget(lang_label)
+        card4_layout.addSpacing(2)
+        lang_hint = QLabel(
+            "Language used in AI analysis reports generated from templates."
+        )
+        lang_hint.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
+        lang_hint.setWordWrap(True)
+        card4_layout.addWidget(lang_hint)
+        card4_layout.addSpacing(6)
+
+        self._output_language_combo = QComboBox()
+        self._output_language_combo.setEditable(True)
+        self._output_language_combo.setFixedHeight(34)
+        self._output_language_combo.setStyleSheet(self._preset_combo.styleSheet())
+        for lang in [
+            "Vietnamese (tiếng Việt có dấu)",
+            "English",
+            "Japanese (日本語)",
+            "Korean (한국어)",
+        ]:
+            self._output_language_combo.addItem(lang)
+        self._output_language_combo.setCurrentText(
+            app_settings.output_language or "Vietnamese (tiếng Việt có dấu)"
+        )
+        self._output_language_combo.currentTextChanged.connect(self._mark_changed)
+        card4_layout.addWidget(self._output_language_combo)
+
         col2_layout.addWidget(card4)
         col2_layout.addStretch()
 
@@ -868,6 +901,8 @@ class SettingsViewQt(QWidget):
             or "https://api.openai.com/v1",
             ai_model_id=self._ai_model_combo.currentText().strip(),
             enable_ai_memory=self._ai_memory_toggle.isChecked(),
+            output_language=self._output_language_combo.currentText().strip()
+            or "Vietnamese (tiếng Việt có dấu)",
         )
 
         # Immediate visual feedback

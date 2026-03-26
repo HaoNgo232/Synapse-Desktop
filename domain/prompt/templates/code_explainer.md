@@ -16,16 +16,3 @@ Your task is to explain the codebase architecture, key components, and main exec
    - ONBOARDING ROADMAP: Suggested order for exploring the codebase
 3. Focus on the "mental model" developers need to be productive, not exhaustive details.
 4. Use ASCII diagrams where helpful to illustrate architecture or data flow.
-
-## Output format
-- Emit your ENTIRE explanation inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire explanation in Vietnamese (tiếng Việt có dấu). Keep IT terms in English where appropriate.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, PROJECT OVERVIEW, KEY MODULES).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Use ASCII diagrams or pseudocode where helpful.
-  - Reference files as path/to/file.ext:L42 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- If you need to show code examples, indent them with 4 spaces.
-- Start the report with an EXECUTIVE SUMMARY section (3-5 sentences).

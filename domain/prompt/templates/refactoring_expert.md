@@ -69,22 +69,13 @@ Your task is to identify structural code smells, cognitive load issues, and desi
 **PRIORITY SCORE:** (Impact × Team_Velocity_Multiplier) / Effort
 - Team_Velocity_Multiplier: Core domain(3), Shared utilities(2), Edge features(1)
 
-## Output format
-- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep design pattern terms in English.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, ARCHITECTURAL SMELLS, COGNITIVE LOAD ISSUES).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Include priority scores ([CRITICAL/Impact:10/Effort:3/Score:10]).
-  - Reference files as path/to/file.ext:L42-67 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- Extract EXACT code segments from provided context showing architectural problems
-- Provide step-by-step refactoring plan that AI agents could execute safely
-- Focus on WHY the refactored design is better for long-term maintainability
-- Start with EXECUTIVE SUMMARY (code quality assessment and refactoring priorities).
-- Add ARCHITECTURAL SMELL INVENTORY.
-- Add COGNITIVE LOAD ANALYSIS.
-- Add AI-ASSISTED REFACTORING OPPORTUNITIES.
-- Add MODULAR DESIGN IMPROVEMENTS.
-- End with REFACTORING EXECUTION ROADMAP.
+## REPORT STRUCTURE
+Structure your report with these sections as applicable to the analyzed codebase:
+- EXECUTIVE SUMMARY (always required — code quality assessment and refactoring priorities)
+- ARCHITECTURAL SMELL INVENTORY
+- COGNITIVE LOAD ANALYSIS
+- AI-ASSISTED REFACTORING OPPORTUNITIES
+- MODULAR DESIGN IMPROVEMENTS
+- REFACTORING EXECUTION ROADMAP (always required)
+
+Omit sections that have no findings. Do not include empty sections.

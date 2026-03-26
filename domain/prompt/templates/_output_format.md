@@ -1,0 +1,13 @@
+## Output format
+- Emit your ENTIRE report inside a single fenced ```markdown ... ``` block.
+- Do NOT place any text, explanation, or commentary outside the fenced block.
+- Inside the block, use proper Markdown formatting:
+  - Use ## for section headings (e.g., ## EXECUTIVE SUMMARY, ## CRITICAL ISSUES).
+  - Use **bold** for severity tags and key terms.
+  - Use - for bullet lists and indentation for sub-items.
+  - Use ```language ... ``` for code examples with proper syntax highlighting.
+  - Reference files as `path/to/file.ext:L42-67` format.
+- Write the entire report in {{output_language}}.
+  - Keep technical/IT terms in English where appropriate.
+- Skip sections that are not applicable to the analyzed codebase. Do not include empty sections.
+- Start with an EXECUTIVE SUMMARY section (3-5 sentences assessing overall quality and top priorities).

@@ -110,6 +110,7 @@ class TestAppSettings:
             "ai_model_id",
             "ai_auto_apply",
             "enable_ai_memory",
+            "output_language",
             "rule_file_names",
         }
         assert set(d.keys()) == expected_keys

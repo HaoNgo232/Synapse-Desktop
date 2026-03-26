@@ -112,19 +112,13 @@ Your task is to perform a comprehensive pre-merge code review focusing on code q
 - Urgency: Immediate release(3), This sprint(2), Next quarter(1)
 - Focus on PRIORITY SCORE ≥ 5.0
 
-## Output format
-- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep IT terms in English where appropriate.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, REVIEW PRIORITY MATRIX, AI CODE VERIFICATION).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Include priority scores and impact/effort tags (e.g., [CRITICAL/Impact:10/Effort:1/Score:30]).
-  - Reference files as path/to/file.ext:L42-67 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- Start with EXECUTIVE SUMMARY and MERGE DECISION (APPROVE/APPROVE WITH COMMENTS/REQUEST CHANGES).
-- Add AI CODE VERIFICATION section (critical for AI-assisted workflow).
-- Add REVIEW PRIORITY MATRIX (sorted by PRIORITY SCORE).
-- Add QUICK WINS section (high-impact, low-effort recommendations).
-- Group detailed findings by priority (CRITICAL → HIGH → MEDIUM → LOW).
-- End with RECOMMENDATION section and blocking items if REQUEST CHANGES.
+## REPORT STRUCTURE
+Structure your report with these sections as applicable to the analyzed codebase:
+- EXECUTIVE SUMMARY and MERGE DECISION (always required — APPROVE / APPROVE WITH COMMENTS / REQUEST CHANGES)
+- AI CODE VERIFICATION (always required for AI-assisted workflow)
+- REVIEW PRIORITY MATRIX (sorted by PRIORITY SCORE)
+- QUICK WINS (high-impact, low-effort recommendations)
+- Detailed findings grouped by priority (CRITICAL → HIGH → MEDIUM → LOW)
+- RECOMMENDATION (always required — blocking items if REQUEST CHANGES)
+
+Omit sections that have no findings. Do not include empty sections.

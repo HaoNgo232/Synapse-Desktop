@@ -143,22 +143,14 @@ Your task is to analyze the codebase for performance bottlenecks, algorithmic in
 - Severity: Production outage(3), Degraded UX(2), Future bottleneck(1)
 - Focus on PRIORITY SCORE ≥ 5.0
 
-## Output format
-- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep performance/CS terms in English.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CRITICAL BOTTLENECKS, EVENT LOOP ANALYSIS).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Include Big O notation and benchmarks (e.g., "O(n²) on 10k items = 100M ops, 5s → 50ms after fix").
-  - Include priority scores ([CRITICAL/Impact:10/Effort:1/Score:30]).
-  - Reference files as path/to/file.ext:L42-67 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- Start with EXECUTIVE SUMMARY (overall performance health and top bottlenecks).
-- Add WORKLOAD PROFILE (request patterns and resource usage).
-- Add CRITICAL BOTTLENECKS (sorted by PRIORITY SCORE with Big O analysis).
-- Add EVENT LOOP ANALYSIS (Node.js specific blocking operations).
-- Add DATABASE PERFORMANCE ISSUES (N+1 queries, missing indexes).
-- Include OPTIMIZED CODE EXAMPLES with 4-space indentation showing before/after.
-- Add SCALABILITY RECOMMENDATIONS (caching, async processing, horizontal scaling).
-- End with PERFORMANCE IMPROVEMENT ROADMAP (estimated gains and implementation order).
+## REPORT STRUCTURE
+Structure your report with these sections as applicable to the analyzed codebase:
+- EXECUTIVE SUMMARY (always required — overall performance health and top bottlenecks)
+- WORKLOAD PROFILE (request patterns and resource usage)
+- CRITICAL BOTTLENECKS (sorted by PRIORITY SCORE with Big O analysis)
+- EVENT LOOP ANALYSIS (only if Node.js or single-threaded async runtime detected)
+- DATABASE PERFORMANCE ISSUES (only if database access patterns are present)
+- SCALABILITY RECOMMENDATIONS
+- PERFORMANCE IMPROVEMENT ROADMAP (always required — estimated gains and implementation order)
+
+Omit sections that have no findings. Do not include empty sections.

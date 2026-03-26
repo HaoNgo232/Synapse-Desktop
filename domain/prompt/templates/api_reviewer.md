@@ -80,22 +80,14 @@ Your task is to review API design across any technology stack with focus on cont
 **PRIORITY SCORE:** (Impact × Consumer_Reach) / Effort
 - Consumer_Reach: Public API(3), Internal services(2), Single consumer(1)
 
-## Output format
-- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep API/IT terms in English where appropriate.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CONTRACT ANALYSIS, PERFORMANCE ISSUES).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Include priority scores ([CRITICAL/Impact:10/Effort:3/Score:10]).
-  - Reference files as path/to/file.ext:L42-67 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- Extract EXACT code snippets from provided context, do not use generic examples
-- Focus on WHY a design pattern is better for the specific business domain
-- Start with EXECUTIVE SUMMARY (API quality assessment and critical concerns).
-- Add BUSINESS CONTEXT & CONSUMER ANALYSIS.
-- Add CONTRACT CLARITY & CONSISTENCY AUDIT.
-- Add PERFORMANCE & CACHING STRATEGY REVIEW.
-- Add SECURITY & ACCESS CONTROL ASSESSMENT.
-- Add EVOLUTION & VERSIONING STRATEGY.
-- End with PRIORITIZED IMPROVEMENT ROADMAP.
+## REPORT STRUCTURE
+Structure your report with these sections as applicable to the analyzed codebase:
+- EXECUTIVE SUMMARY (always required — API quality assessment and critical concerns)
+- BUSINESS CONTEXT & CONSUMER ANALYSIS
+- CONTRACT CLARITY & CONSISTENCY AUDIT
+- PERFORMANCE & CACHING STRATEGY REVIEW
+- SECURITY & ACCESS CONTROL ASSESSMENT
+- EVOLUTION & VERSIONING STRATEGY
+- PRIORITIZED IMPROVEMENT ROADMAP (always required)
+
+Omit sections that have no findings. Do not include empty sections.

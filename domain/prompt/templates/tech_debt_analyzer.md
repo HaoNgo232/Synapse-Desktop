@@ -46,17 +46,3 @@ Your task is to identify, quantify, and prioritize technical debt in the codebas
    - Suggested refactoring approach with migration strategy
    - Business justification for prioritizing this debt
 5. Provide a DEBT REPAYMENT ROADMAP with quick wins (low effort, high impact) and strategic investments (high effort, high impact).
-
-## Output format
-- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep engineering/IT terms in English where appropriate.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, CRITICAL DEBT, DEBT REPAYMENT ROADMAP).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Include DEBT SCORE inline for each item (e.g., "DEBT SCORE: 65/100").
-  - Reference files as path/to/file.ext:L42 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- If you need to show code examples, indent them with 4 spaces.
-- Start the report with an EXECUTIVE SUMMARY section (3-5 sentences).
-- End with a DEBT REPAYMENT ROADMAP section prioritizing fixes by impact/effort ratio.

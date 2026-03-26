@@ -88,23 +88,15 @@ Your task is to review infrastructure-as-code, container configurations, CI/CD p
 **PRIORITY SCORE:** (Impact × Blast_Radius) / Effort
 - Blast_Radius: All services(3), Critical path(2), Single service(1)
 
-## Output format
-- Emit your ENTIRE report inside a single fenced ```plaintext ... ``` block.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, write in PLAIN TEXT only:
-  - Write the entire report in Vietnamese (tiếng Việt có dấu). Keep DevOps/cloud terms in English.
-  - Use UPPERCASE headings (e.g., EXECUTIVE SUMMARY, SECURITY RISKS, RELIABILITY ASSESSMENT).
-  - Use dashes (-) for bullet lists and indentation for sub-items.
-  - Include priority scores ([CRITICAL/Impact:10/Effort:1/Score:30]).
-  - Reference files as path/to/file.ext:L42-67 format.
-  - Do NOT use Markdown syntax (no #, **, ```, etc.) inside the block.
-- Extract EXACT configuration snippets from provided context, avoid generic examples
-- Focus on WHY a configuration improves reliability/security/cost for the specific deployment model
-- Start with EXECUTIVE SUMMARY (infrastructure health and critical risks).
-- Add INFRASTRUCTURE MATURITY ASSESSMENT.
-- Add CONTAINER SECURITY & BUILD OPTIMIZATION.
-- Add KUBERNETES ARCHITECTURE REVIEW (if applicable).
-- Add CI/CD PIPELINE SECURITY & EFFICIENCY.
-- Add OBSERVABILITY & MONITORING GAPS.
-- Add COST OPTIMIZATION OPPORTUNITIES.
-- End with OPERATIONAL IMPROVEMENT ROADMAP.
+## REPORT STRUCTURE
+Structure your report with these sections as applicable to the analyzed codebase:
+- EXECUTIVE SUMMARY (always required — infrastructure health and critical risks)
+- INFRASTRUCTURE MATURITY ASSESSMENT
+- CONTAINER SECURITY & BUILD OPTIMIZATION
+- KUBERNETES ARCHITECTURE REVIEW (only if Kubernetes manifests are present)
+- CI/CD PIPELINE SECURITY & EFFICIENCY
+- OBSERVABILITY & MONITORING GAPS
+- COST OPTIMIZATION OPPORTUNITIES
+- OPERATIONAL IMPROVEMENT ROADMAP (always required)
+
+Omit sections that have no findings or are not applicable. Do not include empty sections.

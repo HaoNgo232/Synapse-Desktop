@@ -265,7 +265,7 @@ class LocalCustomTemplateProvider(TemplateProvider):
         self._ensure_dir()
         available: list[TemplateInfo] = []
         for file_path in self.directory.glob("*.md"):
-            if file_path.is_file():
+            if file_path.is_file() and not file_path.name.startswith("_"):
                 info = self._parse_metadata(file_path)
                 available.append(info)
         return available
@@ -339,6 +339,46 @@ _PROVIDERS: list[TemplateProvider] = [
     LocalCustomTemplateProvider(),
 ]
 
+_OUTPUT_FORMAT_PATH = _TEMPLATES_DIR / "_output_format.md"
+
+
+def _get_output_language() -> str:
+    """Doc output_language tu settings, fallback ve Vietnamese."""
+    try:
+        from infrastructure.persistence.settings_manager import load_app_settings
+
+        return load_app_settings().output_language
+    except Exception:
+        return "Vietnamese (tiếng Việt có dấu)"
+
+
+def _append_output_format(content: str) -> str:
+    """
+    Strip phan '## Output format' cu (neu co) va append shared output format.
+
+    Args:
+        content: Noi dung template goc
+
+    Returns:
+        Template content + shared output format da inject output_language
+    """
+    # Strip phan output format cu de backward compat
+    idx = content.find("\n## Output format")
+    if idx != -1:
+        content = content[:idx]
+
+    # Doc shared output format
+    try:
+        fmt = _OUTPUT_FORMAT_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return content.strip()
+
+    # Inject output_language
+    language = _get_output_language()
+    fmt = fmt.replace("{{output_language}}", language)
+
+    return content.strip() + "\n\n" + fmt.strip()
+
 
 def list_templates() -> list[TemplateInfo]:
     """Liet ke tat ca prompt templates kha dung tu tat ca providers."""
@@ -349,10 +389,16 @@ def list_templates() -> list[TemplateInfo]:
 
 
 def load_template(template_id: str) -> str:
-    """Doc noi dung cua mot template theo ID."""
+    """
+    Doc noi dung cua mot template theo ID, kem theo shared output format.
+
+    Neu template da co section '## Output format', phan do se bi strip truoc
+    khi append shared format (backward compatibility trong qua trinh migration).
+    """
     for provider in _PROVIDERS:
         if provider.handles(template_id):
-            return provider.load_template(template_id)
+            content = provider.load_template(template_id)
+            return _append_output_format(content)
 
     raise KeyError(f"Template '{template_id}' khong ton tai trong bat ky provider nao.")
 

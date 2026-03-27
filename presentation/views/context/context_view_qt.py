@@ -771,6 +771,12 @@ class ContextViewQt(
             dlt = sub.addAction("❌ Delete")
             dlt.setData({"action": "delete", "text": text})
 
+        # Clear All — relocated from standalone button for safety
+        if history:
+            menu.addSeparator()
+            clear_all_action = menu.addAction("🗑 Clear All History")
+            clear_all_action.setData({"action": "clear_all"})
+
     @Slot(object)
     def _on_history_selected(self, action) -> None:
         """Handle history selection from dropdown."""
@@ -781,6 +787,10 @@ class ContextViewQt(
         if isinstance(data, dict):
             action_type = data.get("action")
             text = str(data.get("text", ""))
+
+            if action_type == "clear_all":
+                self._clear_prompt_history()
+                return
 
             if action_type == "delete" and text:
                 from infrastructure.persistence.settings_manager import (

@@ -330,14 +330,8 @@ class ApplyViewQt(QWidget):
         self._results_layout.setSpacing(8)
         self._results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Empty state
-        empty_label = QLabel("Paste OPX and click Preview to verify changes")
-        empty_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; font-style: italic; "
-            f"font-size: 12px; padding: 32px;"
-        )
-        empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._results_layout.addWidget(empty_label)
+        # Render initial empty state
+        self._render_empty_state()
 
         scroll.setWidget(self._results_container)
         layout.addWidget(scroll, stretch=1)
@@ -361,7 +355,7 @@ class ApplyViewQt(QWidget):
     @Slot()
     def _clear_input(self) -> None:
         self._opx_input.clear()
-        self._clear_results()
+        self._render_empty_state()
         self._cached_file_actions.clear()
         self._cached_memory_block = None
 
@@ -529,9 +523,62 @@ class ApplyViewQt(QWidget):
 
     # ===== Rendering =====
 
+    def _render_empty_state(self) -> None:
+        """
+        Hiển thị trạng thái chờ với hướng dẫn sử dụng.
+        Hàm này sửa lỗi UI bị 'bóp lại' (squeezed) bằng cách điều chỉnh layout alignment
+        và giới hạn chiều rộng của text một cách hợp lý.
+        """
+        self._clear_results()
+        # Chuyển layout về chế độ căn giữa khi ở trạng thái empty
+        self._results_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        empty_widget = QWidget()
+        empty_layout = QVBoxLayout(empty_widget)
+        # Giữ spacing và padding rộng rãi để UI thoáng đãng (Premium feel)
+        empty_layout.setSpacing(16)
+        empty_layout.setContentsMargins(40, 80, 40, 80)
+
+        # Biểu tượng tia sét đặc trưng của Synapse
+        empty_icon = QLabel("⚡")
+        empty_icon.setStyleSheet("font-size: 52px; background: transparent;")
+        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(empty_icon)
+
+        # Tiêu đề chính
+        empty_title = QLabel("Ready to Apply Changes")
+        empty_title.setStyleSheet(
+            f"font-size: 20px; font-weight: 800; color: {ThemeColors.TEXT_PRIMARY}; "
+            "background: transparent; margin-top: 10px;"
+        )
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(empty_title)
+
+        # Hướng dẫn chi tiết 3 bước
+        empty_steps = QLabel(
+            "1.  Paste the OPX response from AI chat into the left panel\n"
+            "2.  Click Preview to review changes with visual side-by-side diffs\n"
+            "3.  Click Apply Changes to write to disk safely (with backups)"
+        )
+        empty_steps.setStyleSheet(
+            f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 14px; "
+            "line-height: 1.8; background: transparent; "
+            "padding: 10px 0;"
+        )
+        empty_steps.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_steps.setWordWrap(True)
+        # Fix lỗi 'bóp': Đặt chiều rộng tối thiểu và tối đa để text wrap đẹp hơn
+        empty_steps.setMinimumWidth(400)
+        empty_steps.setMaximumWidth(600)
+        empty_layout.addWidget(empty_steps)
+
+        self._results_layout.addWidget(empty_widget)
+
     def _render_preview(self, preview_data: PreviewData) -> None:
         """Render preview cards."""
         self._clear_results()
+        # Khi có kết quả, chuyển layout về AlignTop để danh sách bắt đầu từ trên xuống
+        self._results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         for row in preview_data.rows:
             card = self._create_preview_card(row)
@@ -542,6 +589,8 @@ class ApplyViewQt(QWidget):
     def _render_results(self, results: List[ActionResult]) -> None:
         """Render apply results."""
         self._clear_results()
+        # Khi có kết quả, chuyển layout về AlignTop
+        self._results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         has_errors = False
 
         for result in results:

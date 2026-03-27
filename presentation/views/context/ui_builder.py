@@ -546,32 +546,6 @@ class UIBuilderMixin:
         self._history_btn.setMenu(self._history_menu)
         header.addWidget(self._history_btn)
 
-        # Clear history button
-        self._clear_history_btn = QToolButton()
-        self._clear_history_btn.setText("Clear History")
-        self._clear_history_btn.setStyleSheet(
-            f"""
-            QToolButton {{
-                background: transparent;
-                color: {ThemeColors.ERROR};
-                border: 1px solid {ThemeColors.BORDER};
-                border-radius: 4px;
-                padding: 2px 8px;
-                font-size: 11px;
-                font-weight: 500;
-            }}
-            QToolButton:hover {{
-                background: {ThemeColors.ERROR};
-                color: white;
-                border-color: {ThemeColors.ERROR};
-            }}
-            """
-        )
-        self._clear_history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._clear_history_btn.setToolTip("Xoa toan bo Prompt History")
-        self._clear_history_btn.clicked.connect(self._clear_prompt_history)
-        header.addWidget(self._clear_history_btn)
-
         # AI Suggest Select button: doc instruction va tu dong chon files
         self._ai_suggest_btn = QToolButton()
         self._ai_suggest_btn.setText("AI Suggest Select")
@@ -724,12 +698,6 @@ class UIBuilderMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        # Shared style for description hints under each button
-        desc_style = (
-            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; "
-            f"padding: 0 2px; background: transparent; border: none;"
-        )
-
         # ── Copy as File toggle (persistent preference) ──
         from presentation.components.toggle_switch import ToggleSwitch
 
@@ -822,10 +790,6 @@ class UIBuilderMixin:
         )
         layout.addWidget(self._opx_btn)
 
-        _opx_desc = QLabel("Full context + AI edit instructions")
-        _opx_desc.setStyleSheet(desc_style)
-        layout.addWidget(_opx_desc)
-
         # Loading indicator (indeterminate progress bar) hien khi dang xu ly
         self._copy_loading_bar = QProgressBar()
         self._copy_loading_bar.setRange(0, 0)  # indeterminate mode
@@ -850,10 +814,6 @@ class UIBuilderMixin:
             )
         )
         layout.addWidget(self._copy_btn)
-
-        _ctx_desc = QLabel("Full file contents for general questions")
-        _ctx_desc.setStyleSheet(desc_style)
-        layout.addWidget(_ctx_desc)
 
         # === SECONDARY: Copy Smart ===
         self._smart_btn = QPushButton("Copy Smart")
@@ -888,10 +848,6 @@ class UIBuilderMixin:
         self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
         layout.addWidget(self._smart_btn)
 
-        _smart_desc = QLabel("Signatures only — saves ~70% tokens")
-        _smart_desc.setStyleSheet(desc_style)
-        layout.addWidget(_smart_desc)
-
         # === SECONDARY: Copy Diff Only ===
         self._diff_btn = QPushButton("Copy Diff Only")
         self._diff_btn.setStyleSheet(
@@ -924,10 +880,6 @@ class UIBuilderMixin:
         self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
         layout.addWidget(self._diff_btn)
 
-        _diff_desc = QLabel("Git changes only — ideal for code review")
-        _diff_desc.setStyleSheet(desc_style)
-        layout.addWidget(_diff_desc)
-
         # === TERTIARY: Copy Tree Map ===
         self._tree_map_btn = QPushButton("Copy Tree Map")
         self._tree_map_btn.setStyleSheet(secondary_style)
@@ -937,9 +889,5 @@ class UIBuilderMixin:
             self._copy_controller.on_copy_tree_map_requested
         )
         layout.addWidget(self._tree_map_btn)
-
-        _tree_desc = QLabel("Project structure only — no file contents")
-        _tree_desc.setStyleSheet(desc_style)
-        layout.addWidget(_tree_desc)
 
         return widget

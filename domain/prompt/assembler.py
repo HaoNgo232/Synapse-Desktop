@@ -24,6 +24,7 @@ from presentation.config.output_format import OutputStyle
 from domain.prompt.formatters.xml import (
     generate_file_summary_xml,
     generate_smart_summary_xml,
+    generate_file_summary_xml_minimal,
 )
 from domain.prompt.formatters.system_prompts import (
     AGENT_ROLE_INSTRUCTION,
@@ -235,8 +236,11 @@ def _assemble_xml(
     project_rules: str = "",
 ) -> str:
     """Lap rap prompt theo XML format voi AI-Friendly header va Agent Role."""
-    # generate_file_summary_xml() da bao gom agent_role ben trong
-    file_summary = generate_file_summary_xml()
+    # include_xml_formatting = True nghia la dang dung OPX (Overwrite Patch XML)
+    if include_xml_formatting:
+        file_summary = generate_file_summary_xml_minimal()
+    else:
+        file_summary = generate_file_summary_xml()
 
     prompt = f"""{file_summary}
 
@@ -257,6 +261,16 @@ def _assemble_xml(
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
 
+    # Recency bias: Dat cau truc dau ra o cuoi cung de override cac huong dan truoc do neu co xung dot
+    if include_xml_formatting:
+        prompt += """
+<final_output_structure>
+CRITICAL: Structure your response exactly like this:
+1. Brief Analysis: ```markdown ... ``` (concise findings)
+2. Code Changes: ```xml ... ``` (OPX patches)
+Output nothing else outside these blocks.
+</final_output_structure>
+"""
     return prompt
 
 

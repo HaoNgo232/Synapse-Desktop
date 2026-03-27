@@ -24,6 +24,7 @@ class OutputStyle(Enum):
     XML = "xml"
     JSON = "json"
     PLAIN = "plain"
+    SMART = "smart"  # UI compatible: signatures only
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,17 @@ OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
             "Dành cho model context nhỏ",
         ],
         file_extension=".txt",
+    ),
+    OutputStyle.SMART: OutputFormatConfig(
+        id="smart",
+        name="Smart Context",
+        description="Chỉ bao gồm signatures (no bodies)",
+        benefits=[
+            "Tiết kiệm token tối đa khi chỉ cần hiểu cấu trúc",
+            "Tránh clutter bởi implementation details",
+            "Tối ưu cho việc resolve dependencies",
+        ],
+        file_extension=".md",
     ),
 }
 

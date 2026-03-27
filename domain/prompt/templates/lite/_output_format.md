@@ -1,7 +1,6 @@
 ## Output format
-- Write the entire report in {{output_language}}.
-- Keep technical/IT terms in English where appropriate.
-- Use clear Markdown formatting: ## for sections, **bold** for key terms, - for bullet lists.
+- Emit your analysis/report inside a fenced ```markdown ... ``` block.
+- Inside the block, use proper Markdown formatting (## headers, **bold**, - lists, ```code```)
 - Reference files as `path/to/file.ext:L42-67` format.
-- Skip sections that have no findings.
-- Be concise and actionable. Prioritize high-impact fixes over exhaustive commentary.
+- Write in {{output_language}}, keep technical terms in English.
+- If system instructions require code modifications (OPX), append them AFTER the report block in separate ```xml``` format.

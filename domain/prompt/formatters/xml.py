@@ -10,8 +10,15 @@ Import noi dung van ban tu system_prompts.py de dam bao nhat quan.
 """
 
 import html
-
 from shared.types.prompt_types import FileEntry
+
+__all__ = [
+    "format_files_xml",
+    "generate_file_summary_xml",
+    "generate_smart_summary_xml",
+    "generate_file_summary_xml_minimal",
+]
+
 from domain.prompt.formatters.system_prompts import (
     AGENT_ROLE_INSTRUCTION,
     GENERATION_HEADER,
@@ -135,5 +142,30 @@ def generate_smart_summary_xml() -> str:
 <notes>
 {SMART_SUMMARY_NOTES}
 </notes>
+</file_summary>
+"""
+
+
+def generate_file_summary_xml_minimal() -> str:
+    """
+    Tao section file_summary toi gian cho che do OPX.
+    Loai bo agent role de tranh xung dot voi system prompt.
+
+    Returns:
+        XML string chua file_summary section cho OPX
+    """
+    return f"""<file_summary>
+{GENERATION_HEADER}
+
+<purpose>
+This file contains code context for generating OPX (Overwrite Patch XML) modifications.
+Use the provided code to understand structure, then generate precise XML patches.
+</purpose>
+
+<usage_guidelines>
+- Analyze code structure and identify exact modification points
+- Generate OPX patches using precise search patterns from provided code
+- Ensure all file paths and code snippets match exactly
+</usage_guidelines>
 </file_summary>
 """

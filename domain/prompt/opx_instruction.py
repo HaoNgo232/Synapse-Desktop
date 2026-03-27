@@ -129,6 +129,11 @@ export const config: AppConfig = {
 - If a match may occur multiple times, set occurrence="first|last|N" on <find>.
 - Preserve indentation to fit the surrounding code.
 
+# Safety & Truncation
+- If you see `[NOTE: File content trimmed...]` or `[NOTE: Converted to Smart Context...]` or `[NOTE: File severely truncated...]` in a file's content, do NOT generate `op="patch"` or `op="replace"` edits for that file. 
+- You may still use `op="new"`, `op="remove"`, or `op="move"` for such files if the operation doesn't depend on knowing the full existing content.
+- If a patch is impossible due to truncation, explicitly mention this in your analysis/report and ask the user to provide the full content of the specific file using a tool or by copying it manually.
+
 # Multiple changes to the same file
 - Use separate <edit op="patch"> elements for each region — one per change.
 - Order patches top-to-bottom within the file to avoid offset drift.

@@ -44,7 +44,7 @@ from application.services.workspace_config import (
     get_use_gitignore,
     get_use_relative_paths,
 )
-from presentation.config.output_format import OutputStyle
+from presentation.config.output_format import OutputStyle  # Re-touching for index
 from presentation.config.theme import ThemeColors
 
 if TYPE_CHECKING:
@@ -319,6 +319,7 @@ class CopyActionViewProtocol(Protocol):
     def get_tokenization_service(self) -> Any: ...
     def get_ignore_engine(self) -> Any: ...
     def get_copy_as_file(self) -> bool: ...
+    def is_smart_mode_active(self) -> bool: ...
 
 
 class CopyActionController(QObject):
@@ -642,6 +643,20 @@ class CopyActionController(QObject):
 
     def on_copy_context_requested(self, include_xml: bool = False) -> None:
         """Entry point from UI: read toggle preference for copy destination."""
+        # Block Smart Context + OPX combination
+        if include_xml and self._is_smart_mode_active():
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self._view.parent_widget(),
+                "OPX Incompatible with Smart Mode",
+                "OPX requires full file content to generate accurate patches.\n"
+                "Smart Context only contains signatures without bodies.\n\n"
+                "Please switch to 'Copy Context' mode for OPX generation.",
+                QMessageBox.StandardButton.Ok,
+            )
+            return
+
         destination = "file" if self._view.get_copy_as_file() else "text"
         self._copy_context(include_xml=include_xml, copy_destination=destination)
 
@@ -1385,3 +1400,11 @@ class CopyActionController(QObject):
             dialog.exec()
         except Exception as e:
             self._view.show_status(f"Error: {e}", is_error=True)
+
+    def _is_smart_mode_active(self) -> bool:
+        """
+        Check xem mode "Smart Context" co dang active hay khong.
+        Active khi user chon "Smart" style tu dropdown (neu ho tro)
+        hoac thong qua Preset dac biet.
+        """
+        return self._view.is_smart_mode_active()

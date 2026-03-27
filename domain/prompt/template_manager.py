@@ -211,6 +211,13 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
+            "roi_evaluator": TemplateInfo(
+                template_id="roi_evaluator",
+                display_name="ROI Evaluator",
+                description="Phân tích và đánh giá Return on Investment (ROI) cho các giải pháp kỹ thuật và dự án",
+                is_custom=False,
+                has_lite=True,
+            ),
         }
 
     def list_templates(self) -> list[TemplateInfo]:

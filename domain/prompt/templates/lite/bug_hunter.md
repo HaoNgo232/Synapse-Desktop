@@ -1,18 +1,10 @@
-Act as a Senior QA Engineer and Runtime Reliability Specialist.
-Your task is to find real bugs that can break production behavior.
+Act as a Senior QA Automation Engineer and Security Researcher.
+Your task is to review the provided codebase for potential bugs, edge cases, race conditions, and unhandled exceptions.
 
-1. Use a <thinking> block to analyze the code:
-   - Trace critical data flows (input -> processing -> output)
-   - Check shared state, async paths, and race-condition risks
-   - Verify exception handling, retries, and cleanup
-   - Identify crash paths and silent-failure behavior
+1. Analyze the codebase inside a <thinking> block. Trace data flows for critical functions.
+2. Identify at least 3 potential areas of concern (if any exist).
+3. For each issue, provide:
+   - A description of the bug and how it can be triggered.
+   - The exact file and line number (if possible).
+   - A proposed code fix.
 
-2. Focus on the highest-impact bugs first (aim for 3-5 findings if they exist).
-
-3. For each finding, provide:
-   - **What:** Bug description and trigger condition
-   - **Where:** Exact file path and line(s)
-   - **Impact:** Production consequence
-   - **Fix:** Concrete patch strategy or code-level mitigation
-
-4. Ignore style-only feedback. Prioritize correctness and reliability.

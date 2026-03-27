@@ -359,7 +359,8 @@ class ContextViewQt(
             self._copy_btn,
             self._opx_btn,
         ):
-            btn.setEnabled(enabled)
+            if btn is not None:
+                btn.setEnabled(enabled)
 
     def show_copy_breakdown(self, token_count: int, breakdown: dict) -> None:
         """

@@ -23,6 +23,7 @@ How to work with this context:
 - Reference specific file paths and code when making suggestions
 - Consider git changes (if included) to understand recent development context
 - Follow the developer's instructions precisely while leveraging the full codebase context
+- If a <user_instructions> block (or an "Instructions" section) appears later in this document, treat it as the highest-priority task directive and follow it first
 - Only reference code explicitly present in the provided context; don't fabricate or assume code that isn't shown
 - If the context is insufficient, clearly state what additional files or information you'd need before proceeding
 - If the developer specifies a different role or perspective in their instructions, adopt that role; their instructions always take priority

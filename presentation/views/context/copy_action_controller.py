@@ -35,6 +35,7 @@ from typing import (
     Any,
 )
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 
 from domain.codemap.tree_map_generator import generate_tree_map_only
@@ -46,6 +47,7 @@ from application.services.workspace_config import (
     get_use_relative_paths,
 )
 from presentation.config.output_format import OutputStyle
+from presentation.config.theme import ThemeColors
 
 if TYPE_CHECKING:
     pass
@@ -79,6 +81,46 @@ if TYPE_CHECKING:
 # Cache stores ONE entry per copy mode. If fingerprint matches,
 # return cached (prompt, token_count) immediately.
 # ============================================================
+
+
+def copy_as_file_to_clipboard(
+    content: str, filename: str = "paste.txt"
+) -> tuple[bool, str]:
+    """
+    Lưu content vào temp file và đặt file URI vào clipboard.
+
+    Khi user Ctrl+V vào web chat (ChatGPT, Claude, Gemini…), trình duyệt sẽ
+    nhận ra đây là file attachment thay vì plain text — tránh lag khi paste
+    văn bản lớn.
+
+    Returns:
+        (True, file_path) nếu thành công
+        (False, error_msg) nếu thất bại
+    """
+    import tempfile
+    from pathlib import Path as _Path
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtWidgets import QApplication
+
+    try:
+        temp_dir = _Path(tempfile.gettempdir()) / "synapse_clipboard"
+        temp_dir.mkdir(exist_ok=True)
+
+        temp_path = temp_dir / filename
+        temp_path.write_text(content, encoding="utf-8")
+
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(temp_path))])
+
+        clipboard = QApplication.clipboard()
+        if clipboard is None:
+            return False, "QApplication.clipboard() returned None"
+
+        clipboard.setMimeData(mime)
+        return True, str(temp_path)
+
+    except Exception as exc:
+        return False, str(exc)
 
 
 class PromptCache:
@@ -480,7 +522,143 @@ class CopyActionController(QObject):
 
         add_instruction_history(text)
 
-    def _copy_context(self, include_xml: bool = False) -> None:
+    def _ask_copy_destination(self, action_label: str) -> Optional[str]:
+        """Show copy destination chooser and return 'text'/'file' (or None if cancelled)."""
+        parent = self._view.parent_widget()
+
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("Choose Copy Mode")
+        dialog.setModal(True)
+        dialog.setMinimumWidth(500)
+        dialog.setStyleSheet(
+            f"""
+            QDialog {{
+                background-color: {ThemeColors.BG_SURFACE};
+                border: 1px solid {ThemeColors.BORDER_LIGHT};
+                border-radius: 12px;
+            }}
+            QLabel#title {{
+                color: {ThemeColors.TEXT_PRIMARY};
+                font-size: 14px;
+                font-weight: 700;
+            }}
+            QLabel#subtitle {{
+                color: {ThemeColors.TEXT_SECONDARY};
+                font-size: 12px;
+            }}
+            QPushButton {{
+                min-height: 44px;
+                padding: 0 14px;
+                border-radius: 8px;
+                border: 1px solid {ThemeColors.BORDER};
+                background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_PRIMARY};
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.BG_HOVER};
+                border-color: {ThemeColors.BORDER_LIGHT};
+            }}
+            QPushButton:focus {{
+                border: 1px solid {ThemeColors.BORDER_FOCUS};
+            }}
+            QPushButton[variant="primary"] {{
+                background-color: {ThemeColors.PRIMARY};
+                border-color: {ThemeColors.PRIMARY};
+                color: white;
+            }}
+            QPushButton[variant="primary"]:hover {{
+                background-color: {ThemeColors.PRIMARY_HOVER};
+                border-color: {ThemeColors.PRIMARY_HOVER};
+            }}
+            QPushButton[variant="file"] {{
+                color: {ThemeColors.INFO};
+                border-color: {ThemeColors.INFO};
+                background-color: transparent;
+            }}
+            QPushButton[variant="file"]:hover {{
+                background-color: {ThemeColors.INFO_BG_HOVER};
+                border-color: {ThemeColors.INFO_BG_HOVER};
+                color: white;
+            }}
+            QPushButton[variant="ghost"] {{
+                color: {ThemeColors.TEXT_SECONDARY};
+                background-color: transparent;
+            }}
+            """
+        )
+
+        root = QVBoxLayout(dialog)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(10)
+
+        title = QLabel(f"{action_label}")
+        title.setObjectName("title")
+        subtitle = QLabel("Copy context as plain text or attachable file?")
+        subtitle.setObjectName("subtitle")
+        subtitle.setWordWrap(True)
+
+        root.addWidget(title)
+        root.addWidget(subtitle)
+
+        button_row = QHBoxLayout()
+        button_row.setSpacing(8)
+
+        file_btn = QPushButton("Copy as File")
+        file_btn.setProperty("variant", "file")
+        file_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setProperty("variant", "ghost")
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        text_btn = QPushButton("Copy as Text")
+        text_btn.setProperty("variant", "primary")
+        text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        text_btn.setDefault(True)
+
+        button_row.addWidget(file_btn)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(text_btn)
+        root.addLayout(button_row)
+
+        file_btn.clicked.connect(lambda: dialog.done(2))
+        text_btn.clicked.connect(lambda: dialog.done(1))
+        cancel_btn.clicked.connect(dialog.reject)
+
+        result = dialog.exec()
+        if result == 1:
+            return "text"
+        if result == 2:
+            return "file"
+        return None
+
+    def on_copy_context_requested(self, include_xml: bool = False) -> None:
+        """Entry point from UI: ask destination then run copy context."""
+        action_label = "Copy + OPX" if include_xml else "Copy Context"
+        destination = self._ask_copy_destination(action_label)
+        if destination is None:
+            return
+        self._copy_context(include_xml=include_xml, copy_destination=destination)
+
+    def on_copy_smart_requested(self) -> None:
+        """Entry point from UI: ask destination then run copy smart."""
+        destination = self._ask_copy_destination("Copy Smart")
+        if destination is None:
+            return
+        self._copy_smart_context(copy_destination=destination)
+
+    def on_copy_tree_map_requested(self) -> None:
+        """Entry point from UI: ask destination then run tree map copy."""
+        destination = self._ask_copy_destination("Copy Tree Map")
+        if destination is None:
+            return
+        self._copy_tree_map_only(copy_destination=destination)
+
+    def _copy_context(
+        self, include_xml: bool = False, copy_destination: str = "text"
+    ) -> None:
         """Copy context with selected format."""
         workspace = self._view.get_workspace()
         if not workspace:
@@ -495,7 +673,8 @@ class CopyActionController(QObject):
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         instructions = self._view.get_instructions_text()
         self._save_instruction_to_history(instructions)
-        copy_mode = "copy_opx" if include_xml else "copy_context"
+        copy_mode_base = "copy_opx" if include_xml else "copy_context"
+        copy_mode = f"{copy_mode_base}:{copy_destination}"
         selected_path_strs = {str(p) for p in file_paths}
 
         # === Cache fast path ===
@@ -504,11 +683,17 @@ class CopyActionController(QObject):
         )
         if cached is not None:
             prompt, token_count, breakdown = cached
-            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
-                prompt
-            )
+            if copy_destination == "file":
+                success, err_msg = copy_as_file_to_clipboard(prompt)
+            else:
+                success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                    prompt
+                )
             if success:
-                breakdown["copy_mode"] = "Copy + OPX" if include_xml else "Copy Context"
+                mode_text = "Copy + OPX" if include_xml else "Copy Context"
+                breakdown["copy_mode"] = (
+                    f"{mode_text} (File)" if copy_destination == "file" else mode_text
+                )
                 self._view.show_copy_breakdown(token_count, breakdown)
             else:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
@@ -521,12 +706,22 @@ class CopyActionController(QObject):
         if security_enabled:
             self._view.show_status("Checking security...")
             self._run_security_check_then_copy(
-                gen, workspace, file_paths, instructions, include_xml
+                gen,
+                workspace,
+                file_paths,
+                instructions,
+                include_xml,
+                copy_destination,
             )
         else:
             try:
                 self._do_copy_context(
-                    gen, workspace, file_paths, instructions, include_xml
+                    gen,
+                    workspace,
+                    file_paths,
+                    instructions,
+                    include_xml,
+                    copy_destination,
                 )
             except Exception as e:
                 self._view.show_status(f"Error: {e}", is_error=True)
@@ -540,6 +735,7 @@ class CopyActionController(QObject):
         file_paths: List[Path],
         instructions: str,
         include_xml: bool,
+        copy_destination: str,
     ) -> None:
         """Run security check in background, then proceed with copy if safe."""
         # Early exit if generation already stale (user clicked again before we got here)
@@ -575,7 +771,12 @@ class CopyActionController(QObject):
                         return
                     try:
                         self._do_copy_context(
-                            gen, workspace, file_paths, instructions, include_xml
+                            gen,
+                            workspace,
+                            file_paths,
+                            instructions,
+                            include_xml,
+                            copy_destination,
                         )
                     except Exception as e:
                         self._view.show_status(f"Error: {e}", is_error=True)
@@ -597,7 +798,12 @@ class CopyActionController(QObject):
             else:
                 try:
                     self._do_copy_context(
-                        gen, workspace, file_paths, instructions, include_xml
+                        gen,
+                        workspace,
+                        file_paths,
+                        instructions,
+                        include_xml,
+                        copy_destination,
                     )
                 except Exception as e:
                     self._view.show_status(f"Error: {e}", is_error=True)
@@ -626,6 +832,7 @@ class CopyActionController(QObject):
         self,
         gen: int,
         task_fn: Callable[[], Tuple[str, int, dict]],
+        copy_destination: str,
         success_template: str = "Copied! ({token_count:,} tokens)",
         pre_snapshot: Optional[dict] = None,
         cache_key: Optional[tuple] = None,
@@ -690,9 +897,12 @@ class CopyActionController(QObject):
                 except Exception:
                     pass  # Cache storage failure is non-critical
 
-            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
-                prompt
-            )
+            if copy_destination == "file":
+                success, err_msg = copy_as_file_to_clipboard(prompt)
+            else:
+                success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                    prompt
+                )
 
             if not success:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
@@ -713,6 +923,10 @@ class CopyActionController(QObject):
                     final_breakdown["copy_mode"] = "Copy Smart"
                 else:
                     final_breakdown["copy_mode"] = "Copy"
+            if copy_destination == "file":
+                mode_label = str(final_breakdown.get("copy_mode", "Copy"))
+                if not mode_label.endswith("(File)"):
+                    final_breakdown["copy_mode"] = f"{mode_label} (File)"
 
             self._view.show_copy_breakdown(token_count, final_breakdown)
 
@@ -742,6 +956,7 @@ class CopyActionController(QObject):
         file_paths: List[Path],
         instructions: str,
         include_xml: bool,
+        copy_destination: str,
     ) -> None:
         """
         Execute copy context tren background thread.
@@ -755,7 +970,8 @@ class CopyActionController(QObject):
             output_style = self._view.get_output_style()
             include_git = load_app_settings().include_git_changes
 
-            copy_mode = "copy_opx" if include_xml else "copy_context"
+            copy_mode_base = "copy_opx" if include_xml else "copy_context"
+            copy_mode = f"{copy_mode_base}:{copy_destination}"
             # Capture for cache storage in on_finished callback
             _cache_selected = set(selected_path_strs)
             _cache_instructions = instructions
@@ -784,10 +1000,13 @@ class CopyActionController(QObject):
                 )
 
             snapshot = {"copy_mode": "Copy + OPX" if include_xml else "Copy Context"}
+            if copy_destination == "file":
+                snapshot["copy_mode"] = f"{snapshot['copy_mode']} (File)"
 
             self._run_copy_in_background(
                 gen,
                 task,
+                copy_destination,
                 "Copied! ({token_count:,} tokens)",
                 pre_snapshot=snapshot,
                 cache_key=(
@@ -802,7 +1021,7 @@ class CopyActionController(QObject):
             if self._is_current_generation(gen):
                 self._view.set_copy_buttons_enabled(True)
 
-    def _copy_smart_context(self) -> None:
+    def _copy_smart_context(self, copy_destination: str = "text") -> None:
         """Copy smart context (code structure only) tren background thread."""
         workspace = self._view.get_workspace()
         if not workspace:
@@ -820,14 +1039,20 @@ class CopyActionController(QObject):
         self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
-        cached = self._try_cache_hit("copy_smart", selected_path_strs, instructions)
+        cache_mode = f"copy_smart:{copy_destination}"
+        cached = self._try_cache_hit(cache_mode, selected_path_strs, instructions)
         if cached is not None:
             prompt, token_count, breakdown = cached
-            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
-                prompt
-            )
+            if copy_destination == "file":
+                success, err_msg = copy_as_file_to_clipboard(prompt)
+            else:
+                success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                    prompt
+                )
             if success:
-                breakdown["copy_mode"] = "Copy Smart"
+                breakdown["copy_mode"] = (
+                    "Copy Smart (File)" if copy_destination == "file" else "Copy Smart"
+                )
                 self._view.show_copy_breakdown(token_count, breakdown)
             else:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
@@ -857,12 +1082,17 @@ class CopyActionController(QObject):
         self._run_copy_in_background(
             gen,
             task,
+            copy_destination,
             "Smart context copied! ({token_count:,} tokens)",
-            pre_snapshot={"copy_mode": "Copy Smart"},
-            cache_key=("copy_smart", selected_path_strs, instructions, False),
+            pre_snapshot={
+                "copy_mode": (
+                    "Copy Smart (File)" if copy_destination == "file" else "Copy Smart"
+                )
+            },
+            cache_key=(cache_mode, selected_path_strs, instructions, False),
         )
 
-    def _copy_tree_map_only(self) -> None:
+    def _copy_tree_map_only(self, copy_destination: str = "text") -> None:
         """Copy tree map only tren background thread."""
         workspace = self._view.get_workspace()
         if not workspace:
@@ -875,14 +1105,22 @@ class CopyActionController(QObject):
         self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
-        cached = self._try_cache_hit("copy_treemap", selected_strs, instructions)
+        cache_mode = f"copy_treemap:{copy_destination}"
+        cached = self._try_cache_hit(cache_mode, selected_strs, instructions)
         if cached is not None:
             prompt, token_count, breakdown = cached
-            success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
-                prompt
-            )
+            if copy_destination == "file":
+                success, err_msg = copy_as_file_to_clipboard(prompt)
+            else:
+                success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
+                    prompt
+                )
             if success:
-                breakdown["copy_mode"] = "Copy Tree Map"
+                breakdown["copy_mode"] = (
+                    "Copy Tree Map (File)"
+                    if copy_destination == "file"
+                    else "Copy Tree Map"
+                )
                 self._view.show_copy_breakdown(token_count, breakdown)
             else:
                 self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
@@ -935,10 +1173,139 @@ class CopyActionController(QObject):
         self._run_copy_in_background(
             gen,
             task,
+            copy_destination,
             "Tree map copied! ({token_count:,} tokens)",
-            pre_snapshot={"copy_mode": "Copy Tree Map"},
-            cache_key=("copy_treemap", selected_strs, instructions, False),
+            pre_snapshot={
+                "copy_mode": (
+                    "Copy Tree Map (File)"
+                    if copy_destination == "file"
+                    else "Copy Tree Map"
+                )
+            },
+            cache_key=(cache_mode, selected_strs, instructions, False),
         )
+
+    def _copy_as_file(self) -> None:
+        """
+        Đóng gói context vào file paste.txt và đặt vào clipboard dưới dạng file.
+
+        Thay vì copy plain text, tạo temp file paste.txt rồi đặt file URI lên
+        clipboard. Web chat interfaces (ChatGPT, Claude web, Gemini…) nhận Ctrl+V
+        như file upload — tránh lag khi paste văn bản lớn.
+        """
+        workspace = self._view.get_workspace()
+        if not workspace:
+            self._view.show_status("No workspace selected", is_error=True)
+            return
+
+        selected_files = self._view.get_selected_paths()
+        if not selected_files:
+            self._view.show_status("No files selected", is_error=True)
+            return
+
+        file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
+        selected_path_strs = {str(p) for p in file_paths}
+        instructions = self._view.get_instructions_text()
+        self._save_instruction_to_history(instructions)
+
+        # === Cache fast path ===
+        cached = self._try_cache_hit("copy_as_file", selected_path_strs, instructions)
+        if cached is not None:
+            prompt, token_count, breakdown = cached
+            success, result = copy_as_file_to_clipboard(prompt)
+            if success:
+                breakdown["copy_mode"] = "Copy as File"
+                self._view.show_copy_breakdown(token_count, breakdown)
+                self._view.show_status(
+                    "📎 paste.txt ready — Ctrl+V in web chat to upload as file"
+                )
+            else:
+                self._view.show_status(f"Copy as File failed: {result}", is_error=True)
+            return
+
+        gen = self._begin_copy_operation()
+        use_rel = get_use_relative_paths()
+        output_style = self._view.get_output_style()
+        include_git = load_app_settings().include_git_changes
+
+        def task() -> Tuple[str, int, dict]:
+            tree_item = self._view.scan_full_tree(workspace)
+            format_str = "xml"
+            if output_style == OutputStyle.JSON:
+                format_str = "json"
+            elif output_style == OutputStyle.PLAIN:
+                format_str = "plain"
+
+            return self._view.get_prompt_builder().build_prompt(
+                file_paths=[Path(p) for p in selected_path_strs],
+                workspace=workspace,
+                instructions=instructions,
+                output_format=format_str,
+                include_git_changes=include_git,
+                use_relative_paths=use_rel,
+                tree_item=tree_item,
+                selected_paths=selected_path_strs,
+            )
+
+        # Custom background run: same worker pattern but uses file clipboard
+        if not self._is_current_generation(gen):
+            return
+
+        self._view.show_status("Preparing file...")
+
+        signals = CopyTaskSignals()
+        worker = CopyTaskWorker(task, signals, generation=gen)
+        self._current_copy_worker = worker
+        self._current_copy_signals = signals
+
+        _cache_selected = set(selected_path_strs)
+        _cache_instructions = instructions
+
+        def on_finished(prompt: str, token_count: int, breakdown: dict) -> None:
+            self._cleanup_stale_refs(gen)
+            if not self._is_current_generation(gen):
+                return
+
+            self._current_copy_worker = None
+            self._current_copy_signals = None
+
+            # Store in cache
+            try:
+                self._store_in_cache(
+                    "copy_as_file",
+                    _cache_selected,
+                    _cache_instructions,
+                    prompt,
+                    token_count,
+                    breakdown,
+                )
+            except Exception:
+                pass
+
+            success, result = copy_as_file_to_clipboard(prompt)
+            if success:
+                breakdown["copy_mode"] = "Copy as File"
+                self._view.show_copy_breakdown(token_count, breakdown)
+                self._view.show_status(
+                    f"📎 paste.txt ready ({token_count:,} tokens) — Ctrl+V in web chat to upload"
+                )
+            else:
+                self._view.show_status(f"Copy as File failed: {result}", is_error=True)
+
+            self._view.set_copy_buttons_enabled(True)
+
+        def on_error(error_msg: str) -> None:
+            self._cleanup_stale_refs(gen)
+            if not self._is_current_generation(gen):
+                return
+            self._current_copy_worker = None
+            self._current_copy_signals = None
+            self._view.show_status(f"Error: {error_msg}", is_error=True)
+            self._view.set_copy_buttons_enabled(True)
+
+        signals.finished.connect(on_finished, Qt.ConnectionType.QueuedConnection)
+        signals.error.connect(on_error, Qt.ConnectionType.QueuedConnection)
+        QThreadPool.globalInstance().start(worker)
 
     def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
         """Collect all node paths from a TreeItem tree."""

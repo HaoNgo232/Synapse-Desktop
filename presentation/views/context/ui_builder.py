@@ -777,7 +777,7 @@ class UIBuilderMixin:
         self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._opx_btn.clicked.connect(
             lambda: (
-                self._copy_controller._copy_context(include_xml=True)
+                self._copy_controller.on_copy_context_requested(include_xml=True)
                 if self._copy_controller
                 else None
             )
@@ -802,7 +802,7 @@ class UIBuilderMixin:
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_btn.clicked.connect(
             lambda: (
-                self._copy_controller._copy_context(include_xml=False)
+                self._copy_controller.on_copy_context_requested(include_xml=False)
                 if self._copy_controller
                 else None
             )
@@ -839,7 +839,7 @@ class UIBuilderMixin:
         )
         self._smart_btn.setToolTip("Copy code structure only (Smart Context)")
         self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._smart_btn.clicked.connect(self._copy_controller._copy_smart_context)
+        self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
         layout.addWidget(self._smart_btn)
 
         # === SECONDARY: Copy Diff Only ===
@@ -879,7 +879,9 @@ class UIBuilderMixin:
         self._tree_map_btn.setStyleSheet(secondary_style)
         self._tree_map_btn.setToolTip("Copy only file structure")
         self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tree_map_btn.clicked.connect(self._copy_controller._copy_tree_map_only)
+        self._tree_map_btn.clicked.connect(
+            self._copy_controller.on_copy_tree_map_requested
+        )
         layout.addWidget(self._tree_map_btn)
 
         return widget

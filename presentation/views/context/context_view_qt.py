@@ -635,6 +635,11 @@ class ContextViewQt(
         self._copy_controller._prompt_cache.invalidate_all()
         self._update_token_display()
 
+        # Update empty state hint visibility
+        has_files = bool(selected_paths)
+        if hasattr(self, "_no_files_hint"):
+            self._no_files_hint.setVisible(not has_files)
+
         # Auto-resolve related files when mode is active
         self._related_controller.resolve_for_current_selection()
 

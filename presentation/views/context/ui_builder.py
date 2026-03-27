@@ -591,12 +591,13 @@ class UIBuilderMixin:
         # Textarea - chiem toan bo khong gian con lai
         self._instructions_field = QTextEdit()
         self._instructions_field.setPlaceholderText(
-            "Describe your request here...\n\n"
+            "Describe your task for the AI...\n\n"
             "Examples:\n"
-            "- Refactor module X to Y\n"
-            "- Fix bug: [error description]\n"
-            "- Add feature: [functionality description]\n\n"
-            "Optional: include output format, constraints, or edge cases."
+            "- Refactor the auth module to use JWT tokens\n"
+            "- Fix bug: users get 500 error on /api/login\n"
+            "- Add rate limiting to all API endpoints\n\n"
+            "Tip: Write your task first, then click 'AI Suggest Select'\n"
+            "to auto-pick relevant files from the tree."
         )
         self._instructions_field.setStyleSheet(
             f"""
@@ -722,6 +723,13 @@ class UIBuilderMixin:
         _file_row.addWidget(self._copy_as_file_toggle)
         layout.addLayout(_file_row)
 
+        _file_hint = QLabel("Paste as file upload in web chats to avoid lag")
+        _file_hint.setStyleSheet(
+            f"font-size: 10px; color: {ThemeColors.TEXT_MUTED};"
+            f" background: transparent; border: none;"
+        )
+        layout.addWidget(_file_hint)
+
         _toggle_sep = QFrame()
         _toggle_sep.setFixedHeight(1)
         _toggle_sep.setStyleSheet(
@@ -779,7 +787,11 @@ class UIBuilderMixin:
             }}
         """
         )
-        self._opx_btn.setToolTip("Copy context with OPX instructions (Ctrl+Shift+C)")
+        self._opx_btn.setToolTip(
+            "Copy full context + OPX patch instructions.\n"
+            "AI can return structured XML patches for auto-apply.\n"
+            "Shortcut: Ctrl+Shift+C"
+        )
         self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._opx_btn.clicked.connect(
             lambda: (
@@ -804,7 +816,10 @@ class UIBuilderMixin:
         # === SECONDARY: Copy Context ===
         self._copy_btn = QPushButton("Copy Context")
         self._copy_btn.setStyleSheet(secondary_style)
-        self._copy_btn.setToolTip("Copy context with basic formatting (Ctrl+C)")
+        self._copy_btn.setToolTip(
+            "Copy full file content without OPX instructions.\n"
+            "Use when you don't need AI to return structured patches."
+        )
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_btn.clicked.connect(
             lambda: (
@@ -817,33 +832,36 @@ class UIBuilderMixin:
 
         # === SECONDARY: Copy Smart ===
         self._smart_btn = QPushButton("Copy Smart")
-        self._smart_btn.setProperty("custom-style", "orange")
+        self._smart_btn.setProperty("custom-style", "teal")
         self._smart_btn.setStyleSheet(
             f"""
-            QPushButton[custom-style="orange"] {{
+            QPushButton[custom-style="teal"] {{
                 background-color: transparent;
-                color: {ThemeColors.WARNING};
-                border: 1px solid {ThemeColors.WARNING};
+                color: #2DD4BF;
+                border: 1px solid #2DD4BF;
                 border-radius: 6px;
                 padding: 8px 12px;
                 font-weight: 600;
                 font-size: 12px;
             }}
-            QPushButton[custom-style="orange"]:hover {{
-                background-color: {ThemeColors.WARNING};
-                color: white;
+            QPushButton[custom-style="teal"]:hover {{
+                background-color: #2DD4BF;
+                color: #0F172A;
             }}
-            QPushButton[custom-style="orange"]:pressed {{
-                background-color: #D97706;
-                color: white;
+            QPushButton[custom-style="teal"]:pressed {{
+                background-color: #14B8A6;
+                color: #0F172A;
             }}
-            QPushButton[custom-style="orange"]:disabled {{
+            QPushButton[custom-style="teal"]:disabled {{
                 color: {ThemeColors.TEXT_MUTED};
                 border-color: {ThemeColors.BG_ELEVATED};
             }}
         """
         )
-        self._smart_btn.setToolTip("Copy code structure only (Smart Context)")
+        self._smart_btn.setToolTip(
+            "Copy only function signatures and class definitions.\n"
+            "Saves 70-80% tokens — ideal for architecture questions."
+        )
         self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
         layout.addWidget(self._smart_btn)
@@ -875,7 +893,10 @@ class UIBuilderMixin:
             }}
         """
         )
-        self._diff_btn.setToolTip("Copy only git diff (Ctrl+Shift+D)")
+        self._diff_btn.setToolTip(
+            "Copy only git changes (staged + unstaged).\n"
+            "Ideal for code review and PR descriptions."
+        )
         self._diff_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
         layout.addWidget(self._diff_btn)
@@ -883,7 +904,10 @@ class UIBuilderMixin:
         # === TERTIARY: Copy Tree Map ===
         self._tree_map_btn = QPushButton("Copy Tree Map")
         self._tree_map_btn.setStyleSheet(secondary_style)
-        self._tree_map_btn.setToolTip("Copy only file structure")
+        self._tree_map_btn.setToolTip(
+            "Copy only the project directory tree (no file content).\n"
+            "Useful for architecture discussions with minimal tokens."
+        )
         self._tree_map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tree_map_btn.clicked.connect(
             self._copy_controller.on_copy_tree_map_requested

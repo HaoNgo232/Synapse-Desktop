@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QMenu,
     QFileDialog,
+    QToolButton,
 )
 from PySide6.QtCore import Qt, Slot, QTimer, Signal
 
@@ -542,7 +543,28 @@ class SettingsViewQt(QWidget):
         ai_desc.setStyleSheet(f"font-size: 12px; color: {ThemeColors.TEXT_SECONDARY};")
         ai_desc.setWordWrap(True)
         card3b_layout.addWidget(ai_desc)
-        card3b_layout.addSpacing(14)
+        card3b_layout.addSpacing(6)
+
+        # Onboarding hint — hiển thị khi chưa có API key
+        self._ai_onboarding_hint = QLabel(
+            "Quick start: Get a free API key from OpenRouter (openrouter.ai), "
+            "Groq (console.groq.com), or use a local LLM with LM Studio (localhost:1234/v1)."
+        )
+        self._ai_onboarding_hint.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.INFO}; "
+            f"background: {ThemeColors.INFO}12; "
+            f"border: 1px solid {ThemeColors.INFO}30; "
+            f"border-radius: 6px; padding: 8px 10px;"
+        )
+        self._ai_onboarding_hint.setWordWrap(True)
+        self._ai_onboarding_hint.setVisible(not bool(app_settings.ai_api_key.strip()))
+        card3b_layout.addWidget(self._ai_onboarding_hint)
+        card3b_layout.addSpacing(8)
+
+        # Ẩn hint khi user bắt đầu nhập API key
+        self._ai_api_key_input_changed_for_hint = lambda text: (
+            self._ai_onboarding_hint.setVisible(not bool(text.strip()))
+        )
 
         # API Key input
         api_key_label = QLabel("API Key")
@@ -551,6 +573,10 @@ class SettingsViewQt(QWidget):
         )
         card3b_layout.addWidget(api_key_label)
         card3b_layout.addSpacing(4)
+
+        api_key_row = QHBoxLayout()
+        api_key_row.setSpacing(0)
+        api_key_row.setContentsMargins(0, 0, 0, 0)
 
         self._ai_api_key_input = QLineEdit()
         self._ai_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -564,7 +590,7 @@ class SettingsViewQt(QWidget):
                 color: {ThemeColors.TEXT_PRIMARY};
                 border: 1px solid {ThemeColors.BORDER};
                 border-radius: 6px;
-                padding: 4px 12px;
+                padding: 4px 36px 4px 12px;
                 font-size: 13px;
             }}
             QLineEdit:focus {{
@@ -573,7 +599,37 @@ class SettingsViewQt(QWidget):
         """
         )
         self._ai_api_key_input.textChanged.connect(self._mark_changed)
-        card3b_layout.addWidget(self._ai_api_key_input)
+        self._ai_api_key_input.textChanged.connect(
+            self._ai_api_key_input_changed_for_hint
+        )
+        api_key_row.addWidget(self._ai_api_key_input, stretch=1)
+
+        # Eye toggle button overlaid on the right side of input
+        self._api_key_eye_btn = QToolButton()
+        self._api_key_eye_btn.setText("\U0001f441")  # Eye emoji
+        self._api_key_eye_btn.setFixedSize(28, 28)
+        self._api_key_eye_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._api_key_eye_btn.setToolTip("Show/Hide API Key")
+        self._api_key_eye_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                color: {ThemeColors.TEXT_MUTED};
+                font-size: 14px;
+                margin-left: -32px;
+            }}
+            QToolButton:hover {{
+                color: {ThemeColors.PRIMARY};
+                background: {ThemeColors.BG_ELEVATED};
+            }}
+        """
+        )
+        self._api_key_eye_btn.clicked.connect(self._toggle_api_key_visibility)
+        api_key_row.addWidget(self._api_key_eye_btn)
+
+        card3b_layout.addLayout(api_key_row)
 
         card3b_layout.addSpacing(12)
 
@@ -631,10 +687,10 @@ class SettingsViewQt(QWidget):
         model_row.addWidget(self._ai_model_combo, stretch=1)
 
         # Nut Fetch Models tu server
-        fetch_btn = _make_ghost_btn("Fetch Models")
-        fetch_btn.setFixedWidth(120)
-        fetch_btn.clicked.connect(self._fetch_ai_models)
-        model_row.addWidget(fetch_btn)
+        self._fetch_btn = _make_ghost_btn("Fetch Models")
+        self._fetch_btn.setFixedWidth(120)
+        self._fetch_btn.clicked.connect(self._fetch_ai_models)
+        model_row.addWidget(self._fetch_btn)
 
         card3b_layout.addLayout(model_row)
 
@@ -659,21 +715,33 @@ class SettingsViewQt(QWidget):
         self._security_toggle.toggled.connect(self._mark_changed)
         card4_layout.addWidget(self._security_toggle)
 
+        col2_layout.addWidget(card4)
+
+        # ─────────────────────────────
+        # CARD 4b: Output & Templates
+        # ─────────────────────────────
+        card4b = _make_card()
+        card4b_layout = QVBoxLayout(card4b)
+        card4b_layout.setContentsMargins(22, 22, 22, 22)
+        card4b_layout.setSpacing(0)
+
+        card4b_layout.addWidget(_AccentDotLabel("Output & Templates"))
+        card4b_layout.addSpacing(18)
+
         # Output language selector
-        card4_layout.addSpacing(16)
         lang_label = QLabel("Report Output Language")
         lang_label.setStyleSheet(
             f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        card4_layout.addWidget(lang_label)
-        card4_layout.addSpacing(2)
+        card4b_layout.addWidget(lang_label)
+        card4b_layout.addSpacing(2)
         lang_hint = QLabel(
             "Language used in AI analysis reports generated from templates."
         )
         lang_hint.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
         lang_hint.setWordWrap(True)
-        card4_layout.addWidget(lang_hint)
-        card4_layout.addSpacing(6)
+        card4b_layout.addWidget(lang_hint)
+        card4b_layout.addSpacing(6)
 
         self._output_language_combo = QComboBox()
         self._output_language_combo.setEditable(True)
@@ -690,23 +758,26 @@ class SettingsViewQt(QWidget):
             app_settings.output_language or "Vietnamese (tiếng Việt có dấu)"
         )
         self._output_language_combo.currentTextChanged.connect(self._mark_changed)
-        card4_layout.addWidget(self._output_language_combo)
+        card4b_layout.addWidget(self._output_language_combo)
 
         # Template tier selector (Lite / Pro)
-        card4_layout.addSpacing(16)
+        card4b_layout.addSpacing(16)
+        card4b_layout.addWidget(_make_separator())
+        card4b_layout.addSpacing(16)
+
         tier_label = QLabel("Template Tier")
         tier_label.setStyleSheet(
             f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
         )
-        card4_layout.addWidget(tier_label)
-        card4_layout.addSpacing(2)
+        card4b_layout.addWidget(tier_label)
+        card4b_layout.addSpacing(2)
         tier_hint = QLabel(
             "Lite: concise and actionable output. Pro: full framework and detailed analysis."
         )
         tier_hint.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
         tier_hint.setWordWrap(True)
-        card4_layout.addWidget(tier_hint)
-        card4_layout.addSpacing(6)
+        card4b_layout.addWidget(tier_hint)
+        card4b_layout.addSpacing(6)
 
         self._template_tier_combo = QComboBox()
         self._template_tier_combo.setEditable(False)
@@ -721,9 +792,9 @@ class SettingsViewQt(QWidget):
         )
         self._template_tier_combo.setCurrentIndex(max(0, tier_index))
         self._template_tier_combo.currentIndexChanged.connect(self._mark_changed)
-        card4_layout.addWidget(self._template_tier_combo)
+        card4b_layout.addWidget(self._template_tier_combo)
 
-        col2_layout.addWidget(card4)
+        col2_layout.addWidget(card4b)
         col2_layout.addStretch()
 
         # ─────────────────────────────
@@ -783,14 +854,14 @@ class SettingsViewQt(QWidget):
 
             install_btn.setMenu(menu)
 
-            # Hien thi trang thai da cai hay chua
+            # Hien thi trang thai da cai hay chua (icon + text cho accessibility)
             if check_installed(target_name):
-                status_label = QLabel("Installed")
+                status_label = QLabel("\u2713 Installed")
                 status_label.setStyleSheet(
                     f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"
                 )
             else:
-                status_label = QLabel("Not installed")
+                status_label = QLabel("\u25cb Not installed")
                 status_label.setStyleSheet(
                     f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};"
                 )
@@ -1319,7 +1390,7 @@ class SettingsViewQt(QWidget):
                 if check_installed(target_name):
                     label = self._mcp_status_labels.get(target_name)
                     if label is not None:
-                        label.setText("Installed")
+                        label.setText("\u2713 Installed")
                         label.setStyleSheet(
                             f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"
                         )
@@ -1429,6 +1500,28 @@ class SettingsViewQt(QWidget):
         super().closeEvent(event)
 
     @Slot()
+    def _toggle_api_key_visibility(self) -> None:
+        """Toggle API key field giữa hiển thị và ẩn."""
+        if self._ai_api_key_input.echoMode() == QLineEdit.EchoMode.Password:
+            self._ai_api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._api_key_eye_btn.setToolTip("Hide API Key")
+            self._api_key_eye_btn.setStyleSheet(
+                self._api_key_eye_btn.styleSheet().replace(
+                    f"color: {ThemeColors.TEXT_MUTED}",
+                    f"color: {ThemeColors.PRIMARY}",
+                )
+            )
+        else:
+            self._ai_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self._api_key_eye_btn.setToolTip("Show API Key")
+            self._api_key_eye_btn.setStyleSheet(
+                self._api_key_eye_btn.styleSheet().replace(
+                    f"color: {ThemeColors.PRIMARY}",
+                    f"color: {ThemeColors.TEXT_MUTED}",
+                )
+            )
+
+    @Slot()
     def _fetch_ai_models(self) -> None:
         """
         Goi endpoint /v1/models de lay danh sach model tu server.
@@ -1447,6 +1540,9 @@ class SettingsViewQt(QWidget):
             self._show_status("Please enter an API Key first.", is_error=True)
             return
 
+        # Disable button de ngan duplicate requests khi dang fetch
+        self._fetch_btn.setEnabled(False)
+        self._fetch_btn.setText("Fetching...")
         self._show_status("Fetching models...")
 
         # Inner classes cho background worker (khong tao file rieng vi chi dung o day)
@@ -1491,6 +1587,10 @@ class SettingsViewQt(QWidget):
         """
         self._fetch_worker = None  # Giai phong reference
 
+        # Restore button state
+        self._fetch_btn.setEnabled(True)
+        self._fetch_btn.setText("Fetch Models")
+
         if not models:
             self._show_status("No models found on this server.", is_error=True)
             return
@@ -1517,5 +1617,10 @@ class SettingsViewQt(QWidget):
         Dam bao giai phong reference worker va hien thi toast loi ro rang.
         """
         self._fetch_worker = None
+
+        # Restore button state
+        self._fetch_btn.setEnabled(True)
+        self._fetch_btn.setText("Fetch Models")
+
         if msg:
             self._show_status(msg, is_error=True)

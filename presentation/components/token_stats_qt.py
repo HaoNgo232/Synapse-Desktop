@@ -230,13 +230,15 @@ class TokenStatsPanelQt(QWidget):
             self._warning_banner.show()
             over = total - context_length
             self._warning_label.setText(
-                f"⚠ Context exceeds limit by {over:,} tokens! Some content may be truncated."
+                f"⚠ Exceeds limit by {over:,} tokens! Use Copy Smart (saves ~70% tokens) "
+                f"or deselect some files to fit within context window."
             )
         elif level == "high":
             self._warning_banner.show()
             remaining = context_length - total
             self._warning_label.setText(
-                f"⚠ Approaching context limit. {remaining:,} tokens remaining."
+                f"⚠ Approaching limit — {remaining:,} tokens remaining. "
+                f"Consider using Copy Smart or removing some files."
             )
             self._warning_banner.setStyleSheet(
                 f"background-color: #422006; border: 1px solid {ThemeColors.WARNING}; "

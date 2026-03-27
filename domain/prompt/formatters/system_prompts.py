@@ -23,7 +23,7 @@ How to work with this context:
 - Reference specific file paths and code when making suggestions
 - Consider git changes (if included) to understand recent development context
 - Follow the developer's instructions precisely while leveraging the full codebase context
-- If a <user_instructions> block (or an "Instructions" section) appears later in this document, treat it as the highest-priority task directive and follow it first
+- If a user_instructions block (or an "Instructions" section) appears later in this document, treat it as the highest-priority task directive and follow it first
 - Only reference code explicitly present in the provided context; don't fabricate or assume code that isn't shown
 - If the context is insufficient, clearly state what additional files or information you'd need before proceeding
 - If the developer specifies a different role or perspective in their instructions, adopt that role; their instructions always take priority
@@ -226,34 +226,4 @@ def example():
     pass
 ~~~
 ```
-"""
-
-# ===========================================================================
-# Memory Injection - Continuous Context Memory cho OPX
-# ===========================================================================
-
-MEMORY_INSTRUCTION_PROMPT = """
-<synapse_memory_instructions>
-To help maintain continuity across sessions, please append a <synapse_memory> block at the end of your response.
-
-Format:
-<synapse_memory>
-COMPLETED: [1-2 sentences summarizing what you just did]
-CONTEXT: [Key technical decisions, patterns used, or dependencies affected]
-NEXT_STEPS: [What the user should logically do next based on this change]
-</synapse_memory>
-
-Guidelines:
-- Keep the memory block under 150 words total.
-- Be specific: mention file names, function names, and architectural decisions.
-- Don't repeat the full code or OPX content inside the memory block.
-</synapse_memory_instructions>
-"""
-
-PREVIOUS_MEMORY_TEMPLATE = """<previous_session_context>
-The following is a summary from the previous coding session on this project.
-Use it to understand what was done before and maintain continuity.
-
-{memory_content}
-</previous_session_context>
 """

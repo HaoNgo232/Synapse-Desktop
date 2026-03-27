@@ -659,17 +659,6 @@ class SettingsViewQt(QWidget):
         self._security_toggle.toggled.connect(self._mark_changed)
         card4_layout.addWidget(self._security_toggle)
 
-        # enable_ai_memory toggle
-        card4_layout.addSpacing(16)
-        ai_memory_toggle = _ToggleRow(
-            label="Enable AI Continuous Memory (OPX Only)",
-            description="Instructs the AI to summarize its actions and next steps. Synapse saves this memory and injects it into subsequent Prompts to maintain context across sessions.",
-            checked=settings.get("enable_ai_memory", True),
-        )
-        ai_memory_toggle.toggled.connect(self._mark_changed)
-        card4_layout.addWidget(ai_memory_toggle)
-        self._ai_memory_toggle = ai_memory_toggle
-
         # Output language selector
         card4_layout.addSpacing(16)
         lang_label = QLabel("Report Output Language")
@@ -931,7 +920,6 @@ class SettingsViewQt(QWidget):
             ai_base_url=self._ai_base_url_input.text().strip()
             or "https://api.openai.com/v1",
             ai_model_id=self._ai_model_combo.currentText().strip(),
-            enable_ai_memory=self._ai_memory_toggle.isChecked(),
             output_language=self._output_language_combo.currentText().strip()
             or "Vietnamese (tiếng Việt có dấu)",
             template_tier=str(self._template_tier_combo.currentData() or "lite"),
@@ -1000,7 +988,6 @@ class SettingsViewQt(QWidget):
         self._security_toggle.setChecked(True)
         self._git_toggle.setChecked(True)
         self._relative_toggle.setChecked(True)
-        self._ai_memory_toggle.setChecked(True)
         self._output_language_combo.setCurrentText("Vietnamese (tiếng Việt có dấu)")
         tier_default_idx = self._template_tier_combo.findData("lite")
         self._template_tier_combo.setCurrentIndex(max(0, tier_default_idx))

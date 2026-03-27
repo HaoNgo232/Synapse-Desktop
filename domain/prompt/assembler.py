@@ -36,48 +36,7 @@ from domain.prompt.formatters.system_prompts import (
     SUMMARY_NOTES,
     GIT_DIFF_INSTRUCTION,
     GIT_LOG_INSTRUCTION,
-    MEMORY_INSTRUCTION_PROMPT,
-    PREVIOUS_MEMORY_TEMPLATE,
 )
-
-import re
-
-
-_MAX_MEMORY_LENGTH = 2000
-_MEMORY_FORBIDDEN_KEYWORDS = [
-    "IGNORE ALL PREVIOUS",
-    "SYSTEM:",
-    "ADMIN MODE",
-    "OVERRIDE ALL",
-]
-# Cac OPX/system tags nguy hiem can escape, giu lai generic types nhu List<T>
-_DANGEROUS_TAG_PREFIXES = ["<edit", "<opx", "<put", "<find", "<system", "<synapse"]
-
-
-def _sanitize_memory_content(raw: str) -> str:
-    """
-    Lam sach noi dung memory de ngan persistent prompt injection.
-
-    Thay vi xoa toan bo XML tags (lam mat generic types nhu List<T>, Array<T>),
-    chi escape cac OPX/system tags nguy hiem theo deny-list.
-    Kiem tra forbidden keywords de block prompt injection ro rang.
-    """
-    if len(raw) > _MAX_MEMORY_LENGTH:
-        raw = raw[:_MAX_MEMORY_LENGTH] + "..."
-
-    # Kiem tra forbidden keywords truoc
-    upper_raw = raw.upper()
-    for keyword in _MEMORY_FORBIDDEN_KEYWORDS:
-        if keyword in upper_raw:
-            return "[MEMORY BLOCKED: Contains unsafe instructions]"
-
-    # Chi escape cac OPX/system tags nguy hiem, giu lai generic types
-    for tag in _DANGEROUS_TAG_PREFIXES:
-        raw = raw.replace(tag, "&lt;" + tag[1:])
-
-    # Collapse nhieu dong trong thanh toi da 2 dong lien tiep
-    cleaned = re.sub(r"\n{3,}", "\n\n", raw)
-    return cleaned.strip()
 
 
 def assemble_prompt(
@@ -89,8 +48,6 @@ def assemble_prompt(
     git_logs: Optional[GitLogResult] = None,
     output_style: OutputStyle = OutputStyle.XML,
     project_rules: str = "",
-    memory_content: Optional[str] = None,
-    enable_ai_memory: bool = False,
 ) -> str:
     """
     Lap rap prompt hoan chinh tu cac sections.
@@ -122,8 +79,6 @@ def assemble_prompt(
             git_diffs,
             git_logs,
             project_rules,
-            memory_content,
-            enable_ai_memory,
         )
     elif output_style == OutputStyle.JSON:
         return _assemble_json(
@@ -140,6 +95,7 @@ def assemble_prompt(
             file_map,
             file_contents,
             user_instructions,
+            include_xml_formatting,
             git_diffs,
             git_logs,
             project_rules,
@@ -163,7 +119,6 @@ def assemble_smart_prompt(
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
     project_rules: str = "",
-    memory_content: Optional[str] = None,
 ) -> str:
     """
     Lap rap prompt cho Copy Smart - gom file_summary (voi agent_role),
@@ -176,7 +131,6 @@ def assemble_smart_prompt(
         git_diffs: Optional git diffs
         git_logs: Optional git logs
         project_rules: Quy tac project
-        memory_content: Noi dung memory.xml
 
     Returns:
         Prompt string day du
@@ -184,15 +138,8 @@ def assemble_smart_prompt(
     # generate_smart_summary_xml() da bao gom agent_role
     file_summary = generate_smart_summary_xml()
 
-    memory_injection = ""
-    if memory_content and memory_content.strip():
-        safe_memory = _sanitize_memory_content(memory_content.strip())
-        memory_injection = "\n" + PREVIOUS_MEMORY_TEMPLATE.format(
-            memory_content=safe_memory
-        )
-
     prompt = f"""{file_summary}
-{memory_injection}
+
 <directory_structure>
 {file_map}
 </directory_structure>
@@ -286,23 +233,13 @@ def _assemble_xml(
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
-    memory_content: Optional[str] = None,
-    enable_ai_memory: bool = False,
 ) -> str:
     """Lap rap prompt theo XML format voi AI-Friendly header va Agent Role."""
     # generate_file_summary_xml() da bao gom agent_role ben trong
     file_summary = generate_file_summary_xml()
 
-    # Prepend previous memory if available
-    memory_injection = ""
-    if memory_content and memory_content.strip():
-        safe_memory = _sanitize_memory_content(memory_content.strip())
-        memory_injection = "\n" + PREVIOUS_MEMORY_TEMPLATE.format(
-            memory_content=safe_memory
-        )
-
     prompt = f"""{file_summary}
-{memory_injection}
+
 <directory_structure>
 {file_map}
 </directory_structure>
@@ -313,8 +250,6 @@ def _assemble_xml(
 
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
-        if enable_ai_memory:
-            prompt += f"\n{MEMORY_INSTRUCTION_PROMPT}\n"
 
     if project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
@@ -341,7 +276,7 @@ def _assemble_json(
         files_data = {}
 
     # Them system instruction va file summary vao JSON output
-    prompt_data = {
+    prompt_data: dict[str, object] = {
         "system_instruction": AGENT_ROLE_INSTRUCTION,
         "file_summary": {
             "generated_by": "Synapse Desktop",
@@ -354,21 +289,19 @@ def _assemble_json(
         "files": files_data,
     }
 
-    if project_rules:
-        prompt_data["project_rules"] = project_rules
-
-    if user_instructions:
-        prompt_data["instructions"] = user_instructions
-
-    # Them git context voi instruction text
-    if git_diffs:
+    # Them git context voi instruction text (truoc project_rules va instructions)
+    has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
+    if has_diffs:
+        assert git_diffs is not None
         prompt_data["git_diffs"] = {
             "instruction": GIT_DIFF_INSTRUCTION,
             "work_tree": git_diffs.work_tree_diff,
             "staged": git_diffs.staged_diff,
         }
 
-    if git_logs:
+    has_logs = git_logs and git_logs.log_content
+    if has_logs:
+        assert git_logs is not None
         prompt_data["git_logs"] = {
             "instruction": GIT_LOG_INSTRUCTION,
             "content": git_logs.log_content,
@@ -377,6 +310,12 @@ def _assemble_json(
     if include_xml_formatting:
         prompt_data["formatting_instructions"] = XML_FORMATTING_INSTRUCTIONS
 
+    if project_rules and project_rules.strip():
+        prompt_data["project_rules"] = project_rules.strip()
+
+    if user_instructions and user_instructions.strip():
+        prompt_data["instructions"] = user_instructions.strip()
+
     return json.dumps(prompt_data, ensure_ascii=False, indent=2)
 
 
@@ -384,12 +323,13 @@ def _assemble_plain(
     file_map: str,
     file_contents: str,
     user_instructions: str,
+    include_xml_formatting: bool,
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
 ) -> str:
     """Lap rap prompt theo Plain Text format voi Summary header va Git instructions."""
-    prompt_parts = []
+    prompt_parts: list[str] = []
 
     # Them Agent Role va File Summary o dau prompt
     prompt_parts.append(
@@ -429,12 +369,15 @@ def _assemble_plain(
             f"{'-' * 32}\n{GIT_LOG_INSTRUCTION}\n\nGit Logs:\n{git_logs.log_content}"
         )
 
-    if project_rules:
-        prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules}")
+    if include_xml_formatting:
+        prompt_parts.append(f"{'-' * 32}\n{XML_FORMATTING_INSTRUCTIONS}")
+
+    if project_rules and project_rules.strip():
+        prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules.strip()}")
 
     # User instructions o cuoi cung (recency bias giup LLM xu ly tot hon)
-    if user_instructions:
-        prompt_parts.append(f"{'-' * 32}\nInstructions:\n{user_instructions}")
+    if user_instructions and user_instructions.strip():
+        prompt_parts.append(f"{'-' * 32}\nInstructions:\n{user_instructions.strip()}")
 
     return "\n\n".join(prompt_parts)
 
@@ -448,24 +391,34 @@ def _assemble_markdown(
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
 ) -> str:
-    """Lap rap prompt theo Markdown format voi File Summary va Agent Role."""
-    # Header voi Agent Role va File Summary
-    prompt = f"""<system_instruction>
-{AGENT_ROLE_INSTRUCTION}
-</system_instruction>
+    """Lap rap prompt theo Markdown format voi File Summary va Agent Role.
 
-<file_summary>
+    Su dung hybrid format: Markdown content duoc boc trong XML semantic tags
+    de AI de dang nhan dien ranh gioi cac section.
+    """
+    # Header voi Agent Role va File Summary
+    prompt = f"""<file_summary>
 {GENERATION_HEADER}
 
-Purpose: {SUMMARY_PURPOSE}
+<agent_role>
+{AGENT_ROLE_INSTRUCTION}
+</agent_role>
 
-File Format: {SUMMARY_FILE_FORMAT_MARKDOWN}
+<purpose>
+{SUMMARY_PURPOSE}
+</purpose>
 
-Usage Guidelines:
+<file_format>
+{SUMMARY_FILE_FORMAT_MARKDOWN}
+</file_format>
+
+<usage_guidelines>
 {SUMMARY_USAGE_GUIDELINES}
+</usage_guidelines>
 
-Notes:
+<notes>
 {SUMMARY_NOTES}
+</notes>
 </file_summary>
 
 <file_map>

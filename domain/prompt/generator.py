@@ -715,16 +715,11 @@ def build_smart_prompt(
         git_diffs: Optional git diffs
         git_logs: Optional git logs
         project_rules: Project rules
-        workspace_root: Optional workspace root de doc memory.xml
+        workspace_root: Optional workspace root (kept for API compatibility)
 
     Returns:
         Prompt string day du
     """
-
-    # Copy Smart does not include OPX formatting, so we do not inject memory
-    # to avoid polluting the context without a way to update the memory.
-    memory_content = None
-
     return assemble_smart_prompt(
         smart_contents=smart_contents,
         file_map=file_map,
@@ -732,7 +727,6 @@ def build_smart_prompt(
         git_diffs=git_diffs,
         git_logs=git_logs,
         project_rules=project_rules,
-        memory_content=memory_content,
     )
 
 
@@ -761,23 +755,11 @@ def generate_prompt(
         git_logs: Optional git logs
         output_style: Dinh dang dau ra
         project_rules: Project rules
-        workspace_root: Optional workspace root de doc memory.xml
+        workspace_root: Optional workspace root (kept for API compatibility)
 
     Returns:
         Prompt hoan chinh
     """
-    from infrastructure.persistence.settings_manager import load_app_settings
-
-    settings = load_app_settings()
-    enable_ai_memory = settings.enable_ai_memory
-
-    memory_content = None
-    if enable_ai_memory and workspace_root and include_xml_formatting:
-        # Dùng memory prompt adapter: ưu tiên memory_v2.json, fallback memory.xml
-        from domain.memory.memory_prompt_adapter import load_memory_for_prompt
-
-        memory_content = load_memory_for_prompt(workspace_root)
-
     return assemble_prompt(
         file_map=file_map,
         file_contents=file_contents,
@@ -787,6 +769,4 @@ def generate_prompt(
         git_logs=git_logs,
         output_style=output_style,
         project_rules=project_rules,
-        memory_content=memory_content,
-        enable_ai_memory=enable_ai_memory,
     )

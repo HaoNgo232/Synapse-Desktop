@@ -529,87 +529,160 @@ def _apply_search_replace(
         match_method: 'exact' | 'normalized' | 'fuzzy:0.95' | 'not_found'
     """
     # Use smart search với 3-layer fallback
-    first_pos, method = _smart_find_block(content, search, enable_fuzzy=True)
+    first_pos, first_match_len, method = _smart_find_block(
+        content, search, enable_fuzzy=True
+    )
 
     if first_pos == -1:
         return False, content, method
+
+    if method == "exact":
+        matches = _find_exact_matches(content, search)
+    elif method == "normalized":
+        matches = _find_normalized_matches(content, search)
+    else:
+        matches = [(first_pos, first_match_len)]
+
+    if not matches:
+        return False, content, "not_found"
 
     # Log method used (non-exact matches cần attention)
     if method != "exact":
         log_info(f"Match method '{method}' used at position {first_pos}")
 
-    # Check for multiple matches (chỉ check với exact/normalized)
-    # Fuzzy matching quá chậm để tìm all matches
-    if method in ("exact", "normalized"):
-        has_multiple = content.find(search, first_pos + 1) != -1
-    else:
-        # Assume single match for fuzzy
-        has_multiple = False
+    # Fuzzy fallback chi co 1 best match, exact/normalized co the co nhieu matches
+    has_multiple = len(matches) > 1
 
-    # Handle occurrence logic (UNCHANGED from original)
-    if not has_multiple or occurrence == "first" or occurrence is None:
-        new_content = content[:first_pos] + replace + content[first_pos + len(search) :]
+    # Handle occurrence logic
+    if occurrence in (None, "first"):
+        if has_multiple and method in ("exact", "normalized") and occurrence is None:
+            # Nhieu matches ma khong co occurrence -> ambiguous
+            return False, content, method
+        selected_pos, selected_len = matches[0]
+        new_content = (
+            content[:selected_pos] + replace + content[selected_pos + selected_len :]
+        )
         return True, new_content, method
 
     if occurrence == "last":
-        last_pos = content.rfind(search)
-        new_content = content[:last_pos] + replace + content[last_pos + len(search) :]
+        selected_pos, selected_len = matches[-1]
+        new_content = (
+            content[:selected_pos] + replace + content[selected_pos + selected_len :]
+        )
         return True, new_content, method
 
-    if isinstance(occurrence, int) and occurrence > 0:
-        nth_pos = _find_nth_occurrence(content, search, occurrence)
-        if nth_pos == -1:
+    # Den day occurrence khong the la None/'first'/'last' nua.
+    # Parse phong thu de tranh runtime input khong dung type.
+    try:
+        occurrence_index = int(occurrence)
+    except (TypeError, ValueError):
+        return False, content, method
+
+    if occurrence_index > 0:
+        if occurrence_index > len(matches):
             return False, content, method
-        new_content = content[:nth_pos] + replace + content[nth_pos + len(search) :]
+        selected_pos, selected_len = matches[occurrence_index - 1]
+        new_content = (
+            content[:selected_pos] + replace + content[selected_pos + selected_len :]
+        )
         return True, new_content, method
 
-    # Nhieu matches ma khong co occurrence -> ambiguous
+    # occurrence khong hop le
     return False, content, method
-
-
-def _find_nth_occurrence(haystack: str, needle: str, n: int) -> int:
-    """
-    Tim vi tri occurrence thu n cua needle trong haystack.
-    Port truc tiep tu TypeScript.
-    """
-    idx = -1
-    from_pos = 0
-
-    for _ in range(n):
-        idx = haystack.find(needle, from_pos)
-        if idx == -1:
-            return -1
-        from_pos = idx + len(needle)
-
-    return idx
 
 
 # ==================== FUZZY MATCHING HELPERS ====================
 
 
-def _normalize_whitespace(text: str) -> str:
+def _strip_line_ending(line: str) -> str:
+    """Remove \r/\n line ending but keep all other whitespace."""
+    return line.rstrip("\r\n")
+
+
+def _line_window_span_without_terminal_newline(
+    lines_with_eol: list[str], start_line: int, line_count: int
+) -> int:
+    """Tinh do dai span cho line-window, khong gom terminal newline cua dong cuoi."""
+    if line_count <= 0:
+        return 0
+
+    if line_count == 1:
+        return len(_strip_line_ending(lines_with_eol[start_line]))
+
+    total = 0
+    # Cac dong truoc dong cuoi giu nguyen newline
+    for idx in range(start_line, start_line + line_count - 1):
+        total += len(lines_with_eol[idx])
+
+    # Dong cuoi bo terminal newline de match behavior cua marker extraction
+    total += len(_strip_line_ending(lines_with_eol[start_line + line_count - 1]))
+    return total
+
+
+def _find_exact_matches(content: str, search: str) -> list[tuple[int, int]]:
+    """Tim tat ca exact matches theo thu tu xuat hien."""
+    if not search:
+        return []
+
+    matches: list[tuple[int, int]] = []
+    from_pos = 0
+
+    while True:
+        pos = content.find(search, from_pos)
+        if pos == -1:
+            break
+        matches.append((pos, len(search)))
+        from_pos = pos + len(search)
+
+    return matches
+
+
+def _find_normalized_matches(content: str, search: str) -> list[tuple[int, int]]:
     """
-    Normalize whitespace trong text, preserve structure.
+    Tim matches khi chi khac trailing whitespace.
 
-    Loại bỏ trailing whitespace nhưng giữ leading whitespace (indentation).
-
-    Args:
-        text: Text cần normalize
-
-    Returns:
-        Text đã normalize
+    Return danh sach (start_pos, span_len) trong ORIGINAL content de tranh
+    offset drift khi thay the.
     """
-    lines: list[str] = []
-    for line in text.splitlines():
-        # Remove trailing whitespace only
-        # Keep leading whitespace (indentation matters!)
-        lines.append(line.rstrip())  # type: ignore[arg-type]
-    return "\n".join(lines)
+    search_lines = search.splitlines()
+    if not search_lines:
+        return []
+
+    lines_with_eol = content.splitlines(keepends=True)
+    if not lines_with_eol:
+        return []
+
+    content_line_count = len(lines_with_eol)
+    search_line_count = len(search_lines)
+    if search_line_count > content_line_count:
+        return []
+
+    line_offsets: list[int] = []
+    offset = 0
+    for raw_line in lines_with_eol:
+        line_offsets.append(offset)
+        offset += len(raw_line)
+
+    normalized_search = [line.rstrip() for line in search_lines]
+    content_bodies = [_strip_line_ending(line) for line in lines_with_eol]
+
+    matches: list[tuple[int, int]] = []
+    for start_line in range(content_line_count - search_line_count + 1):
+        window = content_bodies[start_line : start_line + search_line_count]
+        if all(
+            window[i].rstrip() == normalized_search[i] for i in range(search_line_count)
+        ):
+            span_len = _line_window_span_without_terminal_newline(
+                lines_with_eol, start_line, search_line_count
+            )
+            matches.append((line_offsets[start_line], span_len))
+
+    return matches
 
 
 def _fuzzy_find_best_match(
     content: str, search: str, threshold: float = 0.90
-) -> tuple[int, float]:
+) -> tuple[int, int, float]:
     """
     Tìm vị trí best fuzzy match cho search block trong content.
 
@@ -621,8 +694,8 @@ def _fuzzy_find_best_match(
         threshold: Minimum similarity score (0.0-1.0)
 
     Returns:
-        (position, similarity_score)
-        (-1, 0.0) nếu không tìm thấy match đủ tốt
+        (position, match_length, similarity_score)
+        (-1, 0, 0.0) nếu không tìm thấy match đủ tốt
     """
     # Try RapidFuzz first (10-100x faster)
     try:
@@ -637,14 +710,22 @@ def _fuzzy_find_best_match(
         fuzz = None  # type: ignore[assignment]
 
     search_lines = search.splitlines()
-    content_lines = content.splitlines()
+    content_lines_with_eol = content.splitlines(keepends=True)
+    content_lines = [_strip_line_ending(line) for line in content_lines_with_eol]
 
     if len(search_lines) == 0 or len(content_lines) == 0:
-        return -1, 0.0
+        return -1, 0, 0.0
 
     best_pos = -1
+    best_len = 0
     best_score = 0.0
     search_len = len(search_lines)
+
+    line_offsets: list[int] = []
+    offset = 0
+    for raw_line in content_lines_with_eol:
+        line_offsets.append(offset)
+        offset += len(raw_line)
 
     # Sliding window qua content
     for i in range(len(content_lines) - search_len + 1):
@@ -662,20 +743,20 @@ def _fuzzy_find_best_match(
 
         if score > best_score:
             best_score = score
-            # Convert line index to character position
-            best_pos = len("\n".join(content_lines[:i]))
-            if i > 0:
-                best_pos += 1  # Add newline
+            best_pos = line_offsets[i]
+            best_len = _line_window_span_without_terminal_newline(
+                content_lines_with_eol, i, search_len
+            )
 
     if best_score >= threshold:
-        return best_pos, best_score
+        return best_pos, best_len, best_score
 
-    return -1, 0.0
+    return -1, 0, 0.0
 
 
 def _smart_find_block(
     content: str, search: str, enable_fuzzy: bool = True
-) -> tuple[int, str]:
+) -> tuple[int, int, str]:
     """
     3-layer fallback strategy để tìm search block trong content.
 
@@ -690,37 +771,35 @@ def _smart_find_block(
         enable_fuzzy: Có enable fuzzy matching không
 
     Returns:
-        (position, method_used)
+        (position, match_length, method_used)
         method_used: 'exact' | 'normalized' | 'fuzzy:0.95' | 'not_found'
     """
     # Layer 1: Exact match (FAST PATH - unchanged behavior)
     pos = content.find(search)
     if pos != -1:
-        return pos, "exact"
+        return pos, len(search), "exact"
 
-    # Layer 2: Normalized whitespace (SAFE - chỉ khác whitespace)
-    norm_content = _normalize_whitespace(content)
-    norm_search = _normalize_whitespace(search)
-
-    norm_pos = norm_content.find(norm_search)
-    if norm_pos != -1:
-        # Map normalized position back to original
-        # Positions should be identical or very close
-        return norm_pos, "normalized"
+    # Layer 2: Normalized whitespace (SAFE - chỉ khác trailing whitespace)
+    normalized_matches = _find_normalized_matches(content, search)
+    if normalized_matches:
+        norm_pos, norm_len = normalized_matches[0]
+        return norm_pos, norm_len, "normalized"
 
     # Layer 3: Fuzzy match (LAST RESORT - needs validation)
     if not enable_fuzzy:
-        return -1, "not_found"
+        return -1, 0, "not_found"
 
-    fuzzy_pos, fuzzy_score = _fuzzy_find_best_match(content, search, threshold=0.90)
+    fuzzy_pos, fuzzy_len, fuzzy_score = _fuzzy_find_best_match(
+        content, search, threshold=0.90
+    )
     if fuzzy_pos != -1:
         log_warning(
             f"Fuzzy match found (similarity: {fuzzy_score:.1%}) for block: "
             f"{search[:50].strip()}..."
         )
-        return fuzzy_pos, f"fuzzy:{fuzzy_score:.2f}"
+        return fuzzy_pos, fuzzy_len, f"fuzzy:{fuzzy_score:.2f}"
 
-    return -1, "not_found"
+    return -1, 0, "not_found"
 
 
 def _handle_delete(

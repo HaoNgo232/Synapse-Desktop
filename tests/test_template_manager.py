@@ -17,6 +17,7 @@ from domain.prompt.template_manager import (
     get_template_info,
     TemplateInfo,
     LocalCustomTemplateProvider,
+    BuiltInTemplateProvider,
 )
 import domain.prompt.template_manager as tm
 
@@ -76,8 +77,8 @@ class TestLoadTemplate:
     def test_load_security_auditor(self):
         """Load security_auditor thanh cong."""
         content = load_template("security_auditor")
-        assert "OWASP" in content
-        assert "Security Audit Report" in content
+        assert "Application Security Engineer" in content
+        assert "<thinking>" in content
 
     def test_load_refactoring_expert(self):
         """Load refactoring_expert thanh cong."""
@@ -88,14 +89,33 @@ class TestLoadTemplate:
     def test_load_doc_generator(self):
         """Load doc_generator thanh cong."""
         content = load_template("doc_generator")
-        assert "README.md" in content
+        assert "Technical Documentation Engineer" in content
         assert "documentation" in content.lower()
 
     def test_load_performance_optimizer(self):
         """Load performance_optimizer thanh cong."""
         content = load_template("performance_optimizer")
-        assert "Big O" in content
+        assert "Performance Engineer" in content
         assert "memory" in content.lower()
+
+    def test_can_force_pro_tier(self, monkeypatch):
+        """Khi template_tier=pro thi provider load Pro template."""
+        monkeypatch.setattr(tm, "_get_template_tier", lambda: "pro")
+        content = load_template("security_auditor")
+        assert "OWASP" in content
+
+    def test_lite_fallback_to_pro_when_lite_missing(self, tmp_path, monkeypatch):
+        """Neu tier=lite nhung file lite khong ton tai thi fallback Pro."""
+        # Fake templates dir voi pro-only file
+        pro_file = tmp_path / "bug_hunter.md"
+        pro_file.write_text("PRO TEMPLATE CONTENT", encoding="utf-8")
+
+        monkeypatch.setattr(tm, "_TEMPLATES_DIR", tmp_path)
+        monkeypatch.setattr(tm, "_get_template_tier", lambda: "lite")
+
+        provider = BuiltInTemplateProvider()
+        content = provider.load_template("bug_hunter")
+        assert content == "PRO TEMPLATE CONTENT"
 
     def test_load_nonexistent_raises_key_error(self):
         """Load template khong ton tai raise KeyError."""
@@ -130,6 +150,11 @@ class TestGetTemplateInfo:
         info = get_template_info("bug_hunter")
         with pytest.raises(AttributeError):
             info.display_name = "Hacked"  # type: ignore[misc]
+
+    def test_builtin_templates_expose_has_lite(self):
+        """Built-in templates co metadata has_lite cho UI indicator."""
+        info = get_template_info("bug_hunter")
+        assert info.has_lite is True
 
 
 class TestLocalCustomTemplateProvider:

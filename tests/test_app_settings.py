@@ -33,6 +33,7 @@ class TestAppSettings:
         assert settings.enable_security_check is True
         assert settings.use_gitignore is True
         assert settings.use_relative_paths is True
+        assert settings.template_tier == "lite"
         assert "node_modules" in settings.excluded_folders
 
     def test_from_dict_full(self):
@@ -111,6 +112,7 @@ class TestAppSettings:
             "ai_auto_apply",
             "enable_ai_memory",
             "output_language",
+            "template_tier",
             "rule_file_names",
         }
         assert set(d.keys()) == expected_keys

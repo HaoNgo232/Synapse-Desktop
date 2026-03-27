@@ -36,6 +36,8 @@ class TemplateInfo:
     description: str
     # True nếu là template do người dùng tạo, False nếu là built-in
     is_custom: bool = False
+    # True neu template co lite variant trong built-in tier system
+    has_lite: bool = False
 
 
 # ============================================================================
@@ -81,114 +83,133 @@ class BuiltInTemplateProvider(TemplateProvider):
                 display_name="Bug Hunter",
                 description="Tìm lỗi logic, race conditions, edge cases và exceptions chưa xử lý",
                 is_custom=False,
+                has_lite=True,
             ),
             "security_auditor": TemplateInfo(
                 template_id="security_auditor",
                 display_name="Security Auditor",
                 description="Kiểm tra lỗ hổng bảo mật theo OWASP Top 10, phát hiện secrets và hardcoded credentials",
                 is_custom=False,
+                has_lite=True,
             ),
             "refactoring_expert": TemplateInfo(
                 template_id="refactoring_expert",
                 display_name="Refactoring Expert",
                 description="Đề xuất cải thiện code theo SOLID, DRY, Clean Code và giảm độ phức tạp",
                 is_custom=False,
+                has_lite=True,
             ),
             "doc_generator": TemplateInfo(
                 template_id="doc_generator",
                 display_name="Documentation Generator",
                 description="Tạo hoặc cập nhật README, tài liệu kiến trúc từ codebase (chế độ cập nhật thông minh)",
                 is_custom=False,
+                has_lite=True,
             ),
             "performance_optimizer": TemplateInfo(
                 template_id="performance_optimizer",
                 display_name="Performance Optimizer",
                 description="Phân tích Big O, memory leaks, blocking operations và đề xuất tối ưu hóa",
                 is_custom=False,
+                has_lite=True,
             ),
             "ui_ux_reviewer": TemplateInfo(
                 template_id="ui_ux_reviewer",
                 display_name="UI/UX Reviewer",
                 description="Review giao diện, accessibility, tính nhất quán, màu sắc, animations và trải nghiệm người dùng",
                 is_custom=False,
+                has_lite=True,
             ),
             "test_writer": TemplateInfo(
                 template_id="test_writer",
                 display_name="Test Writer",
                 description="Tạo Unit Tests, Integration Tests theo AAA pattern và nguyên tắc TDD",
                 is_custom=False,
+                has_lite=True,
             ),
             "api_reviewer": TemplateInfo(
                 template_id="api_reviewer",
                 display_name="API Reviewer",
                 description="Review thiết kế API (REST, GraphQL, gRPC, component APIs) về contract, consistency, performance và security",
                 is_custom=False,
+                has_lite=True,
             ),
             "flow_checker": TemplateInfo(
                 template_id="flow_checker",
                 display_name="Flow Checker",
                 description="Phân tích execution flow, data flow, control flow và phát hiện vấn đề về luồng xử lý",
                 is_custom=False,
+                has_lite=True,
             ),
             "architecture_reviewer": TemplateInfo(
                 template_id="architecture_reviewer",
                 display_name="Architecture Reviewer",
                 description="Review kiến trúc tổng thể, SOLID compliance, design patterns và long-term maintainability",
                 is_custom=False,
+                has_lite=True,
             ),
             "code_review_gate": TemplateInfo(
                 template_id="code_review_gate",
                 display_name="Code Review Gate",
                 description="Pre-merge quality gate với SOLID/Clean Code checklist và severity-based recommendations",
                 is_custom=False,
+                has_lite=True,
             ),
             "tech_debt_analyzer": TemplateInfo(
                 template_id="tech_debt_analyzer",
                 display_name="Tech Debt Analyzer",
                 description="Phát hiện, đo lường và prioritize technical debt với debt scoring và repayment roadmap",
                 is_custom=False,
+                has_lite=True,
             ),
             "code_explainer": TemplateInfo(
                 template_id="code_explainer",
                 display_name="Code Explainer",
                 description="Giải thích kiến trúc, components và execution flows để onboard nhanh vào codebase mới",
                 is_custom=False,
+                has_lite=True,
             ),
             "pull_request_generator": TemplateInfo(
                 template_id="pull_request_generator",
                 display_name="PR Generator",
                 description="Tạo tiêu đề và mô tả Pull Request chuẩn Conventional Commits từ git diff",
                 is_custom=False,
+                has_lite=True,
             ),
             "dependency_auditor": TemplateInfo(
                 template_id="dependency_auditor",
                 display_name="Dependency Auditor",
                 description="Kiểm tra dependencies về security vulnerabilities, licenses, và outdated packages",
                 is_custom=False,
+                has_lite=True,
             ),
             "devops_reviewer": TemplateInfo(
                 template_id="devops_reviewer",
                 display_name="DevOps Reviewer",
                 description="Review Docker, K8s, CI/CD pipelines và infrastructure configs về security và performance",
                 is_custom=False,
+                has_lite=True,
             ),
             "database_optimizer": TemplateInfo(
                 template_id="database_optimizer",
                 display_name="Database Optimizer",
                 description="Tối ưu database queries, indexes, schema design và caching strategy",
                 is_custom=False,
+                has_lite=True,
             ),
             "logic_portability": TemplateInfo(
                 template_id="logic_portability",
                 display_name="Logic Portability Extractor",
                 description="Trích xuất và đóng gói logic đã hoàn thiện thành module tái sử dụng được cho các project khác",
                 is_custom=False,
+                has_lite=True,
             ),
             "malware_forensics": TemplateInfo(
                 template_id="malware_forensics",
                 display_name="Malware Forensics Analyzer",
                 description="Phân tích pháp y mã độc theo Zero-Trust: phát hiện backdoor, exfiltration, obfuscation, và supply-chain poisoning",
                 is_custom=False,
+                has_lite=True,
             ),
         }
 
@@ -205,12 +226,19 @@ class BuiltInTemplateProvider(TemplateProvider):
             raise FileNotFoundError(
                 f"Template '{template_id}' khong thuoc BuiltIn provider."
             )
-        template_path = _TEMPLATES_DIR / f"{template_id}.md"
-        if not template_path.exists():
+
+        tier = _get_template_tier()
+        if tier == "lite":
+            lite_path = _TEMPLATES_DIR / "lite" / f"{template_id}.md"
+            if lite_path.exists():
+                return lite_path.read_text(encoding="utf-8").strip()
+
+        pro_path = _TEMPLATES_DIR / f"{template_id}.md"
+        if not pro_path.exists():
             raise FileNotFoundError(
-                f"File template '{template_path}' khong ton tai tren disk."
+                f"File template '{pro_path}' khong ton tai tren disk."
             )
-        return template_path.read_text(encoding="utf-8").strip()
+        return pro_path.read_text(encoding="utf-8").strip()
 
     def get_template_info(self, template_id: str) -> TemplateInfo:
         if not self.handles(template_id):
@@ -352,6 +380,7 @@ _PROVIDERS: list[TemplateProvider] = [
 ]
 
 _OUTPUT_FORMAT_PATH = _TEMPLATES_DIR / "_output_format.md"
+_LITE_OUTPUT_FORMAT_PATH = _TEMPLATES_DIR / "lite" / "_output_format.md"
 
 
 def _get_output_language() -> str:
@@ -362,6 +391,19 @@ def _get_output_language() -> str:
         return load_app_settings().output_language
     except Exception:
         return "Vietnamese (tiếng Việt có dấu)"
+
+
+def _get_template_tier() -> str:
+    """Doc template tier tu settings, fallback ve 'lite'."""
+    try:
+        from infrastructure.persistence.settings_manager import load_app_settings
+
+        tier = str(load_app_settings().template_tier).strip().lower()
+        if tier in {"lite", "pro"}:
+            return tier
+    except Exception:
+        pass
+    return "lite"
 
 
 def _append_output_format(content: str) -> str:
@@ -379,9 +421,17 @@ def _append_output_format(content: str) -> str:
     if idx != -1:
         content = content[:idx]
 
+    # Chon shared output format theo tier (lite/pro)
+    tier = _get_template_tier()
+    fmt_path = _OUTPUT_FORMAT_PATH
+    if tier == "lite":
+        fmt_path = _LITE_OUTPUT_FORMAT_PATH
+        if not fmt_path.exists():
+            fmt_path = _OUTPUT_FORMAT_PATH
+
     # Doc shared output format
     try:
-        fmt = _OUTPUT_FORMAT_PATH.read_text(encoding="utf-8")
+        fmt = fmt_path.read_text(encoding="utf-8")
     except OSError:
         return content.strip()
 

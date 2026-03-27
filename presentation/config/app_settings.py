@@ -76,6 +76,10 @@ class AppSettings:
     # Ngon ngu dau ra cho cac template reports (VD: "Vietnamese (tiếng Việt có dấu)", "English")
     output_language: str = "Vietnamese (tiếng Việt có dấu)"
 
+    # --- Prompt Template Settings ---
+    # Tier cua built-in prompt templates: "lite" (mac dinh) hoac "pro"
+    template_tier: str = "lite"
+
     # --- Rule Settings ---
     # Danh sach cac ten file project rules de tu dong boc tach (VD: .cursorrules)
     rule_file_names: list[str] = field(
@@ -157,6 +161,7 @@ class AppSettings:
             "ai_auto_apply": self.ai_auto_apply,
             "enable_ai_memory": self.enable_ai_memory,
             "output_language": self.output_language,
+            "template_tier": self.template_tier,
             "rule_file_names": self.rule_file_names,
         }
 

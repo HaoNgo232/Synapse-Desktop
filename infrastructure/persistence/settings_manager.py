@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
     "enable_security_check": True,  # Enable security check
     "include_git_changes": True,  # Integrate git diff/log in prompt
     "use_relative_paths": True,  # Xuat path tuong doi workspace (tranh PII trong prompt)
+    "template_tier": "lite",  # Built-in template tier: lite | pro
 }
 
 

@@ -703,6 +703,37 @@ class SettingsViewQt(QWidget):
         self._output_language_combo.currentTextChanged.connect(self._mark_changed)
         card4_layout.addWidget(self._output_language_combo)
 
+        # Template tier selector (Lite / Pro)
+        card4_layout.addSpacing(16)
+        tier_label = QLabel("Template Tier")
+        tier_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {ThemeColors.TEXT_PRIMARY};"
+        )
+        card4_layout.addWidget(tier_label)
+        card4_layout.addSpacing(2)
+        tier_hint = QLabel(
+            "Lite: concise and actionable output. Pro: full framework and detailed analysis."
+        )
+        tier_hint.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
+        tier_hint.setWordWrap(True)
+        card4_layout.addWidget(tier_hint)
+        card4_layout.addSpacing(6)
+
+        self._template_tier_combo = QComboBox()
+        self._template_tier_combo.setEditable(False)
+        self._template_tier_combo.setFixedHeight(34)
+        self._template_tier_combo.setStyleSheet(self._preset_combo.styleSheet())
+        self._template_tier_combo.addItem("Lite (Recommended)", "lite")
+        self._template_tier_combo.addItem("Pro (Advanced)", "pro")
+
+        current_tier = str(getattr(app_settings, "template_tier", "lite")).lower()
+        tier_index = self._template_tier_combo.findData(
+            current_tier if current_tier in {"lite", "pro"} else "lite"
+        )
+        self._template_tier_combo.setCurrentIndex(max(0, tier_index))
+        self._template_tier_combo.currentIndexChanged.connect(self._mark_changed)
+        card4_layout.addWidget(self._template_tier_combo)
+
         col2_layout.addWidget(card4)
         col2_layout.addStretch()
 
@@ -903,6 +934,7 @@ class SettingsViewQt(QWidget):
             enable_ai_memory=self._ai_memory_toggle.isChecked(),
             output_language=self._output_language_combo.currentText().strip()
             or "Vietnamese (tiếng Việt có dấu)",
+            template_tier=str(self._template_tier_combo.currentData() or "lite"),
         )
 
         # Immediate visual feedback
@@ -968,6 +1000,10 @@ class SettingsViewQt(QWidget):
         self._security_toggle.setChecked(True)
         self._git_toggle.setChecked(True)
         self._relative_toggle.setChecked(True)
+        self._ai_memory_toggle.setChecked(True)
+        self._output_language_combo.setCurrentText("Vietnamese (tiếng Việt có dấu)")
+        tier_default_idx = self._template_tier_combo.findData("lite")
+        self._template_tier_combo.setCurrentIndex(max(0, tier_default_idx))
 
         # Reset AI Context Builder fields
         self._ai_api_key_input.clear()

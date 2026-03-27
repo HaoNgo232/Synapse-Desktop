@@ -132,6 +132,10 @@ class TokenDisplayService(QObject):
         with self._update_lock:
             self._pending_updates.clear()
 
+        # Reset disposal flag so service can be reused after stop() -> clear_cache()
+        # This is critical for folder-switch flow: stop() -> clear_cache() -> request_tokens_for_tree()
+        self._is_disposed = False
+
         log_debug("[TokenDisplayService] clear_cache() complete")
 
     def stop(self):

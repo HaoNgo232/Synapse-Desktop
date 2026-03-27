@@ -76,13 +76,28 @@ def scan_for_secrets(
         return matches
 
     # Tạo temp file để scan (detect-secrets cần file path)
+    temp_path: Optional[str] = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, encoding="utf-8"
         ) as f:
+            temp_path = f.name  # Capture path BEFORE write so cleanup can find it
             f.write(content)
-            temp_path = f.name
     except (OSError, IOError):
+        # Clean up temp file if it was created
+        if temp_path:
+            try:
+                Path(temp_path).unlink()
+            except Exception:
+                pass
+        return matches
+    except Exception:
+        # Clean up on unexpected errors (MemoryError, etc.)
+        if temp_path:
+            try:
+                Path(temp_path).unlink()
+            except Exception:
+                pass
         return matches
 
     try:

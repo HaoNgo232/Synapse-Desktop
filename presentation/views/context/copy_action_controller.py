@@ -26,13 +26,11 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Optional,
-    List,
     Set,
     Callable,
-    Dict,
-    Tuple,
     Protocol,
     Any,
+    TypeAlias,
 )
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool, Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
@@ -50,7 +48,15 @@ from presentation.config.output_format import OutputStyle
 from presentation.config.theme import ThemeColors
 
 if TYPE_CHECKING:
-    pass
+    from infrastructure.git.git_utils import DiffOnlyResult
+
+
+PromptBreakdown: TypeAlias = dict[str, Any]
+PromptResult: TypeAlias = tuple[str, int, PromptBreakdown]
+PromptCacheEntry: TypeAlias = tuple[str, str, int, PromptBreakdown]
+PromptCacheKey: TypeAlias = tuple[str, set[str], str, bool]
+SecretMatchList: TypeAlias = list[Any]
+StaleRef: TypeAlias = QObject | QRunnable
 
 
 # ============================================================
@@ -113,9 +119,6 @@ def copy_as_file_to_clipboard(
         mime.setUrls([QUrl.fromLocalFile(str(temp_path))])
 
         clipboard = QApplication.clipboard()
-        if clipboard is None:
-            return False, "QApplication.clipboard() returned None"
-
         clipboard.setMimeData(mime)
         return True, str(temp_path)
 
@@ -132,9 +135,9 @@ class PromptCache:
 
     def __init__(self) -> None:
         # mode_key -> (fingerprint, prompt, token_count, breakdown)
-        self._entries: Dict[str, Tuple[str, str, int, dict]] = {}
+        self._entries: dict[str, PromptCacheEntry] = {}
 
-    def get(self, mode: str, fingerprint: str) -> Optional[Tuple[str, int, dict]]:
+    def get(self, mode: str, fingerprint: str) -> PromptResult | None:
         """Return (prompt, token_count, breakdown) if fingerprint matches, else None."""
         entry = self._entries.get(mode)
         if entry is not None and entry[0] == fingerprint:
@@ -147,7 +150,7 @@ class PromptCache:
         fingerprint: str,
         prompt: str,
         token_count: int,
-        breakdown: dict,
+        breakdown: PromptBreakdown,
     ) -> None:
         """Store result for a copy mode."""
         self._entries[mode] = (fingerprint, prompt, token_count, breakdown)
@@ -235,7 +238,7 @@ class CopyTaskWorker(QRunnable):
 
     def __init__(
         self,
-        task_fn: Callable[[], Tuple[str, int, dict]],
+        task_fn: Callable[[], PromptResult],
         signals: CopyTaskSignals,
         generation: int,
     ):
@@ -304,7 +307,9 @@ class CopyActionViewProtocol(Protocol):
     def get_instructions_text(self) -> str: ...
     def get_output_style(self) -> OutputStyle: ...
     def show_status(self, message: str, is_error: bool = False) -> None: ...
-    def show_copy_breakdown(self, token_count: int, breakdown: dict) -> None: ...
+    def show_copy_breakdown(
+        self, token_count: int, breakdown: PromptBreakdown
+    ) -> None: ...
     def get_total_tokens(self) -> int: ...
     def set_copy_buttons_enabled(self, enabled: bool) -> None: ...
     def get_clipboard_service(self) -> Any: ...
@@ -352,7 +357,7 @@ class CopyActionController(QObject):
     # Stale worker refs — workers whose generation is outdated but may still
     # be running on thread pool. We keep strong refs to prevent GC/segfault
     # until their callback fires and we can safely deleteLater().
-    _stale_workers: list
+    _stale_workers: list[StaleRef]
 
     # Prompt-level cache — one entry per copy mode
     _prompt_cache: PromptCache
@@ -363,7 +368,7 @@ class CopyActionController(QObject):
         selected_paths: Set[str],
         instructions: str,
         include_xml: bool = False,
-    ) -> Optional[Tuple[str, int, dict]]:
+    ) -> PromptResult | None:
         """Check prompt cache for a hit. Returns (prompt, token_count, breakdown) or None.
 
         This is called on the main thread BEFORE starting any background work.
@@ -397,7 +402,7 @@ class CopyActionController(QObject):
         instructions: str,
         prompt: str,
         token_count: int,
-        breakdown: dict,
+        breakdown: PromptBreakdown,
         include_xml: bool = False,
     ) -> None:
         """Store generated prompt in cache for future hits."""
@@ -732,10 +737,10 @@ class CopyActionController(QObject):
         self,
         gen: int,
         workspace: Path,
-        file_paths: List[Path],
+        file_paths: list[Path],
         instructions: str,
         include_xml: bool,
-        copy_destination: str,
+        copy_destination: str = "text",
     ) -> None:
         """Run security check in background, then proceed with copy if safe."""
         # Early exit if generation already stale (user clicked again before we got here)
@@ -750,7 +755,7 @@ class CopyActionController(QObject):
         self._current_security_signals = signals
         self._current_security_worker = worker
 
-        def on_security_finished(matches: list) -> None:
+        def on_security_finished(matches: SecretMatchList) -> None:
             """Handle security scan results on main thread."""
             self._cleanup_stale_refs(gen)
 
@@ -831,11 +836,11 @@ class CopyActionController(QObject):
     def _run_copy_in_background(
         self,
         gen: int,
-        task_fn: Callable[[], Tuple[str, int, dict]],
-        copy_destination: str,
+        task_fn: Callable[[], PromptResult],
+        copy_destination: str = "text",
         success_template: str = "Copied! ({token_count:,} tokens)",
-        pre_snapshot: Optional[dict] = None,
-        cache_key: Optional[tuple] = None,
+        pre_snapshot: PromptBreakdown | None = None,
+        cache_key: PromptCacheKey | None = None,
     ) -> None:
         """
         Chay mot copy task tren background thread.
@@ -874,7 +879,9 @@ class CopyActionController(QObject):
                 return
             self._view.show_status(f"{step} ({progress}%)")
 
-        def on_finished(prompt: str, token_count: int, breakdown: dict) -> None:
+        def on_finished(
+            prompt: str, token_count: int, breakdown: PromptBreakdown
+        ) -> None:
             """Callback khi worker hoan thanh."""
             self._cleanup_stale_refs(gen)
 
@@ -953,10 +960,10 @@ class CopyActionController(QObject):
         self,
         gen: int,
         workspace: Path,
-        file_paths: List[Path],
+        file_paths: list[Path],
         instructions: str,
         include_xml: bool,
-        copy_destination: str,
+        copy_destination: str = "text",
     ) -> None:
         """
         Execute copy context tren background thread.
@@ -978,7 +985,7 @@ class CopyActionController(QObject):
             _cache_include_xml = include_xml
             _cache_mode = copy_mode
 
-            def task() -> Tuple[str, int, dict]:
+            def task() -> PromptResult:
                 """Heavy work - chay tren background thread."""
                 tree_item = self._view.scan_full_tree(workspace)
                 format_str = "xml"
@@ -1062,7 +1069,7 @@ class CopyActionController(QObject):
         use_rel = get_use_relative_paths()
         include_git = load_app_settings().include_git_changes
 
-        def task() -> Tuple[str, int, dict]:
+        def task() -> PromptResult:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._view.scan_full_tree(workspace)
@@ -1100,7 +1107,7 @@ class CopyActionController(QObject):
             return
 
         selected_files = self._view.get_selected_paths()
-        selected_strs = set(selected_files) if selected_files else set()
+        selected_strs: set[str] = set(selected_files) if selected_files else set()
         instructions = self._view.get_instructions_text()
         self._save_instruction_to_history(instructions)
 
@@ -1129,7 +1136,7 @@ class CopyActionController(QObject):
         gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
 
-        def task() -> Tuple[str, int, dict]:
+        def task() -> PromptResult:
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._view.scan_full_tree(workspace)
@@ -1197,6 +1204,7 @@ class CopyActionController(QObject):
         if not workspace:
             self._view.show_status("No workspace selected", is_error=True)
             return
+        workspace_path: Path = workspace
 
         selected_files = self._view.get_selected_paths()
         if not selected_files:
@@ -1228,8 +1236,8 @@ class CopyActionController(QObject):
         output_style = self._view.get_output_style()
         include_git = load_app_settings().include_git_changes
 
-        def task() -> Tuple[str, int, dict]:
-            tree_item = self._view.scan_full_tree(workspace)
+        def task() -> PromptResult:
+            tree_item = self._view.scan_full_tree(workspace_path)
             format_str = "xml"
             if output_style == OutputStyle.JSON:
                 format_str = "json"
@@ -1238,7 +1246,7 @@ class CopyActionController(QObject):
 
             return self._view.get_prompt_builder().build_prompt(
                 file_paths=[Path(p) for p in selected_path_strs],
-                workspace=workspace,
+                workspace=workspace_path,
                 instructions=instructions,
                 output_format=format_str,
                 include_git_changes=include_git,
@@ -1261,7 +1269,9 @@ class CopyActionController(QObject):
         _cache_selected = set(selected_path_strs)
         _cache_instructions = instructions
 
-        def on_finished(prompt: str, token_count: int, breakdown: dict) -> None:
+        def on_finished(
+            prompt: str, token_count: int, breakdown: PromptBreakdown
+        ) -> None:
             self._cleanup_stale_refs(gen)
             if not self._is_current_generation(gen):
                 return
@@ -1352,13 +1362,13 @@ class CopyActionController(QObject):
             use_rel = get_use_relative_paths()
 
             def _build_diff_prompt(
-                diff_result,
-                instructions,
-                include_content,
-                include_tree,
-                include_related=False,
-                related_depth=1,
-            ):
+                diff_result: "DiffOnlyResult",
+                instructions: str,
+                include_content: bool,
+                include_tree: bool,
+                include_related: bool = False,
+                related_depth: int = 1,
+            ) -> str:
                 return build_diff_only_prompt(
                     diff_result,
                     instructions,

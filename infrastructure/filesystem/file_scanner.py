@@ -49,6 +49,7 @@ import threading  # noqa: E402
 
 _scanning_lock = threading.Lock()
 _is_scanning = False
+_scan_generation = 0  # Monotonically increasing generation counter
 
 
 def is_scanning() -> bool:
@@ -61,15 +62,22 @@ def is_scanning() -> bool:
         return _is_scanning
 
 
-def start_scanning():
+def start_scanning() -> int:
     """
     Bắt đầu scanning session.
 
     Thread-safe: Sử dụng lock để set giá trị.
+
+    Returns:
+        Generation number cho scan session nay.
+        Truyen generation vao is_scanning_valid() de kiem tra
+        scan nay co con hop le khong.
     """
-    global _is_scanning
+    global _is_scanning, _scan_generation
     with _scanning_lock:
         _is_scanning = True
+        _scan_generation += 1
+        return _scan_generation
 
 
 def stop_scanning():
@@ -81,6 +89,21 @@ def stop_scanning():
     global _is_scanning
     with _scanning_lock:
         _is_scanning = False
+
+
+def is_scanning_valid(generation: int) -> bool:
+    """
+    Check xem scan session voi generation nay con hop le khong.
+
+    Returns False neu:
+    - Scanning da bi stop (is_scanning = False)
+    - Mot scan session MOI da duoc start (generation khac)
+
+    Args:
+        generation: Generation number nhan duoc tu start_scanning()
+    """
+    with _scanning_lock:
+        return _is_scanning and _scan_generation == generation
 
 
 @dataclass

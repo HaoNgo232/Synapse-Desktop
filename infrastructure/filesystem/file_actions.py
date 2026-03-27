@@ -236,6 +236,29 @@ def apply_file_actions(
     return results
 
 
+def _validate_path_in_workspace(
+    resolved_path: Path, workspace_roots: list[Path]
+) -> bool:
+    """
+    Kiem tra path co nam trong bat ky workspace root nao khong.
+
+    Args:
+        resolved_path: Path da duoc resolve() thanh absolute
+        workspace_roots: Danh sach workspace roots hop le
+
+    Returns:
+        True neu path nam trong mot workspace root
+    """
+    for ws_root in workspace_roots:
+        try:
+            ws_resolved = ws_root.resolve()
+            resolved_path.relative_to(ws_resolved)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 def _resolve_path(
     path_str: str, root_name: Optional[str], workspace_roots: Optional[list[Path]]
 ) -> Path:
@@ -247,6 +270,9 @@ def _resolve_path(
     - file:// URIs
     - Relative paths (resolved against workspace root)
     - Multi-workspace voi root attribute
+
+    Security: Tat ca paths deu duoc validate nam trong workspace boundary.
+    Raise ValueError neu path nam ngoai workspace.
     """
     # Handle file:// URI
     if path_str.startswith("file://"):
@@ -254,68 +280,63 @@ def _resolve_path(
 
     path = Path(path_str)
 
-    # Neu la absolute path, tra ve luon
-    if path.is_absolute():
-        return path
-
     # Neu khong co workspace roots, coi nhu relative to cwd
+    # (fallback cho CLI usage hoac testing)
     if not workspace_roots:
         return Path.cwd() / path
 
-    # Neu co root name, tim workspace root tuong ung
-    if root_name:
-        for ws_root in workspace_roots:
-            if ws_root.name == root_name:
-                return ws_root / path
-
-    # Default: dung workspace root dau tien
+    # --- Resolve path thanh absolute ---
     final_path = workspace_roots[0] / path
 
-    # SECURITY CHECK: Path Traversal Protection
-    # Ensure the resolved path is actually inside one of the workspace roots
+    if path.is_absolute():
+        # Absolute path tu OPX (AI hay tra ve dang nay)
+        final_path = path
+    elif root_name:
+        # Multi-workspace: tim workspace root theo ten
+        matched = False
+        for ws_root in workspace_roots:
+            if ws_root.name == root_name:
+                final_path = ws_root / path
+                matched = True
+                break
+        if not matched:
+            # Root name khong match -> fallback ve workspace root dau tien
+            final_path = workspace_roots[0] / path
+    else:
+        # Default: dung workspace root dau tien
+        final_path = workspace_roots[0] / path
+
+    # --- SECURITY CHECK: Path Traversal Protection ---
+    # Ap dung cho TAT CA code paths, khong chi default branch
     try:
         resolved_absolute = final_path.resolve()
-        is_safe = False
 
-        # Check against all workspace roots allowed
-        for ws_root in workspace_roots:
-            ws_resolved = ws_root.resolve()
-            # Check if path is inside workspace
-            # Hỗ trợ Python < 3.9 (không có is_relative_to)
-            try:
-                resolved_absolute.relative_to(ws_resolved)
-                is_safe = True
-                break
-            except ValueError:
-                continue
+        if _validate_path_in_workspace(resolved_absolute, workspace_roots):
+            return final_path
 
-        if not is_safe:
-            log_error(f"Security Alert: Blocked access to {resolved_absolute}")
-            raise ValueError("Access denied: Path is outside workspace roots")
+        # Path ngoai workspace - block
+        log_error(f"Security Alert: Blocked access to {resolved_absolute}")
+        raise ValueError("Access denied: Path is outside workspace roots")
 
-    except Exception as e:
-        if "Access denied" in str(e):
-            raise
-        # Nếu resolve thất bại (file chưa tồn tại), ta check parent
-        # Vẫn cần cẩn thận với creation path
+    except ValueError:
+        # Re-raise access denied errors
+        raise
+    except Exception:
+        # resolve() that bai (broken symlink, permission, etc.)
+        # Thu check parent directory (cho create operations voi file chua ton tai)
         if not final_path.exists():
-            # Check parent directory instead
             try:
                 parent_resolved = final_path.parent.resolve()
-                is_safe = False
-                for ws_root in workspace_roots:
-                    try:
-                        parent_resolved.relative_to(ws_root.resolve())
-                        is_safe = True
-                        break
-                    except ValueError:
-                        continue
-                if not is_safe:
-                    raise ValueError("Access denied: Path is outside workspace roots")
+                if _validate_path_in_workspace(parent_resolved, workspace_roots):
+                    return final_path
             except Exception:
-                pass  # Fallback to allow if explicit parent check fails but path seemed valid structurally
+                pass
 
-    return final_path
+        # SECURITY DEFAULT: Deny khi khong the validate
+        log_error(f"Security: Could not validate path {final_path}, denying access")
+        raise ValueError(
+            "Access denied: Could not verify path is within workspace roots"
+        )
 
 
 def _handle_create(

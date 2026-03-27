@@ -261,14 +261,14 @@ class UIBuilderMixin:
         )
 
         # Menu actions without icons
-        off_action = related_menu.addAction("Off")
+        off_action = related_menu.addAction("Off — manual selection only")
         related_menu.addSeparator()
 
-        direct_action = related_menu.addAction("Direct (depth 1)")
-        nearby_action = related_menu.addAction("Nearby (depth 2)")
-        deep_action = related_menu.addAction("Deep (depth 3)")
-        deeper_action = related_menu.addAction("Deeper (depth 4)")
-        deepest_action = related_menu.addAction("Deepest (depth 5)")
+        direct_action = related_menu.addAction("Direct imports (1 hop)")
+        nearby_action = related_menu.addAction("Nearby files (2 hops)")
+        deep_action = related_menu.addAction("Extended chain (3 hops)")
+        deeper_action = related_menu.addAction("Wide discovery (4 hops)")
+        deepest_action = related_menu.addAction("Maximum depth (5 hops)")
 
         # Connect actions
         off_action.triggered.connect(
@@ -722,7 +722,45 @@ class UIBuilderMixin:
         widget.setStyleSheet("background-color: transparent; border: none;")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(6)
+
+        # Shared style for description hints under each button
+        desc_style = (
+            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; "
+            f"padding: 0 2px; background: transparent; border: none;"
+        )
+
+        # ── Copy as File toggle (persistent preference) ──
+        from presentation.components.toggle_switch import ToggleSwitch
+
+        _file_row = QHBoxLayout()
+        _file_row.setSpacing(8)
+        _file_row.setContentsMargins(0, 0, 0, 0)
+
+        _file_label = QLabel("Copy as file attachment")
+        _file_label.setStyleSheet(
+            f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_SECONDARY};"
+            f" background: transparent; border: none;"
+        )
+        _file_row.addWidget(_file_label)
+        _file_row.addStretch()
+
+        self._copy_as_file_toggle = ToggleSwitch(checked=False)
+        self._copy_as_file_toggle.setToolTip(
+            "When ON, copies as a file attachment instead of plain text.\n"
+            "Web chats (ChatGPT, Claude) receive it as file upload\n"
+            "— avoids lag when pasting large context."
+        )
+        _file_row.addWidget(self._copy_as_file_toggle)
+        layout.addLayout(_file_row)
+
+        _toggle_sep = QFrame()
+        _toggle_sep.setFixedHeight(1)
+        _toggle_sep.setStyleSheet(
+            f"background-color: {ThemeColors.BORDER}; border: none;"
+        )
+        layout.addWidget(_toggle_sep)
+        layout.addSpacing(4)
 
         # Style chung cho secondary buttons (ghost style)
         secondary_style = (
@@ -784,6 +822,10 @@ class UIBuilderMixin:
         )
         layout.addWidget(self._opx_btn)
 
+        _opx_desc = QLabel("Full context + AI edit instructions")
+        _opx_desc.setStyleSheet(desc_style)
+        layout.addWidget(_opx_desc)
+
         # Loading indicator (indeterminate progress bar) hien khi dang xu ly
         self._copy_loading_bar = QProgressBar()
         self._copy_loading_bar.setRange(0, 0)  # indeterminate mode
@@ -808,6 +850,10 @@ class UIBuilderMixin:
             )
         )
         layout.addWidget(self._copy_btn)
+
+        _ctx_desc = QLabel("Full file contents for general questions")
+        _ctx_desc.setStyleSheet(desc_style)
+        layout.addWidget(_ctx_desc)
 
         # === SECONDARY: Copy Smart ===
         self._smart_btn = QPushButton("Copy Smart")
@@ -842,6 +888,10 @@ class UIBuilderMixin:
         self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
         layout.addWidget(self._smart_btn)
 
+        _smart_desc = QLabel("Signatures only — saves ~70% tokens")
+        _smart_desc.setStyleSheet(desc_style)
+        layout.addWidget(_smart_desc)
+
         # === SECONDARY: Copy Diff Only ===
         self._diff_btn = QPushButton("Copy Diff Only")
         self._diff_btn.setStyleSheet(
@@ -874,6 +924,10 @@ class UIBuilderMixin:
         self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
         layout.addWidget(self._diff_btn)
 
+        _diff_desc = QLabel("Git changes only — ideal for code review")
+        _diff_desc.setStyleSheet(desc_style)
+        layout.addWidget(_diff_desc)
+
         # === TERTIARY: Copy Tree Map ===
         self._tree_map_btn = QPushButton("Copy Tree Map")
         self._tree_map_btn.setStyleSheet(secondary_style)
@@ -883,5 +937,9 @@ class UIBuilderMixin:
             self._copy_controller.on_copy_tree_map_requested
         )
         layout.addWidget(self._tree_map_btn)
+
+        _tree_desc = QLabel("Project structure only — no file contents")
+        _tree_desc.setStyleSheet(desc_style)
+        layout.addWidget(_tree_desc)
 
         return widget

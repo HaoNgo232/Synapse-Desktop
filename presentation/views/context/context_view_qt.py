@@ -343,6 +343,15 @@ class ContextViewQt(
     def get_ignore_engine(self):
         return self._ignore_engine
 
+    def get_copy_as_file(self) -> bool:
+        """Adapter: Read copy-as-file toggle state from actions panel.
+
+        Toggle is created by UIBuilderMixin._build_action_buttons().
+        Returns False if toggle doesn't exist yet (safe fallback).
+        """
+        toggle = getattr(self, "_copy_as_file_toggle", None)
+        return toggle.isChecked() if toggle is not None else False
+
     def parent_widget(self):
         return self
 

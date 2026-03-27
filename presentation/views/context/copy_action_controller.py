@@ -318,6 +318,7 @@ class CopyActionViewProtocol(Protocol):
     def parent_widget(self) -> Any: ...
     def get_tokenization_service(self) -> Any: ...
     def get_ignore_engine(self) -> Any: ...
+    def get_copy_as_file(self) -> bool: ...
 
 
 class CopyActionController(QObject):
@@ -640,25 +641,18 @@ class CopyActionController(QObject):
         return None
 
     def on_copy_context_requested(self, include_xml: bool = False) -> None:
-        """Entry point from UI: ask destination then run copy context."""
-        action_label = "Copy + OPX" if include_xml else "Copy Context"
-        destination = self._ask_copy_destination(action_label)
-        if destination is None:
-            return
+        """Entry point from UI: read toggle preference for copy destination."""
+        destination = "file" if self._view.get_copy_as_file() else "text"
         self._copy_context(include_xml=include_xml, copy_destination=destination)
 
     def on_copy_smart_requested(self) -> None:
-        """Entry point from UI: ask destination then run copy smart."""
-        destination = self._ask_copy_destination("Copy Smart")
-        if destination is None:
-            return
+        """Entry point from UI: read toggle preference for copy destination."""
+        destination = "file" if self._view.get_copy_as_file() else "text"
         self._copy_smart_context(copy_destination=destination)
 
     def on_copy_tree_map_requested(self) -> None:
-        """Entry point from UI: ask destination then run tree map copy."""
-        destination = self._ask_copy_destination("Copy Tree Map")
-        if destination is None:
-            return
+        """Entry point from UI: read toggle preference for copy destination."""
+        destination = "file" if self._view.get_copy_as_file() else "text"
         self._copy_tree_map_only(copy_destination=destination)
 
     def _copy_context(

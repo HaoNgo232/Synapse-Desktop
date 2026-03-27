@@ -616,11 +616,15 @@ class ApplyViewQt(QWidget):
         # Card style: left accent border theo action color
         card.setStyleSheet(
             f"QFrame {{"
-            f"  background-color: {ThemeColors.BG_ELEVATED};"
+            f"  background-color: {ThemeColors.BG_SURFACE};"
             f"  border: 1px solid {ThemeColors.BORDER};"
-            f"  border-left: 3px solid {fg};"
-            f"  border-radius: 6px;"
-            f"  padding: 10px 12px;"
+            f"  border-left: 4px solid {fg};"
+            f"  border-radius: 8px;"
+            f"  padding: 14px 16px;"
+            f"}}"
+            f"QFrame:hover {{"
+            f"  border-color: {ThemeColors.BORDER_LIGHT};"
+            f"  background-color: {ThemeColors.BG_ELEVATED};"
             f"}}"
         )
         layout = QVBoxLayout(card)

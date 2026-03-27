@@ -488,9 +488,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         badge_y = y + (row_height - BADGE_HEIGHT) / 2 + BADGE_Y_OFFSET
         badge_rect = QRectF(x, badge_y, width, BADGE_HEIGHT)
 
-        # Background — tăng alpha để dễ đọc hơn trên dark bg
+        # Background — Giảm alpha mặc định, sẽ sáng lên khi hover (logic hover xử lý ở paint)
         bg_color = QColor(color)
-        bg_color.setAlpha(90)
+        bg_color.setAlpha(60)
         path = QPainterPath()
         path.addRoundedRect(badge_rect, BADGE_RADIUS, BADGE_RADIUS)
         painter.fillPath(path, bg_color)

@@ -178,6 +178,18 @@ class BuiltInTemplateProvider(TemplateProvider):
                 description="Tối ưu database queries, indexes, schema design và caching strategy",
                 is_custom=False,
             ),
+            "logic_portability": TemplateInfo(
+                template_id="logic_portability",
+                display_name="Logic Portability Extractor",
+                description="Trích xuất và đóng gói logic đã hoàn thiện thành module tái sử dụng được cho các project khác",
+                is_custom=False,
+            ),
+            "malware_forensics": TemplateInfo(
+                template_id="malware_forensics",
+                display_name="Malware Forensics Analyzer",
+                description="Phân tích pháp y mã độc theo Zero-Trust: phát hiện backdoor, exfiltration, obfuscation, và supply-chain poisoning",
+                is_custom=False,
+            ),
         }
 
     def list_templates(self) -> list[TemplateInfo]:

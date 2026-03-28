@@ -266,6 +266,7 @@ def _assemble_xml(
         prompt += """
 <final_output_structure>
 CRITICAL: Structure your response exactly like this:
+0. Your thinking content
 1. Brief Analysis: ```markdown ... ``` (concise findings)
 2. Code Changes: ```xml ... ``` (OPX patches)
 Output nothing else outside these blocks.

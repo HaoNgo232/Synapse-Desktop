@@ -489,6 +489,19 @@ class UIBuilderMixin:
         self._template_menu.aboutToShow.connect(self._populate_template_menu)
         self._template_menu.triggered.connect(self._on_template_selected)
 
+        # Tier Selector (Lite/Pro) - Khởi tạo ngầm để nhúng vào bên trong menu Templates
+        from presentation.components.tier_selector import TierSelector
+
+        current_tier = getattr(load_app_settings(), "template_tier", "lite")
+        self._tier_selector = TierSelector(initial_tier=current_tier)
+        self._tier_selector.tier_changed.connect(self._on_tier_changed)
+        # Style gọn hơn khi nằm trong menu
+        self._tier_selector.setContentsMargins(8, 4, 8, 4)
+
+        # Cập nhật text mặc định cho button
+        tier_label = "Lite" if current_tier == "lite" else "Pro"
+        self._template_btn.setText(f"Templates ({tier_label})")
+
         self._template_btn.setMenu(self._template_menu)
         header.addWidget(self._template_btn)
 

@@ -176,13 +176,13 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
-            "dependency_auditor": TemplateInfo(
-                template_id="dependency_auditor",
-                display_name="Dependency Auditor",
-                description="Kiểm tra dependencies về security vulnerabilities, licenses, và outdated packages",
-                is_custom=False,
-                has_lite=True,
-            ),
+            # "dependency_auditor": TemplateInfo(
+            #     template_id="dependency_auditor",
+            #     display_name="Dependency Auditor",
+            #     description="Kiểm tra dependencies về security vulnerabilities, licenses, và outdated packages",
+            #     is_custom=False,
+            #     has_lite=True,
+            # ),
             "devops_reviewer": TemplateInfo(
                 template_id="devops_reviewer",
                 display_name="DevOps Reviewer",
@@ -211,8 +211,8 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
-            "roi_evaluator": TemplateInfo(
-                template_id="roi_evaluator",
+            "feature_roi_evaluator": TemplateInfo(
+                template_id="feature_roi_evaluator",
                 display_name="Feature ROI Evaluator",
                 description="Đánh giá tính hữu ích, rào cản adoption, và ROI của các tính năng từ góc nhìn người dùng — so sánh với thị trường",
                 is_custom=False,

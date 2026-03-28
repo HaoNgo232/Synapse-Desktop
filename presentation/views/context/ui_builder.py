@@ -867,6 +867,12 @@ class UIBuilderMixin:
         if model_id:
             self._selected_model_id = model_id
             self._model_btn.setText(action.text())
+
+            # Persist selection vào settings để survive app restart
+            from infrastructure.persistence.settings_manager import update_app_setting
+
+            update_app_setting(model_id=model_id)
+
             # Trigger logic in ContextViewQt
             self._on_model_changed(model_id)
 

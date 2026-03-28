@@ -49,7 +49,12 @@ class TokenUsageBar(QWidget):
         self._progress.setTextVisible(False)
         self._progress.setRange(0, self._limit)
         self._progress.setValue(0)
-        self._progress.setStyleSheet(f"""
+        self._progress.setStyleSheet(self._get_progress_style(ThemeColors.PRIMARY))
+        layout.addWidget(self._progress)
+
+    def _get_progress_style(self, chunk_color: str) -> str:
+        """Tạo stylesheet cho QProgressBar với màu chunk tùy biến."""
+        return f"""
             QProgressBar {{
                 background-color: {ThemeColors.BG_PAGE};
                 border: none;
@@ -57,12 +62,11 @@ class TokenUsageBar(QWidget):
             }}
             QProgressBar::chunk {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                                            stop:0 {ThemeColors.PRIMARY}, 
+                                            stop:0 {chunk_color}, 
                                             stop:1 #A78BFA);
                 border-radius: 2px;
             }}
-        """)
-        layout.addWidget(self._progress)
+        """
 
     def update_stats(self, tokens: int, limit: int, files: int):
         self._tokens = tokens
@@ -79,13 +83,11 @@ class TokenUsageBar(QWidget):
 
         # Đổi màu chunk nếu vượt limit hoặc sắp hết
         usage_pct = (tokens / self._limit) * 100
-        color = ThemeColors.PRIMARY
+        chunk_color = ThemeColors.PRIMARY
         if usage_pct > 90:
-            color = ThemeColors.ERROR
+            chunk_color = ThemeColors.ERROR
         elif usage_pct > 70:
-            color = ThemeColors.WARNING
+            chunk_color = ThemeColors.WARNING
 
-        if usage_pct > 70:
-            self._progress.setStyleSheet(
-                self._progress.styleSheet().replace(ThemeColors.PRIMARY, color)
-            )
+        # Luôn rebuild stylesheet từ template → đảm bảo đúng màu ở mọi trạng thái
+        self._progress.setStyleSheet(self._get_progress_style(chunk_color))

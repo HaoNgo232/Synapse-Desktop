@@ -284,6 +284,7 @@ class TagChipsWidget(QWidget):
             QPushButton:hover {{ background: {ThemeColors.ERROR}15; border-color: {ThemeColors.ERROR}; }}
         """)
         self._clear_btn.clicked.connect(self.clear_all)
+        header_row.addWidget(self._clear_btn)
         # Edit as Text button
         self._edit_text_btn = QPushButton("Edit as Text 📝")
         self._edit_text_btn.setToolTip("Edit all patterns as a text list")

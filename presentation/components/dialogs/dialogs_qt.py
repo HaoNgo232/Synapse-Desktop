@@ -280,6 +280,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self.instructions = instructions
         self.on_success = on_success
         self._file_checkboxes: dict[str, QCheckBox] = {}
+        self._refresh_generation = 0  # Generation counter để tránh race condition
         self.setMinimumWidth(650)
         self._build_ui()
         QTimer.singleShot(0, self._refresh_changed_files)
@@ -672,6 +673,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
     def _refresh_changed_files(self) -> None:
         from infrastructure.adapters.qt_utils import schedule_background
 
+        self._refresh_generation += 1
+        current_gen = self._refresh_generation
+
         commits = self._get_num_commits()
         include_staged = self._include_staged.isChecked()
         include_unstaged = self._include_unstaged.isChecked()
@@ -691,11 +695,14 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         schedule_background(
             _work,
-            on_result=self._on_refresh_result,
-            on_error=lambda msg: self._on_refresh_error(str(msg)),
+            on_result=lambda res, g=current_gen: self._on_refresh_result(res, g),
+            on_error=lambda msg, g=current_gen: self._on_refresh_error(str(msg), g),
         )
 
-    def _on_refresh_result(self, result: "DiffOnlyResult") -> None:
+    def _on_refresh_result(self, result: "DiffOnlyResult", generation: int) -> None:
+        if generation != self._refresh_generation:
+            return  # Stale result — bỏ qua
+
         from infrastructure.git.git_utils import extract_changed_files_from_diff
 
         if result.error:
@@ -720,7 +727,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
         )
         self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
 
-    def _on_refresh_error(self, msg: str) -> None:
+    def _on_refresh_error(self, msg: str, generation: int) -> None:
+        if generation != self._refresh_generation:
+            return
         self._status.setText(f"Refresh error: {msg}")
         self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
 

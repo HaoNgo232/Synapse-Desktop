@@ -52,26 +52,29 @@ class PresetWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        label = QLabel("Presets")
-        label.setStyleSheet(
+        # Label (định danh, có thể ẩn đi)
+        self._label = QLabel("Presets")
+        self._label.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {ThemeColors.TEXT_SECONDARY};"
         )
-        layout.addWidget(label)
+        layout.addWidget(self._label)
 
         self._combo = QComboBox()
-        self._combo.setFixedHeight(28)
-        self._combo.setMinimumWidth(120)
+        self._combo.setFixedHeight(26)
+        self._combo.setMinimumWidth(140)
         self._combo.setStyleSheet(f"""
             QComboBox {{
-                background: {ThemeColors.BG_ELEVATED};
+                background: {ThemeColors.BG_ELEVATED}40;
                 color: {ThemeColors.TEXT_PRIMARY};
-                border: 1px solid {ThemeColors.BORDER};
-                border-radius: 4px;
-                padding: 2px 8px;
+                border: 1px solid {ThemeColors.BORDER}40;
+                border-radius: 6px;
+                padding: 2px 10px;
                 font-size: 11px;
+                font-weight: 500;
             }}
             QComboBox:hover {{
-                border-color: {ThemeColors.PRIMARY};
+                background: {ThemeColors.BG_HOVER};
+                border-color: {ThemeColors.BORDER};
             }}
             QComboBox::drop-down {{
                 border: none;
@@ -83,37 +86,38 @@ class PresetWidget(QWidget):
                 selection-background-color: {ThemeColors.PRIMARY};
                 selection-color: white;
                 border: 1px solid {ThemeColors.BORDER};
-                border-radius: 4px;
-                padding: 2px;
+                border-radius: 8px;
+                padding: 4px;
             }}
         """)
         self._combo.addItem("— Select preset —", "")
         layout.addWidget(self._combo, stretch=1)
 
+        # Style cho toolbar buttons (Blend-in)
         btn_style = (
             f"QToolButton {{ "
-            f"  background: transparent; border: 1px solid {ThemeColors.BORDER}; "
-            f"  border-radius: 4px; padding: 3px; "
+            f"  background: transparent; border: 1px solid transparent; "
+            f"  border-radius: 6px; padding: 4px; "
             f"  color: {ThemeColors.TEXT_SECONDARY}; font-size: 13px; "
             f"}} "
             f"QToolButton:hover {{ "
             f"  background: {ThemeColors.BG_HOVER}; "
             f"  color: {ThemeColors.TEXT_PRIMARY}; "
-            f"  border-color: {ThemeColors.BORDER_LIGHT}; "
+            f"  border-color: {ThemeColors.BORDER}60; "
             f"}}"
         )
 
         self._save_btn = QToolButton()
         self._save_btn.setText("💾")
-        self._save_btn.setFixedSize(28, 28)
-        self._save_btn.setToolTip("Save current selection as preset")
+        self._save_btn.setFixedSize(26, 26)
+        self._save_btn.setToolTip("Save as preset")
         self._save_btn.setStyleSheet(btn_style)
         self._save_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         layout.addWidget(self._save_btn)
 
         self._delete_btn = QToolButton()
         self._delete_btn.setText("🗑️")
-        self._delete_btn.setFixedSize(28, 28)
+        self._delete_btn.setFixedSize(26, 26)
         self._delete_btn.setToolTip("Delete selected preset")
         self._delete_btn.setStyleSheet(btn_style)
         self._delete_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -122,7 +126,7 @@ class PresetWidget(QWidget):
 
         self._menu_btn = QToolButton()
         self._menu_btn.setText("⋮")
-        self._menu_btn.setFixedSize(28, 28)
+        self._menu_btn.setFixedSize(26, 26)
         self._menu_btn.setToolTip("More options")
         self._menu_btn.setStyleSheet(btn_style)
         self._menu_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))

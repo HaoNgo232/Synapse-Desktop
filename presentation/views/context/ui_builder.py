@@ -295,6 +295,24 @@ class UIBuilderMixin:
         self._related_menu_btn.setMenu(related_menu)
         layout.addWidget(self._related_menu_btn)
 
+        # Separator dọc sau Related Context
+        sep_preset = QFrame()
+        sep_preset.setFixedWidth(1)
+        sep_preset.setFixedHeight(18)
+        sep_preset.setStyleSheet(f"background-color: {ThemeColors.BORDER}40;")
+        layout.addWidget(sep_preset)
+
+        # === MOVE PRESET WIDGET TO TOOLBAR ===
+        from presentation.components.preset_widget import PresetWidget
+
+        _preset_controller = getattr(self, "_preset_controller", None)
+        if _preset_controller is not None:
+            self._preset_widget = PresetWidget(controller=_preset_controller)
+            # Remove title label in Presets to keep toolbar slim
+            if hasattr(self._preset_widget, "_label"):
+                self._preset_widget._label.hide()
+            layout.addWidget(self._preset_widget)
+
         layout.addStretch()
 
         # Token Usage Bar (Thay thế cho các label rời rạc)
@@ -323,31 +341,6 @@ class UIBuilderMixin:
         header.addWidget(files_label)
         header.addStretch()
         layout.addLayout(header)
-
-        # === CLEANUP OLD PRESET WIDGET FIRST ===
-        if hasattr(self, "_preset_widget") and self._preset_widget:
-            # Disconnect OLD widget before losing reference
-            try:
-                if hasattr(self, "file_tree_widget") and self.file_tree_widget:
-                    self.file_tree_widget.selection_changed.disconnect(
-                        self._preset_widget._on_selection_changed_external
-                    )
-            except (RuntimeError, TypeError):
-                pass
-
-            # Clean up old widget
-            self._preset_widget.deleteLater()
-            self._preset_widget = None
-
-        # === CREATE NEW PRESET WIDGET ===
-        from presentation.components.preset_widget import PresetWidget
-
-        _preset_controller = getattr(self, "_preset_controller", None)
-        if _preset_controller is not None:
-            self._preset_widget = PresetWidget(
-                controller=_preset_controller,
-            )
-            layout.addWidget(self._preset_widget)
 
         # File tree widget (da co san search bar, select/deselect all)
         # Nhan ignore_engine tu ContextViewQt (hoac fallback sang instance moi)

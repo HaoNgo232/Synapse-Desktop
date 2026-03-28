@@ -213,8 +213,8 @@ class BuiltInTemplateProvider(TemplateProvider):
             ),
             "roi_evaluator": TemplateInfo(
                 template_id="roi_evaluator",
-                display_name="ROI Evaluator",
-                description="Phân tích và đánh giá Return on Investment (ROI) cho các giải pháp kỹ thuật và dự án",
+                display_name="Feature ROI Evaluator",
+                description="Đánh giá tính hữu ích, rào cản adoption, và ROI của các tính năng từ góc nhìn người dùng — so sánh với thị trường",
                 is_custom=False,
                 has_lite=True,
             ),

@@ -281,6 +281,16 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self.on_success = on_success
         self._file_checkboxes: dict[str, QCheckBox] = {}
         self._refresh_generation = 0  # Generation counter để tránh race condition
+        self._active_workers: list[
+            Any
+        ] = []  # Giữ strong reference để tránh GC gây SEGV khi worker đang chạy
+
+        # Khởi tạo timer cho cơ chế debounce khi refresh danh sách file
+        # Điều này giúp tránh việc quét git liên tục khi người dùng thay đổi settings nhanh
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.timeout.connect(self._do_refresh_changed_files)
+
         self.setMinimumWidth(650)
         self._build_ui()
         QTimer.singleShot(0, self._refresh_changed_files)
@@ -437,6 +447,14 @@ class DiffOnlyDialogQt(BaseDialogQt):
         btn_row.addWidget(copy_btn)
         layout.addLayout(btn_row)
 
+    def _cleanup_worker(self, worker: Any) -> None:
+        """Xóa worker khỏi danh sách active khi hoàn tất."""
+        if worker in self._active_workers:
+            try:
+                self._active_workers.remove(worker)
+            except ValueError:
+                pass
+
     @Slot()
     def _do_copy(self) -> None:
         from infrastructure.adapters.qt_utils import schedule_background
@@ -459,11 +477,14 @@ class DiffOnlyDialogQt(BaseDialogQt):
                 include_unstaged=include_unstaged,
             )
 
-        schedule_background(
+        worker = schedule_background(
             _work,
             on_result=self._on_copy_result,
             on_error=lambda msg: self._on_copy_error(str(msg)),
         )
+        # Giữ strong reference để tránh SEGV khi worker auto-delete signals
+        self._active_workers.append(worker)
+        worker.signals.finished.connect(lambda: self._cleanup_worker(worker))
 
     def _on_copy_result(self, result: "DiffOnlyResult") -> None:
         """
@@ -671,6 +692,14 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
     @Slot()
     def _refresh_changed_files(self) -> None:
+        """
+        Kích hoạt việc quét lại danh sách file với cơ chế debounce.
+        Giúp tối ưu hóa performance khi người dùng nhấn +/- liên tục hoặc gõ nhanh.
+        """
+        self._refresh_timer.start(500)  # Đợi 300ms inactivity trước khi thực hiện quét
+
+    def _do_refresh_changed_files(self) -> None:
+        """Logic thực tế để thực hiện việc quét danh sách file thay đổi."""
         from infrastructure.adapters.qt_utils import schedule_background
 
         self._refresh_generation += 1
@@ -693,11 +722,17 @@ class DiffOnlyDialogQt(BaseDialogQt):
                 include_unstaged=include_unstaged,
             )
 
-        schedule_background(
+        worker = schedule_background(
             _work,
             on_result=lambda res: self._on_refresh_result(res, current_gen),
             on_error=lambda msg: self._on_refresh_error(str(msg), current_gen),
         )
+        # BẮT BUỘC: Giữ strong reference cho worker.
+        # BackgroundWorker trong qt_utils.py có setAutoDelete(True),
+        # nếu không giữ reference ở đây thì Python GC sẽ xóa wrapper và signals
+        # của nó trước khi background thread kịp emit -> Gây SEGFAULT.
+        self._active_workers.append(worker)
+        worker.signals.finished.connect(lambda: self._cleanup_worker(worker))
 
     def _on_refresh_result(self, result: "DiffOnlyResult", generation: int) -> None:
         if generation != self._refresh_generation:

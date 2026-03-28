@@ -32,6 +32,10 @@ from presentation.config.output_format import (
     DEFAULT_OUTPUT_STYLE,
 )
 from infrastructure.persistence.settings_manager import load_app_settings
+from presentation.components.token_usage_bar import TokenUsageBar
+
+# Compatibility Alias for UI Tests
+TokenStatsPanelQt = TokenUsageBar
 
 
 class UIBuilderMixin:
@@ -46,7 +50,7 @@ class UIBuilderMixin:
         layout.setSpacing(0)
 
         # Top toolbar: controls + token counter
-        toolbar = self._build_toolbar()
+        toolbar = self.build_toolbar()
         layout.addWidget(toolbar)
 
         # Main splitter: files | instructions | actions
@@ -66,15 +70,15 @@ class UIBuilderMixin:
         )
 
         # Left panel - File tree (~30%)
-        left_panel = self._build_left_panel()
+        left_panel = self.build_left_panel()
         splitter.addWidget(left_panel)
 
         # Center panel - Instructions (~45%)
-        center_panel = self._build_instructions_panel()
+        center_panel = self.build_instructions_panel()
         splitter.addWidget(center_panel)
 
         # Right panel - Actions + Token stats (~25%)
-        action_panel = self._build_actions_panel()
+        action_panel = self.build_actions_panel()
         splitter.addWidget(action_panel)
 
         # Ty le 30:40:30 cho 3 panel de Panel phai (Actions) rong hon
@@ -85,7 +89,7 @@ class UIBuilderMixin:
 
         layout.addWidget(splitter, 1)
 
-    def _build_toolbar(self: Any) -> QFrame:
+    def build_toolbar(self: Any) -> QFrame:
         """Build top toolbar chua controls va token counter."""
         toolbar = QFrame()
         toolbar.setFixedHeight(44)
@@ -102,8 +106,6 @@ class UIBuilderMixin:
         toolbar_layout = QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(12, 0, 12, 0)
         toolbar_layout.setSpacing(10)
-
-        from presentation.components.token_usage_bar import TokenUsageBar
 
         import sys
 
@@ -379,7 +381,7 @@ class UIBuilderMixin:
 
         return toolbar
 
-    def _build_left_panel(self: Any) -> QFrame:
+    def build_left_panel(self: Any) -> QFrame:
         """Build left panel chi chua header + preset widget + file tree."""
         panel = QFrame()
         panel.setProperty("class", "surface")
@@ -437,7 +439,7 @@ class UIBuilderMixin:
 
         return panel
 
-    def _build_instructions_panel(self: Any) -> QFrame:
+    def build_instructions_panel(self: Any) -> QFrame:
         """Build center panel voi instructions textarea va format selector."""
         panel = QFrame()
         panel.setProperty("class", "surface")
@@ -673,7 +675,7 @@ class UIBuilderMixin:
 
         return panel
 
-    def _build_actions_panel(self: Any) -> QFrame:
+    def build_actions_panel(self: Any) -> QFrame:
         """Build right panel: Token stats (top) -> Copy buttons -> Status (bottom)."""
         panel = QFrame()
         panel.setProperty("class", "surface")
@@ -883,3 +885,15 @@ class UIBuilderMixin:
     def _on_model_changed(self: Any, model_id: str) -> None:
         """Fallback for signal connection."""
         pass
+
+    @property
+    def _token_count_label(self: Any) -> QLabel:
+        """Compatibility property for old tests."""
+        return self._token_usage_bar._token_label
+
+    # --- Compatibility Aliases for tests ---
+    def build_ui(self: Any) -> None:
+        return self._build_ui()
+
+    def build_context_tab_toolbar(self: Any) -> QFrame:
+        return self.build_toolbar()

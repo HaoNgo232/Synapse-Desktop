@@ -88,15 +88,3 @@ Your task is to review infrastructure-as-code, container configurations, CI/CD p
 **PRIORITY SCORE:** (Impact × Blast_Radius) / Effort
 - Blast_Radius: All services(3), Critical path(2), Single service(1)
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — infrastructure health and critical risks)
-- INFRASTRUCTURE MATURITY ASSESSMENT
-- CONTAINER SECURITY & BUILD OPTIMIZATION
-- KUBERNETES ARCHITECTURE REVIEW (only if Kubernetes manifests are present)
-- CI/CD PIPELINE SECURITY & EFFICIENCY
-- OBSERVABILITY & MONITORING GAPS
-- COST OPTIMIZATION OPPORTUNITIES
-- OPERATIONAL IMPROVEMENT ROADMAP (always required)
-
-Omit sections that have no findings or are not applicable. Do not include empty sections.

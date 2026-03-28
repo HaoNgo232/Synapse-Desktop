@@ -69,13 +69,3 @@ Your task is to identify structural code smells, cognitive load issues, and desi
 **PRIORITY SCORE:** (Impact × Team_Velocity_Multiplier) / Effort
 - Team_Velocity_Multiplier: Core domain(3), Shared utilities(2), Edge features(1)
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — code quality assessment and refactoring priorities)
-- ARCHITECTURAL SMELL INVENTORY
-- COGNITIVE LOAD ANALYSIS
-- AI-ASSISTED REFACTORING OPPORTUNITIES
-- MODULAR DESIGN IMPROVEMENTS
-- REFACTORING EXECUTION ROADMAP (always required)
-
-Omit sections that have no findings. Do not include empty sections.

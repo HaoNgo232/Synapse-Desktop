@@ -68,14 +68,3 @@ Your task is to analyze completed logic in the provided codebase and produce a s
 - **MINIMAL DEPENDENCIES:** The portable module should have the fewest possible external dependencies; prefer stdlib solutions where the original used a heavy library for trivial tasks
 - **LANGUAGE-NATIVE PATTERNS:** Use idiomatic patterns for the target language (Protocols for Python, Interfaces for TypeScript, Traits for Rust)
 
-## REPORT STRUCTURE
-Structure your report with these sections:
-- EXTRACTION SUMMARY (always required — what is being extracted, why it's valuable, and the complexity assessment)
-- DEPENDENCY ANALYSIS (internal and external dependency map with classification)
-- INTERFACE DEFINITIONS (all Protocol/Interface definitions the consumer must implement)
-- PORTABLE MODULE CODE (the complete, self-contained extracted code with directory structure)
-- ADAPTATION GUIDE (always required — step-by-step integration instructions for a new project)
-- TEST SUITE (adapted tests for the portable module)
-- KNOWN LIMITATIONS & ASSUMPTIONS (edge cases, thread safety, performance characteristics)
-
-Omit sections that are not applicable. Do not include empty sections.

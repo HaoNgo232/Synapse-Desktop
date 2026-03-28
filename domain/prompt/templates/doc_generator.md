@@ -68,8 +68,7 @@ Your task is to generate or update comprehensive documentation that balances arc
 - **NO GENERIC TEMPLATES:** Extract actual project entities, APIs, configurations from codebase analysis
 - **PRACTICAL EXAMPLES:** Use real code snippets, actual API endpoints, genuine configuration examples from the project
 
-## Additional output rules for documentation
-- Output format: use a single fenced ```markdown ... ``` block (not plaintext).
+## Documentation content guidelines
 - If UPDATING existing README:
   - Mark updated sections with HTML comments: <!-- UPDATED: [reason] -->
   - Preserve existing badges, structure, and established tone

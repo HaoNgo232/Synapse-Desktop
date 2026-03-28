@@ -112,13 +112,3 @@ Your task is to perform a comprehensive pre-merge code review focusing on code q
 - Urgency: Immediate release(3), This sprint(2), Next quarter(1)
 - Focus on PRIORITY SCORE ≥ 5.0
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY and MERGE DECISION (always required — APPROVE / APPROVE WITH COMMENTS / REQUEST CHANGES)
-- AI CODE VERIFICATION (always required for AI-assisted workflow)
-- REVIEW PRIORITY MATRIX (sorted by PRIORITY SCORE)
-- QUICK WINS (high-impact, low-effort recommendations)
-- Detailed findings grouped by priority (CRITICAL → HIGH → MEDIUM → LOW)
-- RECOMMENDATION (always required — blocking items if REQUEST CHANGES)
-
-Omit sections that have no findings. Do not include empty sections.

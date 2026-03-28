@@ -84,14 +84,3 @@ Your task is to evaluate the real-world usefulness, adoption potential, and ROI 
 - Progressive disclosure recommendations: Which features should be visible by default vs hidden behind advanced settings?
 - First-run experience optimization: What should a new user see and accomplish in their first 5 minutes?
 
-## REPORT STRUCTURE
-Structure your report with these sections:
-- EXECUTIVE SUMMARY (always required — overall product health, top 3 highest-ROI features, top 3 concerning features, and one-sentence strategic direction)
-- FEATURE INVENTORY (complete list of discovered features with classification and persona mapping)
-- USER VALUE DEEP DIVE (per-feature or per-cluster analysis of pain point alignment and usage estimation)
-- COMPETITIVE POSITIONING (market landscape, differentiation assessment, competitive gaps)
-- ADOPTION BARRIER ANALYSIS (why users might NOT use key features, with remediation suggestions)
-- ROI MATRIX (always required — ranked table: Feature | User Value | Adoption | Competitive Advantage | ROI Score | Verdict)
-- STRATEGIC ROADMAP (always required — double down / simplify / sunset / missing opportunity recommendations)
-
-Omit sections that have no findings. Do not include empty sections.

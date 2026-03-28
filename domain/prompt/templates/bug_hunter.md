@@ -65,14 +65,3 @@ Your task is to conduct systematic bug detection using structured frameworks for
 - Likelihood: Production occurrence(3), Staging reproducible(2), Theoretical edge case(1)
 - Focus on PRIORITY SCORE ≥ 5.0
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — overall stability assessment and critical risk count)
-- CRITICAL VULNERABILITIES (sorted by PRIORITY SCORE with exploitation scenarios)
-- CONCURRENCY & RACE CONDITION ANALYSIS
-- ERROR HANDLING & RESILIENCE GAPS  
-- RESOURCE LEAK & MEMORY MANAGEMENT ISSUES
-- LOGIC ERROR & BOUNDARY CONDITION INVENTORY
-- BUG REMEDIATION ROADMAP (always required — prioritized fix sequence with effort estimates)
-
-Omit sections that have no findings. Do not include empty sections.

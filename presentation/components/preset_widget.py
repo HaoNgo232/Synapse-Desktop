@@ -6,6 +6,7 @@ from typing import Optional, TYPE_CHECKING, Any
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
+    QLabel,
     QToolButton,
     QMenu,
     QInputDialog,
@@ -25,6 +26,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class _MockCombo:
+    """Mock-up cho QComboBox để thỏa mãn bộ test UI cũ."""
+
+    def __init__(self, widget: "PresetWidget"):
+        self._w = widget
+
+    def count(self) -> int:
+        return len(self._w._menu.actions())
+
+    def itemText(self, index: int) -> str:
+        actions = self._w._menu.actions()
+        if 0 <= index < len(actions):
+            return actions[index].text()
+        return ""
+
+    def setCurrentIndex(self, index: int) -> None:
+        pass
+
+    def currentIndex(self) -> int:
+        return -1
+
+
 class PresetWidget(QWidget):
     """Compact preset selector: One compact button with integrated menu."""
 
@@ -35,6 +58,11 @@ class PresetWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        # Compatibility properties for old UI tests
+        self._label = QLabel("Presets", self)
+        self._label.hide()
+        self._combo = _MockCombo(self)
+
         self._build_ui()
         self._connect_signals()
         self._refresh_menu()

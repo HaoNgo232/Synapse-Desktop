@@ -32,7 +32,7 @@ class TokenUsageBar(QWidget):
             f"font-size: 10px; color: {ThemeColors.TEXT_MUTED}; font-weight: 600;"
         )
 
-        self._token_label = QLabel("0 / 200k tokens")
+        self._token_label = QLabel("0 tokens / 200k")
         self._token_label.setStyleSheet(
             f"font-size: 10px; color: {ThemeColors.TEXT_SECONDARY}; font-weight: 700;"
         )

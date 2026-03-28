@@ -413,22 +413,11 @@ def _get_template_tier() -> str:
     return "lite"
 
 
-def _append_output_format(content: str) -> str:
+def _get_output_format_only() -> str:
     """
-    Strip phan '## Output format' cu (neu co) va append shared output format.
-
-    Args:
-        content: Noi dung template goc
-
-    Returns:
-        Template content + shared output format da inject output_language
+    Doc shared output format (lite/pro) va inject output_language.
+    Dung cho assembler de dam bao tinh nhat quan.
     """
-    # Strip phan output format cu de backward compat
-    idx = content.find("\n## Output format")
-    if idx != -1:
-        content = content[:idx]
-
-    # Chon shared output format theo tier (lite/pro)
     tier = _get_template_tier()
     fmt_path = _OUTPUT_FORMAT_PATH
     if tier == "lite":
@@ -436,17 +425,28 @@ def _append_output_format(content: str) -> str:
         if not fmt_path.exists():
             fmt_path = _OUTPUT_FORMAT_PATH
 
-    # Doc shared output format
     try:
         fmt = fmt_path.read_text(encoding="utf-8")
+        language = _get_output_language()
+        return fmt.replace("{{output_language}}", language).strip()
     except OSError:
+        return ""
+
+
+def _append_output_format(content: str, opx_mode: bool = False) -> str:
+    """
+    Append shared output format vao content.
+    Hien tai phuong thuc nay duoc giu lai cho muc dich tuong thich or UI display
+    neu can, nhung Assembler moi la nguoi quyet dinh cuoi cung.
+    """
+    if opx_mode:
         return content.strip()
 
-    # Inject output_language
-    language = _get_output_language()
-    fmt = fmt.replace("{{output_language}}", language)
+    fmt = _get_output_format_only()
+    if not fmt:
+        return content.strip()
 
-    return content.strip() + "\n\n" + fmt.strip()
+    return content.strip() + "\n\n" + fmt
 
 
 def list_templates() -> list[TemplateInfo]:
@@ -457,17 +457,20 @@ def list_templates() -> list[TemplateInfo]:
     return available
 
 
-def load_template(template_id: str) -> str:
+def load_template(template_id: str, opx_mode: bool = False) -> str:
     """
-    Doc noi dung cua mot template theo ID, kem theo shared output format.
-
-    Neu template da co section '## Output format', phan do se bi strip truoc
-    khi append shared format (backward compatibility trong qua trinh migration).
+    Doc noi dung cua mot template theo ID (analytical framework).
+    Shared output format se duoc Assembler tu dong them vao khi build prompt
+    dua tren runtime mode (Normal vs OPX).
     """
+    # Xoa phan duoi de khong tu dong append shared format vao UI
+    # Giup loai bo tinh trang trung lap directive khi copy
     for provider in _PROVIDERS:
         if provider.handles(template_id):
             content = provider.load_template(template_id)
-            return _append_output_format(content)
+            # Neu opx_mode=True, chac chan khong append
+            # Neu opx_mode=False (mac dinh), cung khong append vao UI de Assembler can thiep
+            return content.strip()
 
     raise KeyError(f"Template '{template_id}' khong ton tai trong bat ky provider nao.")
 

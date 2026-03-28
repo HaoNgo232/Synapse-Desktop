@@ -63,14 +63,25 @@ def assemble_prompt(
         file_map: File map string tu generate_file_map()
         file_contents: File contents string tu formatter tuong ung
         user_instructions: Huong dan tu nguoi dung
-        include_xml_formatting: Co bao gom OPX instructions khong
+        include_xml_formatting: Co bao gom OPX instructions khong (True -> OPX, False -> Normal)
         git_diffs: Optional git diffs (work tree & staged)
         git_logs: Optional git logs
         output_style: Dinh dang dau ra
+        project_rules: Quy tac project
 
     Returns:
         Prompt hoan chinh
     """
+
+    # Ensure user_instructions is cleaned of any legacy output formats to avoid conflicts
+    # as the assembler is now the single source of truth for output formatting.
+    if user_instructions:
+        idx = user_instructions.find("## Output format")
+        if idx != -1:
+            user_instructions = user_instructions[:idx].strip()
+        idx = user_instructions.find("## REPORT STRUCTURE")
+        if idx != -1:
+            user_instructions = user_instructions[:idx].strip()
     if output_style == OutputStyle.XML:
         return _assemble_xml(
             file_map,
@@ -252,17 +263,12 @@ def _assemble_xml(
 """
     prompt = _append_git_changes_xml(prompt, git_diffs, git_logs)
 
-    if include_xml_formatting:
-        prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
-
     if project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
-    if user_instructions and user_instructions.strip():
-        prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
-
-    # Recency bias: Dat cau truc dau ra o cuoi cung de override cac huong dan truoc do neu co xung dot
+    # OUTPUT FORMAT SECTION (Single Source of Truth)
     if include_xml_formatting:
+        prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
         prompt += """
 <final_output_structure>
 CRITICAL: Structure your response exactly like this:
@@ -272,6 +278,18 @@ CRITICAL: Structure your response exactly like this:
 Output nothing else outside these blocks.
 </final_output_structure>
 """
+    else:
+        # Load minimal normal output format via template_manager helper (to reuse language logic)
+        from domain.prompt.template_manager import _get_output_format_only
+
+        fmt = _get_output_format_only()
+        if fmt:
+            prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
+
+    # User instructions ALWAYS last for recency bias
+    if user_instructions and user_instructions.strip():
+        prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+
     return prompt
 
 
@@ -324,6 +342,13 @@ def _assemble_json(
 
     if include_xml_formatting:
         prompt_data["formatting_instructions"] = XML_FORMATTING_INSTRUCTIONS
+    else:
+        # Normal mode output format
+        from domain.prompt.template_manager import _get_output_format_only
+
+        fmt = _get_output_format_only()
+        if fmt:
+            prompt_data["output_format"] = fmt
 
     if project_rules and project_rules.strip():
         prompt_data["project_rules"] = project_rules.strip()
@@ -390,14 +415,13 @@ def _assemble_plain(
     if project_rules and project_rules.strip():
         prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules.strip()}")
 
+    # Output Format (Single Source of Truth)
     if not include_xml_formatting:
-        prompt_parts.append(
-            f"{'-' * 32}\n"
-            "OUTPUT FORMAT:\n"
-            "Write your response in clear Markdown sections with appropriate headers.\n"
-            "Wrap code snippets in fenced blocks with the correct language tag (e.g. ```python).\n"
-            "If Instructions are provided, address every point before suggesting code changes."
-        )
+        from domain.prompt.template_manager import _get_output_format_only
+
+        fmt = _get_output_format_only()
+        if fmt:
+            prompt_parts.append(f"{'-' * 32}\nOUTPUT FORMAT:\n{fmt}")
 
     # User instructions o cuoi cung (recency bias giup LLM xu ly tot hon)
     if user_instructions and user_instructions.strip():
@@ -457,18 +481,12 @@ def _assemble_markdown(
 
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
+    else:
+        from domain.prompt.template_manager import _get_output_format_only
 
-    if project_rules and project_rules.strip():
-        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
-
-    if not include_xml_formatting:
-        prompt += (
-            "\n<output_format>\n"
-            "Write your response in clear Markdown sections with appropriate headers.\n"
-            "Wrap code snippets in fenced blocks with the correct language tag.\n"
-            "If user_instructions are provided, address every point before suggesting code.\n"
-            "</output_format>\n"
-        )
+        fmt = _get_output_format_only()
+        if fmt:
+            prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
 
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"

@@ -344,7 +344,8 @@ def test_populate_history_menu_with_entries(context_view):
         view._populate_history_menu()
 
     actions = view._history_menu.actions()
-    assert len(actions) == 2
+    # 4 items: Header + Separator + 2 history entries
+    assert len(actions) == 4
 
 
 def test_on_history_selected(context_view):

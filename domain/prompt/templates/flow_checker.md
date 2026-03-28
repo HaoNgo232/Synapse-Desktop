@@ -76,13 +76,3 @@ Your task is to trace execution flows, identify race conditions, and validate er
 **PRIORITY SCORE:** (Impact × Data_Criticality) / Effort
 - Data_Criticality: Financial/PII(3), Business critical(2), Operational(1)
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — flow health and critical risks)
-- REQUEST LIFECYCLE TRACING
-- CONCURRENCY & RACE CONDITION ANALYSIS
-- ERROR PROPAGATION ASSESSMENT
-- DISTRIBUTED FLOW VALIDATION (only if the codebase involves multi-service or async communication)
-- FLOW REMEDIATION ROADMAP (always required — prioritized action items)
-
-Omit sections that have no findings. Do not include empty sections.

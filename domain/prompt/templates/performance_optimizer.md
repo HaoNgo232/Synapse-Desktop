@@ -143,14 +143,3 @@ Your task is to analyze the codebase for performance bottlenecks, algorithmic in
 - Severity: Production outage(3), Degraded UX(2), Future bottleneck(1)
 - Focus on PRIORITY SCORE ≥ 5.0
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — overall performance health and top bottlenecks)
-- WORKLOAD PROFILE (request patterns and resource usage)
-- CRITICAL BOTTLENECKS (sorted by PRIORITY SCORE with Big O analysis)
-- EVENT LOOP ANALYSIS (only if Node.js or single-threaded async runtime detected)
-- DATABASE PERFORMANCE ISSUES (only if database access patterns are present)
-- SCALABILITY RECOMMENDATIONS
-- PERFORMANCE IMPROVEMENT ROADMAP (always required — estimated gains and implementation order)
-
-Omit sections that have no findings. Do not include empty sections.

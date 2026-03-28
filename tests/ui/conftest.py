@@ -20,6 +20,7 @@ class FakeFileTreeWidget(QWidget):
     selection_changed = Signal(set)
     file_preview_requested = Signal(str)
     token_counting_done = Signal()
+    exclude_patterns_changed = Signal()
 
     def __init__(self, *args, **kwargs):
         # Allow any arguments like ignore_engine, tokenization_service when mocked

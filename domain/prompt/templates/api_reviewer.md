@@ -80,14 +80,3 @@ Your task is to review API design across any technology stack with focus on cont
 **PRIORITY SCORE:** (Impact × Consumer_Reach) / Effort
 - Consumer_Reach: Public API(3), Internal services(2), Single consumer(1)
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — API quality assessment and critical concerns)
-- BUSINESS CONTEXT & CONSUMER ANALYSIS
-- CONTRACT CLARITY & CONSISTENCY AUDIT
-- PERFORMANCE & CACHING STRATEGY REVIEW
-- SECURITY & ACCESS CONTROL ASSESSMENT
-- EVOLUTION & VERSIONING STRATEGY
-- PRIORITIZED IMPROVEMENT ROADMAP (always required)
-
-Omit sections that have no findings. Do not include empty sections.

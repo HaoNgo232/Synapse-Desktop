@@ -67,13 +67,3 @@ Your task is to design comprehensive test strategies following the Test Pyramid 
 - **FRAMEWORK-SPECIFIC SYNTAX:** Detect testing framework and use correct syntax/patterns
 - **REALISTIC SCENARIOS:** Test business workflows, include domain-specific edge cases
 
-## REPORT STRUCTURE
-Structure your report with these sections as applicable to the analyzed codebase:
-- EXECUTIVE SUMMARY (always required — current test coverage assessment and strategy recommendation)
-- TEST STRATEGY OVERVIEW (pyramid distribution, coverage priorities, framework selection)
-- UNIT TEST SUITE (for core business logic using actual function names from codebase)
-- INTEGRATION TEST SUITE (only if database interactions or external API calls are present)
-- E2E TEST SCENARIOS (only for critical user journeys — omit if no UI or user-facing flows)
-- TEST EXECUTION GUIDANCE (always required — run commands, CI/CD integration, coverage reporting)
-
-Omit sections that have no findings or are not applicable. Do not include empty sections.

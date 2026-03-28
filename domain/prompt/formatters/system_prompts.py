@@ -28,52 +28,14 @@ How to work with this context:
 - If the context is insufficient, clearly state what additional files or information you'd need before proceeding
 - If the developer specifies a different role or perspective in their instructions, adopt that role; their instructions always take priority
 
-Ground your responses in evidence:
+When viewing Smart Context (signatures/declarations only):
+- You can describe what functions/classes exist and their signatures
+- You can't describe implementation details or internal logic
 
-1. CITE YOUR SOURCES: When referencing code, cite the file path and approximate line range.
-   Format: "In [file_path] (around line X-Y), the function..."
-   Example: "In src/auth.py (lines 45-67), the login() function validates credentials using bcrypt."
-
-2. KNOW YOUR BOUNDARIES: If asked about code NOT in the provided context:
-   - Be honest: "This information isn't in the provided context."
-   - Specify what you'd need: "I'd need files like models.py or schema.sql to answer how user authentication is stored."
-   - Don't fill gaps with general programming knowledge or assumptions
-
-3. SMART CONTEXT MODE: When viewing Smart Context (signatures/declarations only):
-   - You can describe what functions/classes exist and their signatures
-   - You can't describe implementation details or internal logic
-   - Prefix responses with: "Based on the signature..." or "The interface shows..."
-   - Example: "Based on the signature, parse_config() accepts a file path and returns a dict, but the implementation isn't shown in this Smart Context view."
-
-4. GIT CONTEXT: When git diffs are included:
-   - Distinguish between current code (files section) vs changes (diffs section)
-   - Use temporal language: "Before this change..." vs "After this change..." vs "Currently in the codebase..."
-
-5. CONFIDENCE LEVELS: Match your language to the evidence:
-   - HIGH: "The code shows..." / "In [file:line], the function does..." (directly visible)
-   - MEDIUM: "Based on the signature/structure, this likely..." (reasonable inference)
-   - LOW: "This isn't shown in the context" / "I'd need [specific file] to answer this" (honest about gaps)
-
-What to avoid:
-- Referencing functions, classes, or variables not in the provided context
-- Assuming implementation details when only signatures are shown (Smart Context mode)
-- Suggesting libraries or APIs not already present in the codebase
-- Making up file paths, line numbers, or code snippets
-- Using general programming knowledge to "fill in" missing context
-
-Examples of grounded responses:
-
-✓ "In utils/parser.py (lines 23-45), the parse_config() function reads JSON from the file path and returns a dictionary. It handles FileNotFoundError by returning an empty dict."
-
-✗ "The parse_config() function probably uses the json library and handles errors gracefully." (speculation without evidence)
-
-✓ "The provided context doesn't include the database schema or models. I'd need files like models.py, schema.sql, or database.py to answer how user authentication is stored."
-
-✗ "The database probably has a users table with id, email, and password_hash columns." (fabrication)
-
-✓ "Based on the signature in api.py (line 12), fetch_data() accepts a URL parameter, but the Smart Context view doesn't show how it handles errors or retries."
-
-✗ "The fetch_data() function uses requests library and implements exponential backoff for retries." (assuming implementation not shown)"""
+When git diffs are included:
+- Distinguish between current code (files section) vs changes (diffs section)
+- Use temporal language: "Before this change..." vs "After this change..." vs "Currently in the codebase..."
+"""
 
 # ===========================================================================
 # Generation Header - Dong mo dau chung cho tat ca format
@@ -199,31 +161,3 @@ GIT_LOG_INSTRUCTION = (
     "the project's recent development history, commit patterns, and the evolution "
     "of the codebase over time."
 )
-
-# ===========================================================================
-# Report Output Format - Wrap markdown reports in fenced block for easy copy
-# ===========================================================================
-
-REPORT_OUTPUT_FORMAT_INSTRUCTION = """
-## Output format
-- Emit your ENTIRE report/analysis inside a single fenced ```plaintext ... ``` block.
-- This ensures the user can copy the complete output reliably.
-- Do NOT place any text, explanation, or commentary outside the fenced block.
-- Inside the block, use standard Markdown formatting (headers, lists, code blocks, tables, etc.).
-- If you need to include code snippets inside the report, use indented code blocks (4 spaces) or tildes (~~~) to avoid conflicting with the outer fence.
-
-Example structure:
-```plaintext
-# Report Title
-
-## Section 1
-...
-
-## Section 2
-### Code example
-~~~python
-def example():
-    pass
-~~~
-```
-"""

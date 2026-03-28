@@ -10,7 +10,6 @@ Thay the logic doc file bi trung lap 4 lan trong:
 Moi formatter goi collect_files() MOT LAN, roi format theo cach rieng.
 """
 
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -18,43 +17,35 @@ from infrastructure.filesystem.file_utils import is_binary_file
 from shared.types.prompt_types import FileEntry
 from shared.utils.import_parser import extract_local_imports
 from shared.utils.language_utils import get_language_from_path
+from shared.utils.metadata_utils import (
+    extract_layer_from_path,
+    extract_role_from_content,
+)
 
 
-def _extract_layer(rel_path: str) -> Optional[str]:
-    """Trich xuat layer tu relative path (e.g., application, domain)."""
-    parts = rel_path.split("/")
-    if len(parts) > 1:
-        layer = parts[0]
-        if layer in {
-            "application",
-            "domain",
-            "infrastructure",
-            "presentation",
-            "shared",
-        }:
-            return layer
-    return None
-
-
-def _extract_role(path: Path, content: str) -> Optional[str]:
-    """Doan role cua file dua tren class name hoac file name suffix."""
-    # 1. Tim class name chinh trong file
-    class_match = re.search(r"^class\s+([A-Z]\w+)", content, re.MULTILINE)
-    if class_match:
-        return class_match.group(1)
-
-    # 2. Fallback vao suffix cua file name
-    stem = path.stem
-    if "_" in stem:
-        parts = stem.split("_")
-        return "".join(p.capitalize() for p in parts)
-    return stem.capitalize()
+# Logics metadata (layer, role) da duoc move sang shared/utils/metadata_utils.py
+# de de dang quan ly heuristics cho nhieu loai project (Web, Python, DDD).
 
 
 def _path_to_dotted(path_str: str) -> str:
     """Chuyen doi path sang dotted notation (e.g., domain/prompt -> domain.prompt)."""
-    if path_str.endswith(".py"):
-        path_str = path_str[:-3]
+    p = Path(path_str)
+    # Strip cac extension pho bien cua source code
+    known_extensions = {
+        ".py",
+        ".pyi",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".mjs",
+        ".cjs",
+        ".mts",
+        ".cts",
+    }
+    if p.suffix.lower() in known_extensions:
+        path_str = str(p.with_suffix(""))
+
     return path_str.replace("/", ".").replace("\\", ".")
 
 
@@ -131,9 +122,9 @@ def collect_files(
 
             content = path.read_text(encoding="utf-8", errors="replace")
 
-            # Trich xuat metadata
-            layer = _extract_layer(display)
-            role = _extract_role(path, content)
+            # Trich xuat metadata tu shared utility
+            layer = extract_layer_from_path(display, workspace_root)
+            role = extract_role_from_content(path, content)
             deps: list[str] = []
             if workspace_root:
                 raw_deps = extract_local_imports(path, workspace_root)

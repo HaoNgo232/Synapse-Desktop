@@ -59,7 +59,7 @@ def generate_file_structure_xml(
     selected_paths: Set[str],
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
-    show_all: bool = True,
+    show_all: bool = False,
 ) -> str:
     """
     Tao cau truc thu muc dang XML long nhau cho prompt structure moi.
@@ -107,7 +107,7 @@ def generate_file_map(
     selected_paths: set[str],
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
-    show_all: bool = True,
+    show_all: bool = False,
 ) -> str:
     """
     Tao file map string tu tree structure.

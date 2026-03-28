@@ -33,6 +33,11 @@ _JS_TS_EXTENSIONS = [
     ".json",
 ]
 
+# --- Rust & Java Patterns ---
+_RUST_USE_RE = re.compile(r"^\s*use\s+([.\w:]+)(?:::\{(.+)\})?;", re.MULTILINE)
+_RUST_MOD_RE = re.compile(r"^\s*mod\s+(\w+);", re.MULTILINE)
+_JAVA_IMPORT_RE = re.compile(r"^\s*import\s+([\w.]+);", re.MULTILINE)
+
 
 def _normalize_rel_path(path: str) -> str:
     return path.replace("\\", "/")
@@ -136,6 +141,60 @@ def _resolve_js_ts_import(
     return resolved
 
 
+def _resolve_rust_module(
+    module: str, file_path: Path, workspace_root: Path
+) -> list[str]:
+    """Resolve Rust crate/module to file path."""
+    clean_mod = (
+        module.replace("::", "/").replace("crate/", "").replace("self/", "").strip("/")
+    )
+    if not clean_mod:
+        return []
+
+    # Local siblings or children
+    base_dirs = [file_path.parent, workspace_root / "src"]
+    candidates = []
+
+    # Try different combinations of nested paths
+    # e.g. models/user/User -> models/user/user.rs or models/user.rs
+    parts = clean_mod.split("/")
+    for base in base_dirs:
+        for i in range(len(parts), 0, -1):
+            sub_path = "/".join(parts[:i])
+            candidates.append(base / f"{sub_path}.rs")
+            candidates.append(base / sub_path / "mod.rs")
+            # Lowercase version for Rust convention
+            candidates.append(base / f"{sub_path.lower()}.rs")
+            candidates.append(base / sub_path.lower() / "mod.rs")
+
+    resolved: list[str] = []
+    for candidate in candidates:
+        rel = _rel_file_if_exists(candidate, workspace_root)
+        if rel:
+            resolved.append(rel)
+    return resolved
+
+
+def _resolve_java_import(import_str: str, workspace_root: Path) -> list[str]:
+    """Resolve Java package/class to file path (heuristic)."""
+    clean_path = import_str.replace(".", "/").strip()
+    if not clean_path:
+        return []
+
+    # Heuristic: Find in common src roots
+    src_roots = ["src/main/java", "src/test/java", "src", "java"]
+    candidates = []
+    for root in src_roots:
+        candidates.append(workspace_root / root / f"{clean_path}.java")
+
+    resolved: list[str] = []
+    for candidate in candidates:
+        rel = _rel_file_if_exists(candidate, workspace_root)
+        if rel:
+            resolved.append(rel)
+    return resolved
+
+
 def extract_local_imports(file_path: Path, workspace_root: Path) -> list[str]:
     """
     Extract local import file paths from a source file.
@@ -143,6 +202,8 @@ def extract_local_imports(file_path: Path, workspace_root: Path) -> list[str]:
     Supported forms:
     - Python: `from x.y import z`, `import x.y`
     - JavaScript/TypeScript: `import ... from './x'`, `require('./x')`
+    - Rust: `use crate::x`, `mod x`
+    - Java: `import x.y.z`
 
     Only local imports are returned. External package imports are ignored.
 
@@ -165,7 +226,6 @@ def extract_local_imports(file_path: Path, workspace_root: Path) -> list[str]:
     found: list[str] = []
 
     if suffix in {".py", ".pyi"}:
-        # Join multi-line imports (parenthesized) trước khi apply regex
         raw_lines = content.splitlines()
         joined_lines: list[str] = []
         buffer = ""
@@ -215,16 +275,7 @@ def extract_local_imports(file_path: Path, workspace_root: Path) -> list[str]:
 
         return _dedupe_keep_order(found)
 
-    if suffix in {
-        ".js",
-        ".jsx",
-        ".ts",
-        ".tsx",
-        ".mjs",
-        ".cjs",
-        ".mts",
-        ".cts",
-    }:
+    if suffix in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}:
         for pattern in _JS_TS_IMPORT_PATTERNS:
             for match in pattern.finditer(content):
                 specifier = match.group(1)
@@ -232,6 +283,36 @@ def extract_local_imports(file_path: Path, workspace_root: Path) -> list[str]:
                     _resolve_js_ts_import(specifier, file_path, workspace_root)
                 )
 
+        return _dedupe_keep_order(found)
+
+    if suffix == ".rs":
+        for match in _RUST_USE_RE.finditer(content):
+            base_mod = (
+                match.group(1).replace("crate", "").replace("self", "").strip(": ")
+            )
+            if base_mod:
+                found.extend(_resolve_rust_module(base_mod, file_path, workspace_root))
+            if match.group(2):
+                sub_mods = [s.strip() for s in match.group(2).split(",")]
+                for sm in sub_mods:
+                    found.extend(
+                        _resolve_rust_module(
+                            f"{base_mod}::{sm}" if base_mod else sm,
+                            file_path,
+                            workspace_root,
+                        )
+                    )
+
+        for match in _RUST_MOD_RE.finditer(content):
+            found.extend(
+                _resolve_rust_module(match.group(1), file_path, workspace_root)
+            )
+
+        return _dedupe_keep_order(found)
+
+    if suffix == ".java":
+        for match in _JAVA_IMPORT_RE.finditer(content):
+            found.extend(_resolve_java_import(match.group(1), workspace_root))
         return _dedupe_keep_order(found)
 
     return []
@@ -245,15 +326,6 @@ def get_related_files(
 ) -> list[str]:
     """
     Resolve related files by traversing local imports up to the given depth.
-
-    Args:
-        changed_files: Relative paths of changed files
-        workspace_root: Workspace root
-        depth: Import traversal depth (1 = direct imports only)
-        max_files: Maximum number of related files returned
-
-    Returns:
-        Relative paths of related files (excluding changed_files)
     """
     if depth <= 0 or max_files <= 0:
         return []

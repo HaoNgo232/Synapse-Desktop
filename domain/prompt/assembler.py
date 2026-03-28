@@ -274,7 +274,11 @@ def _assemble_xml(
     """Lắp ráp prompt theo XML format với cấu trúc Project mới."""
     from datetime import datetime
 
-    project_name = workspace_root.name if workspace_root else "unknown-project"
+    import html
+
+    project_name = (
+        html.escape(workspace_root.name) if workspace_root else "unknown-project"
+    )
     current_date = datetime.now().strftime("%Y-%m-%d")
 
     # include_xml_formatting = True nghĩa là đang dùng OPX (Overwrite Patch XML)

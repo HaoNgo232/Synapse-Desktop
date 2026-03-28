@@ -422,6 +422,10 @@ class UIBuilderMixin:
         self.file_tree_widget.selection_changed.connect(self._on_selection_changed)
         self.file_tree_widget.file_preview_requested.connect(self._preview_file)
         self.file_tree_widget.token_counting_done.connect(self._update_token_display)
+        # Khi user exclude tu context menu, refresh tree ngay lap tuc
+        self.file_tree_widget.exclude_patterns_changed.connect(
+            self._tree_controller.refresh_tree
+        )
 
         # Connect NEW preset widget to selection changes
         if hasattr(self, "_preset_widget") and self._preset_widget:

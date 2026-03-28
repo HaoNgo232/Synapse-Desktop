@@ -67,8 +67,11 @@ class FileTreeWidget(QWidget):
     # Signals
     selection_changed = Signal(set)
     file_preview_requested = Signal(str)
-    token_counting_done = Signal()  # Emitted khi batch token counting hoàn thành
-    search_results_changed = Signal(int)  # Emitted với số kết quả search
+    token_counting_done = Signal()  # Emitted khi batch token counting hoan thanh
+    search_results_changed = Signal(int)  # Emitted voi so ket qua search
+    exclude_patterns_changed = (
+        Signal()
+    )  # Emitted khi user exclude file/folder tu context menu
 
     def __init__(
         self,
@@ -692,7 +695,13 @@ class FileTreeWidget(QWidget):
 
     @Slot(QPoint)
     def _on_context_menu(self, pos: QPoint) -> None:
-        """Show context menu for file tree items."""
+        """Hien thi context menu cho file/folder trong tree.
+
+        Hien thi cac hanh dong kha dung:
+        - Exclude from Context: Them file/folder vao excluded patterns
+        - Manage Exclusions...: Mo dialog quan ly toan bo excluded patterns
+        - Mark/Unmark as Project Rule: Danh dau file lam project rule (chi cho file)
+        """
         index = self._tree_view.indexAt(pos)
         if not index.isValid():
             return
@@ -701,50 +710,118 @@ class FileTreeWidget(QWidget):
         file_path = self._model.data(source_idx, FileTreeRoles.FILE_PATH_ROLE)
         is_dir = self._model.data(source_idx, FileTreeRoles.IS_DIR_ROLE)
 
-        # Only show menu for files, not directories
-        if not file_path or is_dir:
+        if not file_path:
             return
 
         workspace = self._model.get_workspace_path()
         if not workspace:
             return
 
-        from application.services.workspace_rules import (
-            is_rule_file,
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background: #1E293B;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 20px 6px 12px;
+                border-radius: 4px;
+                color: #E2E8F0;
+                font-size: 12px;
+            }
+            QMenu::item:selected { background: #2D3F55; }
+            QMenu::separator { height: 1px; background: #334155; margin: 4px 8px; }
+        """)
+
+        # --- Exclude Section ---
+        # Lay ten hien thi (folder hoac file)
+        item_name = Path(file_path).name
+        exclude_label = (
+            f"Exclude Folder '{item_name}'" if is_dir else f"Exclude File '{item_name}'"
         )
 
-        menu = QMenu(self)
-        is_rule = is_rule_file(workspace, file_path)
+        exclude_action = menu.addAction(exclude_label)
+        exclude_action.triggered.connect(
+            lambda: self._exclude_path(workspace, file_path, is_dir)
+        )
 
-        if is_rule:
-            action = menu.addAction("✓ Unmark as Project Rule")
-            action.triggered.connect(
-                lambda: self._unmark_rule_file(workspace, file_path)
-            )
-        else:
-            action = menu.addAction("Mark as Project Rule")
-            action.triggered.connect(lambda: self._mark_rule_file(workspace, file_path))
+        manage_action = menu.addAction("Manage Exclusions...")
+        manage_action.triggered.connect(lambda: self._open_exclusions_dialog())
+
+        # --- Project Rule Section (chi hien thi cho file) ---
+        if not is_dir:
+            menu.addSeparator()
+
+            from application.services.workspace_rules import is_rule_file
+
+            is_rule = is_rule_file(workspace, file_path)
+
+            if is_rule:
+                rule_action = menu.addAction("Unmark as Project Rule")
+                rule_action.triggered.connect(
+                    lambda: self._unmark_rule_file(workspace, file_path)
+                )
+            else:
+                rule_action = menu.addAction("Mark as Project Rule")
+                rule_action.triggered.connect(
+                    lambda: self._mark_rule_file(workspace, file_path)
+                )
 
         menu.exec(self._tree_view.viewport().mapToGlobal(pos))
 
+    def _exclude_path(self, workspace: Path, file_path: str, is_dir: bool) -> None:
+        """Them file/folder vao excluded patterns va refresh tree.
+
+        Tinh toan relative path so voi workspace, sau do luu vao settings.
+        Ket qua ngay lap tuc hien thi bang cach refresh tree.
+        """
+        from application.services.workspace_config import add_excluded_patterns
+        from presentation.components.toast.toast_qt import toast_success, toast_error
+
+        try:
+            path_obj = Path(file_path)
+            rel = path_obj.relative_to(workspace)
+            pattern = str(rel)
+        except ValueError:
+            pattern = Path(file_path).name
+
+        if add_excluded_patterns([pattern]):
+            toast_success(f"Excluded: {pattern}")
+            # Thong bao cho TreeManagementController refresh tree
+            self.exclude_patterns_changed.emit()
+        else:
+            toast_error("Failed to save exclusion.")
+
+    def _open_exclusions_dialog(self) -> None:
+        """Mo dialog quan ly toan bo excluded patterns.
+
+        Hien thi tat ca cac patterns dang active, cho phep user xoa tung cai
+        hoac them moi. Thay doi co hieu luc ngay sau khi dong dialog.
+        """
+        from presentation.components.dialogs.exclusions_dialog import ExclusionsDialog
+
+        dialog = ExclusionsDialog(self)
+        if dialog.exec():
+            self.exclude_patterns_changed.emit()
+
     def _mark_rule_file(self, workspace: Path, file_path: str) -> None:
-        """Mark a file as project rule."""
+        """Danh dau file la project rule."""
         from application.services.workspace_rules import add_rule_file
         from presentation.components.toast.toast_qt import toast_success
 
         add_rule_file(workspace, file_path)
         toast_success(f"Marked as project rule: {Path(file_path).name}")
-        # Trigger repaint to show badge
         self._tree_view.viewport().update()
 
     def _unmark_rule_file(self, workspace: Path, file_path: str) -> None:
-        """Unmark a file as project rule."""
+        """Bo danh dau file khoi project rule."""
         from application.services.workspace_rules import remove_rule_file
         from presentation.components.toast.toast_qt import toast_success
 
         remove_rule_file(workspace, file_path)
         toast_success(f"Unmarked project rule: {Path(file_path).name}")
-        # Trigger repaint to hide badge
         self._tree_view.viewport().update()
 
     # ===== Private Helpers =====

@@ -695,8 +695,8 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         schedule_background(
             _work,
-            on_result=lambda res, g=current_gen: self._on_refresh_result(res, g),
-            on_error=lambda msg, g=current_gen: self._on_refresh_error(str(msg), g),
+            on_result=lambda res: self._on_refresh_result(res, current_gen),
+            on_error=lambda msg: self._on_refresh_error(str(msg), current_gen),
         )
 
     def _on_refresh_result(self, result: "DiffOnlyResult", generation: int) -> None:

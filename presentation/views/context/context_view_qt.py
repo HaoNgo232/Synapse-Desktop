@@ -252,18 +252,13 @@ class ContextViewQt(
         if hasattr(self, "_graph_provider") and self._graph_provider is not None:
             self._graph_provider.on_workspace_changed(workspace_path)
 
-        # 9. Sync Tier Selector with new settings
-        if hasattr(self, "_tier_selector"):
-            from infrastructure.persistence.settings_manager import load_app_settings
+        # 9. Sync Templates Button Text (Tier)
+        from infrastructure.persistence.settings_manager import load_app_settings
 
-            new_tier = getattr(load_app_settings(), "template_tier", "lite")
-            # Set tier without emitting signal to avoid infinite loop
-            self._tier_selector.set_tier(new_tier, emit=False)
-
-            # Đồng bộ text cho button Templates
-            if hasattr(self, "_template_btn"):
-                tier_label = "Lite" if new_tier == "lite" else "Pro"
-                self._template_btn.setText(f"Templates ({tier_label})")
+        new_tier = getattr(load_app_settings(), "template_tier", "lite")
+        if hasattr(self, "_template_btn"):
+            tier_label = "Lite" if new_tier == "lite" else "Pro"
+            self._template_btn.setText(f"Templates ({tier_label})")
 
     def restore_tree_state(
         self, selected_files: List[str], expanded_folders: List[str]
@@ -766,19 +761,22 @@ class ContextViewQt(
         menu = self._template_menu
         menu.clear()
 
-        # 1. Chèn Tier Selector (Lite/Pro) lên đầu menu dùng QWidgetAction
+        # 1. Chèn Tier Selector (Lite/Pro) lên đầu menu dùng QWidgetAction (động)
         from PySide6.QtWidgets import QWidgetAction
         from infrastructure.persistence.settings_manager import load_app_settings
+        from presentation.components.tier_selector import TierSelector
 
-        if hasattr(self, "_tier_selector") and self._tier_selector:
-            # Sync trạng thái mới nhất từ settings (do users có thể đã đổi ở tab Settings)
-            new_tier = getattr(load_app_settings(), "template_tier", "lite")
-            self._tier_selector.set_tier(new_tier, emit=False)
+        # Luôn tạo mới menu item để tránh lỗi ownership của Qt
+        new_tier = getattr(load_app_settings(), "template_tier", "lite")
+        tier_selector = TierSelector(initial_tier=new_tier)
+        tier_selector.tier_changed.connect(self._on_tier_changed)
+        # Style gọn hơn khi nằm trong menu
+        tier_selector.setContentsMargins(8, 4, 8, 4)
 
-            action = QWidgetAction(menu)
-            action.setDefaultWidget(self._tier_selector)
-            menu.addAction(action)
-            menu.addSeparator()
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(tier_selector)
+        menu.addAction(action)
+        menu.addSeparator()
 
         # 2. Đổ dữ liệu các templates
         for tmpl in list_templates():

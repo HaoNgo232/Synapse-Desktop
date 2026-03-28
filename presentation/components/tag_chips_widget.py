@@ -229,13 +229,76 @@ class TagChipsWidget(QWidget):
     def __init__(self, patterns: Optional[List[str]] = None, parent=None):
         super().__init__(parent)
         self._patterns: List[str] = list(patterns) if patterns else []
+        self._history: List[List[str]] = []  # Stack luu tru lich su de ho tro Undo
         self._build_ui()
         self._render_chips()
+
+    def _save_state_to_history(self) -> None:
+        """Lưu trạng thái hiện tại vào stack lịch sử (giới hạn 50 bước)."""
+        self._history.append(list(self._patterns))
+        if len(self._history) > 50:
+            self._history.pop(0)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
+
+        # Header area: Title (optional) + Status + Action buttons
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+
+        self._status_label = QLabel(f"Active patterns: {len(self._patterns)}")
+        self._status_label.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; font-weight: 600;"
+        )
+        header_row.addWidget(self._status_label)
+
+        header_row.addStretch()
+
+        # Undo button
+        self._undo_btn = QPushButton("Undo ↺")
+        self._undo_btn.setToolTip("Undo last change")
+        self._undo_btn.setFixedWidth(60)
+        self._undo_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {ThemeColors.INFO}; border: 1px solid {ThemeColors.INFO}40;
+                border-radius: 4px; font-size: 10px; font-weight: 600; padding: 2px 4px;
+            }}
+            QPushButton:hover {{ background: {ThemeColors.INFO}15; border-color: {ThemeColors.INFO}; }}
+            QPushButton:disabled {{ color: {ThemeColors.TEXT_MUTED}; border-color: {ThemeColors.BORDER}; }}
+        """)
+        self._undo_btn.setEnabled(False)
+        self._undo_btn.clicked.connect(self.undo)
+        header_row.addWidget(self._undo_btn)
+
+        # Clear All button
+        self._clear_btn = QPushButton("Clear All")
+        self._clear_btn.setToolTip("Remove all patterns")
+        self._clear_btn.setFixedWidth(70)
+        self._clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {ThemeColors.ERROR}; border: 1px solid {ThemeColors.ERROR}40;
+                border-radius: 4px; font-size: 10px; font-weight: 600; padding: 2px 4px;
+            }}
+            QPushButton:hover {{ background: {ThemeColors.ERROR}15; border-color: {ThemeColors.ERROR}; }}
+        """)
+        self._clear_btn.clicked.connect(self.clear_all)
+        # Edit as Text button
+        self._edit_text_btn = QPushButton("Edit as Text 📝")
+        self._edit_text_btn.setToolTip("Edit all patterns as a text list")
+        self._edit_text_btn.setFixedWidth(110)
+        self._edit_text_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {ThemeColors.TEXT_PRIMARY}; border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px; font-size: 10px; font-weight: 600; padding: 2px 4px;
+            }}
+            QPushButton:hover {{ background: {ThemeColors.BG_ELEVATED}; border-color: {ThemeColors.PRIMARY}; }}
+        """)
+        self._edit_text_btn.clicked.connect(self._open_text_editor)
+        header_row.addWidget(self._edit_text_btn)
+
+        layout.addLayout(header_row)
 
         # Chips container with flow layout
         self._chips_container = QWidget()
@@ -248,8 +311,10 @@ class TagChipsWidget(QWidget):
         input_row.setSpacing(8)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Add pattern...")
-        self._input.setFixedHeight(36)
+        self._input.setPlaceholderText(
+            "Paste patterns (separated by comma or semicolon)..."
+        )
+        self._input.setFixedHeight(34)
         self._input.setFont(QFont("Cascadia Code, Fira Code, Consolas", 11))
         self._input.setStyleSheet(f"""
             QLineEdit {{
@@ -310,31 +375,53 @@ class TagChipsWidget(QWidget):
         self._chips_container.updateGeometry()
         self.updateGeometry()
 
+        # Update status & button states
+        if hasattr(self, "_status_label"):
+            self._status_label.setText(f"Active patterns: {len(self._patterns)}")
+        if hasattr(self, "_undo_btn"):
+            self._undo_btn.setEnabled(len(self._history) > 0)
+        if hasattr(self, "_clear_btn"):
+            self._clear_btn.setEnabled(len(self._patterns) > 0)
+
     def _add_from_input(self) -> None:
-        text = self._input.text().strip()
-        if not text:
+        raw_text = self._input.text().strip()
+        if not raw_text:
             return
 
-        if text in self._patterns:
-            # Flash red border for duplicate
-            self._input.setStyleSheet(f"""
-                QLineEdit {{
-                    background: {ThemeColors.BG_PAGE};
-                    border: 1px solid {ThemeColors.ERROR};
-                    border-radius: 6px;
-                    padding: 0 10px;
-                    color: {ThemeColors.TEXT_PRIMARY};
-                    font-size: 12px;
-                }}
-            """)
-            self._input.setToolTip("Pattern already exists")
-            QTimer.singleShot(1500, self._reset_input_style)
+        # Support batch add: tách bằng dấu phẩy, chấm phẩy hoặc khoảng trắng
+        import re
+
+        parts = re.split(r"[,\s;]+", raw_text)
+        new_patterns = [
+            p.strip() for p in parts if p.strip() and p.strip() not in self._patterns
+        ]
+
+        if not new_patterns:
+            if any(p.strip() in self._patterns for p in parts if p.strip()):
+                # Flash red for duplicates
+                self._flash_input_error("Pattern already exists")
             return
 
-        self._patterns.append(text)
+        self._save_state_to_history()
+        self._patterns.extend(new_patterns)
         self._input.clear()
         self._render_chips()
         self.patterns_changed.emit(self._patterns.copy())
+
+    def _flash_input_error(self, message: str) -> None:
+        """Highlight input field to show error."""
+        self._input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {ThemeColors.BG_PAGE};
+                border: 1px solid {ThemeColors.ERROR};
+                border-radius: 6px;
+                padding: 0 10px;
+                color: {ThemeColors.TEXT_PRIMARY};
+                font-size: 12px;
+            }}
+        """)
+        self._input.setToolTip(message)
+        QTimer.singleShot(1500, self._reset_input_style)
 
     def _reset_input_style(self) -> None:
         self._input.setStyleSheet(f"""
@@ -354,9 +441,45 @@ class TagChipsWidget(QWidget):
 
     def _remove_pattern(self, pattern: str) -> None:
         if pattern in self._patterns:
+            self._save_state_to_history()
             self._patterns.remove(pattern)
             self._render_chips()
             self.patterns_changed.emit(self._patterns.copy())
+
+    def _open_text_editor(self) -> None:
+        """Mở dialog chỉnh sửa text thô của patterns."""
+        from presentation.components.dialogs.edit_patterns_dialog import (
+            EditPatternsDialog,
+        )
+
+        dialog = EditPatternsDialog(self._patterns, self)
+        if dialog.exec():
+            new_patterns = dialog.get_patterns()
+            # Chỉ lưu history nếu có thay đổi
+            if new_patterns != self._patterns:
+                self._save_state_to_history()
+                self._patterns = new_patterns
+                self._render_chips()
+                self.patterns_changed.emit(self._patterns.copy())
+
+    def undo(self) -> None:
+        """Hoàn tác trạng thái patterns về bước trước đó."""
+        if not self._history:
+            return
+
+        self._patterns = self._history.pop()
+        self._render_chips()
+        self.patterns_changed.emit(self._patterns.copy())
+
+    def clear_all(self) -> None:
+        """Xóa toàn bộ patterns hiện tại."""
+        if not self._patterns:
+            return
+
+        self._save_state_to_history()
+        self._patterns = []
+        self._render_chips()
+        self.patterns_changed.emit(self._patterns.copy())
 
     # --- Public API ---
 

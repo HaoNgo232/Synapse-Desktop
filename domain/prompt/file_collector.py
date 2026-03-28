@@ -10,12 +10,52 @@ Thay the logic doc file bi trung lap 4 lan trong:
 Moi formatter goi collect_files() MOT LAN, roi format theo cach rieng.
 """
 
+import re
 from pathlib import Path
 from typing import Optional
 
-from shared.types.prompt_types import FileEntry
 from infrastructure.filesystem.file_utils import is_binary_file
+from shared.types.prompt_types import FileEntry
+from shared.utils.import_parser import extract_local_imports
 from shared.utils.language_utils import get_language_from_path
+
+
+def _extract_layer(rel_path: str) -> Optional[str]:
+    """Trich xuat layer tu relative path (e.g., application, domain)."""
+    parts = rel_path.split("/")
+    if len(parts) > 1:
+        layer = parts[0]
+        if layer in {
+            "application",
+            "domain",
+            "infrastructure",
+            "presentation",
+            "shared",
+        }:
+            return layer
+    return None
+
+
+def _extract_role(path: Path, content: str) -> Optional[str]:
+    """Doan role cua file dua tren class name hoac file name suffix."""
+    # 1. Tim class name chinh trong file
+    class_match = re.search(r"^class\s+([A-Z]\w+)", content, re.MULTILINE)
+    if class_match:
+        return class_match.group(1)
+
+    # 2. Fallback vao suffix cua file name
+    stem = path.stem
+    if "_" in stem:
+        parts = stem.split("_")
+        return "".join(p.capitalize() for p in parts)
+    return stem.capitalize()
+
+
+def _path_to_dotted(path_str: str) -> str:
+    """Chuyen doi path sang dotted notation (e.g., domain/prompt -> domain.prompt)."""
+    if path_str.endswith(".py"):
+        path_str = path_str[:-3]
+    return path_str.replace("/", ".").replace("\\", ".")
 
 
 def collect_files(
@@ -32,6 +72,7 @@ def collect_files(
     - Kiem tra is_file, is_binary, file_size
     - Doc content (utf-8 with replace)
     - Xac dinh language tu extension
+    - Trich xuat layer, role, dependencies
     - Parallel I/O khi co >5 files de tang toc do
 
     Args:
@@ -46,6 +87,7 @@ def collect_files(
     from concurrent.futures import ThreadPoolExecutor
     from shared.utils.path_utils import path_for_display
 
+    # print(f"DEBUG: selected_paths types: {[type(p) for p in selected_paths]}")
     sorted_paths = sorted(selected_paths)
 
     def _process(path_str: str) -> Optional[FileEntry]:
@@ -88,12 +130,29 @@ def collect_files(
                 pass
 
             content = path.read_text(encoding="utf-8", errors="replace")
+
+            # Trich xuat metadata
+            layer = _extract_layer(display)
+            role = _extract_role(path, content)
+            deps: list[str] = []
+            if workspace_root:
+                raw_deps = extract_local_imports(path, workspace_root)
+                deps = []
+                for rd in raw_deps:
+                    dotted = _path_to_dotted(rd)
+                    if dotted.endswith(".__init__"):
+                        dotted = dotted[:-9]
+                    deps.append(dotted)
+
             return FileEntry(
                 path=path,
                 display_path=display,
                 content=content,
                 error=None,
                 language=language,
+                layer=layer,
+                role=role,
+                dependencies=deps,
             )
 
         except (OSError, IOError) as e:

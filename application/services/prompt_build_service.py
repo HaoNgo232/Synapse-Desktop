@@ -218,12 +218,24 @@ class PromptBuildService:
 
             # 1. Generate file map (with all paths including rules)
             if tree_item and selected_paths:
-                file_map = generate_file_map(
-                    tree_item,
-                    selected_paths,
-                    workspace_root=workspace,
-                    use_relative_paths=use_relative_paths,
-                )
+                if output_format == "xml":
+                    from domain.prompt.generator import generate_file_structure_xml
+
+                    file_map = generate_file_structure_xml(
+                        tree_item,
+                        selected_paths,
+                        workspace_root=workspace,
+                        use_relative_paths=use_relative_paths,
+                        show_all=True,  # XML hiện toàn bộ cấu trúc để AI hiểu Architecture
+                    )
+                else:
+                    file_map = generate_file_map(
+                        tree_item,
+                        selected_paths,
+                        workspace_root=workspace,
+                        use_relative_paths=use_relative_paths,
+                        show_all=True,  # Unified: show all project structure
+                    )
 
             # 2. Load Project Rules from workspace
             from application.services.workspace_rules import get_rule_file_contents

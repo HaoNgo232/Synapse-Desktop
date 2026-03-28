@@ -54,36 +54,88 @@ __all__ = ["calculate_markdown_delimiter"]
 # ===========================================================================
 
 
+def generate_file_structure_xml(
+    tree: TreeItem,
+    selected_paths: Set[str],
+    workspace_root: Optional[Path] = None,
+    use_relative_paths: bool = False,
+    show_all: bool = True,
+) -> str:
+    """
+    Tao cau truc thu muc dang XML long nhau cho prompt structure moi.
+
+    Args:
+        tree: TreeItem root
+        selected_paths: Set cac duong dan duoc tick (chi dung neu show_all=False)
+        workspace_root: Workspace root
+        use_relative_paths: Co dung relative paths khong
+        show_all: Neu True, hien thi toan bộ tree ma khong loc theo selected_paths
+
+    Returns:
+        XML string chua <folder> va <file> long nhau
+    """
+    import html
+
+    def _build_xml(item: TreeItem, indent: str = "") -> str:
+        name = html.escape(item.label)
+        if item.is_dir:
+            children_xml = ""
+            for child in item.children:
+                if show_all or _has_selected_descendant(child, selected_paths):
+                    children_xml += _build_xml(child, indent + "  ")
+
+            if children_xml:
+                return (
+                    f'{indent}<folder name="{name}">\n{children_xml}{indent}</folder>\n'
+                )
+            else:
+                return f'{indent}<folder name="{name}"/>\n'
+        else:
+            path = path_for_display(Path(item.path), workspace_root, use_relative_paths)
+            return f'{indent}<file path="{html.escape(path)}"/>\n'
+
+    if not show_all and not _has_selected_descendant(tree, selected_paths):
+        return "<structure/>"
+
+    # Bat dau tu root
+    xml_content = _build_xml(tree)
+    return f"<structure>\n{xml_content}</structure>"
+
+
 def generate_file_map(
     tree: TreeItem,
     selected_paths: set[str],
     workspace_root: Optional[Path] = None,
     use_relative_paths: bool = False,
+    show_all: bool = True,
 ) -> str:
     """
     Tao file map string tu tree structure.
-    Chi hien thi cac items duoc chon hoac co children duoc chon.
 
     Args:
         tree: TreeItem root
-        selected_paths: Set cac duong dan duoc tick
-        workspace_root: Workspace root de convert sang relative path (optional)
-        use_relative_paths: True = xuat path tuong doi workspace (tranh PII)
+        selected_paths: Set cac duong dan duoc tick (chi dung khi show_all=False)
+        workspace_root: Workspace root
+        use_relative_paths: True = xuat path tuong doi workspace
+        show_all: Neu True, hien thi toan bo cây (van respect ignore engine)
 
     Returns:
         File map string voi ASCII tree visualization
     """
     lines: list[str] = []
 
-    # Neu root duoc chon hoac co descendants duoc chon
-    if _has_selected_descendant(tree, selected_paths):
+    # Neu show_all=True hoặc root duoc chon/co descendants duoc chon
+    if show_all or _has_selected_descendant(tree, selected_paths):
         root_display = path_for_display(
             Path(tree.path), workspace_root, use_relative_paths
         )
         lines.append(root_display)
 
-        # Filter children
-        filtered_children = _filter_selected_tree(tree.children, selected_paths)
+        # Filter children (neu show_all=True thi không filter)
+        if show_all:
+            filtered_children = tree.children
+        else:
+            filtered_children = _filter_selected_tree(tree.children, selected_paths)
 
         if filtered_children:
             _build_tree_string(filtered_children, "", lines)
@@ -775,4 +827,5 @@ def generate_prompt(
         output_style=output_style,
         project_rules=project_rules,
         instructions_at_top=instructions_at_top,
+        workspace_root=workspace_root,
     )

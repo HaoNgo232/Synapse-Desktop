@@ -34,12 +34,17 @@ from domain.prompt.formatters.system_prompts import (
 
 def format_files_xml(entries: list[FileEntry]) -> str:
     """
-    Render List[FileEntry] thanh Repomix XML format.
+    Render List[FileEntry] thanh Repomix XML format nang cao.
 
     Output format:
         <files>
           <file path="src/main.py">
-            content (HTML-escaped)
+            <layer>domain</layer>
+            <role>MainClass</role>
+            <dependencies>
+                <import>shared.utils</import>
+            </dependencies>
+            <content><![CDATA[...]]></content>
           </file>
         </files>
 
@@ -59,9 +64,30 @@ def format_files_xml(entries: list[FileEntry]) -> str:
                 f'<file path="{escaped_path}" skipped="true">{entry.error}</file>'
             )
         elif entry.content is not None:
-            escaped_content = html.escape(entry.content)
+            # Metadata elements
+            layer_xml = (
+                f"    <layer>{html.escape(entry.layer)}</layer>\n"
+                if entry.layer
+                else ""
+            )
+            role_xml = (
+                f"    <role>{html.escape(entry.role)}</role>\n" if entry.role else ""
+            )
+
+            deps_xml = ""
+            if entry.dependencies:
+                deps_xml = "    <dependencies>\n"
+                for dep in entry.dependencies:
+                    deps_xml += f"      <import>{html.escape(dep)}</import>\n"
+                deps_xml += "    </dependencies>\n"
+
+            # Content using CDATA to avoid excessive escaping and keep code readable
+            # Note: CDATA cannot contain ']]>', but it's rare in code.
+            safe_content = entry.content.replace("]]>", "]]]]><![CDATA[>")
+            content_xml = f"    <content><![CDATA[\n{safe_content}\n]]></content>"
+
             file_elements.append(
-                f'<file path="{escaped_path}">\n{escaped_content}\n</file>'
+                f'  <file path="{escaped_path}">\n{layer_xml}{role_xml}{deps_xml}{content_xml}\n  </file>'
             )
 
     if not file_elements:

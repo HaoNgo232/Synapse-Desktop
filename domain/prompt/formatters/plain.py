@@ -24,10 +24,15 @@ def format_files_plain(entries: list[FileEntry]) -> str:
         String chua file paths va contents dang plain text
     """
     file_elements: list[str] = []
-    separator = "-" * 16
 
     for entry in entries:
-        file_header = f"File: {entry.display_path}\n{separator}"
+        file_header = f"===== FILE: {entry.display_path} ====="
+        layer_info = f"LAYER: {entry.layer}\n" if entry.layer else ""
+        role_info = f"ROLE: {entry.role}\n" if entry.role else ""
+        deps_info = ""
+        if entry.dependencies:
+            deps_joined = ", ".join(entry.dependencies)
+            deps_info = f"DEPENDS ON: {deps_joined}\n"
 
         if entry.error:
             if entry.error == "Binary file":
@@ -41,7 +46,10 @@ def format_files_plain(entries: list[FileEntry]) -> str:
         else:
             content_display = ""
 
-        file_elements.append(f"{file_header}\n{content_display}\n{separator}")
+        # Ghép tất cả lại: Header, Metadata, rồi mới đến Code
+        file_elements.append(
+            f"{file_header}\n{layer_info}{role_info}{deps_info}\n{content_display}"
+        )
 
     if not file_elements:
         return "No files selected."

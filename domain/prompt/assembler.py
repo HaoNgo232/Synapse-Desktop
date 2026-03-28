@@ -15,6 +15,7 @@ Tat ca format deu bao gom:
 """
 
 import json
+from pathlib import Path
 from typing import Optional
 
 from infrastructure.git.git_utils import GitDiffResult, GitLogResult
@@ -50,18 +51,19 @@ def assemble_prompt(
     output_style: OutputStyle = OutputStyle.XML,
     project_rules: str = "",
     instructions_at_top: bool = False,
+    workspace_root: Optional[Path] = None,
 ) -> str:
     """
     Lắp ráp prompt hoàn chỉnh từ các sections.
 
     Tùy thuộc vào output_style, sử dụng cấu trúc khác nhau:
-    - XML: file_summary (với agent_role) + directory_structure + files + git_changes + instructions
+    - XML: <project><metadata><structure><files>...
     - JSON: system_instruction + file_summary + directory_structure + files + git + instructions
     - Plain: Summary header + directory + files + git + instructions
     - Markdown: Summary header + file_map + file_contents + git_changes + instructions
 
     Args:
-        file_map: File map string từ generate_file_map()
+        file_map: File map string từ generate_file_map() hoặc generate_file_structure_xml()
         file_contents: File contents string từ formatter tương ứng
         user_instructions: Hướng dẫn từ người dùng
         include_xml_formatting: Có bao gồm OPX instructions không (True -> OPX, False -> Normal)
@@ -70,6 +72,7 @@ def assemble_prompt(
         output_style: Định dạng đầu ra
         project_rules: Quy tắc project
         instructions_at_top: Di chuyển instructions lên đầu (ưu tiên Primal Bias cho context dài/file)
+        workspace_root: Thu mục gốc (dùng cho XML project metadata)
 
     Returns:
         Prompt hoan chinh
@@ -94,6 +97,7 @@ def assemble_prompt(
             git_logs,
             project_rules,
             instructions_at_top,
+            workspace_root=workspace_root,
         )
     elif output_style == OutputStyle.JSON:
         return _assemble_json(
@@ -265,39 +269,44 @@ def _assemble_xml(
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
     instructions_at_top: bool = False,
+    workspace_root: Optional[Path] = None,
 ) -> str:
-    """Lắp ráp prompt theo XML format với AI-Friendly header và Agent Role."""
+    """Lắp ráp prompt theo XML format với cấu trúc Project mới."""
+    from datetime import datetime
+
+    project_name = workspace_root.name if workspace_root else "unknown-project"
+    current_date = datetime.now().strftime("%Y-%m-%d")
+
     # include_xml_formatting = True nghĩa là đang dùng OPX (Overwrite Patch XML)
     if include_xml_formatting:
         file_summary = generate_file_summary_xml_minimal()
     else:
         file_summary = generate_file_summary_xml()
 
-    prompt = ""
-    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
+    prompt = "<project>\n"
+    prompt += f"  <metadata>\n    <name>{project_name}</name>\n    <generated_at>{current_date}</generated_at>\n  </metadata>\n\n"
+
+    # Neu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
     if instructions_at_top:
         if user_instructions and user_instructions.strip():
-            prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+            prompt += f"  <user_instructions>\n{user_instructions.strip()}\n  </user_instructions>\n"
         if project_rules and project_rules.strip():
-            prompt += f"<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
-        if prompt:
-            prompt += "\n"
+            prompt += (
+                f"  <project_rules>\n{project_rules.strip()}\n  </project_rules>\n"
+            )
+        prompt += "\n"
 
-    prompt += f"""{file_summary}
+    prompt += f"{file_summary}\n\n"
+    prompt += f"{file_map}\n\n"  # file_map lúc này là <structure>...
+    prompt += f"{file_contents}\n"  # file_contents lúc này là <files>...
 
-<directory_structure>
-{file_map}
-</directory_structure>
-
-{file_contents}
-"""
     # Git changes section
     prompt = _append_git_changes_xml(prompt, git_diffs, git_logs)
 
     if not instructions_at_top and project_rules and project_rules.strip():
-        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+        prompt += f"\n  <project_rules>\n{project_rules.strip()}\n  </project_rules>\n"
 
-    # OUTPUT FORMAT SECTION (Single Source of Truth)
+    # OUTPUT FORMAT SECTION
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
         prompt += """
@@ -310,17 +319,20 @@ Output nothing else outside these blocks.
 </final_output_structure>
 """
     else:
-        # Load minimal normal output format via template_manager helper (to reuse language logic)
         from domain.prompt.template_manager import _get_output_format_only
 
         fmt = _get_output_format_only()
         if fmt:
             prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
 
-    # User instructions ALWAYS last for recency bias (unless instructions_at_top is True)
-    if not instructions_at_top and user_instructions and user_instructions.strip():
-        prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+    # User instructions (Sandwich pattern: top + bottom reminder)
+    if user_instructions and user_instructions.strip():
+        if instructions_at_top:
+            prompt += "\n  <reminder>\n    REITERATION: Please follow the user_instructions provided at the beginning of this prompt.\n  </reminder>\n"
+        else:
+            prompt += f"\n  <user_instructions>\n{user_instructions.strip()}\n  </user_instructions>\n"
 
+    prompt += "\n</project>"
     return prompt
 
 
@@ -450,9 +462,9 @@ def _assemble_plain(
         f"Notes:\n{SUMMARY_NOTES}"
     )
 
-    prompt_parts.append(f"{'-' * 32}\nDirectory Structure:\n{file_map}")
+    prompt_parts.append(f"{'=' * 48}\nDIRECTORY STRUCTURE\n{'=' * 48}\n{file_map}")
 
-    prompt_parts.append(f"{'-' * 32}\nFile Contents:\n{file_contents}")
+    prompt_parts.append(f"{'=' * 48}\nFILE CONTENTS\n{'=' * 48}\n{file_contents}")
 
     # Them Git context voi instruction text, guard None values
     has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)

@@ -447,6 +447,23 @@ class DiffOnlyDialogQt(BaseDialogQt):
         btn_row.addWidget(copy_btn)
         layout.addLayout(btn_row)
 
+    def reject(self) -> None:
+        """Cleanup workers trước khi đóng dialog để tránh SEGFAULT."""
+        self._refresh_timer.stop()
+        self._refresh_generation += 1  # Invalidate mọi pending result
+
+        # Disconnect tất cả signal để worker không callback vào dead dialog
+        for worker in self._active_workers:
+            try:
+                worker.signals.result.disconnect()
+                worker.signals.error.disconnect()
+                worker.signals.finished.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+        self._active_workers.clear()
+
+        super().reject()
+
     def _cleanup_worker(self, worker: Any) -> None:
         """Xóa worker khỏi danh sách active khi hoàn tất."""
         if worker in self._active_workers:
@@ -696,7 +713,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         Kích hoạt việc quét lại danh sách file với cơ chế debounce.
         Giúp tối ưu hóa performance khi người dùng nhấn +/- liên tục hoặc gõ nhanh.
         """
-        self._refresh_timer.start(500)  # Đợi 300ms inactivity trước khi thực hiện quét
+        self._refresh_timer.start(500)  # Đợi 500ms inactivity trước khi thực hiện quét
 
     def _do_refresh_changed_files(self) -> None:
         """Logic thực tế để thực hiện việc quét danh sách file thay đổi."""

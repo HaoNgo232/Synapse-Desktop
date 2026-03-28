@@ -479,6 +479,9 @@ def _assemble_markdown(
 """
     prompt = _append_git_changes_markdown(prompt, git_diffs, git_logs)
 
+    if project_rules and project_rules.strip():
+        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
     else:

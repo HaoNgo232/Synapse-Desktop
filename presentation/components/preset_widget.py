@@ -32,11 +32,19 @@ class _MockCombo:
     def __init__(self, widget: "PresetWidget"):
         self._w = widget
 
+    def _preset_actions(self) -> list:
+        """Chỉ trả về các action đại diện cho preset thực sự."""
+        return [
+            a
+            for a in self._w._menu.actions()
+            if a.data() and not str(a.data()).startswith("__") and not a.isSeparator()
+        ]
+
     def count(self) -> int:
-        return len(self._w._menu.actions())
+        return len(self._preset_actions())
 
     def itemText(self, index: int) -> str:
-        actions = self._w._menu.actions()
+        actions = self._preset_actions()
         if 0 <= index < len(actions):
             return actions[index].text()
         return ""

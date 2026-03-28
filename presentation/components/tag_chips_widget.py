@@ -389,10 +389,10 @@ class TagChipsWidget(QWidget):
         if not raw_text:
             return
 
-        # Support batch add: tách bằng dấu phẩy, chấm phẩy hoặc khoảng trắng
+        # Support batch add: tách bằng dấu phẩy, chấm phẩy hoặc xuống dòng
         import re
 
-        parts = re.split(r"[,\s;]+", raw_text)
+        parts = re.split(r"[,;\n]+", raw_text)
         new_patterns = [
             p.strip() for p in parts if p.strip() and p.strip() not in self._patterns
         ]

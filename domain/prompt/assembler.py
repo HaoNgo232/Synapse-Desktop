@@ -52,34 +52,13 @@ def assemble_prompt(
     project_rules: str = "",
     instructions_at_top: bool = False,
     workspace_root: Optional[Path] = None,
+    semantic_index: str = "",
 ) -> str:
     """
     Lắp ráp prompt hoàn chỉnh từ các sections.
-
-    Tùy thuộc vào output_style, sử dụng cấu trúc khác nhau:
-    - XML: <project><metadata><structure><files>...
-    - JSON: system_instruction + file_summary + directory_structure + files + git + instructions
-    - Plain: Summary header + directory + files + git + instructions
-    - Markdown: Summary header + file_map + file_contents + git_changes + instructions
-
-    Args:
-        file_map: File map string từ generate_file_map() hoặc generate_file_structure_xml()
-        file_contents: File contents string từ formatter tương ứng
-        user_instructions: Hướng dẫn từ người dùng
-        include_xml_formatting: Có bao gồm OPX instructions không (True -> OPX, False -> Normal)
-        git_diffs: Optional git diffs (work tree & staged)
-        git_logs: Optional git logs
-        output_style: Định dạng đầu ra
-        project_rules: Quy tắc project
-        instructions_at_top: Di chuyển instructions lên đầu (ưu tiên Primal Bias cho context dài/file)
-        workspace_root: Thu mục gốc (dùng cho XML project metadata)
-
-    Returns:
-        Prompt hoan chinh
     """
 
-    # Ensure user_instructions is cleaned of any legacy output formats to avoid conflicts
-    # as the assembler is now the single source of truth for output formatting.
+    # Ensure user_instructions is cleaned of any legacy output formats
     if user_instructions:
         idx = user_instructions.find("## Output format")
         if idx != -1:
@@ -87,17 +66,19 @@ def assemble_prompt(
         idx = user_instructions.find("## REPORT STRUCTURE")
         if idx != -1:
             user_instructions = user_instructions[:idx].strip()
+
     if output_style == OutputStyle.XML:
         return _assemble_xml(
-            file_map,
-            file_contents,
-            user_instructions,
-            include_xml_formatting,
-            git_diffs,
-            git_logs,
-            project_rules,
-            instructions_at_top,
+            file_map=file_map,
+            file_contents=file_contents,
+            user_instructions=user_instructions,
+            include_xml_formatting=include_xml_formatting,
+            git_diffs=git_diffs,
+            git_logs=git_logs,
+            project_rules=project_rules,
+            instructions_at_top=instructions_at_top,
             workspace_root=workspace_root,
+            semantic_index=semantic_index,
         )
     elif output_style == OutputStyle.JSON:
         return _assemble_json(
@@ -109,6 +90,7 @@ def assemble_prompt(
             git_logs,
             project_rules,
             instructions_at_top,
+            semantic_index=semantic_index,
         )
     elif output_style == OutputStyle.PLAIN:
         return _assemble_plain(
@@ -120,6 +102,7 @@ def assemble_prompt(
             git_logs,
             project_rules,
             instructions_at_top,
+            semantic_index=semantic_index,
         )
     else:
         return _assemble_markdown(
@@ -131,6 +114,7 @@ def assemble_prompt(
             git_logs,
             project_rules,
             instructions_at_top,
+            semantic_index=semantic_index,
         )
 
 
@@ -142,41 +126,30 @@ def assemble_smart_prompt(
     git_logs: Optional[GitLogResult] = None,
     project_rules: str = "",
     instructions_at_top: bool = False,
+    semantic_index: str = "",
 ) -> str:
     """
-    Lắp ráp prompt cho Copy Smart - gồm file_summary (với agent_role),
-    directory_structure, smart contents, git changes và user_instructions.
-
-    Args:
-        smart_contents: Output từ generate_smart_context()
-        file_map: Output từ generate_file_map()
-        user_instructions: Hướng dẫn từ người dùng
-        git_diffs: Optional git diffs
-        git_logs: Optional git logs
-        project_rules: Quy tắc project
-        instructions_at_top: Di chuyển instructions lên đầu
-
-    Returns:
-        Prompt string day du
+    Lắp ráp prompt cho Copy Smart.
     """
-    # generate_smart_summary_xml() da bao gom agent_role
     file_summary = generate_smart_summary_xml()
 
     prompt = ""
-    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
+    # Nếu instructions_at_top=True
     if instructions_at_top:
         if user_instructions and user_instructions.strip():
             prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
         if project_rules and project_rules.strip():
             prompt += f"<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+        if semantic_index and semantic_index.strip():
+            prompt += f"{semantic_index.strip()}\n"
         if prompt:
             prompt += "\n"
 
     prompt += f"""{file_summary}
 
-<directory_structure>
+<structure>
 {file_map}
-</directory_structure>
+</structure>
 
 <smart_context>
 {smart_contents}
@@ -187,6 +160,9 @@ def assemble_smart_prompt(
 
     if not instructions_at_top and project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+
+    if not instructions_at_top and semantic_index and semantic_index.strip():
+        prompt += f"\n{semantic_index.strip()}\n"
 
     if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
@@ -270,10 +246,10 @@ def _assemble_xml(
     project_rules: str = "",
     instructions_at_top: bool = False,
     workspace_root: Optional[Path] = None,
+    semantic_index: str = "",
 ) -> str:
-    """Lắp ráp prompt theo XML format với cấu trúc Project mới."""
+    """Lắp ráp prompt theo XML format với semantic_index ở đầu."""
     from datetime import datetime
-
     import html
 
     project_name = (
@@ -281,7 +257,6 @@ def _assemble_xml(
     )
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    # include_xml_formatting = True nghĩa là đang dùng OPX (Overwrite Patch XML)
     if include_xml_formatting:
         file_summary = generate_file_summary_xml_minimal()
     else:
@@ -290,7 +265,7 @@ def _assemble_xml(
     prompt = "<project>\n"
     prompt += f"  <metadata>\n    <name>{project_name}</name>\n    <generated_at>{current_date}</generated_at>\n  </metadata>\n\n"
 
-    # Neu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
+    # 1. Instructions and Rules at top
     if instructions_at_top:
         if user_instructions and user_instructions.strip():
             prompt += f"  <user_instructions>\n{user_instructions.strip()}\n  </user_instructions>\n"
@@ -298,30 +273,31 @@ def _assemble_xml(
             prompt += (
                 f"  <project_rules>\n{project_rules.strip()}\n  </project_rules>\n"
             )
+        if semantic_index and semantic_index.strip():
+            prompt += f"  {semantic_index.strip()}\n"
         prompt += "\n"
 
+    # 2. File Summary (Role, Purpose, Guidelines)
     prompt += f"{file_summary}\n\n"
-    prompt += f"{file_map}\n\n"  # file_map lúc này là <structure>...
-    prompt += f"{file_contents}\n"  # file_contents lúc này là <files>...
 
-    # Git changes section
+    # 3. Semantic Index (neu khong phai instructions_at_top thi dat o day cung duoc, hoac de sau summary)
+    if not instructions_at_top and semantic_index and semantic_index.strip():
+        prompt += f"  {semantic_index.strip()}\n\n"
+
+    # 4. Structure and Files
+    prompt += f"<structure>\n{file_map}\n</structure>\n\n"
+    prompt += f"{file_contents}\n"
+
+    # 5. Git changes
     prompt = _append_git_changes_xml(prompt, git_diffs, git_logs)
 
+    # 6. Project Rules (bottom)
     if not instructions_at_top and project_rules and project_rules.strip():
         prompt += f"\n  <project_rules>\n{project_rules.strip()}\n  </project_rules>\n"
 
-    # OUTPUT FORMAT SECTION
+    # 7. Output Format Instructions
     if include_xml_formatting:
         prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
-        prompt += """
-<final_output_structure>
-CRITICAL: Structure your response exactly like this:
-0. Your thinking content
-1. Brief Analysis: ```markdown ... ``` (concise findings)
-2. Code Changes: ```xml ... ``` (OPX patches)
-Output nothing else outside these blocks.
-</final_output_structure>
-"""
     else:
         from domain.prompt.template_manager import _get_output_format_only
 
@@ -329,7 +305,7 @@ Output nothing else outside these blocks.
         if fmt:
             prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
 
-    # User instructions (Sandwich pattern: top + bottom reminder)
+    # 8. User Instructions (bottom)
     if user_instructions and user_instructions.strip():
         if instructions_at_top:
             prompt += "\n  <reminder>\n    REITERATION: Please follow the user_instructions provided at the beginning of this prompt.\n  </reminder>\n"
@@ -349,6 +325,7 @@ def _assemble_json(
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
     instructions_at_top: bool = False,
+    semantic_index: str = "",
 ) -> str:
     """Lắp ráp prompt theo JSON format với system_instruction và file_summary."""
     try:
@@ -366,6 +343,7 @@ def _assemble_json(
             "usage_guidelines": SUMMARY_USAGE_GUIDELINES,
             "notes": SUMMARY_NOTES,
         },
+        "semantic_index": semantic_index.strip() if semantic_index else "",
         "directory_structure": file_map,
         "files": files_data,
     }
@@ -376,9 +354,12 @@ def _assemble_json(
             "system_instruction": prompt_data["system_instruction"],
         }
         if user_instructions and user_instructions.strip():
-            new_data["instructions"] = user_instructions.strip()
+            new_data["user_instructions"] = user_instructions.strip()
         if project_rules and project_rules.strip():
             new_data["project_rules"] = project_rules.strip()
+
+        if semantic_index and semantic_index.strip():
+            new_data["semantic_index"] = semantic_index.strip()
 
         new_data.update(
             {
@@ -421,7 +402,7 @@ def _assemble_json(
         prompt_data["project_rules"] = project_rules.strip()
 
     if not instructions_at_top and user_instructions and user_instructions.strip():
-        prompt_data["instructions"] = user_instructions.strip()
+        prompt_data["user_instructions"] = user_instructions.strip()
 
     return json.dumps(prompt_data, ensure_ascii=False, indent=2)
 
@@ -435,6 +416,7 @@ def _assemble_plain(
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
     instructions_at_top: bool = False,
+    semantic_index: str = "",
 ) -> str:
     """Lắp ráp prompt theo Plain Text format với Summary header và Git instructions."""
     prompt_parts: list[str] = []
@@ -448,6 +430,10 @@ def _assemble_plain(
         if project_rules and project_rules.strip():
             prompt_parts.append(
                 f"{'=' * 48}\nPROJECT RULES\n{'=' * 48}\n{project_rules.strip()}"
+            )
+        if semantic_index and semantic_index.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{semantic_index.strip()}"
             )
 
     # Thêm Agent Role và File Summary ở đầu prompt
@@ -465,6 +451,12 @@ def _assemble_plain(
         f"Usage Guidelines:\n{SUMMARY_USAGE_GUIDELINES}\n\n"
         f"Notes:\n{SUMMARY_NOTES}"
     )
+
+    if not instructions_at_top and semantic_index and semantic_index.strip():
+        # Clean tags if it's plain text mode? No, better keep it semantic.
+        prompt_parts.append(
+            f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{semantic_index.strip()}"
+        )
 
     prompt_parts.append(f"{'=' * 48}\nDIRECTORY STRUCTURE\n{'=' * 48}\n{file_map}")
 
@@ -492,7 +484,9 @@ def _assemble_plain(
         prompt_parts.append(f"{'-' * 32}\n{XML_FORMATTING_INSTRUCTIONS}")
 
     if not instructions_at_top and project_rules and project_rules.strip():
-        prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules.strip()}")
+        prompt_parts.append(
+            f"{'=' * 48}\nPROJECT RULES\n{'=' * 48}\n{project_rules.strip()}"
+        )
 
     # Output Format (Single Source of Truth)
     if not include_xml_formatting:
@@ -504,7 +498,9 @@ def _assemble_plain(
 
     # User instructions ở cuối cùng (recency bias giúp LLM xử lý tốt hơn) - nếu không ép instructions_at_top
     if not instructions_at_top and user_instructions and user_instructions.strip():
-        prompt_parts.append(f"{'-' * 32}\nInstructions:\n{user_instructions.strip()}")
+        prompt_parts.append(
+            f"{'=' * 48}\nUSER INSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
+        )
 
     return "\n\n".join(prompt_parts)
 
@@ -518,6 +514,7 @@ def _assemble_markdown(
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
     instructions_at_top: bool = False,
+    semantic_index: str = "",
 ) -> str:
     """Lắp ráp prompt theo Markdown format với File Summary và Agent Role.
 
@@ -557,9 +554,13 @@ def _assemble_markdown(
 <notes>
 {SUMMARY_NOTES}
 </notes>
-</file_summary>
+</file_summary>\n"""
 
-<file_map>
+    # 3. Semantic Index (if not at top)
+    if not instructions_at_top and semantic_index and semantic_index.strip():
+        prompt += f"{semantic_index.strip()}\n\n"
+
+    prompt += f"""<file_map>
 {file_map}
 </file_map>
 

@@ -70,7 +70,8 @@ class ServiceContainer:
 
         # Services do container so huu truc tiep (inject dependencies)
         self.prompt_builder: IPromptBuilder = PromptBuildService(
-            tokenization_service=self._tokenization_service
+            tokenization_service=self._tokenization_service,
+            graph_service=self.graph_service,
         )
         self.clipboard: IClipboardService = QtClipboardService()
 

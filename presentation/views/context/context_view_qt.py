@@ -96,7 +96,14 @@ class ContextViewQt(
         if prompt_builder is None:
             from application.services.prompt_build_service import PromptBuildService
 
-            prompt_builder = PromptBuildService()
+            # Bug #1 Fix: Đảm bảo fallback instance cũng được inject graph_service (nếu có)
+            # để project structure metadata có thể được tính toán.
+            from typing import Any, cast
+
+            prompt_builder = PromptBuildService(
+                tokenization_service=self._tokenization_service,
+                graph_service=cast(Any, self._graph_provider),
+            )
         self._prompt_builder = prompt_builder
 
         if clipboard_service is None:

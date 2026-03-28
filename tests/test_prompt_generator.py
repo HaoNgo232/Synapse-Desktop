@@ -394,7 +394,7 @@ class TestBuildSmartPrompt:
             user_instructions="Add error handling",
         )
         assert "<file_summary>" in result
-        assert "<directory_structure>" in result
+        assert "<structure>" in result
         assert "<smart_context>" in result
         assert "<user_instructions>" in result
         assert "Add error handling" in result
@@ -474,9 +474,9 @@ class TestRepomixXmlFormat:
 
         result = generate_file_contents_xml({str(file_path)})
 
-        # < và > phải được escape
-        assert "&lt;" in result
-        assert "&gt;" in result
+        # CDATA section keeps literal < and >
+        assert "if a < b and c > d" in result
+        assert "<![CDATA[" in result
 
     def test_xml_empty_set(self):
         """Empty set returns empty files tag."""
@@ -533,8 +533,8 @@ class TestRepomixXmlFormat:
             output_style=OutputStyle.XML,
         )
 
-        assert "<directory_structure>" in result
-        assert "</directory_structure>" in result
+        assert "<structure>" in result
+        assert "</structure>" in result
         # XML style không dùng <file_contents> wrapper
         assert "<file_map>" not in result
 
@@ -546,7 +546,7 @@ class TestRepomixXmlFormat:
         )
 
         # Default is structure XML
-        assert "<directory_structure>" in result
+        assert "<structure>" in result
         assert "<file_map>" not in result
 
 
@@ -603,7 +603,7 @@ class TestJsonFormat:
         data = json.loads(result)
         assert data["directory_structure"] == "tree"
         assert data["files"]["file.py"] == "content"
-        assert data["instructions"] == "instr"
+        assert data["user_instructions"] == "instr"
 
     def test_generate_prompt_json_git_context(self):
         """JSON prompt includes git context."""
@@ -638,9 +638,9 @@ class TestPlainFormat:
 
         result = generate_file_contents_plain({str(file_path)})
 
-        assert f"File: {file_path}" in result
+        assert f"FILE: {file_path}" in result
         assert "print('hello')" in result
-        assert "-" * 16 in result
+        assert "=====" in result
 
     def test_generate_prompt_with_plain_style(self):
         """generate_prompt produces plain text for PLAIN output style."""
@@ -654,8 +654,8 @@ class TestPlainFormat:
             user_instructions="instr",
         )
 
-        assert "Instructions:" in result
-        assert "Directory Structure:" in result
-        assert "File Contents:" in result
-        assert "-" * 32 in result
+        assert "USER INSTRUCTIONS" in result
+        assert "DIRECTORY STRUCTURE" in result
+        assert "FILE CONTENTS" in result
+        assert "=" * 48 in result
         assert "<file_map>" not in result

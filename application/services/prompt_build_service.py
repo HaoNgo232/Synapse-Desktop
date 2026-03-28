@@ -1,17 +1,8 @@
 """
 PromptBuildService - Concrete implementation cua IPromptBuilder.
-
-Tach logic prompt building ra khoi CopyActionsMixin thanh service doc lap.
-Delegate den core.prompt_generator cho logic thuc su,
-nhung wrap lai trong mot API don gian va testable.
-
-Note: build_prompt() la high-level API nhan file_paths va settings,
-noi bo se goi cac functions cu the tu core.prompt_generator theo
-dung signatures cua chung.
-
-build_prompt_full() la API mo rong tra ve BuildResult voi metadata day du
-(per-file token counts, trim notes, dependency graph) phuc vu multi-agent workflow.
 """
+
+from __future__ import annotations
 
 import logging
 from pathlib import Path
@@ -19,6 +10,7 @@ from typing import List, Optional, Set, Tuple, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from application.interfaces.tokenization_port import ITokenizationService
+    from domain.relationships.port import IRelationshipGraphProvider
 
 from domain.prompt.generator import (
     generate_file_map,
@@ -51,6 +43,9 @@ _FORMAT_TO_GENERATOR = {
 }
 
 
+logger = logging.getLogger(__name__)
+
+
 class PromptBuildService:
     """
     Build prompt tu file paths va settings.
@@ -62,6 +57,7 @@ class PromptBuildService:
     def __init__(
         self,
         tokenization_service: Optional["ITokenizationService"] = None,
+        graph_service: Optional["IRelationshipGraphProvider"] = None,
     ):
         if tokenization_service is None:
             from infrastructure.adapters.encoder_registry import (
@@ -70,6 +66,8 @@ class PromptBuildService:
 
             tokenization_service = get_tokenization_service()
         self._tokenization_service = tokenization_service
+        # GraphService de tinh project structure metadata (optional)
+        self._graph_service = graph_service
 
     def build_prompt(
         self,
@@ -203,6 +201,7 @@ class PromptBuildService:
         git_diffs = None
         git_logs = None
         file_contents = ""
+        semantic_index = ""
 
         if output_format == "smart":
             prompt = self._build_smart(
@@ -267,6 +266,12 @@ class PromptBuildService:
 
             # 4. Assemble prompt voi git data va xml formatting
             output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
+            semantic_index = self._compute_semantic_index(workspace)
+            if semantic_index:
+                from shared.logging_config import log_info
+
+                log_info(f"[PromptBuild] Injected semantic index for {workspace}")
+
             prompt = generate_prompt(
                 file_map=file_map,
                 file_contents=file_contents,
@@ -278,6 +283,7 @@ class PromptBuildService:
                 project_rules=project_rules,
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
+                semantic_index=semantic_index,
             )
 
         token_count = self._tokenization_service.count_tokens(prompt)
@@ -436,6 +442,7 @@ class PromptBuildService:
                         project_rules=trimmed_comp.project_rules,
                         workspace_root=workspace,
                         instructions_at_top=instructions_at_top,
+                        semantic_index=semantic_index,
                     )
 
                 # Append trimmed notes section vao prompt
@@ -668,6 +675,13 @@ class PromptBuildService:
             git_diffs = get_git_diffs(workspace)
             git_logs = get_git_logs(workspace, max_commits=5)
 
+        # 4. Assemble prompt voi git data va semantic index
+        semantic_index = self._compute_semantic_index(workspace)
+        if semantic_index:
+            from shared.logging_config import log_info
+
+            log_info(f"[PromptBuild] Injected semantic index (smart) for {workspace}")
+
         return build_smart_prompt(
             smart_contents=smart_contents,
             file_map=file_map,
@@ -677,10 +691,46 @@ class PromptBuildService:
             project_rules=project_rules,
             workspace_root=workspace,
             instructions_at_top=instructions_at_top,
+            semantic_index=semantic_index,
         )
 
+    def _compute_semantic_index(self, workspace: Path) -> str:
+        """
+        Tinh semantic index metadata tu GraphService.
+        ...
+        Returns:
+            Formatted XML string (<semantic_index>) hoac "" neu khong co du lieu
+        """
+        from shared.logging_config import log_info
 
-logger = logging.getLogger(__name__)
+        if self._graph_service is None:
+            log_info("[PromptBuild] _graph_service is None, skipping semantic index")
+            return ""
+
+        try:
+            # ensure_built: blocking build neu chua co, tra ve ngay neu da san sang
+            log_info(f"[PromptBuild] Ensuring graph is built for {workspace}...")
+            graph = self._graph_service.ensure_built(workspace)
+
+            from application.services.project_metadata_service import (
+                ProjectMetadataService,
+            )
+            from domain.metadata.formatter import format_project_structure
+
+            metadata = ProjectMetadataService().compute(graph, workspace_root=workspace)
+            xml = format_project_structure(metadata)
+            if xml:
+                log_info(
+                    f"[PromptBuild] Semantic index computed: {metadata.file_count} files, {len(metadata.top_files)} top, {len(metadata.modules)} modules"
+                )
+            else:
+                log_info("[PromptBuild] Semantic index computed but XML is empty")
+            return xml
+        except Exception as e:
+            from shared.logging_config import log_error
+
+            log_error("[PromptBuild] Failed to compute semantic index", exc=e)
+            return ""
 
 
 class QtClipboardService:

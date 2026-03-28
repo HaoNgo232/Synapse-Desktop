@@ -64,14 +64,52 @@ class GraphService(IRelationshipGraphProvider):
         """
         Đảm bảo graph đã được build cho workspace.
 
+        Nếu graph đang build cho cùng workspace, đợi cho đến khi xong.
         Phù hợp cho các luồng synchronous như MCP server, scripts nội bộ.
-        Nếu graph đang build cho cùng workspace, chờ đến khi xong.
         """
+        from shared.logging_config import log_info
+        import time
 
         workspace_root = workspace_root.resolve()
 
+        # Polling loop: đợi nếu background build đang chạy cho cùng workspace
+        # Hạn chế waiting time để tránh treo process quá lâu (ví dụ 60s)
+        MAX_WAIT_SECONDS = 60
+        POLL_INTERVAL = 0.2
+        waited = 0.0
+
+        while True:
+            with self._lock:
+                # Cache hit: graph đã sẵn sàng cho workspace này
+                if self._graph is not None and self._workspace_root == workspace_root:
+                    log_info(
+                        f"[GraphService] ensure_built: cache hit "
+                        f"({len(self._graph.all_files())} files)"
+                    )
+                    return self._graph
+
+                # Nếu không có ai đang build -> tự mình build
+                if not self._building:
+                    break
+
+                # Có build đang chạy nhưng cho workspace khác -> không đợi, trigger build mới
+                if self._workspace_root != workspace_root:
+                    break
+
+            # Nếu background build đang chạy cho CÙNG workspace -> đợi
+            if waited >= MAX_WAIT_SECONDS:
+                log_info(
+                    f"[GraphService] ensure_built: waited {MAX_WAIT_SECONDS}s, "
+                    f"falling back to sync build"
+                )
+                break
+
+            time.sleep(POLL_INTERVAL)
+            waited += POLL_INTERVAL
+
+        # Nếu đến đây có nghĩa là cần tự build (không có background build hoặc timeout)
         with self._lock:
-            # Nếu đã có graph cho workspace này thì trả về luôn
+            # Double check sau khi thoát loop để tránh race condition cuối cùng
             if self._graph is not None and self._workspace_root == workspace_root:
                 return self._graph
 
@@ -80,21 +118,33 @@ class GraphService(IRelationshipGraphProvider):
             current_generation = self._generation + 1
             self._generation = current_generation
 
-        # Build bên ngoài lock để tránh block readers
-        graph = self._build_graph_sync(workspace_root)
+        log_info(f"[GraphService] ensure_built: building graph for {workspace_root}...")
+        start = time.time()
+
+        try:
+            # Build bên ngoài lock để không block readers
+            graph = self._build_graph_sync(workspace_root)
+        except Exception as e:
+            # Bug #3 Fix: Reset flag nếu build thất bại
+            with self._lock:
+                self._building = False
+            raise e
+
+        duration = time.time() - start
+        log_info(
+            f"[GraphService] ensure_built: completed in {duration:.2f}s "
+            f"({len(graph.all_files())} files, {graph.edge_count()} edges)"
+        )
 
         with self._lock:
-            # Chỉ swap nếu generation không bị ghi đè
+            # Chỉ swap nếu generation không bị ghi đè (atomic swap)
             if current_generation == self._generation:
                 self._graph = graph
                 self._workspace_root = workspace_root
-                self._building = False
-                return graph
-            else:
-                # Generation conflict: có build khác đã override
-                # Trả về graph vừa build thay vì self._graph (có thể là workspace khác)
-                self._building = False
-                return graph
+
+            # Luôn reset flag khi xong (dù swap hay discard)
+            self._building = False
+            return graph
 
     def invalidate(self) -> None:
         """
@@ -216,13 +266,17 @@ class GraphService(IRelationshipGraphProvider):
         Method này không block UI; callers có thể tiếp tục dùng fallback
         DependencyResolver cho đến khi graph sẵn sàng.
         """
+        from shared.logging_config import log_info
 
         workspace_root = workspace_root.resolve()
+        log_info(f"[GraphService] on_workspace_changed -> {workspace_root}")
 
         with self._lock:
             self._workspace_root = workspace_root
             self._generation += 1
             generation = self._generation
+            # Đánh dấu đang build background
+            self._building = True
 
         thread = threading.Thread(
             target=self._build_graph_background,
@@ -237,15 +291,36 @@ class GraphService(IRelationshipGraphProvider):
         """
         Build graph trên background thread, sau đó swap nếu generation còn hợp lệ.
         """
+        from shared.logging_config import log_info, log_error
+        import time
 
-        graph = self._build_graph_sync(workspace_root)
+        log_info(f"[GraphService] Background build started for {workspace_root}")
+        start = time.time()
+
+        try:
+            graph = self._build_graph_sync(workspace_root)
+        except Exception as e:
+            log_error("[GraphService] Background build FAILED", exc=e)
+            with self._lock:
+                # Reset flag nếu background build lỗi
+                self._building = False
+            return
 
         with self._lock:
+            # Reset flag trong mọi trường hợp (kể cả discard)
+            self._building = False
+
             if generation != self._generation:
-                # Có build mới hơn đã được trigger, bỏ qua kết quả cũ
+                log_info("[GraphService] Build discarded (new generation)")
                 return
+
             self._graph = graph
             self._workspace_root = workspace_root
+            duration = time.time() - start
+            log_info(
+                f"[GraphService] Build completed in {duration:.2f}s "
+                f"({len(graph.all_files())} files, {graph.edge_count()} edges)"
+            )
 
     def _build_graph_sync(self, workspace_root: Path) -> RelationshipGraph:
         """

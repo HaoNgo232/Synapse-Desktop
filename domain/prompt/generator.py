@@ -755,24 +755,10 @@ def build_smart_prompt(
     project_rules: str = "",
     workspace_root: Optional[Path] = None,
     instructions_at_top: bool = False,
+    semantic_index: str = "",
 ) -> str:
     """
     Tạo prompt đầy đủ cho Copy Smart.
-
-    Delegate sang prompt_assembler.assemble_smart_prompt().
-
-    Args:
-        smart_contents: Output từ generate_smart_context()
-        file_map: Output từ generate_file_map()
-        user_instructions: Hướng dẫn từ người dùng
-        git_diffs: Optional git diffs
-        git_logs: Optional git logs
-        project_rules: Project rules
-        workspace_root: Optional workspace root (kept for API compatibility)
-        instructions_at_top: Di chuyển instructions lên đầu
-
-    Returns:
-        Prompt string day du
     """
     return assemble_smart_prompt(
         smart_contents=smart_contents,
@@ -782,6 +768,7 @@ def build_smart_prompt(
         git_logs=git_logs,
         project_rules=project_rules,
         instructions_at_top=instructions_at_top,
+        semantic_index=semantic_index,
     )
 
 
@@ -796,6 +783,7 @@ def generate_prompt(
     project_rules: str = "",
     workspace_root: Optional[Path] = None,
     instructions_at_top: bool = False,
+    semantic_index: str = "",
 ) -> str:
     """
     Tạo prompt hoàn chỉnh để gửi cho LLM.
@@ -813,6 +801,7 @@ def generate_prompt(
         project_rules: Project rules
         workspace_root: Optional workspace root (kept for API compatibility)
         instructions_at_top: Di chuyển instructions lên đầu
+        semantic_index: Semantic index content
 
     Returns:
         Prompt hoan chinh
@@ -828,4 +817,5 @@ def generate_prompt(
         project_rules=project_rules,
         instructions_at_top=instructions_at_top,
         workspace_root=workspace_root,
+        semantic_index=semantic_index,
     )

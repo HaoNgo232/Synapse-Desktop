@@ -159,8 +159,14 @@ def assemble_smart_prompt(
     file_summary = generate_smart_summary_xml()
 
     prompt = ""
-    if instructions_at_top and user_instructions and user_instructions.strip():
-        prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n\n"
+    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
+    if instructions_at_top:
+        if user_instructions and user_instructions.strip():
+            prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+        if project_rules and project_rules.strip():
+            prompt += f"<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+        if prompt:
+            prompt += "\n"
 
     prompt += f"""{file_summary}
 
@@ -172,9 +178,10 @@ def assemble_smart_prompt(
 {smart_contents}
 </smart_context>
 """
+    # Git changes section
     prompt = _append_git_changes_xml(prompt, git_diffs, git_logs)
 
-    if project_rules and project_rules.strip():
+    if not instructions_at_top and project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
     if not instructions_at_top and user_instructions and user_instructions.strip():
@@ -267,8 +274,14 @@ def _assemble_xml(
         file_summary = generate_file_summary_xml()
 
     prompt = ""
-    if instructions_at_top and user_instructions and user_instructions.strip():
-        prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n\n"
+    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
+    if instructions_at_top:
+        if user_instructions and user_instructions.strip():
+            prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+        if project_rules and project_rules.strip():
+            prompt += f"<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+        if prompt:
+            prompt += "\n"
 
     prompt += f"""{file_summary}
 
@@ -278,9 +291,10 @@ def _assemble_xml(
 
 {file_contents}
 """
+    # Git changes section
     prompt = _append_git_changes_xml(prompt, git_diffs, git_logs)
 
-    if project_rules and project_rules.strip():
+    if not instructions_at_top and project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
     # OUTPUT FORMAT SECTION (Single Source of Truth)
@@ -341,15 +355,22 @@ def _assemble_json(
     }
 
     # Nếu instructions_at_top=True, đưa vào đầu object data (sau system_instruction)
-    if instructions_at_top and user_instructions and user_instructions.strip():
-        # Re-order dict to put instructions at top
+    if instructions_at_top:
         new_data: dict[str, object] = {
             "system_instruction": prompt_data["system_instruction"],
-            "instructions": user_instructions.strip(),
-            "file_summary": prompt_data["file_summary"],
-            "directory_structure": prompt_data["directory_structure"],
-            "files": prompt_data["files"],
         }
+        if user_instructions and user_instructions.strip():
+            new_data["instructions"] = user_instructions.strip()
+        if project_rules and project_rules.strip():
+            new_data["project_rules"] = project_rules.strip()
+
+        new_data.update(
+            {
+                "file_summary": prompt_data["file_summary"],
+                "directory_structure": prompt_data["directory_structure"],
+                "files": prompt_data["files"],
+            }
+        )
         prompt_data = new_data
 
     # Them git context voi instruction text (truoc project_rules va instructions)
@@ -380,7 +401,7 @@ def _assemble_json(
         if fmt:
             prompt_data["output_format"] = fmt
 
-    if project_rules and project_rules.strip():
+    if not instructions_at_top and project_rules and project_rules.strip():
         prompt_data["project_rules"] = project_rules.strip()
 
     if not instructions_at_top and user_instructions and user_instructions.strip():
@@ -403,10 +424,15 @@ def _assemble_plain(
     prompt_parts: list[str] = []
 
     # Nếu instructions_at_top=True, đưa lên đầu cùng (trước SYSTEM INSTRUCTION)
-    if instructions_at_top and user_instructions and user_instructions.strip():
-        prompt_parts.append(
-            f"{'=' * 48}\nINSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
-        )
+    if instructions_at_top:
+        if user_instructions and user_instructions.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nINSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
+            )
+        if project_rules and project_rules.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nPROJECT RULES\n{'=' * 48}\n{project_rules.strip()}"
+            )
 
     # Thêm Agent Role và File Summary ở đầu prompt
     prompt_parts.append(
@@ -449,7 +475,7 @@ def _assemble_plain(
     if include_xml_formatting:
         prompt_parts.append(f"{'-' * 32}\n{XML_FORMATTING_INSTRUCTIONS}")
 
-    if project_rules and project_rules.strip():
+    if not instructions_at_top and project_rules and project_rules.strip():
         prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules.strip()}")
 
     # Output Format (Single Source of Truth)
@@ -484,8 +510,13 @@ def _assemble_markdown(
     """
     prompt = ""
     # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
-    if instructions_at_top and user_instructions and user_instructions.strip():
-        prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n\n"
+    if instructions_at_top:
+        if user_instructions and user_instructions.strip():
+            prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+        if project_rules and project_rules.strip():
+            prompt += f"<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+        if prompt:
+            prompt += "\n"
 
     # Header với Agent Role và File Summary
     prompt += f"""<file_summary>
@@ -522,7 +553,7 @@ def _assemble_markdown(
 """
     prompt = _append_git_changes_markdown(prompt, git_diffs, git_logs)
 
-    if project_rules and project_rules.strip():
+    if not instructions_at_top and project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
     if include_xml_formatting:

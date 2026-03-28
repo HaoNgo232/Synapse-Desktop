@@ -99,8 +99,10 @@ class UIBuilderMixin:
         """
         )
         layout = QHBoxLayout(toolbar)
-        layout.setContentsMargins(8, 2, 8, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(12, 4, 12, 4)
+        layout.setSpacing(12)
+
+        from presentation.components.token_usage_bar import TokenUsageBar
 
         import sys
 
@@ -114,69 +116,38 @@ class UIBuilderMixin:
                 "assets",
             )
 
-        # Style cho toolbar icon buttons
-        icon_btn_style = (
+        # Style cho toolbar buttons (Modern & Minimal)
+        modern_btn_style = (
             f"QToolButton {{ "
-            f"  background: transparent; border: none; "
-            f"  border-radius: 6px; padding: 5px; "
-            f"  color: {ThemeColors.TEXT_SECONDARY}; "
+            f"  background: {ThemeColors.BG_ELEVATED}; border: 1px solid {ThemeColors.BORDER}; "
+            f"  border-radius: 6px; padding: 4px 10px; "
+            f"  color: {ThemeColors.TEXT_PRIMARY}; font-size: 11px; font-weight: 500; "
             f"}} "
             f"QToolButton:hover {{ "
             f"  background: {ThemeColors.BG_HOVER}; "
-            f"  color: {ThemeColors.TEXT_PRIMARY}; "
             f"}}"
         )
 
-        # Refresh button
+        # Refresh button (Labeled)
         refresh_btn = QToolButton()
         refresh_btn.setIcon(QIcon(os.path.join(assets_dir, "refresh.svg")))
-        refresh_btn.setIconSize(QSize(16, 16))
+        refresh_btn.setIconSize(QSize(14, 14))
+        refresh_btn.setText(" Reload")
+        refresh_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         refresh_btn.setToolTip("Refresh file tree (F5)")
-        refresh_btn.setStyleSheet(icon_btn_style)
+        refresh_btn.setStyleSheet(modern_btn_style)
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self._tree_controller.refresh_tree)
         layout.addWidget(refresh_btn)
 
-        # Separator nho
-        sep1 = QFrame()
-        sep1.setFixedWidth(1)
-        sep1.setFixedHeight(20)
-        sep1.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
-        layout.addWidget(sep1)
-
-        # Ignore button
-        ignore_btn = QToolButton()
-        ignore_btn.setIcon(QIcon(os.path.join(assets_dir, "ban.svg")))
-        ignore_btn.setIconSize(QSize(16, 16))
-        ignore_btn.setToolTip("Ignore selected files")
-        ignore_btn.setStyleSheet(icon_btn_style)
-        ignore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        ignore_btn.clicked.connect(self._tree_controller.add_to_ignore)
-        layout.addWidget(ignore_btn)
-
-        # Undo ignore button
-        undo_btn = QToolButton()
-        undo_btn.setIcon(QIcon(os.path.join(assets_dir, "undo.svg")))
-        undo_btn.setIconSize(QSize(16, 16))
-        undo_btn.setToolTip("Undo last ignore")
-        undo_btn.setStyleSheet(icon_btn_style)
-        undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        undo_btn.clicked.connect(self._tree_controller.undo_ignore)
-        layout.addWidget(undo_btn)
-
-        # Separator
-        sep2 = QFrame()
-        sep2.setFixedWidth(1)
-        sep2.setFixedHeight(20)
-        sep2.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
-        layout.addWidget(sep2)
-
-        # Remote repos dropdown
+        # Remote repos (Labeled)
         remote_btn = QToolButton()
         remote_btn.setIcon(QIcon(os.path.join(assets_dir, "cloud.png")))
-        remote_btn.setIconSize(QSize(16, 16))
-        remote_btn.setToolTip("Remote Repositories")
-        remote_btn.setStyleSheet(icon_btn_style)
+        remote_btn.setIconSize(QSize(14, 14))
+        remote_btn.setText(" Remote")
+        remote_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        remote_btn.setToolTip("Git Repositories & Cache")
+        remote_btn.setStyleSheet(modern_btn_style)
         remote_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remote_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         remote_menu = QMenu(remote_btn)
@@ -198,6 +169,13 @@ class UIBuilderMixin:
         )
         remote_btn.setMenu(remote_menu)
         layout.addWidget(remote_btn)
+
+        # Separator dọc
+        sep_mid = QFrame()
+        sep_mid.setFixedWidth(1)
+        sep_mid.setFixedHeight(18)
+        sep_mid.setStyleSheet(f"background-color: {ThemeColors.BORDER}40;")
+        layout.addWidget(sep_mid)
 
         # Related files dropdown menu with presets
         self._related_menu_btn = QToolButton()
@@ -317,29 +295,12 @@ class UIBuilderMixin:
         self._related_menu_btn.setMenu(related_menu)
         layout.addWidget(self._related_menu_btn)
 
-        # Stretch de day token counter sang ben phai
         layout.addStretch()
 
-        # Selection meta label
-        self._selection_meta_label = QLabel("0 selected")
-        self._selection_meta_label.setStyleSheet(
-            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; font-weight: 500;"
-        )
-        layout.addWidget(self._selection_meta_label)
-
-        # Separator truoc token counter
-        sep3 = QFrame()
-        sep3.setFixedWidth(1)
-        sep3.setFixedHeight(20)
-        sep3.setStyleSheet(f"background-color: {ThemeColors.BORDER};")
-        layout.addWidget(sep3)
-
-        # Token counter noi bat
-        self._token_count_label = QLabel("0 tokens")
-        self._token_count_label.setStyleSheet(
-            f"font-weight: 700; font-size: 13px; color: {ThemeColors.PRIMARY};"
-        )
-        layout.addWidget(self._token_count_label)
+        # Token Usage Bar (Thay thế cho các label rời rạc)
+        self._token_usage_bar = TokenUsageBar()
+        self._token_usage_bar.setFixedWidth(220)
+        layout.addWidget(self._token_usage_bar)
 
         return toolbar
 

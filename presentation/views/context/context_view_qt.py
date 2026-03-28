@@ -230,7 +230,8 @@ class ContextViewQt(
         self.tree = self.file_tree_widget.get_model()._root_node  # type: ignore
 
         # 6. Reset token display
-        self._token_count_label.setText("0 tokens")
+        if hasattr(self, "_token_usage_bar"):
+            self._token_usage_bar.update_stats(tokens=0, limit=200000, files=0)
         self._token_stats.update_stats(
             file_count=0, file_tokens=0, instruction_tokens=0
         )
@@ -914,18 +915,27 @@ class ContextViewQt(
         total_file_tokens = self.file_tree_widget.get_total_tokens()
         total = total_file_tokens + instruction_tokens
 
-        self._token_count_label.setText(f"{total:,} tokens")
+        # Update Usage Bar (Toolbar)
+        if hasattr(self, "_token_usage_bar"):
+            # Lay limit tu stats panel (da duoc tinh toan theo model)
+            limit = 200000
+            if (
+                hasattr(self, "_token_stats")
+                and hasattr(self._token_stats, "_selected_model")
+                and self._token_stats._selected_model
+            ):
+                limit = self._token_stats._selected_model.context_length
 
-        # Tooltip canh bao overhead khi copy
-        self._token_count_label.setToolTip(
-            f"{total_file_tokens:,} file tokens + {instruction_tokens:,} instruction tokens\n\n"
-            "Note: Actual prompt size will be larger due to:\n"
-            "- Tree map (project structure)\n"
-            "- Git changes (diff + log)\n"
-            "- OPX instructions (if using Copy + OPX)\n"
-            "- XML/JSON tags wrapping\n\n"
-            "Hover over the status message after copying to see detailed breakdown."
-        )
+            self._token_usage_bar.update_stats(
+                tokens=total, limit=limit, files=file_count
+            )
+
+            self._token_usage_bar.setToolTip(
+                f"Breakdown:\n"
+                f"- {total_file_tokens:,} from files\n"
+                f"- {instruction_tokens:,} from instructions\n\n"
+                "Max limit based on selected model."
+            )
 
         # Update stats panel
         self._token_stats.update_stats(
@@ -933,7 +943,6 @@ class ContextViewQt(
             file_tokens=total_file_tokens,
             instruction_tokens=instruction_tokens,
         )
-        self._selection_meta_label.setText(f"{file_count:,} selected")
 
     @Slot(str)
     def _on_model_changed(self, model_id: str) -> None:

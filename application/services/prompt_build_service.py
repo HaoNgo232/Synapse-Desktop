@@ -84,6 +84,7 @@ class PromptBuildService:
         include_xml_formatting: bool = False,
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
+        full_tree: bool = False,
     ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt theo output format (backward-compatible API).
@@ -121,6 +122,7 @@ class PromptBuildService:
             include_xml_formatting=include_xml_formatting,
             codemap_paths=codemap_paths,
             instructions_at_top=instructions_at_top,
+            full_tree=full_tree,
         )
         return result.to_legacy_tuple()
 
@@ -140,6 +142,7 @@ class PromptBuildService:
         max_tokens: Optional[int] = None,
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
+        full_tree: bool = False,
     ) -> BuildResult:
         """
         Generate prompt và trả về BuildResult đầy đủ với metadata.
@@ -167,6 +170,8 @@ class PromptBuildService:
                            Trong output_format="smart", tham số này không có tác dụng
                            vì smart format đã là codemap-only.
             instructions_at_top: Di chuyển instructions lên đầu
+            full_tree: Nếu True, hiển thị toàn bộ sơ đồ thư mục của workspace.
+                       Nếu False (mặc định), chỉ hiển thị các file được chọn.
 
         Returns:
             BuildResult voi tat ca metadata can thiet
@@ -209,6 +214,7 @@ class PromptBuildService:
                 tree_item,
                 selected_paths,
                 instructions_at_top=instructions_at_top,
+                full_tree=full_tree,
             )
         else:
             # 0. Fetch git data neu can
@@ -217,24 +223,27 @@ class PromptBuildService:
                 git_logs = get_git_logs(workspace, max_commits=5)
 
             # 1. Generate file map (with all paths including rules)
-            if tree_item and selected_paths:
+            if tree_item:
+                _sel = selected_paths if selected_paths is not None else set()
                 if output_format == "xml":
                     from domain.prompt.generator import generate_file_structure_xml
 
                     file_map = generate_file_structure_xml(
                         tree_item,
-                        selected_paths,
+                        _sel,
                         workspace_root=workspace,
                         use_relative_paths=use_relative_paths,
-                        show_all=True,  # XML hiện toàn bộ cấu trúc để AI hiểu Architecture
+                        show_all=full_tree,
                     )
                 else:
+                    from domain.prompt.generator import generate_file_map
+
                     file_map = generate_file_map(
                         tree_item,
-                        selected_paths,
+                        _sel,
                         workspace_root=workspace,
                         use_relative_paths=use_relative_paths,
-                        show_all=True,  # Unified: show all project structure
+                        show_all=full_tree,
                     )
 
             # 2. Load Project Rules from workspace
@@ -609,6 +618,7 @@ class PromptBuildService:
         tree_item: Optional[TreeItem] = None,
         selected_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
+        full_tree: bool = False,
     ) -> str:
         """
         Build smart context prompt với code maps và relationships.
@@ -648,6 +658,7 @@ class PromptBuildService:
                 selected_paths,
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
+                show_all=full_tree,
             )
 
         # Fetch git data neu can

@@ -51,6 +51,9 @@ class AppSettings:
     # Co dung relative paths trong prompts hay khong (bao mat PII)
     use_relative_paths: bool = True
 
+    # Có include full project tree map trong prompt hay không (tốn token nếu project lớn)
+    include_full_tree: bool = False
+
     # --- Security Settings ---
     # Co enable security scan truoc khi copy hay khong
     enable_security_check: bool = True
@@ -163,6 +166,7 @@ class AppSettings:
             "output_language": self.output_language,
             "template_tier": self.template_tier,
             "rule_file_names": self.rule_file_names,
+            "include_full_tree": self.include_full_tree,
         }
 
     def to_safe_dict(self) -> dict[str, Any]:

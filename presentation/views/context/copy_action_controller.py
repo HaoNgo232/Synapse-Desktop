@@ -192,6 +192,8 @@ def _build_fingerprint(
     h.update(f"rel={use_relative_paths}\n".encode())
     h.update(f"xml={include_xml}\n".encode())
     h.update(f"top={instructions_at_top}\n".encode())
+    h.update(f"full_tree={load_app_settings().include_full_tree}\n".encode())
+    # Note: though full_tree comes from UI toggle, it is synced to settings.
 
     # Instructions
     h.update(f"instr={instructions}\n".encode())
@@ -321,6 +323,7 @@ class CopyActionViewProtocol(Protocol):
     def get_tokenization_service(self) -> Any: ...
     def get_ignore_engine(self) -> Any: ...
     def get_copy_as_file(self) -> bool: ...
+    def get_full_tree(self) -> bool: ...
     def is_smart_mode_active(self) -> bool: ...
 
 
@@ -1035,6 +1038,7 @@ class CopyActionController(QObject):
                     selected_paths=selected_path_strs,
                     include_xml_formatting=include_xml,
                     instructions_at_top=instructions_at_top,
+                    full_tree=self._view.get_full_tree(),
                 )
 
             snapshot = {"copy_mode": "Copy + OPX" if include_xml else "Copy Context"}
@@ -1120,6 +1124,7 @@ class CopyActionController(QObject):
                 use_relative_paths=use_rel,
                 tree_item=tree_item,
                 selected_paths=selected_path_strs,
+                full_tree=self._view.get_full_tree(),
             )
 
         # snapshot is now passed directly as pre_snapshot argument in run_copy
@@ -1292,6 +1297,7 @@ class CopyActionController(QObject):
                 use_relative_paths=use_rel,
                 tree_item=tree_item,
                 selected_paths=selected_path_strs,
+                full_tree=self._view.get_full_tree(),
             )
 
         # Custom background run: same worker pattern but uses file clipboard

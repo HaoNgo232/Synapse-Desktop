@@ -60,7 +60,11 @@ class MCPToolDecorator(Protocol):
 class MCPToolRegistrar(Protocol):
     """Protocol toi thieu cho MCP instance co kha nang dang ky tools."""
 
-    def tool(self) -> MCPToolDecorator: ...
+    def tool(
+        self,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> Callable[[ToolFunc], ToolFunc]: ...
 
 
 class MemoryEntryLike(Protocol):
@@ -76,9 +80,7 @@ class MemoryStoreLike(Protocol):
 
     def get_by_file(self, file_path: str) -> List[MemoryEntryLike]: ...
 
-    def get_by_layer(
-        self, layer: Literal["action", "decision", "constraint"]
-    ) -> List[MemoryEntryLike]: ...
+    def get_by_layer(self, layer: str) -> List[MemoryEntryLike]: ...
 
     def format_for_prompt(self) -> str: ...
 
@@ -96,7 +98,7 @@ class ContractPackLike(Protocol):
     def format_for_prompt(self) -> str: ...
 
 
-def register_tools(mcp_instance: MCPToolRegistrar) -> None:
+def register_tools(mcp_instance: Any) -> None:
     """Dang ky workflow tools voi MCP server."""
 
     @mcp_instance.tool()
@@ -904,7 +906,7 @@ def register_tools(mcp_instance: MCPToolRegistrar) -> None:
                 await asyncio.to_thread(
                     add_memory_fn,
                     ws,
-                    layer,
+                    cast(Literal["action", "decision", "constraint"], layer),
                     content,
                     linked_files,
                     linked_symbols,
@@ -1078,8 +1080,8 @@ def register_tools(mcp_instance: MCPToolRegistrar) -> None:
                     return "Error: 'content' is required for 'add_convention' action."
 
                 def mod_conv(p: ContractPackLike) -> ContractPackLike:
-                    if content not in p.conventions:
-                        p.conventions.append(content)
+                    if content and content not in p.conventions:
+                        p.conventions.append(cast(str, content))
                     return p
 
                 pack = await asyncio.to_thread(
@@ -1099,8 +1101,8 @@ def register_tools(mcp_instance: MCPToolRegistrar) -> None:
                     return "Error: 'content' is required for 'add_anti_pattern' action."
 
                 def mod_anti(p: ContractPackLike) -> ContractPackLike:
-                    if content not in p.anti_patterns:
-                        p.anti_patterns.append(content)
+                    if content and content not in p.anti_patterns:
+                        p.anti_patterns.append(cast(str, content))
                     return p
 
                 pack = await asyncio.to_thread(
@@ -1147,7 +1149,7 @@ def register_tools(mcp_instance: MCPToolRegistrar) -> None:
 
                 def mod_rev(p: ContractPackLike) -> ContractPackLike:
                     if content not in p.review_checklist:
-                        p.review_checklist.append(content)
+                        p.review_checklist.append(str(content))
                     return p
 
                 pack = await asyncio.to_thread(locked_modify_contract_pack, ws, mod_rev)

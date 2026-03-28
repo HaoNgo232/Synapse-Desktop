@@ -721,6 +721,7 @@ class UIBuilderMixin:
 
         # ── Copy as File toggle (persistent preference) ──
         from presentation.components.toggle_switch import ToggleSwitch
+        from infrastructure.persistence.settings_manager import update_app_setting
 
         _file_row = QHBoxLayout()
         _file_row.setSpacing(8)
@@ -749,6 +750,41 @@ class UIBuilderMixin:
             f" background: transparent; border: none;"
         )
         layout.addWidget(_file_hint)
+
+        # ── Full project tree toggle (persistent preference) ──
+        _tree_row = QHBoxLayout()
+        _tree_row.setSpacing(8)
+        _tree_row.setContentsMargins(0, 0, 0, 0)
+
+        _tree_label = QLabel("Include Full Project Structure")
+        _tree_label.setStyleSheet(
+            f"font-size: 12px; font-weight: 500; color: {ThemeColors.TEXT_SECONDARY};"
+            f" background: transparent; border: none;"
+        )
+        _tree_row.addWidget(_tree_label)
+        _tree_row.addStretch()
+
+        saved_full_tree = load_app_settings().include_full_tree
+        self._full_tree_toggle = ToggleSwitch(checked=saved_full_tree)
+        self._full_tree_toggle.setToolTip(
+            "When ON, includes the full project directory structure in the prompt.\n"
+            "Helps AI understand project architecture but uses more tokens.\n"
+            "For very large projects, keep this OFF to save context window."
+        )
+        # Invalidate cache when toggle changes
+        self._full_tree_toggle.toggled.connect(
+            lambda checked: (
+                update_app_setting(include_full_tree=checked),
+                self._copy_controller._prompt_cache.invalidate_all()
+                if hasattr(self, "_copy_controller") and self._copy_controller
+                else None,
+                self._update_token_display()
+                if hasattr(self, "_update_token_display")
+                else None,
+            )
+        )
+        _tree_row.addWidget(self._full_tree_toggle)
+        layout.addLayout(_tree_row)
 
         _toggle_sep = QFrame()
         _toggle_sep.setFixedHeight(1)

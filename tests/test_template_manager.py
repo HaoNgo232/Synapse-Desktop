@@ -89,13 +89,13 @@ class TestLoadTemplate:
     def test_load_doc_generator(self):
         """Load doc_generator thanh cong."""
         content = load_template("doc_generator")
-        assert "Technical Documentation Engineer" in content
+        assert "Technical Writer and Developer Advocate" in content
         assert "documentation" in content.lower()
 
     def test_load_performance_optimizer(self):
         """Load performance_optimizer thanh cong."""
         content = load_template("performance_optimizer")
-        assert "Performance Engineer" in content
+        assert "System Engineer" in content
         assert "memory" in content.lower()
 
     def test_can_force_pro_tier(self, monkeypatch):

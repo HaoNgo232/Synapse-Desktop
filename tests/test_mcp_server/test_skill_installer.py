@@ -26,6 +26,7 @@ from infrastructure.mcp.skill_installer import (
 # ---------- Danh sach 5 skill keys can test ----------
 EXPECTED_SKILLS = [
     "rp_build",
+    "rp_design",
     "rp_review",
     "rp_refactor",
     "rp_investigate",

@@ -108,7 +108,7 @@ class TestAssemblePrompt:
             include_xml_formatting=False,
         )
 
-        assert "<system_instruction>" in prompt
+        assert "<agent_role>" in prompt
         assert "<file_map>" in prompt
         assert sample_file_map in prompt
         assert "</file_map>" in prompt

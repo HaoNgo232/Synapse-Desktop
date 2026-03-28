@@ -317,6 +317,8 @@ class DiffOnlyDialogQt(BaseDialogQt):
         inc_btn.setStyleSheet("padding: 0px; font-size: 16px; font-weight: 700;")
         inc_btn.clicked.connect(lambda: self._adjust_commits(1))
 
+        # Tự động refresh danh sách file khi thay đổi cấu hình git
+        self._num_commits.editingFinished.connect(self._refresh_changed_files)
         commits_row.addWidget(dec_btn)
         commits_row.addWidget(self._num_commits)
         commits_row.addWidget(inc_btn)
@@ -333,10 +335,12 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         self._include_staged = QCheckBox("Include staged changes")
         self._include_staged.setChecked(True)
+        self._include_staged.toggled.connect(self._refresh_changed_files)
         layout.addWidget(self._include_staged)
 
         self._include_unstaged = QCheckBox("Include unstaged changes")
         self._include_unstaged.setChecked(True)
+        self._include_unstaged.toggled.connect(self._refresh_changed_files)
         layout.addWidget(self._include_unstaged)
 
         # Separator
@@ -561,8 +565,10 @@ class DiffOnlyDialogQt(BaseDialogQt):
             return 0
 
     def _adjust_commits(self, delta: int) -> None:
+        """Điều chỉnh số lượng commit (+/-) và tự động refresh danh sách file."""
         commits = max(0, self._get_num_commits() + delta)
         self._num_commits.setText(str(commits))
+        self._refresh_changed_files()
 
     def _adjust_related_depth(self, delta: int) -> None:
         """Điều chỉnh độ sâu của liên quan file (+/-) và gán vào UI."""

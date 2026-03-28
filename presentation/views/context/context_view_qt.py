@@ -232,9 +232,11 @@ class ContextViewQt(
         # 6. Reset token display
         if hasattr(self, "_token_usage_bar"):
             self._token_usage_bar.update_stats(tokens=0, limit=200000, files=0)
-        self._token_stats.update_stats(
-            file_count=0, file_tokens=0, instruction_tokens=0
-        )
+
+        if hasattr(self, "_context_info_label"):
+            self._context_info_label.setText("0 files · 0 tokens")
+        if hasattr(self, "_limit_warning"):
+            self._limit_warning.hide()
 
         # 7. Start file watcher for new workspace
         if self._file_watcher and workspace_path.exists():
@@ -550,11 +552,14 @@ class ContextViewQt(
         # Cleanup preset widget connections to prevent leaks
         if hasattr(self, "_preset_widget") and self._preset_widget:
             try:
-                # Disconnect from file tree selection signal
+                # Disconnect khoi signal cua file tree (dung _refresh_menu thay the)
                 if hasattr(self, "file_tree_widget") and self.file_tree_widget:
-                    self.file_tree_widget.selection_changed.disconnect(
-                        self._preset_widget._on_selection_changed_external
-                    )
+                    try:
+                        self.file_tree_widget.selection_changed.disconnect(
+                            self._preset_widget._refresh_menu
+                        )
+                    except (RuntimeError, TypeError):
+                        pass
             except (RuntimeError, TypeError, AttributeError):
                 pass
             self._preset_widget.deleteLater()
@@ -915,34 +920,41 @@ class ContextViewQt(
         total_file_tokens = self.file_tree_widget.get_total_tokens()
         total = total_file_tokens + instruction_tokens
 
-        # Update Usage Bar (Toolbar)
+        # Update Usage Bar (Toolbar) & Actions Panel Labels
         if hasattr(self, "_token_usage_bar"):
-            # Lay limit tu stats panel (da duoc tinh toan theo model)
-            limit = 200000
-            if (
-                hasattr(self, "_token_stats")
-                and hasattr(self._token_stats, "_selected_model")
-                and self._token_stats._selected_model
-            ):
-                limit = self._token_stats._selected_model.context_length
+            # Lay limit tu model_id da duoc luu tru khi chon tren toolbar
+            from presentation.config.model_config import get_model_by_id
 
+            model_id = getattr(self, "_selected_model_id", "gpt-4o")
+            model_cfg = get_model_by_id(model_id)
+            limit = model_cfg.context_length if model_cfg else 128000
+
+            # Update Toolbar progress bar
             self._token_usage_bar.update_stats(
                 tokens=total, limit=limit, files=file_count
             )
-
             self._token_usage_bar.setToolTip(
                 f"Breakdown:\n"
                 f"- {total_file_tokens:,} from files\n"
                 f"- {instruction_tokens:,} from instructions\n\n"
+                f"Model: {model_cfg.name if model_cfg else 'Unknown'}\n"
                 "Max limit based on selected model."
             )
 
-        # Update stats panel
-        self._token_stats.update_stats(
-            file_count=file_count,
-            file_tokens=total_file_tokens,
-            instruction_tokens=instruction_tokens,
-        )
+            # Update compact labels in actions panel
+            if hasattr(self, "_context_info_label"):
+                self._context_info_label.setText(
+                    f"{file_count} files · {total:,} tokens"
+                )
+
+            # Update Warning (Fixed height)
+            if hasattr(self, "_limit_warning"):
+                if total > limit:
+                    over = total - limit
+                    self._limit_warning.setText(f"⚠ Over limit by {over:,} tokens!")
+                    self._limit_warning.show()
+                else:
+                    self._limit_warning.hide()
 
     @Slot(str)
     def _on_model_changed(self, model_id: str) -> None:

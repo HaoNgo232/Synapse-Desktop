@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 
 from domain.workflow.shared.scope_detector import detect_scope_from_git_diff
 from domain.workflow.shared.token_budget_manager import TokenBudgetManager
+from domain.codemap.graph_builder import CodeMapBuilder
 from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
 from infrastructure.git.git_utils import get_git_diffs, GitDiffResult
 from application.services.tokenization_service import TokenizationService
@@ -158,7 +159,11 @@ def run_code_review(
     caller_files = scope.dependency_files if include_callers else []
 
     # Step 5: Optimize content to fit budget
-    budget_mgr = TokenBudgetManager(tok_service, max_tokens)
+    codemap_builder = CodeMapBuilder(ws)
+    for p in scope.primary_files + caller_files + test_files:
+        codemap_builder.build_for_file(str(ws / p))
+
+    budget_mgr = TokenBudgetManager(tok_service, max_tokens, codemap_builder)
 
     primary_paths = [ws / p for p in scope.primary_files]
     context_paths = [ws / p for p in (caller_files + test_files)]

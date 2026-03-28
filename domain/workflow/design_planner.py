@@ -276,7 +276,7 @@ def run_design_planner(
     risk_areas = _identify_risk_areas(ws, all_scope_files, resolver, codemap_builder)
 
     # Step 6: Optimize content to fit budget
-    budget_mgr = TokenBudgetManager(tok_service, max_tokens)
+    budget_mgr = TokenBudgetManager(tok_service, max_tokens, codemap_builder)
 
     primary_paths = [ws / p for p in scope.primary_files]
     dep_paths = [ws / p for p in scope.dependency_files]

@@ -12,8 +12,9 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from application.interfaces.tokenization_port import ITokenizationService
+    from domain.codemap.graph_builder import CodeMapBuilder
 
-from domain.workflow.shared.file_slicer import auto_slice_file
+from domain.workflow.shared.file_slicer import auto_slice_file, smart_truncate
 from domain.smart_context.parser import smart_parse
 
 logger = logging.getLogger(__name__)
@@ -73,14 +74,17 @@ class TokenBudgetManager:
         self,
         tokenization_service: "ITokenizationService",
         max_tokens: int,
+        codemap_builder: Optional["CodeMapBuilder"] = None,
     ) -> None:
         """
         Args:
             tokenization_service: Service đếm token (inject từ container)
             max_tokens: Giới hạn token tối đa
+            codemap_builder: Graph builder đã build index (None = fallback sang hints-only)
         """
         self._tok = tokenization_service
         self._max_tokens = max_tokens
+        self._codemap_builder: Optional["CodeMapBuilder"] = codemap_builder
 
     def fit_files_to_budget(
         self,
@@ -152,12 +156,12 @@ class TokenBudgetManager:
             )
             return result
 
-        # Strategy 4: Truncate largest files (hard limit enforced)
+        # Strategy 4: Smart truncate bằng Graph-aware scoring (hard limit enforced)
         result = self._try_truncate_largest(
             primary_files, dependency_files, instructions, workspace_root
         )
         result.optimizations_applied.extend(
-            ["smartified_dependencies", "sliced_primary_files", "truncated_largest"]
+            ["smartified_dependencies", "sliced_primary_files", "smart_truncated"]
         )
         return result
 
@@ -300,8 +304,9 @@ class TokenBudgetManager:
         ws: Path,
         relevant_symbols: Dict[str, Set[str]],
     ) -> BudgetResult:
-        """Strategy 3: Slice primary files theo symbols, smart context cho deps.
+        """Strategy 3: Smart-slice primary files theo symbols/graph, smart context cho deps.
 
+        Sử dụng smart_truncate() nếu có codemap_builder, ngược lại dùng auto_slice_file().
         Enforce hard token limit - skip files nếu thêm vào sẽ vượt budget.
         """
         file_contents = {}
@@ -314,7 +319,23 @@ class TokenBudgetManager:
             try:
                 rel_path = file_path.relative_to(ws).as_posix()
                 hints = relevant_symbols.get(rel_path, None)
-                slice_result = auto_slice_file(file_path, hints, workspace_root=ws)
+
+                # Tính budget còn lại dành cho file này
+                remaining_budget = self._max_tokens - total_tokens
+
+                if self._codemap_builder is not None:
+                    # Dùng smart_truncate với Graph-aware scoring
+                    slice_result = smart_truncate(
+                        file_path,
+                        target_tokens=remaining_budget,
+                        codemap_builder=self._codemap_builder,
+                        relevance_hints=hints,
+                        workspace_root=ws,
+                    )
+                else:
+                    # Fallback: dùng auto_slice_file legacy
+                    slice_result = auto_slice_file(file_path, hints, workspace_root=ws)
+
                 content_tokens = self._tok.count_tokens(slice_result.content)
 
                 # Enforce hard limit: skip nếu vượt budget
@@ -358,10 +379,11 @@ class TokenBudgetManager:
     def _try_truncate_largest(
         self, primary: List[Path], deps: List[Path], instructions: str, ws: Path
     ) -> BudgetResult:
-        """Strategy 4: Truncate (slice) tất cả files + enforce hard token limit.
+        """Strategy 4: Smart-truncate tất cả files bằng Graph-aware scoring.
 
         Đây là strategy cuối cùng, mạnh tay nhất:
-        - Slice mỗi file chỉ giữ 100 dòng đầu
+        - Dùng smart_truncate() để chọn function/class quan trọng theo Graph
+        - Phân bổ budget cho mỗi file theo tỷ lệ dựa trên kích thước
         - Skip file nếu thêm vào sẽ vượt budget
         - Ưu tiên files nhỏ trước (sort ascending by size)
         """
@@ -373,11 +395,25 @@ class TokenBudgetManager:
         all_files = [item for item in all_files if item[0].exists()]
         all_files.sort(key=lambda x: x[0].stat().st_size)
 
-        for file_path, is_primary in all_files:
+        # Tính tổng size để phân bổ budget tương đối
+        total_size = sum(p.stat().st_size for p, _ in all_files) or 1
+        remaining_budget = self._max_tokens - total_tokens
+
+        for file_path, _is_primary in all_files:
             try:
                 rel_path = file_path.relative_to(ws).as_posix()
-                slice_result = auto_slice_file(
-                    file_path, max_lines=10000, workspace_root=ws
+
+                # Phân bổ budget theo tỷ lệ kích thước file (có tối thiểu 200 tokens)
+                file_size = file_path.stat().st_size
+                allocated_tokens = max(
+                    200, int(remaining_budget * file_size / total_size)
+                )
+
+                slice_result = smart_truncate(
+                    file_path,
+                    target_tokens=allocated_tokens,
+                    codemap_builder=self._codemap_builder,
+                    workspace_root=ws,
                 )
                 content_tokens = self._tok.count_tokens(slice_result.content)
 

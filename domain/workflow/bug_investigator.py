@@ -16,9 +16,11 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Protocol, cast
+from typing import Callable, Dict, List, Optional, Protocol, Set, cast
 
 from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
+from domain.workflow.shared.token_budget_manager import TokenBudgetManager
+from domain.codemap.graph_builder import CodeMapBuilder
 from application.services.tokenization_service import TokenizationService
 from domain.errors import DomainValidationError
 
@@ -165,27 +167,35 @@ def run_bug_investigation(
         max_depth,
     )
 
-    # Convert nodes to file contents
-    file_contents: Dict[str, str] = {}
-    token_budget_remaining = (
-        max_tokens - tok_service.count_tokens(bug_description) - 1000
-    )
+    # Step 3: Optimize content to fit budget using TokenBudgetManager
+    codemap_builder = CodeMapBuilder(ws)
+    # BugInvestigator uses a dynamic graph, we don't need full workspace scan but
+    # building for the discovered entry points helps scoring.
+    for node in investigation_nodes:
+        codemap_builder.build_for_file(str(ws / node.file_path))
+
+    budget_mgr = TokenBudgetManager(tok_service, max_tokens, codemap_builder)
+
+    # Map nodes to primary files and relevant symbols
+    primary_paths = []
+    relevant_symbols: Dict[str, Set[str]] = {}
 
     for node in investigation_nodes:
-        if token_budget_remaining <= 0:
-            break
+        p = ws / node.file_path
+        if p.is_file() and p not in primary_paths:
+            primary_paths.append(p)
+            if node.symbol_name:
+                relevant_symbols.setdefault(node.file_path, set()).add(node.symbol_name)
 
-        try:
-            file_path = (ws / node.file_path).resolve()
-            if file_path.is_file():
-                content = file_path.read_text(encoding="utf-8", errors="ignore")
-                tokens = tok_service.count_tokens(content)
+    budget_result = budget_mgr.fit_files_to_budget(
+        primary_files=primary_paths,
+        dependency_files=[],
+        instructions=bug_description,
+        workspace_root=ws,
+        relevant_symbols=relevant_symbols,
+    )
 
-                if tokens <= token_budget_remaining:
-                    file_contents[node.file_path] = content
-                    token_budget_remaining -= tokens
-        except Exception:
-            continue
+    file_contents = budget_result.file_contents
 
     # Build trace steps from investigation nodes
     trace_steps = [
@@ -230,6 +240,11 @@ def run_bug_investigation(
 
     prompt = format_handoff_xml(context)
     total_tokens = tok_service.count_tokens(prompt)
+
+    # Calculate optimizations
+    optimizations = budget_result.optimizations_applied
+    if "smart_truncated" in optimizations or "sliced_primary_files" in optimizations:
+        logger.info(f"Bug investigation optimized context: {optimizations}")
 
     return InvestigationResult(
         prompt=prompt,

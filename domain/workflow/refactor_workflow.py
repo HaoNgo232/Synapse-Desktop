@@ -21,12 +21,12 @@ from typing import Dict, List, Optional
 
 from domain.workflow.shared.scope_detector import detect_scope_from_symbols
 from domain.workflow.shared.token_budget_manager import TokenBudgetManager
+from domain.codemap.graph_builder import CodeMapBuilder
 from domain.workflow.shared.handoff_formatter import (
     HandoffContext,
     format_handoff_xml,
     format_relationships_section,
 )
-from domain.smart_context.parser import smart_parse
 from application.services.tokenization_service import TokenizationService
 from domain.errors import DomainValidationError
 
@@ -134,20 +134,25 @@ def run_refactor_discovery(
             scope_files=[],
         )
 
-    # Step 2: Extract smart context for all scope files
-    file_contents: Dict[str, str] = {}
-    for rel_path in file_paths:
-        file_path = (ws / rel_path).resolve()
-        if not file_path.exists():
-            continue
+    # Step 2: Extract smart context using TokenBudgetManager
+    codemap_builder = CodeMapBuilder(ws)
+    # Build for workspace tree or at least for scope files
+    for p in file_paths:
+        codemap_builder.build_for_file(str(ws / p))
 
-        try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
-            smart = smart_parse(str(file_path), content)
-            if smart:  # Only add if not None
-                file_contents[rel_path] = smart
-        except Exception:
-            pass
+    budget_mgr = TokenBudgetManager(tok_service, max_tokens, codemap_builder)
+
+    primary_paths = [ws / p for p in file_paths if (ws / p).exists()]
+
+    budget_result = budget_mgr.fit_files_to_budget(
+        primary_files=primary_paths,
+        dependency_files=[],
+        instructions=f"Refactor Discovery: {refactor_scope}",
+        workspace_root=ws,
+        relevant_symbols=None,
+    )
+
+    file_contents = budget_result.file_contents
 
     # Step 3: Build relationships
     relationships = format_relationships_section(ws, file_paths)
@@ -244,7 +249,12 @@ def run_refactor_planning(
         )
 
     # Step 2: Read full content for files to modify
-    budget_mgr = TokenBudgetManager(tok_service, max_tokens)
+    codemap_builder = CodeMapBuilder(ws)
+    # Build for workspace tree or at least for scope files
+    for p in file_paths:
+        codemap_builder.build_for_file(str(ws / p))
+
+    budget_mgr = TokenBudgetManager(tok_service, max_tokens, codemap_builder)
 
     primary_paths = [ws / p for p in file_paths if (ws / p).exists()]
 

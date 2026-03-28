@@ -23,6 +23,7 @@ from domain.workflow.shared.handoff_formatter import (
     format_relationships_section,
 )
 from domain.prompt.generator import generate_file_map
+from domain.codemap.graph_builder import CodeMapBuilder
 from infrastructure.filesystem.file_utils import scan_directory
 from domain.workflow.test_analyzer import (
     AnalysisResult,
@@ -181,7 +182,11 @@ def run_test_builder(
     file_map = generate_file_map(tree, all_relevant_paths, workspace_root=ws)
 
     # Buoc 5: Optimize content de fit vao token budget
-    budget_mgr = TokenBudgetManager(tok_service, max_tokens)
+    codemap_builder = CodeMapBuilder(ws)
+    for p in all_relevant_paths:
+        codemap_builder.build_for_file(str(p))
+
+    budget_mgr = TokenBudgetManager(tok_service, max_tokens, codemap_builder)
 
     # Primary files = source files can test + existing test files (de AI hoc pattern)
     primary_paths = [ws / p for p in scope.primary_files]

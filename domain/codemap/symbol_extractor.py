@@ -103,25 +103,36 @@ def _node_to_symbol(
     """
     Convert AST node thành Symbol nếu match.
 
-    Args:
-        node: AST node
-        lines: File lines
-        file_path: File path
-        parent: Parent symbol name
-
-    Returns:
-        Symbol object hoặc None
+    Hỗ trợ: Python, JavaScript/TypeScript, Java, Rust.
     """
     node_type = node.type
 
-    # Class definition
-    if "class" in node_type and "definition" in node_type:
+    # Class / Interface / Struct / Enum (Common types)
+    is_class = "class" in node_type and "definition" in node_type  # Python
+    is_class_decl = node_type in [
+        "class_declaration",
+        "interface_declaration",
+        "enum_declaration",
+    ]  # Java / TS
+    is_rust_type = node_type in ["struct_item", "enum_item", "trait_item"]  # Rust
+
+    if is_class or is_class_decl or is_rust_type:
         name = _extract_name(node, lines)
         if name:
             signature = _extract_signature(node, lines)
+            kind = SymbolKind.CLASS
+            if "interface" in node_type:
+                kind = SymbolKind.INTERFACE
+            elif "struct" in node_type:
+                kind = SymbolKind.STRUCT
+            elif "enum" in node_type:
+                kind = SymbolKind.ENUM
+            elif "trait" in node_type:
+                kind = SymbolKind.TRAIT
+
             return Symbol(
                 name=name,
-                kind=SymbolKind.CLASS,
+                kind=kind,
                 file_path=file_path,
                 line_start=node.start_point[0] + 1,
                 line_end=node.end_point[0] + 1,
@@ -129,11 +140,16 @@ def _node_to_symbol(
                 parent=None,
             )
 
-    # Function/Method definition
-    if "function" in node_type and "definition" in node_type:
+    # Function / Method (Common types)
+    is_func = "function" in node_type and "definition" in node_type  # Python / TS
+    is_java_method = node_type == "method_declaration"  # Java
+    is_rust_fn = node_type == "function_item"  # Rust
+
+    if is_func or is_java_method or is_rust_fn:
         name = _extract_name(node, lines)
         if name:
             signature = _extract_signature(node, lines)
+            # Nếu có parent (chứa trong class/struct/impl) thì là Method
             kind = SymbolKind.METHOD if parent else SymbolKind.FUNCTION
             return Symbol(
                 name=name,
@@ -145,29 +161,12 @@ def _node_to_symbol(
                 parent=parent,
             )
 
-    # Variable/Constant assignment (top-level only)
-    if not parent and (
-        "variable" in node_type
-        or "assignment" in node_type
-        or "declaration" in node_type
-    ):
-        name = _extract_name(node, lines)
-        if name and node.start_point[0] < len(lines):
-            # Chỉ lấy top-level variables
-            line = lines[node.start_point[0]].strip()
-            if line and not line.startswith((" ", "\t")):
-                return Symbol(
-                    name=name,
-                    kind=SymbolKind.VARIABLE,
-                    file_path=file_path,
-                    line_start=node.start_point[0] + 1,
-                    line_end=node.end_point[0] + 1,
-                    signature=line[:100],  # First 100 chars
-                    parent=None,
-                )
-
     # Import statement
-    if "import" in node_type:
+    if (
+        "import" in node_type
+        or "use_declaration" in node_type
+        or "package_declaration" in node_type
+    ):
         name = _extract_import_name(node, lines)
         if name:
             return Symbol(
@@ -181,6 +180,27 @@ def _node_to_symbol(
                 else None,
                 parent=None,
             )
+
+    # Variable / Constant assignment (top-level only)
+    if not parent and (
+        "variable" in node_type
+        or "assignment" in node_type
+        or "declaration" in node_type
+    ):
+        name = _extract_name(node, lines)
+        if name and node.start_point[0] < len(lines):
+            # Chỉ lấy top-level variables (Không thụt đầu dòng)
+            line = lines[node.start_point[0]].strip()
+            if line and not line.startswith((" ", "\t")):
+                return Symbol(
+                    name=name,
+                    kind=SymbolKind.VARIABLE,
+                    file_path=file_path,
+                    line_start=node.start_point[0] + 1,
+                    line_end=node.end_point[0] + 1,
+                    signature=line[:100],
+                    parent=None,
+                )
 
     return None
 
@@ -226,22 +246,23 @@ def _extract_import_name(node: Node, lines: list[str]) -> Optional[str]:
     """
     Extract module name từ import statement.
 
-    Examples:
-        - import foo -> "foo"
-        - from foo import bar -> "foo"
-        - import foo as baz -> "foo"
+    Hỗ trợ:
+    - Python: import foo, from foo import bar
+    - Rust: use std::collections::HashMap
+    - Java: package com.example, import java.util.List
     """
-    # Tìm module name trong import statement
-    for child in node.children:
-        if "dotted_name" in child.type or "module" in child.type:
-            start_row = child.start_point[0]
-            start_col = child.start_point[1]
-            end_col = child.end_point[1]
-            if start_row < len(lines):
-                return lines[start_row][start_col:end_col]
+    target_types = [
+        "dotted_name",
+        "module",
+        "scoped_identifier",
+        "use_list",
+        "identifier",
+        "package_name",
+        "scoped_type_identifier",
+    ]
 
-        # For simple identifiers
-        if child.type == "identifier":
+    for child in node.children:
+        if any(t in child.type for t in target_types):
             start_row = child.start_point[0]
             start_col = child.start_point[1]
             end_col = child.end_point[1]

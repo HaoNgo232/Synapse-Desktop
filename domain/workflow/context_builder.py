@@ -22,6 +22,7 @@ from domain.workflow.shared.handoff_formatter import (
     format_relationships_section,
 )
 from domain.prompt.generator import generate_file_map
+from domain.codemap.graph_builder import CodeMapBuilder
 from infrastructure.filesystem.file_utils import scan_directory
 from application.services.tokenization_service import TokenizationService
 from domain.errors import DomainValidationError
@@ -139,7 +140,13 @@ def run_context_builder(
             )
 
     effective_budget = max(1000, max_tokens - contract_tokens - git_tokens - 500)
-    budget_mgr = TokenBudgetManager(tok_service, effective_budget)
+
+    # Initialize CodeMapBuilder for Graph-aware truncation
+    codemap_builder = CodeMapBuilder(ws)
+    # Build for workspace tree (file_map already built tree)
+    codemap_builder.build_for_workspace(tree)
+
+    budget_mgr = TokenBudgetManager(tok_service, effective_budget, codemap_builder)
 
     primary_paths = [ws / p for p in scope.primary_files]
     dep_paths = [ws / p for p in scope.dependency_files]

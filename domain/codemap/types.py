@@ -13,6 +13,10 @@ class SymbolKind(Enum):
     """Loại symbol trong code."""
 
     CLASS = "class"
+    INTERFACE = "interface"
+    STRUCT = "struct"
+    ENUM = "enum"
+    TRAIT = "trait"
     FUNCTION = "function"
     METHOD = "method"
     VARIABLE = "variable"

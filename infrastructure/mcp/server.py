@@ -99,6 +99,21 @@ def run_mcp_server(workspace_path: Optional[str] = None) -> None:
         # Khong de loi auto-update lam crash MCP server
         logger.warning("MCP config auto-update failed: %s", e)
 
+    # Preload workflow plugins neu da co workspace path.
+    # Viec preload giup list_workflow_plugins/run_workflow_plugin hoat dong ngay,
+    # khong can cho den luc tool dau tien moi discover.
+    if workspace_path:
+        try:
+            from infrastructure.plugins.workflow_plugin_loader import (
+                discover_and_register_workflow_plugins,
+            )
+
+            loaded = discover_and_register_workflow_plugins(Path(workspace_path))
+            if loaded:
+                logger.info("Loaded workflow plugins: %s", ", ".join(loaded))
+        except Exception as e:
+            logger.warning("Workflow plugin preload failed: %s", e)
+
     # Dang ky tat ca tools tu handlers
     _register_all_tools()
 

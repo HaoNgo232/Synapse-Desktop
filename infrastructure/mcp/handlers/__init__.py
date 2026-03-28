@@ -31,7 +31,7 @@ from infrastructure.mcp.handlers.workflow_handler import (
 )
 
 
-def register_all_tools(mcp_instance) -> None:
+def register_all_tools(mcp_instance: object) -> None:
     """Dang ky tat ca tools tu cac handler modules vao MCP server.
 
     Goi tung register_tools() tu moi handler module de dang ky

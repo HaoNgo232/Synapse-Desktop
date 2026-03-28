@@ -16,12 +16,37 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Protocol, cast
 
 from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
 from application.services.tokenization_service import TokenizationService
+from domain.errors import DomainValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_str_list() -> List[str]:
+    """Tao list rong co typing ro rang cho dataclass factories."""
+    return []
+
+
+def _empty_trace_steps() -> List["TraceStep"]:
+    """Tao list TraceStep rong co typing ro rang."""
+    return []
+
+
+def _empty_entry_points() -> List[str]:
+    """Tao list entry points rong co typing ro rang."""
+    return []
+
+
+class InvestigationNodeLike(Protocol):
+    """Protocol toi thieu cho node dung trong investigation workflow."""
+
+    file_path: str
+    symbol_name: str
+    reason: str
+    depth: int
 
 
 @dataclass
@@ -38,7 +63,7 @@ class TraceStep:
     """
 
     file_path: str = ""
-    symbols: List[str] = field(default_factory=list)
+    symbols: List[str] = field(default_factory=_empty_str_list)
     content: str = ""
     reason: str = ""
     depth: int = 0
@@ -60,10 +85,10 @@ class InvestigationResult:
 
     prompt: str = ""
     total_tokens: int = 0
-    trace_steps: List[TraceStep] = field(default_factory=list)
+    trace_steps: List[TraceStep] = field(default_factory=_empty_trace_steps)
     files_investigated: int = 0
     max_depth_reached: int = 0
-    entry_points: List[str] = field(default_factory=list)
+    entry_points: List[str] = field(default_factory=_empty_entry_points)
 
 
 # Regex patterns for error trace parsing
@@ -99,12 +124,12 @@ def run_bug_investigation(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     tok_service = tokenization_service or TokenizationService()
 
     # Step 1: Parse error trace
-    entry_points = []
+    entry_points: List[Dict[str, object]] = []
     if error_trace:
         entry_points = _parse_error_trace(error_trace, ws)
 
@@ -122,16 +147,26 @@ def run_bug_investigation(
         )
 
     # Step 2: Build hybrid investigation graph
-    from domain.workflow.shared.hybrid_investigation_graph import (
-        build_hybrid_investigation_graph,
+    from domain.workflow.shared import (
+        hybrid_investigation_graph as hybrid_investigation_graph_module,
+    )
+
+    build_hybrid_investigation_graph = cast(
+        Callable[[Path, List[Dict[str, object]], int], List[InvestigationNodeLike]],
+        getattr(
+            hybrid_investigation_graph_module,
+            "build_hybrid_investigation_graph",
+        ),
     )
 
     investigation_nodes = build_hybrid_investigation_graph(
-        ws, entry_points, max_depth=max_depth
+        ws,
+        entry_points,
+        max_depth,
     )
 
     # Convert nodes to file contents
-    file_contents = {}
+    file_contents: Dict[str, str] = {}
     token_budget_remaining = (
         max_tokens - tok_service.count_tokens(bug_description) - 1000
     )

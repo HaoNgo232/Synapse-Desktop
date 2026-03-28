@@ -39,8 +39,14 @@ from infrastructure.filesystem.file_utils import scan_directory
 from application.services.dependency_resolver import DependencyResolver
 from domain.codemap.graph_builder import CodeMapBuilder
 from application.services.tokenization_service import TokenizationService
+from domain.errors import DomainValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_str_list() -> List[str]:
+    """Tao list rong co typing ro rang cho dataclass factories."""
+    return []
 
 
 HIGH_FAN_IN_THRESHOLD = 3
@@ -76,9 +82,9 @@ class DesignResult:
     files_sliced: int = 0
     files_smart_only: int = 0
     scope_summary: str = ""
-    impacted_modules: List[str] = field(default_factory=list)
-    risk_areas: List[str] = field(default_factory=list)
-    optimizations: List[str] = field(default_factory=list)
+    impacted_modules: List[str] = field(default_factory=_empty_str_list)
+    risk_areas: List[str] = field(default_factory=_empty_str_list)
+    optimizations: List[str] = field(default_factory=_empty_str_list)
 
 
 def _identify_impacted_modules(
@@ -217,13 +223,13 @@ def run_design_planner(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     # Validate output_file path traversal
     if output_file:
         out_path = (ws / output_file).resolve()
         if not out_path.is_relative_to(ws):
-            raise ValueError("output_file path traversal detected")
+            raise DomainValidationError("output_file path traversal detected")
 
     # Initialize services
     tok_service = tokenization_service or TokenizationService()

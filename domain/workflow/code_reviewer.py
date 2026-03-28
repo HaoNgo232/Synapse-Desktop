@@ -19,8 +19,19 @@ from domain.workflow.shared.handoff_formatter import HandoffContext, format_hand
 from infrastructure.git.git_utils import get_git_diffs, GitDiffResult
 from application.services.tokenization_service import TokenizationService
 from application.services.workspace_index import collect_files_from_disk
+from domain.errors import DomainValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_str_list() -> List[str]:
+    """Tao list rong co typing ro rang cho dataclass factories."""
+    return []
+
+
+def _empty_diff_stats() -> Dict[str, int]:
+    """Tao dict thong ke diff rong co typing ro rang."""
+    return {}
 
 
 def _calculate_diff_stats(diff_text: str) -> Dict[str, int]:
@@ -62,8 +73,8 @@ class ReviewResult:
     total_tokens: int = 0
     files_changed: int = 0
     files_context: int = 0
-    diff_stats: Dict[str, int] = field(default_factory=dict)
-    changed_symbols: List[str] = field(default_factory=list)
+    diff_stats: Dict[str, int] = field(default_factory=_empty_diff_stats)
+    changed_symbols: List[str] = field(default_factory=_empty_str_list)
 
 
 def run_code_review(
@@ -92,7 +103,7 @@ def run_code_review(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     tok_service = tokenization_service or TokenizationService()
 
@@ -106,7 +117,7 @@ def run_code_review(
             )
 
         # Parse diff to get changed files
-        diffs = []
+        diffs: List[Dict[str, str]] = []
         # Simple parsing: extract file paths from diff headers
 
         for line in (diff_result.work_tree_diff + diff_result.staged_diff).splitlines():
@@ -139,7 +150,7 @@ def run_code_review(
         )
 
     # Step 3: Find test files
-    test_files = []
+    test_files: List[str] = []
     if include_tests:
         test_files = _find_test_files(ws, scope.primary_files)
 
@@ -198,7 +209,7 @@ def run_code_review(
     total_tokens = tok_service.count_tokens(prompt)
 
     # Extract changed symbols
-    changed_symbols = []
+    changed_symbols: List[str] = []
     for file_path in scope.primary_files:
         if file_path in scope.relevant_symbols:
             changed_symbols.extend(scope.relevant_symbols[file_path])
@@ -236,7 +247,7 @@ def _find_test_files(
     Returns:
         Danh sách relative paths của test files tìm được
     """
-    test_files = []
+    test_files: List[str] = []
     all_files = collect_files_from_disk(workspace_path, workspace_path=workspace_path)
 
     for source_file in source_files:
@@ -298,7 +309,7 @@ def _extract_filename_from_diff_header(line: str) -> Optional[str]:
 
 def _build_diff_summary(diff_result: "GitDiffResult") -> str:
     """Build human-readable diff summary tu GitDiffResult."""
-    changed_files = set()
+    changed_files: set[str] = set()
     for line in (diff_result.work_tree_diff + diff_result.staged_diff).splitlines():
         if line.startswith("diff --git"):
             filename = _extract_filename_from_diff_header(line)

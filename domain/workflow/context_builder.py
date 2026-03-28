@@ -24,6 +24,7 @@ from domain.workflow.shared.handoff_formatter import (
 from domain.prompt.generator import generate_file_map
 from infrastructure.filesystem.file_utils import scan_directory
 from application.services.tokenization_service import TokenizationService
+from domain.errors import DomainValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +83,13 @@ def run_context_builder(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     # Validate output_file path traversal
     if output_file:
         out_path = (ws / output_file).resolve()
         if not out_path.is_relative_to(ws):
-            raise ValueError("output_file path traversal detected")
+            raise DomainValidationError("output_file path traversal detected")
 
     # Initialize tokenization service
     tok_service = tokenization_service or TokenizationService()

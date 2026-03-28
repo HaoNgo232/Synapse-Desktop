@@ -8,16 +8,95 @@ import asyncio
 import json
 import subprocess
 from pathlib import Path
-from typing import Annotated, Dict, List, Optional
+from typing import (
+    Any,
+    Annotated,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    TypeVar,
+    cast,
+)
 
-from mcp.server.fastmcp import Context
 from pydantic import Field
 
+from application.errors import UseCaseValidationError
+from application.plugins.contracts import WorkflowPluginRequest
+from application.plugins.registry import workflow_plugin_registry
+from application.use_cases import (
+    BuildContextCommand,
+    BuildContextUseCase,
+    CodeReviewCommand,
+    CodeReviewUseCase,
+    DesignPlannerCommand,
+    DesignPlannerUseCase,
+    InvestigateCommand,
+    InvestigateUseCase,
+    RefactorCommand,
+    RefactorUseCase,
+    TestBuildCommand,
+    TestBuildUseCase,
+)
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
 from infrastructure.mcp.core.constants import GIT_TIMEOUT, SAFE_GIT_REF, logger
+from infrastructure.mcp.core.error_mapper import format_mcp_error
+from infrastructure.plugins.workflow_plugin_loader import (
+    discover_and_register_workflow_plugins,
+)
 
 
-def register_tools(mcp_instance) -> None:
+ToolFunc = TypeVar("ToolFunc", bound=Callable[..., Any])
+
+
+class MCPToolDecorator(Protocol):
+    """Protocol cho decorator dang ky MCP tool."""
+
+    def __call__(self, func: ToolFunc, /) -> ToolFunc: ...
+
+
+class MCPToolRegistrar(Protocol):
+    """Protocol toi thieu cho MCP instance co kha nang dang ky tools."""
+
+    def tool(self) -> MCPToolDecorator: ...
+
+
+class MemoryEntryLike(Protocol):
+    """Protocol toi thieu cho memory entry duoc serialize."""
+
+    def to_dict(self) -> Dict[str, object]: ...
+
+
+class MemoryStoreLike(Protocol):
+    """Protocol toi thieu cho memory store thao tac trong handler."""
+
+    entries: List[MemoryEntryLike]
+
+    def get_by_file(self, file_path: str) -> List[MemoryEntryLike]: ...
+
+    def get_by_layer(
+        self, layer: Literal["action", "decision", "constraint"]
+    ) -> List[MemoryEntryLike]: ...
+
+    def format_for_prompt(self) -> str: ...
+
+
+class ContractPackLike(Protocol):
+    """Protocol toi thieu cho contract pack duoc cap nhat runtime."""
+
+    conventions: List[str]
+    anti_patterns: List[str]
+    guarded_paths: List[str]
+    review_checklist: List[str]
+
+    def to_dict(self) -> Dict[str, object]: ...
+
+    def format_for_prompt(self) -> str: ...
+
+
+def register_tools(mcp_instance: MCPToolRegistrar) -> None:
     """Dang ky workflow tools voi MCP server."""
 
     @mcp_instance.tool()
@@ -34,7 +113,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted."
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         file_paths: Annotated[
             Optional[List[str]],
             Field(
@@ -88,21 +167,19 @@ def register_tools(mcp_instance) -> None:
             if not out_path.is_relative_to(ws):
                 return "Error: output_file path traversal detected."
 
-        from domain.workflow.context_builder import (
-            run_context_builder,
+        use_case = BuildContextUseCase()
+        command = BuildContextCommand(
+            workspace_path=ws,
+            task_description=task_description,
+            file_paths=file_paths,
+            max_tokens=max_tokens,
+            include_codemap=include_codemap,
+            include_git_changes=include_git_changes,
+            output_file=output_file,
         )
 
         try:
-            result = await asyncio.to_thread(
-                run_context_builder,
-                workspace_path=str(ws),
-                task_description=task_description,
-                file_paths=file_paths,
-                max_tokens=max_tokens,
-                include_codemap=include_codemap,
-                include_git_changes=include_git_changes,
-                output_file=output_file,
-            )  # type: ignore
+            result = await asyncio.to_thread(use_case.execute, command)
 
             if response_format == "json":
                 import json
@@ -142,7 +219,7 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_build error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def rp_review(
@@ -152,7 +229,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted."
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         review_focus: Annotated[
             str,
             Field(
@@ -197,18 +274,18 @@ def register_tools(mcp_instance) -> None:
         if base_ref and not SAFE_GIT_REF.match(base_ref):
             return f"Error: Invalid git reference: {base_ref}"
 
-        from domain.workflow.code_reviewer import run_code_review
+        use_case = CodeReviewUseCase()
+        command = CodeReviewCommand(
+            workspace_path=ws,
+            review_focus=review_focus,
+            include_tests=include_tests,
+            include_callers=include_callers,
+            max_tokens=max_tokens,
+            base_ref=base_ref,
+        )
 
         try:
-            result = await asyncio.to_thread(
-                run_code_review,
-                workspace_path=str(ws),
-                review_focus=review_focus,
-                include_tests=include_tests,
-                include_callers=include_callers,
-                max_tokens=max_tokens,
-                base_ref=base_ref,
-            )  # type: ignore
+            result = await asyncio.to_thread(use_case.execute, command)
 
             summary = (
                 f"Code Review Context Ready\n"
@@ -222,7 +299,7 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_review error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def rp_refactor(
@@ -238,7 +315,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted."
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         phase: Annotated[
             str,
             Field(
@@ -278,20 +355,19 @@ def register_tools(mcp_instance) -> None:
         if phase == "plan" and not discovery_report.strip():
             return "Error: discovery_report required for phase='plan'."
 
-        from domain.workflow.refactor_workflow import (
-            run_refactor_discovery,
-            run_refactor_planning,
+        use_case = RefactorUseCase()
+        command = RefactorCommand(
+            workspace_path=ws,
+            refactor_scope=refactor_scope,
+            phase=phase,
+            file_paths=file_paths,
+            discovery_report=discovery_report,
+            max_tokens=max_tokens,
         )
 
         try:
+            result = await asyncio.to_thread(use_case.execute, command)
             if phase == "discover":
-                result = await asyncio.to_thread(
-                    run_refactor_discovery,
-                    workspace_path=str(ws),
-                    refactor_scope=refactor_scope,
-                    file_paths=file_paths,
-                    max_tokens=max_tokens,
-                )  # type: ignore
                 return (
                     f"Refactor Discovery Complete\n"
                     f"{'=' * 40}\n"
@@ -300,14 +376,6 @@ def register_tools(mcp_instance) -> None:
                     f"\n{'=' * 40}\n{result.prompt}"
                 )
             else:
-                result = await asyncio.to_thread(
-                    run_refactor_planning,
-                    workspace_path=str(ws),
-                    refactor_scope=refactor_scope,
-                    discovery_report_text=discovery_report,
-                    file_paths=file_paths,
-                    max_tokens=max_tokens,
-                )  # type: ignore
                 return (
                     f"Refactor Plan Ready\n"
                     f"{'=' * 40}\n"
@@ -318,7 +386,7 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_refactor error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def rp_investigate(
@@ -334,7 +402,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted."
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         error_trace: Annotated[
             str,
             Field(
@@ -366,20 +434,18 @@ def register_tools(mcp_instance) -> None:
         except ValueError as e:
             return f"Error: {e}"
 
-        from domain.workflow.bug_investigator import (
-            run_bug_investigation,
+        use_case = InvestigateUseCase()
+        command = InvestigateCommand(
+            workspace_path=ws,
+            bug_description=bug_description,
+            error_trace=error_trace,
+            entry_files=entry_files,
+            max_depth=max_depth,
+            max_tokens=max_tokens,
         )
 
         try:
-            result = await asyncio.to_thread(
-                run_bug_investigation,
-                workspace_path=str(ws),
-                bug_description=bug_description,
-                error_trace=error_trace,
-                entry_files=entry_files,
-                max_depth=max_depth,
-                max_tokens=max_tokens,
-            )  # type: ignore
+            result = await asyncio.to_thread(use_case.execute, command)
 
             summary = (
                 f"Bug Investigation Complete\n"
@@ -393,7 +459,7 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_investigate error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def rp_test(
@@ -403,7 +469,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted."
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         task_description: Annotated[
             str,
             Field(
@@ -454,19 +520,19 @@ def register_tools(mcp_instance) -> None:
             if not out_path.is_relative_to(ws):
                 return "Error: output_file path traversal detected."
 
-        from domain.workflow.test_builder import run_test_builder
+        use_case = TestBuildUseCase()
+        command = TestBuildCommand(
+            workspace_path=ws,
+            task_description=task_description,
+            file_paths=file_paths,
+            max_tokens=max_tokens,
+            test_framework=test_framework,
+            include_existing_tests=include_existing_tests,
+            output_file=output_file,
+        )
 
         try:
-            result = await asyncio.to_thread(
-                run_test_builder,
-                workspace_path=str(ws),
-                task_description=task_description,
-                file_paths=file_paths,
-                max_tokens=max_tokens,
-                test_framework=test_framework,
-                include_existing_tests=include_existing_tests,
-                output_file=output_file,
-            )  # type: ignore
+            result = await asyncio.to_thread(use_case.execute, command)
 
             summary = (
                 f"Test Builder Complete\n"
@@ -497,7 +563,7 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_test error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def rp_design(
@@ -513,7 +579,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted."
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         file_paths: Annotated[
             Optional[List[str]],
             Field(
@@ -554,18 +620,18 @@ def register_tools(mcp_instance) -> None:
             if not out_path.is_relative_to(ws):
                 return "Error: output_file path traversal detected."
 
-        from domain.workflow.design_planner import run_design_planner
+        use_case = DesignPlannerUseCase()
+        command = DesignPlannerCommand(
+            workspace_path=ws,
+            task_description=task_description,
+            file_paths=file_paths,
+            max_tokens=max_tokens,
+            include_tests=include_tests,
+            output_file=output_file,
+        )
 
         try:
-            result = await asyncio.to_thread(
-                run_design_planner,
-                workspace_path=str(ws),
-                task_description=task_description,
-                file_paths=file_paths,
-                max_tokens=max_tokens,
-                include_tests=include_tests,
-                output_file=output_file,
-            )  # type: ignore
+            result = await asyncio.to_thread(use_case.execute, command)
 
             summary = (
                 f"Design Planner Complete\n"
@@ -595,7 +661,124 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("rp_design error: %s", e)
+            return format_mcp_error(e)
+
+    @mcp_instance.tool()
+    async def list_workflow_plugins(
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted.",
+            ),
+        ] = None,
+        ctx: Optional[object] = None,
+    ) -> str:
+        """List all discovered workflow plugins and their metadata."""
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
             return f"Error: {e}"
+
+        try:
+            loaded = await asyncio.to_thread(discover_and_register_workflow_plugins, ws)
+            items = [
+                {
+                    "plugin_id": md.plugin_id,
+                    "display_name": md.display_name,
+                    "version": md.version,
+                    "description": md.description,
+                }
+                for md in workflow_plugin_registry.list_metadata()
+            ]
+
+            return json.dumps(
+                {
+                    "workspace": str(ws),
+                    "loaded_now": loaded,
+                    "plugins": items,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        except Exception as e:
+            logger.error("list_workflow_plugins error: %s", e)
+            return format_mcp_error(e)
+
+    @mcp_instance.tool()
+    async def run_workflow_plugin(
+        plugin_id: Annotated[
+            str,
+            Field(description="Workflow plugin id to execute."),
+        ],
+        workspace_path: Annotated[
+            Optional[str],
+            Field(
+                description="Absolute path to workspace root. Auto-detected if omitted.",
+            ),
+        ] = None,
+        ctx: Optional[object] = None,
+        action: Annotated[
+            str,
+            Field(
+                description="Plugin action name (default: run).",
+            ),
+        ] = "run",
+        payload_json: Annotated[
+            str,
+            Field(
+                description="JSON payload for plugin execution.",
+            ),
+        ] = "{}",
+    ) -> str:
+        """Execute workflow plugin without modifying core workflow handler code."""
+        try:
+            ws = await WorkspaceManager.resolve(workspace_path, ctx)
+        except ValueError as e:
+            return f"Error: {e}"
+
+        try:
+            await asyncio.to_thread(discover_and_register_workflow_plugins, ws)
+
+            try:
+                raw_payload: Any = (
+                    json.loads(payload_json) if payload_json.strip() else {}
+                )
+            except json.JSONDecodeError as e:
+                raise UseCaseValidationError(
+                    "payload_json must be valid JSON",
+                    details={"json_error": str(e)},
+                ) from e
+
+            payload_obj: Dict[str, Any]
+            if isinstance(raw_payload, dict):
+                payload_obj = cast(Dict[str, Any], raw_payload)
+            else:
+                payload_obj = {"value": raw_payload}
+
+            request = WorkflowPluginRequest(
+                workspace_path=ws,
+                action=action,
+                payload=payload_obj,
+            )
+            result = await asyncio.to_thread(
+                workflow_plugin_registry.execute,
+                plugin_id,
+                request,
+            )
+
+            return json.dumps(
+                {
+                    "plugin_id": plugin_id,
+                    "success": result.success,
+                    "message": result.message,
+                    "data": result.data,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        except Exception as e:
+            logger.error("run_workflow_plugin error: %s", e)
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def manage_memory(
@@ -617,7 +800,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted.",
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         layer: Annotated[
             Optional[str],
             Field(
@@ -688,9 +871,26 @@ def register_tools(mcp_instance) -> None:
         except ValueError as e:
             return f"Error: {e}"
 
-        from domain.memory.memory_service import (
-            add_memory,
-            load_memory_store,
+        from domain.memory import memory_service as memory_service_module
+
+        add_memory_fn = cast(
+            Callable[
+                [
+                    Path,
+                    Literal["action", "decision", "constraint"],
+                    str,
+                    Optional[List[str]],
+                    Optional[List[str]],
+                    str,
+                    Optional[List[str]],
+                ],
+                None,
+            ],
+            getattr(memory_service_module, "add_memory"),
+        )
+        load_memory_store_fn = cast(
+            Callable[[Path], MemoryStoreLike],
+            getattr(memory_service_module, "load_memory_store"),
         )
 
         try:
@@ -702,14 +902,14 @@ def register_tools(mcp_instance) -> None:
                     return f"Error: 'layer' must be one of: {', '.join(valid_layers)}"
 
                 await asyncio.to_thread(
-                    add_memory,
-                    workspace_root=ws,
-                    layer=layer,  # type: ignore[arg-type]
-                    content=content,
-                    linked_files=linked_files,
-                    linked_symbols=linked_symbols,
-                    workflow=workflow or "",
-                    tags=tags,
+                    add_memory_fn,
+                    ws,
+                    layer,
+                    content,
+                    linked_files,
+                    linked_symbols,
+                    workflow or "",
+                    tags,
                 )
                 return (
                     f"Memory Added\n"
@@ -719,12 +919,14 @@ def register_tools(mcp_instance) -> None:
                     f"{'=' * 40}"
                 )
 
-            store = await asyncio.to_thread(load_memory_store, ws)
+            store = await asyncio.to_thread(load_memory_store_fn, ws)
 
             if action == "get":
                 if not store.entries:
                     return "No memory entries found."
-                entries_data = [e.to_dict() for e in store.entries]
+                entries_data: List[Dict[str, object]] = [
+                    e.to_dict() for e in store.entries
+                ]
                 return (
                     f"Memory Store ({len(store.entries)} entries)\n"
                     f"{'=' * 40}\n"
@@ -737,7 +939,7 @@ def register_tools(mcp_instance) -> None:
                 matches = store.get_by_file(file_path)
                 if not matches:
                     return f"No memory entries linked to '{file_path}'."
-                entries_data = [e.to_dict() for e in matches]
+                entries_data: List[Dict[str, object]] = [e.to_dict() for e in matches]
                 return (
                     f"Memory entries for '{file_path}' ({len(matches)} entries)\n"
                     f"{'=' * 40}\n"
@@ -748,10 +950,10 @@ def register_tools(mcp_instance) -> None:
                 valid_layers = ("action", "decision", "constraint")
                 if not layer or layer not in valid_layers:
                     return f"Error: 'layer' must be one of: {', '.join(valid_layers)}"
-                matches = store.get_by_layer(layer)  # type: ignore[arg-type]
+                matches = store.get_by_layer(layer)
                 if not matches:
                     return f"No memory entries for layer '{layer}'."
-                entries_data = [e.to_dict() for e in matches]
+                entries_data: List[Dict[str, object]] = [e.to_dict() for e in matches]
                 return (
                     f"Memory entries for layer '{layer}' ({len(matches)} entries)\n"
                     f"{'=' * 40}\n"
@@ -768,7 +970,7 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("manage_memory error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def get_contract_pack(
@@ -792,7 +994,7 @@ def register_tools(mcp_instance) -> None:
                 description="Absolute path to workspace root. Auto-detected if omitted.",
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
         content: Annotated[
             Optional[str],
             Field(
@@ -835,8 +1037,20 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         from domain.contracts.contract_pack import (
-            load_contract_pack,
-            locked_modify_contract_pack,
+            load_contract_pack as raw_load_contract_pack,
+            locked_modify_contract_pack as raw_locked_modify_contract_pack,
+        )
+
+        load_contract_pack = cast(
+            Callable[[Path], ContractPackLike],
+            raw_load_contract_pack,
+        )
+        locked_modify_contract_pack = cast(
+            Callable[
+                [Path, Callable[[ContractPackLike], ContractPackLike]],
+                ContractPackLike,
+            ],
+            raw_locked_modify_contract_pack,
         )
 
         try:
@@ -863,7 +1077,7 @@ def register_tools(mcp_instance) -> None:
                 if not content:
                     return "Error: 'content' is required for 'add_convention' action."
 
-                def mod_conv(p):
+                def mod_conv(p: ContractPackLike) -> ContractPackLike:
                     if content not in p.conventions:
                         p.conventions.append(content)
                     return p
@@ -884,7 +1098,7 @@ def register_tools(mcp_instance) -> None:
                 if not content:
                     return "Error: 'content' is required for 'add_anti_pattern' action."
 
-                def mod_anti(p):
+                def mod_anti(p: ContractPackLike) -> ContractPackLike:
                     if content not in p.anti_patterns:
                         p.anti_patterns.append(content)
                     return p
@@ -905,9 +1119,9 @@ def register_tools(mcp_instance) -> None:
                 if not paths:
                     return "Error: 'paths' is required for 'add_guarded_path' action."
 
-                added = []
+                added: List[str] = []
 
-                def mod_guard(p):
+                def mod_guard(p: ContractPackLike) -> ContractPackLike:
                     safe_paths = paths if paths else []
                     for path in safe_paths:
                         if path and path not in p.guarded_paths:
@@ -931,7 +1145,7 @@ def register_tools(mcp_instance) -> None:
                 if not content:
                     return "Error: 'content' is required for 'add_review_item' action."
 
-                def mod_rev(p):
+                def mod_rev(p: ContractPackLike) -> ContractPackLike:
                     if content not in p.review_checklist:
                         p.review_checklist.append(content)
                     return p
@@ -949,23 +1163,23 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("get_contract_pack error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
 
     @mcp_instance.tool()
     async def detect_design_drift(
         planned_files: Annotated[
-            List[str],
+            Optional[List[str]],
             Field(
                 description="List of relative file paths that were planned to be changed.",
             ),
-        ] = [],
+        ] = None,
         workspace_path: Annotated[
             Optional[str],
             Field(
                 description="Absolute path to workspace root. Auto-detected if omitted.",
             ),
         ] = None,
-        ctx: Optional[Context] = None,
+        ctx: Optional[object] = None,
     ) -> str:
         """Detect design drift by comparing planned changes vs actual git changes.
 
@@ -977,6 +1191,8 @@ def register_tools(mcp_instance) -> None:
             ws = await WorkspaceManager.resolve(workspace_path, ctx)
         except ValueError as e:
             return f"Error: {e}"
+
+        planned = planned_files or []
 
         try:
             # Lấy danh sách files thực tế thay đổi từ git (unstaged + staged)
@@ -1006,7 +1222,7 @@ def register_tools(mcp_instance) -> None:
 
             actual_changed = await asyncio.to_thread(_get_changed_files, str(ws))
 
-            if not actual_changed and not planned_files:
+            if not actual_changed and not planned:
                 return "No planned files and no git changes detected."
 
             # Extract symbols và dependencies cho các files thay đổi
@@ -1018,22 +1234,37 @@ def register_tools(mcp_instance) -> None:
                 root = Path(ws_path)
 
                 try:
-                    from domain.codemap.symbol_extractor import extract_symbols
+                    from domain.codemap.symbol_extractor import (
+                        extract_symbols as raw_extract_symbols,
+                    )
+
+                    extract_symbols = cast(
+                        Callable[[str, str], List[Any]],
+                        raw_extract_symbols,
+                    )
                 except ImportError:
                     logger.warning(
                         "symbol_extractor not available, drift detection will proceed without symbol analysis"
                     )
                     return symbols_map, deps_map
 
+                extract_relationships_fn: Optional[Callable[..., List[Any]]] = None
                 try:
-                    from domain.codemap.relationship_extractor import (
-                        extract_relationships,
+                    from domain.codemap import (
+                        relationship_extractor as relationship_extractor_module,
+                    )
+
+                    extract_relationships_fn = cast(
+                        Callable[..., List[Any]],
+                        getattr(
+                            relationship_extractor_module,
+                            "extract_relationships",
+                        ),
                     )
                 except ImportError:
                     logger.warning(
                         "relationship_extractor not available, drift detection will proceed without dependency analysis"
                     )
-                    extract_relationships = None  # type: ignore[assignment]
 
                 for rel_path in file_list:
                     full_path = root / rel_path
@@ -1054,18 +1285,20 @@ def register_tools(mcp_instance) -> None:
                         pass
 
                     # Extract relationships -> dependencies
-                    if extract_relationships is not None:
+                    if extract_relationships_fn is not None:
                         try:
-                            rels = extract_relationships(rel_path, content)
+                            rels = extract_relationships_fn(rel_path, content)
                             deps_map[rel_path] = [
-                                r.target for r in rels if r.target != rel_path
+                                str(getattr(r, "target"))
+                                for r in rels
+                                if getattr(r, "target", rel_path) != rel_path
                             ]
                         except Exception:
                             pass
 
                 return symbols_map, deps_map
 
-            all_files = sorted(set(planned_files) | set(actual_changed))
+            all_files = sorted(set(planned) | set(actual_changed))
             post_symbols, post_deps = await asyncio.to_thread(
                 _extract_file_info, str(ws), all_files
             )
@@ -1075,7 +1308,7 @@ def register_tools(mcp_instance) -> None:
 
             report = detect_drift(
                 workspace_root=Path(ws),
-                planned_files=planned_files,
+                planned_files=planned,
                 actual_changed_files=actual_changed,
                 pre_edit_symbols=None,
                 post_edit_symbols=post_symbols,
@@ -1115,4 +1348,19 @@ def register_tools(mcp_instance) -> None:
 
         except Exception as e:
             logger.error("detect_design_drift error: %s", e)
-            return f"Error: {e}"
+            return format_mcp_error(e)
+
+    # Tham chieu de static analyzer biet cac decorated tool functions duoc dang ky qua decorator side-effect.
+    _ = (
+        rp_build,
+        rp_review,
+        rp_refactor,
+        rp_investigate,
+        rp_test,
+        rp_design,
+        list_workflow_plugins,
+        run_workflow_plugin,
+        manage_memory,
+        get_contract_pack,
+        detect_design_drift,
+    )

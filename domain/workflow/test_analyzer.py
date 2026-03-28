@@ -358,6 +358,11 @@ def _classify_priority(symbol: Symbol) -> str:
     return TestPriority.HIGH
 
 
+def classify_priority(symbol: Symbol) -> str:
+    """Public wrapper de cac module khac co the dung an toan."""
+    return _classify_priority(symbol)
+
+
 def suggest_test_file_path(workspace_path: Path, source_file_rel: str) -> Optional[str]:
     """
     Goi y duong dan cho test file moi.

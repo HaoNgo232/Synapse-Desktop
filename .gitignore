@@ -17,3 +17,5 @@ build-win/
 # .synapse_presets.json
 .synapse_presets.json
 .synapse_selection.json
+tools/architecture/baseline.json
+tools/validation/usecase_simulation_report.json

@@ -28,8 +28,19 @@ from domain.workflow.shared.handoff_formatter import (
 )
 from domain.smart_context.parser import smart_parse
 from application.services.tokenization_service import TokenizationService
+from domain.errors import DomainValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_str_list() -> List[str]:
+    """Tao list rong co typing ro rang cho dataclass factories."""
+    return []
+
+
+def _empty_dependency_map() -> Dict[str, List[str]]:
+    """Tao dict rong co typing ro rang cho dataclass factories."""
+    return {}
 
 
 @dataclass
@@ -48,12 +59,12 @@ class DiscoveryReport:
         total_tokens: Tổng tokens
     """
 
-    scope_files: List[str] = field(default_factory=list)
-    dependencies: Dict[str, List[str]] = field(default_factory=dict)
-    patterns_found: List[str] = field(default_factory=list)
-    risk_areas: List[str] = field(default_factory=list)
-    opportunities: List[str] = field(default_factory=list)
-    backward_compat_concerns: List[str] = field(default_factory=list)
+    scope_files: List[str] = field(default_factory=_empty_str_list)
+    dependencies: Dict[str, List[str]] = field(default_factory=_empty_dependency_map)
+    patterns_found: List[str] = field(default_factory=_empty_str_list)
+    risk_areas: List[str] = field(default_factory=_empty_str_list)
+    opportunities: List[str] = field(default_factory=_empty_str_list)
+    backward_compat_concerns: List[str] = field(default_factory=_empty_str_list)
     prompt: str = ""
     total_tokens: int = 0
 
@@ -72,7 +83,7 @@ class RefactorPlan:
 
     prompt: str = ""
     total_tokens: int = 0
-    files_to_modify: List[str] = field(default_factory=list)
+    files_to_modify: List[str] = field(default_factory=_empty_str_list)
     migration_needed: bool = False
 
 
@@ -98,7 +109,7 @@ def run_refactor_discovery(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     tok_service = tokenization_service or TokenizationService()
 
@@ -124,7 +135,7 @@ def run_refactor_discovery(
         )
 
     # Step 2: Extract smart context for all scope files
-    file_contents = {}
+    file_contents: Dict[str, str] = {}
     for rel_path in file_paths:
         file_path = (ws / rel_path).resolve()
         if not file_path.exists():
@@ -209,7 +220,7 @@ def run_refactor_planning(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     tok_service = tokenization_service or TokenizationService()
 

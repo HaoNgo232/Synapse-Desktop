@@ -30,11 +30,17 @@ from domain.workflow.test_analyzer import (
     detect_test_framework,
     format_test_analysis_xml,
     TestPriority,
-    _classify_priority,
+    classify_priority,
 )
 from application.services.tokenization_service import TokenizationService
+from domain.errors import DomainValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_str_list() -> List[str]:
+    """Tao list rong co typing ro rang cho dataclass factories."""
+    return []
 
 
 # Template huong dan AI viet tests
@@ -93,8 +99,8 @@ class BuildTestResult:
     scope_summary: str = ""
     coverage_summary: str = ""
     untested_symbols: int = 0
-    suggested_test_files: List[str] = field(default_factory=list)
-    optimizations: List[str] = field(default_factory=list)
+    suggested_test_files: List[str] = field(default_factory=_empty_str_list)
+    optimizations: List[str] = field(default_factory=_empty_str_list)
 
 
 def run_test_builder(
@@ -130,13 +136,13 @@ def run_test_builder(
     """
     ws = Path(workspace_path).resolve()
     if not ws.is_dir():
-        raise ValueError(f"'{workspace_path}' is not a valid directory")
+        raise DomainValidationError(f"'{workspace_path}' is not a valid directory")
 
     # Validate output_file - chong path traversal
     if output_file:
         out_path = (ws / output_file).resolve()
         if not out_path.is_relative_to(ws):
-            raise ValueError("output_file path traversal detected")
+            raise DomainValidationError("output_file path traversal detected")
 
     # Initialize tokenization service
     tok_service = tokenization_service or TokenizationService()
@@ -295,10 +301,10 @@ def _build_action_instructions(
         }
         sorted_symbols = sorted(
             cov.untested_symbols,
-            key=lambda s: priority_order.get(_classify_priority(s), 3),
+            key=lambda s: priority_order.get(classify_priority(s), 3),
         )
         for sym in sorted_symbols:
-            priority = _classify_priority(sym)
+            priority = classify_priority(sym)
             sig = sym.signature or sym.name
             untested_lines.append(
                 f"- [{priority}] {cov.source_file}: {sig} (line {sym.line_start})"
@@ -314,9 +320,11 @@ def _build_action_instructions(
 
     return TEST_ACTION_INSTRUCTIONS_TEMPLATE.format(
         coverage_summary=analysis.analysis_summary,
-        untested_symbols_list="\n".join(untested_lines)
-        if untested_lines
-        else "- (All symbols are tested)",
+        untested_symbols_list=(
+            "\n".join(untested_lines)
+            if untested_lines
+            else "- (All symbols are tested)"
+        ),
         test_framework=test_framework,
         suggested_test_files="\n".join(suggested_lines),
     )

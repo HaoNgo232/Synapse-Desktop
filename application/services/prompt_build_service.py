@@ -83,26 +83,28 @@ class PromptBuildService:
         selected_paths: Optional[Set[str]] = None,
         include_xml_formatting: bool = False,
         codemap_paths: Optional[Set[str]] = None,
+        instructions_at_top: bool = False,
     ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt theo output format (backward-compatible API).
 
-        Goi noi bo build_prompt_full() va chuyen doi ket qua
-        ve tuple 3 phan tu de tuong thich voi code cu.
+        Gọi nội bộ build_prompt_full() và chuyển đổi kết quả
+        về tuple 3 phần tử để tương thích với code cũ.
 
         Args:
-            file_paths: Danh sach file paths da resolve
+            file_paths: Danh sách file paths đã resolve
             workspace: Workspace root path
             instructions: User instructions text
-            output_format: "xml", "json", "plain", hoac "smart"
-            include_git_changes: Co include git diff khong
-            use_relative_paths: Co dung relative paths khong
+            output_format: "xml", "json", "plain", hoặc "smart"
+            include_git_changes: Có include git diff không
+            use_relative_paths: Có dùng relative paths không
             tree_item: Root TreeItem cho file map (optional)
-            selected_paths: Set paths da chon cho file map (optional)
-            include_xml_formatting: Co bao gom OPX khong
-            codemap_paths: Optional set cac file paths chi lay AST signatures.
-                           Cac file trong set nay se duoc xuat dang codemap
-                           thay vi full content.
+            selected_paths: Set paths đã chọn cho file map (optional)
+            include_xml_formatting: Có bao gồm OPX không
+            codemap_paths: Optional set các file paths chỉ lấy AST signatures.
+                           Các file trong set này sẽ được xuất dạng codemap
+                           thay vì full content.
+            instructions_at_top: Di chuyển instructions lên đầu
 
         Returns:
             Tuple (prompt_text, token_count, breakdown)
@@ -118,6 +120,7 @@ class PromptBuildService:
             selected_paths=selected_paths,
             include_xml_formatting=include_xml_formatting,
             codemap_paths=codemap_paths,
+            instructions_at_top=instructions_at_top,
         )
         return result.to_legacy_tuple()
 
@@ -136,32 +139,34 @@ class PromptBuildService:
         profile: Optional[str] = None,
         max_tokens: Optional[int] = None,
         codemap_paths: Optional[Set[str]] = None,
+        instructions_at_top: bool = False,
     ) -> BuildResult:
         """
-        Generate prompt va tra ve BuildResult day du voi metadata.
+        Generate prompt và trả về BuildResult đầy đủ với metadata.
 
-        Day la API chinh cho multi-agent workflow. Tra ve BuildResult
-        bao gom per-file token counts, breakdown, trim notes, va
+        Đây là API chính cho multi-agent workflow. Trả về BuildResult
+        bao gồm per-file token counts, breakdown, trim notes, và
         dependency graph metadata.
 
         Args:
-            file_paths: Danh sach primary file paths da resolve
+            file_paths: Danh sách primary file paths đã resolve
             workspace: Workspace root path
             instructions: User instructions text
-            output_format: "xml", "json", "plain", hoac "smart"
-            include_git_changes: Co include git diff khong
-            use_relative_paths: Co dung relative paths khong
+            output_format: "xml", "json", "plain", hoặc "smart"
+            include_git_changes: Có include git diff không
+            use_relative_paths: Có dùng relative paths không
             tree_item: Root TreeItem cho file map (optional)
-            selected_paths: Set paths da chon cho file map (optional)
-            include_xml_formatting: Co bao gom OPX khong
-            dependency_files: Danh sach dependency file paths (Feature 3)
-            profile: Ten profile da ap dung (Feature 1, chi de luu metadata)
-            max_tokens: Gioi han token toi da (None = khong gioi han)
-            codemap_paths: Optional set cac file paths chi lay AST signatures.
-                           Co the la absolute paths. Cac file nay se duoc render
-                           dang codemap (function/class signatures) thay vi full content.
-                           Trong output_format="smart", tham so nay khong co tac dung
-                           vi smart format da la codemap-only.
+            selected_paths: Set paths đã chọn cho file map (optional)
+            include_xml_formatting: Có bao gồm OPX không
+            dependency_files: Danh sách dependency file paths (Feature 3)
+            profile: Tên profile đã áp dụng (Feature 1, chỉ để lưu metadata)
+            max_tokens: Giới hạn token tối đa (None = không giới hạn)
+            codemap_paths: Optional set các file paths chỉ lấy AST signatures.
+                           Có thể là absolute paths. Các file này sẽ được render
+                           dạng codemap (function/class signatures) thay vì full content.
+                           Trong output_format="smart", tham số này không có tác dụng
+                           vì smart format đã là codemap-only.
+            instructions_at_top: Di chuyển instructions lên đầu
 
         Returns:
             BuildResult voi tat ca metadata can thiet
@@ -203,6 +208,7 @@ class PromptBuildService:
                 use_relative_paths,
                 tree_item,
                 selected_paths,
+                instructions_at_top=instructions_at_top,
             )
         else:
             # 0. Fetch git data neu can
@@ -250,6 +256,7 @@ class PromptBuildService:
                 git_logs=git_logs,
                 project_rules=project_rules,
                 workspace_root=workspace,
+                instructions_at_top=instructions_at_top,
             )
 
         token_count = self._tokenization_service.count_tokens(prompt)
@@ -388,6 +395,7 @@ class PromptBuildService:
                         use_relative_paths,
                         tree_item,
                         selected_paths,
+                        instructions_at_top=instructions_at_top,
                     )
                 else:
                     output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
@@ -406,6 +414,7 @@ class PromptBuildService:
                         git_logs=git_logs if trimmed_comp.git_logs_text else None,
                         project_rules=trimmed_comp.project_rules,
                         workspace_root=workspace,
+                        instructions_at_top=instructions_at_top,
                     )
 
                 # Append trimmed notes section vao prompt
@@ -587,18 +596,20 @@ class PromptBuildService:
         use_relative_paths: bool,
         tree_item: Optional[TreeItem] = None,
         selected_paths: Optional[Set[str]] = None,
+        instructions_at_top: bool = False,
     ) -> str:
         """
-        Build smart context prompt voi code maps va relationships.
+        Build smart context prompt với code maps và relationships.
 
         Args:
-            file_paths: Danh sach file paths
+            file_paths: Danh sách file paths
             workspace: Workspace root
             instructions: User instructions
-            include_git_changes: Co include git khong
-            use_relative_paths: Co dung relative paths khong
+            include_git_changes: Có include git không
+            use_relative_paths: Có dùng relative paths không
             tree_item: Root TreeItem cho file map
-            selected_paths: Set paths da chon
+            selected_paths: Set paths đã chọn
+            instructions_at_top: Di chuyển instructions lên đầu
         """
         # Convert paths to string set cho generate_smart_context
         path_strs = {str(p) for p in file_paths}
@@ -642,6 +653,7 @@ class PromptBuildService:
             git_logs=git_logs,
             project_rules=project_rules,
             workspace_root=workspace,
+            instructions_at_top=instructions_at_top,
         )
 
 

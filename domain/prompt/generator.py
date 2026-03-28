@@ -702,20 +702,22 @@ def build_smart_prompt(
     git_logs: Optional[GitLogResult] = None,
     project_rules: str = "",
     workspace_root: Optional[Path] = None,
+    instructions_at_top: bool = False,
 ) -> str:
     """
-    Tao prompt day du cho Copy Smart.
+    Tạo prompt đầy đủ cho Copy Smart.
 
     Delegate sang prompt_assembler.assemble_smart_prompt().
 
     Args:
-        smart_contents: Output tu generate_smart_context()
-        file_map: Output tu generate_file_map()
-        user_instructions: Huong dan tu nguoi dung
+        smart_contents: Output từ generate_smart_context()
+        file_map: Output từ generate_file_map()
+        user_instructions: Hướng dẫn từ người dùng
         git_diffs: Optional git diffs
         git_logs: Optional git logs
         project_rules: Project rules
         workspace_root: Optional workspace root (kept for API compatibility)
+        instructions_at_top: Di chuyển instructions lên đầu
 
     Returns:
         Prompt string day du
@@ -727,6 +729,7 @@ def build_smart_prompt(
         git_diffs=git_diffs,
         git_logs=git_logs,
         project_rules=project_rules,
+        instructions_at_top=instructions_at_top,
     )
 
 
@@ -740,22 +743,24 @@ def generate_prompt(
     output_style: OutputStyle = OutputStyle.XML,
     project_rules: str = "",
     workspace_root: Optional[Path] = None,
+    instructions_at_top: bool = False,
 ) -> str:
     """
-    Tao prompt hoan chinh de gui cho LLM.
+    Tạo prompt hoàn chỉnh để gửi cho LLM.
 
     Delegate sang prompt_assembler.assemble_prompt().
 
     Args:
-        file_map: File map string tu generate_file_map()
-        file_contents: File contents string tu formatter tuong ung
-        user_instructions: Huong dan tu nguoi dung
-        include_xml_formatting: Co bao gom OPX instructions khong
+        file_map: File map string từ generate_file_map()
+        file_contents: File contents string từ formatter tương ứng
+        user_instructions: Hướng dẫn từ người dùng
+        include_xml_formatting: Có bao gồm OPX instructions không
         git_diffs: Optional git diffs (work tree & staged)
         git_logs: Optional git logs
-        output_style: Dinh dang dau ra
+        output_style: Định dạng đầu ra
         project_rules: Project rules
         workspace_root: Optional workspace root (kept for API compatibility)
+        instructions_at_top: Di chuyển instructions lên đầu
 
     Returns:
         Prompt hoan chinh
@@ -769,4 +774,5 @@ def generate_prompt(
         git_logs=git_logs,
         output_style=output_style,
         project_rules=project_rules,
+        instructions_at_top=instructions_at_top,
     )

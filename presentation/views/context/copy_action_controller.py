@@ -176,6 +176,7 @@ def _build_fingerprint(
     use_relative_paths: bool,
     include_xml: bool = False,
     workspace: Optional[Path] = None,
+    instructions_at_top: bool = False,
 ) -> str:
     """Build a fingerprint string from all inputs that affect prompt output.
 
@@ -190,6 +191,7 @@ def _build_fingerprint(
     h.update(f"git={include_git}\n".encode())
     h.update(f"rel={use_relative_paths}\n".encode())
     h.update(f"xml={include_xml}\n".encode())
+    h.update(f"top={instructions_at_top}\n".encode())
 
     # Instructions
     h.update(f"instr={instructions}\n".encode())
@@ -370,6 +372,7 @@ class CopyActionController(QObject):
         selected_paths: Set[str],
         instructions: str,
         include_xml: bool = False,
+        instructions_at_top: bool = False,
     ) -> PromptResult | None:
         """Check prompt cache for a hit. Returns (prompt, token_count, breakdown) or None.
 
@@ -390,6 +393,7 @@ class CopyActionController(QObject):
             use_relative_paths=use_rel,
             include_xml=include_xml,
             workspace=workspace,
+            instructions_at_top=instructions_at_top,
         )
 
         cached = self._prompt_cache.get(copy_mode, fingerprint)
@@ -406,6 +410,7 @@ class CopyActionController(QObject):
         token_count: int,
         breakdown: PromptBreakdown,
         include_xml: bool = False,
+        instructions_at_top: bool = False,
     ) -> None:
         """Store generated prompt in cache for future hits."""
         output_style_id = self._view.get_output_style().value
@@ -422,6 +427,7 @@ class CopyActionController(QObject):
             use_relative_paths=use_rel,
             include_xml=include_xml,
             workspace=workspace,
+            instructions_at_top=instructions_at_top,
         )
         self._prompt_cache.put(copy_mode, fingerprint, prompt, token_count, breakdown)
 
@@ -692,8 +698,13 @@ class CopyActionController(QObject):
         selected_path_strs = {str(p) for p in file_paths}
 
         # === Cache fast path ===
+        instructions_at_top = copy_destination == "file"
         cached = self._try_cache_hit(
-            copy_mode, selected_path_strs, instructions, include_xml
+            copy_mode,
+            selected_path_strs,
+            instructions,
+            include_xml,
+            instructions_at_top=instructions_at_top,
         )
         if cached is not None:
             prompt, token_count, breakdown = cached
@@ -850,6 +861,7 @@ class CopyActionController(QObject):
         success_template: str = "Copied! ({token_count:,} tokens)",
         pre_snapshot: PromptBreakdown | None = None,
         cache_key: PromptCacheKey | None = None,
+        instructions_at_top: bool = False,
     ) -> None:
         """
         Chay mot copy task tren background thread.
@@ -867,9 +879,10 @@ class CopyActionController(QObject):
             gen: Generation number cho operation nay.
             task_fn: Callable tra ve prompt string (chay tren background thread).
             success_template: Template cho status message, co {token_count}.
-            pre_snapshot: Dict snapshot cac gia tri token truoc khi copy (Legacy, replaced by breakdown).
+            pre_snapshot: Dict snapshot cac gia tri token truoc khi copy.
             cache_key: Optional (mode, selected_paths, instructions, include_xml)
                        for storing result in prompt cache.
+            instructions_at_top: Di chuyen instructions len dau.
         """
         # Early exit if generation already stale
         if not self._is_current_generation(gen):
@@ -908,7 +921,14 @@ class CopyActionController(QObject):
                 try:
                     mode, paths, instr, incl_xml = cache_key
                     self._store_in_cache(
-                        mode, paths, instr, prompt, token_count, breakdown, incl_xml
+                        mode,
+                        paths,
+                        instr,
+                        prompt,
+                        token_count,
+                        breakdown,
+                        incl_xml,
+                        instructions_at_top=instructions_at_top,
                     )
                 except Exception:
                     pass  # Cache storage failure is non-critical
@@ -993,6 +1013,7 @@ class CopyActionController(QObject):
             _cache_instructions = instructions
             _cache_include_xml = include_xml
             _cache_mode = copy_mode
+            instructions_at_top = copy_destination == "file"
 
             def task() -> PromptResult:
                 """Heavy work - chay tren background thread."""
@@ -1013,6 +1034,7 @@ class CopyActionController(QObject):
                     tree_item=tree_item,
                     selected_paths=selected_path_strs,
                     include_xml_formatting=include_xml,
+                    instructions_at_top=instructions_at_top,
                 )
 
             snapshot = {"copy_mode": "Copy + OPX" if include_xml else "Copy Context"}
@@ -1031,6 +1053,7 @@ class CopyActionController(QObject):
                     _cache_instructions,
                     _cache_include_xml,
                 ),
+                instructions_at_top=instructions_at_top,
             )
         except Exception as e:
             self._view.show_status(f"Error preparing copy: {e}", is_error=True)
@@ -1055,8 +1078,14 @@ class CopyActionController(QObject):
         self._save_instruction_to_history(instructions)
 
         # === Cache fast path ===
+        instructions_at_top = copy_destination == "file"
         cache_mode = f"copy_smart:{copy_destination}"
-        cached = self._try_cache_hit(cache_mode, selected_path_strs, instructions)
+        cached = self._try_cache_hit(
+            cache_mode,
+            selected_path_strs,
+            instructions,
+            instructions_at_top=instructions_at_top,
+        )
         if cached is not None:
             prompt, token_count, breakdown = cached
             if copy_destination == "file":
@@ -1106,6 +1135,7 @@ class CopyActionController(QObject):
                 )
             },
             cache_key=(cache_mode, selected_path_strs, instructions, False),
+            instructions_at_top=instructions_at_top,
         )
 
     def _copy_tree_map_only(self, copy_destination: str = "text") -> None:
@@ -1297,6 +1327,7 @@ class CopyActionController(QObject):
                     prompt,
                     token_count,
                     breakdown,
+                    instructions_at_top=True,
                 )
             except Exception:
                 pass

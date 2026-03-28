@@ -49,25 +49,27 @@ def assemble_prompt(
     git_logs: Optional[GitLogResult] = None,
     output_style: OutputStyle = OutputStyle.XML,
     project_rules: str = "",
+    instructions_at_top: bool = False,
 ) -> str:
     """
-    Lap rap prompt hoan chinh tu cac sections.
+    Lắp ráp prompt hoàn chỉnh từ các sections.
 
-    Tuy thuoc vao output_style, su dung cau truc khac nhau:
-    - XML: file_summary (voi agent_role) + directory_structure + files + git_changes + instructions
+    Tùy thuộc vào output_style, sử dụng cấu trúc khác nhau:
+    - XML: file_summary (với agent_role) + directory_structure + files + git_changes + instructions
     - JSON: system_instruction + file_summary + directory_structure + files + git + instructions
     - Plain: Summary header + directory + files + git + instructions
     - Markdown: Summary header + file_map + file_contents + git_changes + instructions
 
     Args:
-        file_map: File map string tu generate_file_map()
-        file_contents: File contents string tu formatter tuong ung
-        user_instructions: Huong dan tu nguoi dung
-        include_xml_formatting: Co bao gom OPX instructions khong (True -> OPX, False -> Normal)
+        file_map: File map string từ generate_file_map()
+        file_contents: File contents string từ formatter tương ứng
+        user_instructions: Hướng dẫn từ người dùng
+        include_xml_formatting: Có bao gồm OPX instructions không (True -> OPX, False -> Normal)
         git_diffs: Optional git diffs (work tree & staged)
         git_logs: Optional git logs
-        output_style: Dinh dang dau ra
-        project_rules: Quy tac project
+        output_style: Định dạng đầu ra
+        project_rules: Quy tắc project
+        instructions_at_top: Di chuyển instructions lên đầu (ưu tiên Primal Bias cho context dài/file)
 
     Returns:
         Prompt hoan chinh
@@ -91,6 +93,7 @@ def assemble_prompt(
             git_diffs,
             git_logs,
             project_rules,
+            instructions_at_top,
         )
     elif output_style == OutputStyle.JSON:
         return _assemble_json(
@@ -101,6 +104,7 @@ def assemble_prompt(
             git_diffs,
             git_logs,
             project_rules,
+            instructions_at_top,
         )
     elif output_style == OutputStyle.PLAIN:
         return _assemble_plain(
@@ -111,6 +115,7 @@ def assemble_prompt(
             git_diffs,
             git_logs,
             project_rules,
+            instructions_at_top,
         )
     else:
         return _assemble_markdown(
@@ -121,6 +126,7 @@ def assemble_prompt(
             git_diffs,
             git_logs,
             project_rules,
+            instructions_at_top,
         )
 
 
@@ -131,18 +137,20 @@ def assemble_smart_prompt(
     git_diffs: Optional[GitDiffResult] = None,
     git_logs: Optional[GitLogResult] = None,
     project_rules: str = "",
+    instructions_at_top: bool = False,
 ) -> str:
     """
-    Lap rap prompt cho Copy Smart - gom file_summary (voi agent_role),
-    directory_structure, smart contents, git changes va user_instructions.
+    Lắp ráp prompt cho Copy Smart - gồm file_summary (với agent_role),
+    directory_structure, smart contents, git changes và user_instructions.
 
     Args:
-        smart_contents: Output tu generate_smart_context()
-        file_map: Output tu generate_file_map()
-        user_instructions: Huong dan tu nguoi dung
+        smart_contents: Output từ generate_smart_context()
+        file_map: Output từ generate_file_map()
+        user_instructions: Hướng dẫn từ người dùng
         git_diffs: Optional git diffs
         git_logs: Optional git logs
-        project_rules: Quy tac project
+        project_rules: Quy tắc project
+        instructions_at_top: Di chuyển instructions lên đầu
 
     Returns:
         Prompt string day du
@@ -150,7 +158,11 @@ def assemble_smart_prompt(
     # generate_smart_summary_xml() da bao gom agent_role
     file_summary = generate_smart_summary_xml()
 
-    prompt = f"""{file_summary}
+    prompt = ""
+    if instructions_at_top and user_instructions and user_instructions.strip():
+        prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n\n"
+
+    prompt += f"""{file_summary}
 
 <directory_structure>
 {file_map}
@@ -165,7 +177,7 @@ def assemble_smart_prompt(
     if project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
 
-    if user_instructions and user_instructions.strip():
+    if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
     return prompt.strip()
 
@@ -245,15 +257,20 @@ def _assemble_xml(
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
+    instructions_at_top: bool = False,
 ) -> str:
-    """Lap rap prompt theo XML format voi AI-Friendly header va Agent Role."""
-    # include_xml_formatting = True nghia la dang dung OPX (Overwrite Patch XML)
+    """Lắp ráp prompt theo XML format với AI-Friendly header và Agent Role."""
+    # include_xml_formatting = True nghĩa là đang dùng OPX (Overwrite Patch XML)
     if include_xml_formatting:
         file_summary = generate_file_summary_xml_minimal()
     else:
         file_summary = generate_file_summary_xml()
 
-    prompt = f"""{file_summary}
+    prompt = ""
+    if instructions_at_top and user_instructions and user_instructions.strip():
+        prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n\n"
+
+    prompt += f"""{file_summary}
 
 <directory_structure>
 {file_map}
@@ -286,8 +303,8 @@ Output nothing else outside these blocks.
         if fmt:
             prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
 
-    # User instructions ALWAYS last for recency bias
-    if user_instructions and user_instructions.strip():
+    # User instructions ALWAYS last for recency bias (unless instructions_at_top is True)
+    if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
 
     return prompt
@@ -301,14 +318,15 @@ def _assemble_json(
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
+    instructions_at_top: bool = False,
 ) -> str:
-    """Lap rap prompt theo JSON format voi system_instruction va file_summary."""
+    """Lắp ráp prompt theo JSON format với system_instruction và file_summary."""
     try:
         files_data = json.loads(file_contents)
     except json.JSONDecodeError:
         files_data = {}
 
-    # Them system instruction va file summary vao JSON output
+    # Thêm system instruction và file summary vào JSON output
     prompt_data: dict[str, object] = {
         "system_instruction": AGENT_ROLE_INSTRUCTION,
         "file_summary": {
@@ -321,6 +339,18 @@ def _assemble_json(
         "directory_structure": file_map,
         "files": files_data,
     }
+
+    # Nếu instructions_at_top=True, đưa vào đầu object data (sau system_instruction)
+    if instructions_at_top and user_instructions and user_instructions.strip():
+        # Re-order dict to put instructions at top
+        new_data: dict[str, object] = {
+            "system_instruction": prompt_data["system_instruction"],
+            "instructions": user_instructions.strip(),
+            "file_summary": prompt_data["file_summary"],
+            "directory_structure": prompt_data["directory_structure"],
+            "files": prompt_data["files"],
+        }
+        prompt_data = new_data
 
     # Them git context voi instruction text (truoc project_rules va instructions)
     has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
@@ -353,7 +383,7 @@ def _assemble_json(
     if project_rules and project_rules.strip():
         prompt_data["project_rules"] = project_rules.strip()
 
-    if user_instructions and user_instructions.strip():
+    if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt_data["instructions"] = user_instructions.strip()
 
     return json.dumps(prompt_data, ensure_ascii=False, indent=2)
@@ -367,11 +397,18 @@ def _assemble_plain(
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
+    instructions_at_top: bool = False,
 ) -> str:
-    """Lap rap prompt theo Plain Text format voi Summary header va Git instructions."""
+    """Lắp ráp prompt theo Plain Text format với Summary header và Git instructions."""
     prompt_parts: list[str] = []
 
-    # Them Agent Role va File Summary o dau prompt
+    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước SYSTEM INSTRUCTION)
+    if instructions_at_top and user_instructions and user_instructions.strip():
+        prompt_parts.append(
+            f"{'=' * 48}\nINSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
+        )
+
+    # Thêm Agent Role và File Summary ở đầu prompt
     prompt_parts.append(
         f"{'=' * 48}\nSYSTEM INSTRUCTION\n{'=' * 48}\n{AGENT_ROLE_INSTRUCTION}"
     )
@@ -423,8 +460,8 @@ def _assemble_plain(
         if fmt:
             prompt_parts.append(f"{'-' * 32}\nOUTPUT FORMAT:\n{fmt}")
 
-    # User instructions o cuoi cung (recency bias giup LLM xu ly tot hon)
-    if user_instructions and user_instructions.strip():
+    # User instructions ở cuối cùng (recency bias giúp LLM xử lý tốt hơn) - nếu không ép instructions_at_top
+    if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt_parts.append(f"{'-' * 32}\nInstructions:\n{user_instructions.strip()}")
 
     return "\n\n".join(prompt_parts)
@@ -438,14 +475,20 @@ def _assemble_markdown(
     git_diffs: Optional[GitDiffResult],
     git_logs: Optional[GitLogResult],
     project_rules: str = "",
+    instructions_at_top: bool = False,
 ) -> str:
-    """Lap rap prompt theo Markdown format voi File Summary va Agent Role.
+    """Lắp ráp prompt theo Markdown format với File Summary và Agent Role.
 
-    Su dung hybrid format: Markdown content duoc boc trong XML semantic tags
-    de AI de dang nhan dien ranh gioi cac section.
+    Sử dụng hybrid format: Markdown content được bọc trong XML semantic tags
+    để AI dễ dàng nhận diện ranh giới các section.
     """
-    # Header voi Agent Role va File Summary
-    prompt = f"""<file_summary>
+    prompt = ""
+    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
+    if instructions_at_top and user_instructions and user_instructions.strip():
+        prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n\n"
+
+    # Header với Agent Role và File Summary
+    prompt += f"""<file_summary>
 {GENERATION_HEADER}
 
 <agent_role>
@@ -491,7 +534,7 @@ def _assemble_markdown(
         if fmt:
             prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
 
-    if user_instructions and user_instructions.strip():
+    if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
 
     return prompt

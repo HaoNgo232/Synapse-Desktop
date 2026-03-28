@@ -13,7 +13,7 @@ from typing import List, Optional, Set
 from domain.codemap.symbol_extractor import extract_symbols
 from domain.codemap.types import Symbol
 
-SMALL_FILE_THRESHOLD = 200
+SMALL_FILE_THRESHOLD = 10000  # Tăng lên 10k dòng để tránh cắt nhầm code quan trọng
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,7 +248,7 @@ def slice_file_by_line_range(
 def auto_slice_file(
     file_path: Path,
     relevance_hints: Optional[Set[str]] = None,
-    max_lines: int = 300,
+    max_lines: int = 100000,
     workspace_root: Optional[Path] = None,
 ) -> FileSlice:
     """

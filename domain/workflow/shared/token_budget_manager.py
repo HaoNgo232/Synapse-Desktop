@@ -377,7 +377,7 @@ class TokenBudgetManager:
             try:
                 rel_path = file_path.relative_to(ws).as_posix()
                 slice_result = auto_slice_file(
-                    file_path, max_lines=100, workspace_root=ws
+                    file_path, max_lines=10000, workspace_root=ws
                 )
                 content_tokens = self._tok.count_tokens(slice_result.content)
 

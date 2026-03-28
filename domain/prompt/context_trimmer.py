@@ -53,6 +53,8 @@ class PromptComponents:
     git_logs_text: str = ""
     structure_overhead: int = 0
     dependency_paths: set[str] = field(default_factory=set)
+    protected_paths: set[str] = field(default_factory=set)
+    """Paths that must never be removed or truncated regardless of token pressure."""
 
 
 @dataclass
@@ -198,6 +200,8 @@ class ContextTrimmer:
         if dep_paths:
             removed_deps = []
             for dp in list(dep_paths):
+                if dp in comp.protected_paths:
+                    continue  # Never remove explicitly selected (protected) files
                 if dp in comp.file_contents:
                     del comp.file_contents[dp]
                     removed_deps.append(dp)
@@ -260,6 +264,9 @@ class ContextTrimmer:
             if result.actual_tokens <= self._max_tokens:
                 break
 
+            if path in comp.protected_paths:
+                continue  # Skip files marked as protected — never degrade them
+
             content = comp.file_contents[path]
             ext = _Path(path).suffix.lstrip(".")
 
@@ -320,11 +327,14 @@ class ContextTrimmer:
             if result.actual_tokens <= self._max_tokens:
                 break
 
+            if path in comp.protected_paths:
+                continue  # Skip files marked as protected — last resort still respects them
+
             content = comp.file_contents[path]
             if len(content) <= 200:
                 continue  # Da nho, skip
 
-            truncated = content[:100]
+            truncated = content[:800]
             truncated += (
                 f"\n[NOTE: File severely truncated to fit {self._max_tokens:,} token budget. "
                 f"Use read_file to get full content.]"

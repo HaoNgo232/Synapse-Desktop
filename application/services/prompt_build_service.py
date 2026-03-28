@@ -338,11 +338,15 @@ class PromptBuildService:
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
             )
+            protected_display_paths: set[str] = set()
             for entry in entries:
                 if entry.content is not None:
                     file_content_dict[entry.display_path] = entry.content
                     if str(entry.path) in dep_path_set:
                         dep_display_paths.add(entry.display_path)
+                    else:
+                        # File explicitly selected by user — protect from trimming
+                        protected_display_paths.add(entry.display_path)
 
             git_diffs_text = ""
             git_logs_text = ""
@@ -363,6 +367,7 @@ class PromptBuildService:
                 structure_overhead=breakdown.get("structure_tokens", 0)
                 + breakdown.get("opx_tokens", 0),
                 dependency_paths=dep_display_paths,
+                protected_paths=protected_display_paths,
             )
 
             trimmer = ContextTrimmer(self._tokenization_service, max_tokens)

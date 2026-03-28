@@ -390,6 +390,15 @@ def _assemble_plain(
     if project_rules and project_rules.strip():
         prompt_parts.append(f"{'-' * 32}\nProject Rules:\n{project_rules.strip()}")
 
+    if not include_xml_formatting:
+        prompt_parts.append(
+            f"{'-' * 32}\n"
+            "OUTPUT FORMAT:\n"
+            "Write your response in clear Markdown sections with appropriate headers.\n"
+            "Wrap code snippets in fenced blocks with the correct language tag (e.g. ```python).\n"
+            "If Instructions are provided, address every point before suggesting code changes."
+        )
+
     # User instructions o cuoi cung (recency bias giup LLM xu ly tot hon)
     if user_instructions and user_instructions.strip():
         prompt_parts.append(f"{'-' * 32}\nInstructions:\n{user_instructions.strip()}")
@@ -451,6 +460,15 @@ def _assemble_markdown(
 
     if project_rules and project_rules.strip():
         prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+
+    if not include_xml_formatting:
+        prompt += (
+            "\n<output_format>\n"
+            "Write your response in clear Markdown sections with appropriate headers.\n"
+            "Wrap code snippets in fenced blocks with the correct language tag.\n"
+            "If user_instructions are provided, address every point before suggesting code.\n"
+            "</output_format>\n"
+        )
 
     if user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"

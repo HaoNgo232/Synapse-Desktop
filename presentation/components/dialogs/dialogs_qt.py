@@ -1235,7 +1235,7 @@ class FilePreviewDialogQt(BaseDialogQt):
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
         # Sử dụng font chữ chung của app thay vì mono font cứng nhắc
-        self._text_edit.setFont(QFont(ThemeFonts.FAMILY_BODY, 13))
+        self._text_edit.setFont(QFont(ThemeFonts.FAMILY_BODY, 14))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ "
             f"  background-color: #282a36; color: #f8f8f2; "
@@ -1349,14 +1349,17 @@ class FilePreviewDialogQt(BaseDialogQt):
                 linenos=True,
                 linenostart=1,
                 lineanchors="line",
-                prestyles=(
-                    f"background-color: #282a36; color: #f8f8f2; "
-                    f"font-family: {ThemeFonts.FAMILY_BODY}; "
-                    f"font-size: 14px; padding: 12px; border-radius: 4px; "
-                    f"line-height: 1.5;"
-                ),
             )
-            return highlight_fn(content, lexer, formatter)
+            html_body = highlight_fn(content, lexer, formatter)
+            # Inject style block de ep font chu cho toan bo HTML (bao gom ca bang line numbers)
+            style_header = f"""
+            <style>
+                * {{ font-family: {ThemeFonts.FAMILY_BODY}; font-size: 14px; line-height: 1.6; }}
+                table, tr, td, pre, span, code {{ font-family: {ThemeFonts.FAMILY_BODY}; }}
+                pre {{ margin: 0; padding: 12px; background-color: #282a36; }}
+            </style>
+            """
+            return style_header + html_body
         except ImportError:
             return None
         except Exception:

@@ -355,16 +355,32 @@ class UIBuilderMixin:
             f"QMenu {{ background: {ThemeColors.BG_ELEVATED}; border: 1px solid {ThemeColors.BORDER}; }}"
         )
 
-        saved_model_id = load_app_settings().model_id or DEFAULT_MODEL_ID
-        self._selected_model_id = saved_model_id  # Sync voi view
-        current_label = "Select Model"
+        app_settings = load_app_settings()
+        saved_model_id = app_settings.model_id or DEFAULT_MODEL_ID
 
+        from presentation.config.model_config import get_model_by_id
+
+        current_model = get_model_by_id(saved_model_id)
+        if not current_model and MODEL_CONFIGS:
+            # Fallback: neu id luu tru khong ton tai trong config hien tai
+            current_model = get_model_by_id(DEFAULT_MODEL_ID) or MODEL_CONFIGS[0]
+            saved_model_id = current_model.id
+
+        self._selected_model_id = saved_model_id  # Sync voi view
+
+        current_label = "Select Model"
         for m in MODEL_CONFIGS:
             label = f"{m.name} ({m.context_length // 1000}k)"
             action = model_menu.addAction(label)
             action.setData(m.id)
             if m.id == saved_model_id:
                 current_label = label
+
+        # Neu sau loop van la Select Model -> lay model dau tien
+        if current_label == "Select Model" and MODEL_CONFIGS:
+            m = current_model or MODEL_CONFIGS[0]
+            current_label = f"{m.name} ({m.context_length // 1000}k)"
+            self._selected_model_id = m.id
 
         self._model_btn.setText(current_label)
         self._model_btn.setMenu(model_menu)

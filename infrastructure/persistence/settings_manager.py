@@ -32,7 +32,7 @@ _settings_lock = threading.Lock()
 DEFAULT_SETTINGS = {
     "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",
     "use_gitignore": True,
-    "model_id": "claude-sonnet-4.5",  # Default model
+    "model_id": "gpt-5.1",  # Default model
     "enable_security_check": True,  # Enable security check
     "include_git_changes": True,  # Integrate git diff/log in prompt
     "use_relative_paths": True,  # Xuat path tuong doi workspace (tranh PII trong prompt)

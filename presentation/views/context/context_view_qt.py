@@ -931,9 +931,12 @@ class ContextViewQt(
         # Update Usage Bar (Toolbar) & Actions Panel Labels
         if hasattr(self, "_token_usage_bar"):
             # Lay limit tu model_id da duoc luu tru khi chon tren toolbar
-            from presentation.config.model_config import get_model_by_id
+            from presentation.config.model_config import (
+                get_model_by_id,
+                DEFAULT_MODEL_ID,
+            )
 
-            model_id = getattr(self, "_selected_model_id", "gpt-4o")
+            model_id = getattr(self, "_selected_model_id", DEFAULT_MODEL_ID)
             model_cfg = get_model_by_id(model_id)
             limit = model_cfg.context_length if model_cfg else 128000
 

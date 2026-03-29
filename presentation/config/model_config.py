@@ -102,7 +102,7 @@ MODEL_CONFIGS: List[ModelConfig] = [
 ]
 
 # Default model ID khi chưa chọn
-DEFAULT_MODEL_ID = "claude-sonnet-4.5"
+DEFAULT_MODEL_ID = "gpt-5.1"
 
 
 def get_model_by_id(model_id: str) -> Optional[ModelConfig]:

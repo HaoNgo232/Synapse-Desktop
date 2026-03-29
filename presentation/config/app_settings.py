@@ -42,8 +42,8 @@ class AppSettings:
     use_gitignore: bool = True
 
     # --- AI Context Settings ---
-    # Model ID dang su dung (vd: "claude-sonnet-4.5")
-    model_id: str = "claude-sonnet-4.5"
+    # Model ID dang su dung (vd: "gpt-5.1")
+    model_id: str = "gpt-5.1"
     # Output format ID (vd: "xml", "markdown", "json", "plain")
     output_format: str = "xml"
     # Co include git diff/log trong AI context hay khong

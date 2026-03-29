@@ -289,8 +289,12 @@ def _parse_with_query(
 
         # Iterate over captures dict
         for capture_name, nodes in captures.items():
-            # Only process definition nodes (classes, functions, etc.)
-            if not capture_name.startswith("definition."):
+            # Process definition nodes and metadata (docstrings, comments)
+            if not (
+                capture_name.startswith("definition.")
+                or "docstring" in capture_name
+                or "comment" in capture_name
+            ):
                 continue
 
             for node in nodes:

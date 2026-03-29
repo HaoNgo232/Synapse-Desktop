@@ -22,5 +22,3 @@ tools/validation/usecase_simulation_report.json
 tests/snapshots/plain_format.txt
 tests/snapshots/xml_format.txt
 tmp/
-profile_results.txt
-profile_results_fixed.txt

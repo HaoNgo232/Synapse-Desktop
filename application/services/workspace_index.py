@@ -308,19 +308,19 @@ def collect_files_from_disk(
             for filename in filenames:
                 full_path = os.path.join(dirpath, filename)
 
-                # Fast skip directory check
-                check_path = _sep + full_path + _sep
+                if full_path.startswith(root_path_str):
+                    rel_path = full_path[len(root_path_str) :]
+                else:
+                    rel_path = filename
+
+                # Fast skip directory check - only for paths AFTER workspace root
+                check_path = _sep + rel_path + _sep
                 if any(s in check_path for s in _skip_with_sep):
                     continue
 
                 # Skip system and binary files using strings
                 if is_system_path_str(full_path) or is_binary_file(full_path):
                     continue
-
-                if full_path.startswith(root_path_str):
-                    rel_path = full_path[len(root_path_str) :]
-                else:
-                    rel_path = filename
 
                 if spec.match_file(rel_path):
                     continue

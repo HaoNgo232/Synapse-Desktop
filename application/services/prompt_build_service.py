@@ -22,6 +22,7 @@ from domain.prompt.generator import (
     build_smart_prompt,
     OutputStyle,
 )
+from domain.relationships.summary_generator import generate_relationship_summary_xml
 from domain.prompt.file_collector import collect_files
 from infrastructure.filesystem.file_utils import TreeItem
 from infrastructure.git.git_utils import get_git_diffs, get_git_logs
@@ -696,10 +697,26 @@ class PromptBuildService:
 
     def _compute_semantic_index(self, workspace: Path) -> str:
         """
-        [Feature Disabled] - Tạm thời tắt tính năng tính toán Semantic Index/Project Metadata
-        để tăng tốc độ phản hồi (tránh quét full ổ cứng trên project lớn).
+        Tính toán semantic index (mối quan hệ giữa các files) cho prompt context.
+        Sử dụng GraphService để lấy thông tin dependency/inheritance.
         """
-        return ""
+        if not self._graph_service:
+            return ""
+
+        try:
+            # Đảm bảo graph đã được build hoàn chỉnh (lazy-load if needed)
+            # ensure_built sẽ đợi nếu background build đang chạy cho cùng workspace
+            graph = self._graph_service.ensure_built(workspace)
+            if not graph:
+                return ""
+
+            # Sử dụng summary generator để tạo XML context
+            return generate_relationship_summary_xml(graph, workspace_root=workspace)
+        except Exception as e:
+            from shared.logging_config import log_error
+
+            log_error(f"[PromptBuild] Failed to count semantic index: {e}")
+            return ""
 
 
 class QtClipboardService:

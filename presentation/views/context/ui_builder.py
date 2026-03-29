@@ -793,12 +793,11 @@ class UIBuilderMixin:
         - Hierarchy rõ ràng: Primary CTA -> Secondary -> Tertiary
         """
         panel = QFrame()
-        panel.setProperty("class", "surface")
-        panel.setStyleSheet(f"""
-            QFrame {{
-                background-color: {ThemeColors.BG_SURFACE};
-                border-left: 1px solid {ThemeColors.BORDER};
-            }}
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
+            }
         """)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -867,6 +866,9 @@ class UIBuilderMixin:
             QPushButton:disabled {{ background: {ThemeColors.BG_ELEVATED}; color: {ThemeColors.TEXT_MUTED}; }}
         """)
         self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._opx_btn.setToolTip(
+            "Sao chép context kèm bộ hướng dẫn (Instruction) giúp AI tạo các bản vá code (Patch) theo định dạng OPX."
+        )
         self._opx_btn.clicked.connect(
             lambda: self._copy_controller.on_copy_context_requested(include_xml=True)
         )
@@ -913,6 +915,9 @@ class UIBuilderMixin:
         self._copy_btn = QPushButton("Copy")
         self._copy_btn.setStyleSheet(btn_style_base)
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.setToolTip(
+            "Sao chép context theo định dạng đang chọn trên toolbar."
+        )
         self._copy_btn.clicked.connect(
             lambda: self._copy_controller.on_copy_context_requested(include_xml=False)
         )
@@ -925,6 +930,9 @@ class UIBuilderMixin:
             )
         )
         self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._smart_btn.setToolTip(
+            "Sao chép cấu trúc code rút gọn (Smart Context) giúp tiết kiệm token đáng kể."
+        )
         self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
         secondary_row.addWidget(self._smart_btn)
 
@@ -945,8 +953,8 @@ class UIBuilderMixin:
         sub_btn_style = f"""
             QPushButton {{
                 background-color: transparent;
-                color: {ThemeColors.TEXT_SECONDARY};
-                border: 1px solid {ThemeColors.BORDER}30;
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER}80;
                 border-radius: 18px;
                 padding: 8px; font-size: 11px; font-weight: 500;
             }}
@@ -959,11 +967,17 @@ class UIBuilderMixin:
 
         self._diff_btn = QPushButton("Git Diff")
         self._diff_btn.setStyleSheet(sub_btn_style)
+        self._diff_btn.setToolTip(
+            "Sao chép các thay đổi code dựa trên Git (Commits hoặc file chưa commit) của project."
+        )
         self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
         tertiary_row.addWidget(self._diff_btn)
 
         self._tree_map_btn = QPushButton("Tree Map")
         self._tree_map_btn.setStyleSheet(sub_btn_style)
+        self._tree_map_btn.setToolTip(
+            "Sao chép nhanh toàn bộ sơ đồ cấu trúc thư mục của project."
+        )
         self._tree_map_btn.clicked.connect(
             self._copy_controller.on_copy_tree_map_requested
         )
@@ -982,22 +996,32 @@ class UIBuilderMixin:
         opt_header.setStyleSheet(quick_header.styleSheet())
         opt_wrap.addWidget(opt_header)
 
-        def create_toggle_row(label_text: str) -> tuple:
+        def create_toggle_row(label_text: str, tooltip: str = "") -> tuple:
             row = QHBoxLayout()
             lbl = QLabel(label_text)
             lbl.setStyleSheet(
                 f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY}; padding-left: 4px;"
             )
+            if tooltip:
+                lbl.setToolTip(tooltip)
             row.addWidget(lbl)
             row.addStretch()
             toggle = ToggleSwitch(checked=False)
+            if tooltip:
+                toggle.setToolTip(tooltip)
             row.addWidget(toggle)
             return row, toggle
 
-        _file_row, self._copy_as_file_toggle = create_toggle_row("Copy as file")
+        _file_row, self._copy_as_file_toggle = create_toggle_row(
+            "Copy as file",
+            "Lưu context vào một file tạm thời thay vì copy vào clipboard (hữu ích cho context cực lớn).",
+        )
         opt_wrap.addLayout(_file_row)
 
-        _tree_row, self._full_tree_toggle = create_toggle_row("Include full tree")
+        _tree_row, self._full_tree_toggle = create_toggle_row(
+            "Include full tree",
+            "Đính kèm toàn bộ cấu trúc thư mục project vào prompt để AI nắm bắt được rỡ hơn bức tranh tổng thể.",
+        )
         saved_full_tree = load_app_settings().include_full_tree
         self._full_tree_toggle.setChecked(saved_full_tree)
         self._full_tree_toggle.toggled.connect(

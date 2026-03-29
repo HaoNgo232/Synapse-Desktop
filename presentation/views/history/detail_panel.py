@@ -169,8 +169,8 @@ class HistoryDetailPanel(QWidget):
         )
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 20)  # Tăng padding dưới từ 16 lên 20
+        layout.setSpacing(16)  # Tăng khoảng cách giữa các hàng từ 12 lên 16 cho thoáng
 
         # Row 1: Entry ID + Timestamp
         row1 = QHBoxLayout()
@@ -212,6 +212,7 @@ class HistoryDetailPanel(QWidget):
 
         # Row 3: Action buttons
         layout.addWidget(self._create_action_buttons(entry))
+        layout.addSpacing(4)  # Thêm một chút khoảng trống cuối card
 
         return card
 
@@ -296,8 +297,8 @@ class HistoryDetailPanel(QWidget):
         """Tao row action buttons."""
         widget = QWidget()
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 4, 0, 4)  # Thêm padding trên dưới cho hàng nút
+        layout.setSpacing(10)  # Tăng khoảng cách giữa các nút
 
         # Copy OPX (ghost)
         copy_btn = make_ghost_btn("Copy OPX")

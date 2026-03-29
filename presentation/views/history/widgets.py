@@ -305,53 +305,53 @@ class ErrorCard(QFrame):
 
 
 def _ghost_button_style() -> str:
-    """Ghost button style (transparent with border)."""
+    """Ghost button style (Pill shape, subtle background, 1px border)."""
     return f"""
         QPushButton {{
-            background-color: transparent;
+            background-color: {ThemeColors.BG_ELEVATED}40;
             color: {ThemeColors.TEXT_PRIMARY};
-            border: 1px solid {ThemeColors.BORDER};
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
+            border: 1px solid {ThemeColors.BORDER}40;
+            border-radius: 15px; /* Pill-like */
+            padding: 0px 16px;
+            font-size: 11px;
             font-weight: 600;
         }}
         QPushButton:hover {{
             background-color: {ThemeColors.BG_HOVER};
-            border-color: {ThemeColors.BORDER_LIGHT};
+            border-color: {ThemeColors.BORDER};
         }}
     """
 
 
 def _ghost_danger_button_style() -> str:
-    """Ghost danger button (red text + border)."""
+    """Ghost danger button (red text + border, Pill shape, 1px border)."""
     return f"""
         QPushButton {{
             background-color: transparent;
             color: {ThemeColors.ERROR};
-            border: 1px solid {ThemeColors.ERROR};
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
+            border: 1px solid {ThemeColors.BORDER}40;
+            border-radius: 15px;
+            padding: 0px 14px;
+            font-size: 11px;
             font-weight: 600;
         }}
         QPushButton:hover {{
-            background-color: {ThemeColors.ERROR};
-            color: white;
+            background-color: rgba(248, 113, 113, 0.12);
+            border-color: {ThemeColors.ERROR};
         }}
     """
 
 
 def _primary_button_style() -> str:
-    """Primary button style (accent background)."""
+    """Primary button style (accent background, Pill shape, 1px transparent border)."""
     return f"""
         QPushButton {{
             background-color: {ThemeColors.PRIMARY};
             color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 6px 14px;
-            font-size: 12px;
+            border: 1px solid transparent; /* Giúp khớp kích thước với nút ghost */
+            border-radius: 15px;
+            padding: 0px 18px;
+            font-size: 11px;
             font-weight: 700;
         }}
         QPushButton:hover {{

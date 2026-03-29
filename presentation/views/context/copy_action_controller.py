@@ -695,6 +695,17 @@ class CopyActionController(QObject):
 
         file_paths = [Path(p) for p in selected_files if Path(p).is_file()]
         instructions = self._view.get_instructions_text()
+
+        # Add OPX directive if requested
+        if include_xml:
+            opx_directive = (
+                "\n\n[DIRECTIVE: USE OPX PATCHES]\n"
+                "You are provided with a full/partial code context and instructions. "
+                "For any code changes, YOU MUST respond using OPX (Overwrite Patch XML) format "
+                "as specified in the <opx_instructions> block at the end of this prompt."
+            )
+            instructions += opx_directive
+
         self._save_instruction_to_history(instructions)
         copy_mode_base = "copy_opx" if include_xml else "copy_context"
         copy_mode = f"{copy_mode_base}:{copy_destination}"
@@ -1188,7 +1199,8 @@ class CopyActionController(QObject):
                 raise ValueError("No file tree loaded")
 
             valid_paths = self._collect_all_tree_paths(tree_item)
-            paths = selected_strs & valid_paths if selected_strs else valid_paths
+            # Use full tree paths as requested: "copy tree thì ko cần checkbox luôn"
+            paths = valid_paths
 
             prompt = generate_tree_map_only(
                 tree_item,

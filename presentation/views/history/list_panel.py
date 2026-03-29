@@ -192,6 +192,7 @@ class HistoryListPanel(QWidget):
     def _create_entry_widget(self, entry: HistoryEntry) -> QWidget:
         """Tao widget cho mot entry item trong list (3 dong)."""
         widget = QFrame()
+        widget.setObjectName("historyEntryContainer")
         widget.setProperty("entry_id", entry.id)
 
         # Xac dinh status
@@ -276,9 +277,7 @@ class HistoryListPanel(QWidget):
         )
         line1.addWidget(status_badge)
 
-        line1_widget = QWidget()
-        line1_widget.setLayout(line1)
-        layout.addWidget(line1_widget)
+        layout.addLayout(line1)
 
         # DONG 2: op summary
         if op_summary:
@@ -295,9 +294,7 @@ class HistoryListPanel(QWidget):
             )
             line2.addWidget(ops_label)
             line2.addStretch()
-            line2_widget = QWidget()
-            line2_widget.setLayout(line2)
-            layout.addWidget(line2_widget)
+            layout.addLayout(line2)
 
         # DONG 3: done X / fail Y
         line3 = QHBoxLayout()
@@ -332,9 +329,7 @@ class HistoryListPanel(QWidget):
         line3.addWidget(fail_label)
         line3.addStretch()
 
-        line3_widget = QWidget()
-        line3_widget.setLayout(line3)
-        layout.addWidget(line3_widget)
+        layout.addLayout(line3)
 
         # STYLING - selected hay khong
         is_selected = self._selected_entry_id == entry.id
@@ -347,23 +342,29 @@ class HistoryListPanel(QWidget):
         if selected:
             widget.setStyleSheet(
                 f"""
-                QFrame {{
-                    background-color: rgba(124, 111, 255, 0.1);
+                #historyEntryContainer {{
+                    background-color: rgba(124, 111, 255, 0.12);
                     border-left: 4px solid {ThemeColors.PRIMARY};
                     border-radius: 8px;
+                }}
+                #historyEntryContainer QLabel {{
+                    background-color: transparent;
                 }}
             """
             )
         else:
             widget.setStyleSheet(
                 """
-                QFrame {
+                #historyEntryContainer {
                     background-color: transparent;
                     border-left: 4px solid transparent;
                     border-radius: 8px;
                 }
-                QFrame:hover {
+                #historyEntryContainer:hover {
                     background-color: rgba(45, 45, 68, 0.4);
+                }
+                #historyEntryContainer QLabel {
+                    background-color: transparent;
                 }
             """
             )

@@ -344,7 +344,7 @@ def _assemble_json(
             "notes": SUMMARY_NOTES,
         },
         "semantic_index": semantic_index.strip() if semantic_index else "",
-        "directory_structure": file_map,
+        "structure": file_map,
         "files": files_data,
     }
 
@@ -364,7 +364,7 @@ def _assemble_json(
         new_data.update(
             {
                 "file_summary": prompt_data["file_summary"],
-                "directory_structure": prompt_data["directory_structure"],
+                "structure": prompt_data["structure"],
                 "files": prompt_data["files"],
             }
         )

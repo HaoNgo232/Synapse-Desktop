@@ -1,14 +1,20 @@
 <files>
-<file path="config.json">
+  <file path="config.json">
+    <role>Config</role>
+    <content><![CDATA[
 {
-  &quot;version&quot;: &quot;1.0&quot;,
-  &quot;debug&quot;: false
+  "version": "1.0",
+  "debug": false
 }
 
-</file>
-<file path="hello.py">
+]]></content>
+  </file>
+  <file path="hello.py">
+    <role>Hello</role>
+    <content><![CDATA[
 def greet(name):
-    return f&quot;Hello, {name}!&quot;
+    return f"Hello, {name}!"
 
-</file>
+]]></content>
+  </file>
 </files>

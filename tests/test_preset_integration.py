@@ -91,9 +91,8 @@ class TestPresetIntegration:
         context_view.file_tree_widget.set_selected_paths(paths)
         context_view._preset_controller.create_preset("New Preset")
 
-        # After creating preset: placeholder + 1 preset = 2 items (empty state removed)
-        # So count stays same but content changes
-        assert context_view._preset_widget._combo.count() >= 2
+        # After creating preset: 1 preset should be in the list
+        assert context_view._preset_widget._combo.count() >= 1
 
         # Verify preset appears in combo
         preset_names = [

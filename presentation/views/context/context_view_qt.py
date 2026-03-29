@@ -25,6 +25,7 @@ from infrastructure.persistence.settings_manager import update_app_setting
 from presentation.config.output_format import (
     OutputStyle,
     get_style_by_id,
+    get_format_config,
     DEFAULT_OUTPUT_STYLE,
 )
 
@@ -683,8 +684,10 @@ class ContextViewQt(
             update_app_setting(output_format=format_id)
 
             # Update button text to reflect selection
+            # Update button text to reflect selection
             if hasattr(self, "_format_btn"):
-                self._format_btn.setText(self._selected_output_style.name)
+                config = get_format_config(self._selected_output_style)
+                self._format_btn.setText(config.name)
 
             if self._copy_controller:
                 self._copy_controller._prompt_cache.invalidate_all()

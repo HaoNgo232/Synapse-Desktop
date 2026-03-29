@@ -601,7 +601,7 @@ class TestJsonFormat:
         )
 
         data = json.loads(result)
-        assert data["directory_structure"] == "tree"
+        assert data["structure"] == "tree"
         assert data["files"]["file.py"] == "content"
         assert data["user_instructions"] == "instr"
 

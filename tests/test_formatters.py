@@ -36,6 +36,9 @@ def _make_entry(
     error=None,
     language="python",
     display_path=None,
+    layer=None,
+    role=None,
+    dependencies=None,
 ):
     """Tao FileEntry nhanh cho tests."""
     return FileEntry(
@@ -44,6 +47,9 @@ def _make_entry(
         content=content,
         error=error,
         language=language,
+        layer=layer,
+        role=role,
+        dependencies=dependencies or [],
     )
 
 
@@ -141,7 +147,7 @@ class TestFormatFilesXml:
         assert "<files>" in result
         assert "</files>" in result
         assert '<file path="test.py">' in result
-        assert "print(&#x27;hello&#x27;)" in result  # HTML escaped
+        assert "print('hello')" in result
 
     def test_skipped_file(self):
         """Skipped file co attribute skipped='true'."""
@@ -150,19 +156,17 @@ class TestFormatFilesXml:
         assert 'skipped="true"' in result
         assert "Binary file" in result
 
-    def test_special_chars_escaped(self):
-        """XML special chars duoc escape."""
-        entries = [_make_entry(content="a < b && c > d")]
-        result = format_files_xml(entries)
+    def test_special_chars_escaped_in_metadata(self):
+        """XML special chars trong metadata (layer/role) duoc escape."""
+        entry = _make_entry(path="test.py", layer="a < b && c > d")
+        result = format_files_xml([entry])
         assert "&lt;" in result
         assert "&amp;" in result
         assert "&gt;" in result
-
-    def test_path_with_special_chars(self):
-        """Path co special chars cung duoc escape."""
-        entries = [_make_entry(display_path='path/with"quotes.py')]
-        result = format_files_xml(entries)
-        assert "&quot;" in result
+        # Content CDATA khong escape
+        entry2 = _make_entry(path="test.py", content="x < y")
+        result2 = format_files_xml([entry2])
+        assert "<![CDATA[\nx < y\n]]>" in result2
 
 
 class TestGenerateFileSummaryXml:
@@ -274,8 +278,7 @@ class TestFormatFilesPlain:
         """Single file co header, separator, va content."""
         entries = [_make_entry()]
         result = format_files_plain(entries)
-        assert "File: test.py" in result
-        assert "----------------" in result
+        assert "===== FILE: test.py =====" in result
         assert "print('hello')" in result
 
     def test_binary_skip_message(self):
@@ -291,8 +294,8 @@ class TestFormatFilesPlain:
             _make_entry(path="b.py", display_path="b.py", content="b_code"),
         ]
         result = format_files_plain(entries)
-        assert "File: a.py" in result
-        assert "File: b.py" in result
+        assert "===== FILE: a.py =====" in result
+        assert "===== FILE: b.py =====" in result
         # Ngan cach bang double newline
         assert "\n\n" in result
 
@@ -319,7 +322,7 @@ class TestAssemblePromptXml:
             output_style=OutputStyle.XML,
         )
         assert "<file_summary>" in result
-        assert "<directory_structure>" in result
+        assert "<structure>" in result
 
     def test_xml_with_user_instructions(self):
         """XML prompt co user_instructions o cuoi."""
@@ -360,7 +363,7 @@ class TestAssemblePromptJson:
             output_style=OutputStyle.JSON,
         )
         data = json.loads(result)
-        assert "directory_structure" in data
+        assert "structure" in data
         assert "files" in data
 
     def test_json_with_git(self):
@@ -387,8 +390,8 @@ class TestAssemblePromptPlain:
             output_style=OutputStyle.PLAIN,
         )
         assert "<file_summary>" not in result
-        assert "Directory Structure:" in result
-        assert "File Contents:" in result
+        assert "DIRECTORY STRUCTURE" in result
+        assert "FILE CONTENTS" in result
 
     def test_plain_with_instructions_first(self):
         """Plain prompt co instructions o cuoi (recency bias)."""
@@ -399,9 +402,9 @@ class TestAssemblePromptPlain:
             output_style=OutputStyle.PLAIN,
         )
         # Instructions xuat hien SAU Directory Structure va File Contents (recency bias)
-        inst_pos = result.index("Instructions:")
-        dir_pos = result.index("Directory Structure:")
-        contents_pos = result.index("File Contents:")
+        inst_pos = result.index("USER INSTRUCTIONS")
+        dir_pos = result.index("DIRECTORY STRUCTURE")
+        contents_pos = result.index("FILE CONTENTS")
         assert dir_pos < contents_pos < inst_pos, (
             "Instructions should be at the end for recency bias"
         )

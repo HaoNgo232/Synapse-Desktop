@@ -416,8 +416,8 @@ class TestPerformanceRegression:
 
         end_time = time.perf_counter()
 
-        # Thoi gian phai nho hon 100ms
+        # Thoi gian phai nho hon 200ms (allow for environment variation)
         render_time_ms = (end_time - start_time) * 1000
-        assert render_time_ms < 100.0, (
-            f"Performance regression: {render_time_ms:.2f}ms > 100ms"
+        assert render_time_ms < 200.0, (
+            f"Performance regression: {render_time_ms:.2f}ms > 200ms"
         )

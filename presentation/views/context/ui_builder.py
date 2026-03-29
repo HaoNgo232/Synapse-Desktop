@@ -1020,7 +1020,7 @@ class UIBuilderMixin:
 
         _tree_row, self._full_tree_toggle = create_toggle_row(
             "Include full tree",
-            "Đính kèm toàn bộ cấu trúc thư mục project vào prompt để AI nắm bắt được rỡ hơn bức tranh tổng thể.",
+            "Đính kèm toàn bộ cấu trúc thư mục project vào prompt để AI nắm bắt được rõ hơn bức tranh tổng thể.",
         )
         saved_full_tree = load_app_settings().include_full_tree
         self._full_tree_toggle.setChecked(saved_full_tree)

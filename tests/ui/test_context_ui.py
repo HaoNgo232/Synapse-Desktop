@@ -6,6 +6,7 @@ Covers: lines 43-382 cua context_view_qt.py
 
 from unittest.mock import patch, MagicMock
 from pathlib import Path
+from presentation.config.output_format import OutputStyle
 
 from PySide6.QtCore import QObject
 
@@ -73,10 +74,9 @@ def test_context_view_set_get_instructions(context_view):
 def test_context_view_format_change(context_view):
     """Kiem tra thay doi output format dropdown."""
     view = context_view
-    assert hasattr(view, "_format_combo")
-    if view._format_combo.count() > 1:
-        view._format_combo.setCurrentIndex(1)
-        assert view._format_combo.currentIndex() == 1
+    assert hasattr(view, "_format_btn")
+    assert view._format_btn.menu() is not None
+    assert len(view._format_btn.menu().actions()) > 0
 
 
 def test_context_view_selected_paths_empty(context_view):
@@ -93,11 +93,11 @@ def test_context_view_instructions_change_updates_word_count(context_view):
     assert "words" in view._word_count_label.text()
 
 
-def test_context_view_token_label_exists(context_view):
-    """Kiem tra token count label ton tai va hien thi gia tri mac dinh."""
+def test_context_view_token_bar_exists(context_view):
+    """Kiem tra token usage bar ton tai."""
     view = context_view
-    assert view._token_count_label is not None
-    assert "0 tokens" in view._token_count_label.text()
+    assert hasattr(view, "_token_usage_bar")
+    assert view._token_usage_bar is not None
 
 
 def test_context_view_copy_buttons_exist(context_view):
@@ -249,14 +249,11 @@ def test_on_format_changed(context_view):
     view = context_view
     with (
         patch("presentation.views.context.context_view_qt.update_app_setting"),
-        patch(
-            "presentation.views.context.context_view_qt.get_style_by_id"
-        ) as mock_get_style,
+        patch("presentation.config.output_format.get_style_by_id") as mock_get_style,
     ):
-        mock_get_style.return_value = MagicMock()
-        view._format_combo.setCurrentIndex(0)
-        # Trigger manually
-        view._on_format_changed(0)
+        mock_get_style.return_value = OutputStyle.XML
+        # Trigger manually since format_btn uses menu actions
+        view._on_format_changed("xml")
 
 
 def test_on_format_changed_value_error(context_view):

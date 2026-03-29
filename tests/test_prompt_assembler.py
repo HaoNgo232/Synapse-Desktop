@@ -48,9 +48,9 @@ class TestAssemblePrompt:
         )
 
         assert "<file_summary>" in prompt
-        assert "<directory_structure>" in prompt
+        assert "<structure>" in prompt
         assert sample_file_map in prompt
-        assert "</directory_structure>" in prompt
+        assert "</structure>" in prompt
         assert sample_file_contents_xml in prompt
         assert "<user_instructions>" in prompt
         assert "Please fix bugs." in prompt
@@ -70,9 +70,9 @@ class TestAssemblePrompt:
         data = json.loads(prompt)
         assert "system_instruction" in data
         assert "file_summary" in data
-        assert data["directory_structure"] == sample_file_map
+        assert data["structure"] == sample_file_map
         assert "src/main.py" in data["files"]
-        assert data["instructions"] == "Refactor code."
+        assert data["user_instructions"] == "Refactor code."
         assert "formatting_instructions" not in data
 
     def test_assemble_plain_format(self, sample_file_map, sample_file_contents_plain):
@@ -87,11 +87,11 @@ class TestAssemblePrompt:
 
         assert "SYSTEM INSTRUCTION" in prompt
         assert "FILE SUMMARY" in prompt
-        assert "Directory Structure:" in prompt
+        assert "DIRECTORY STRUCTURE" in prompt
         assert sample_file_map in prompt
-        assert "File Contents:" in prompt
+        assert "FILE CONTENTS" in prompt
         assert sample_file_contents_plain in prompt
-        assert "Instructions:" in prompt
+        assert "USER INSTRUCTIONS" in prompt
         assert "Explain this." in prompt
         assert "<system_instruction>" not in prompt  # No XML tags in plain text
 
@@ -165,9 +165,9 @@ class TestAssembleSmartPrompt:
         )
 
         assert "<file_summary>" in prompt
-        assert "<directory_structure>" in prompt
+        assert "<structure>" in prompt
         assert sample_file_map in prompt
-        assert "</directory_structure>" in prompt
+        assert "</structure>" in prompt
         assert "<smart_context>" in prompt
         assert smart_contents in prompt
         assert "</smart_context>" in prompt
@@ -221,7 +221,7 @@ class TestAssembleDiffOnlyPrompt:
         assert "Files changed: 1" in prompt
         assert "Lines: +1 / -0" in prompt
         assert "</diff_context>" in prompt
-        assert "<directory_structure>" in prompt
+        assert "<structure>" in prompt
         assert "main.py" in prompt  # The tree structure
         assert "<git_diff>" in prompt
         assert "+new line" in prompt

@@ -690,7 +690,7 @@ def build_diff_only_prompt(
 
     if include_tree_structure and diff_result.changed_files:
         tree_str = _build_tree_from_paths(diff_result.changed_files[:50])
-        parts.extend(["<directory_structure>", tree_str, "</directory_structure>", ""])
+        parts.extend(["<structure>", tree_str, "</structure>", ""])
 
     parts.extend(["<git_diff>", diff_result.diff_content, "</git_diff>"])
 

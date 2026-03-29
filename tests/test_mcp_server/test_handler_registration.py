@@ -106,18 +106,20 @@ class TestIndividualHandlerRegistration:
         assert "manage_memory" in names
         assert "get_contract_pack" in names
         assert "detect_design_drift" in names
-        assert len(names) == 9
+        assert "list_workflow_plugins" in names
+        assert "run_workflow_plugin" in names
+        assert len(names) == 11
 
 
 class TestRegisterAllTools:
     """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 20 (tools thuc te dang ky)."""
+        """Tong so tools phai la 22 (tools thuc te dang ky)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 20
+        assert len(tools) == 22
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -162,6 +164,8 @@ class TestRegisterAllTools:
             "manage_memory",
             "get_contract_pack",
             "detect_design_drift",
+            "list_workflow_plugins",
+            "run_workflow_plugin",
         }
 
         missing = expected_tools - names

@@ -27,7 +27,7 @@ class TestAppSettings:
     def test_default_values(self):
         """Test AppSettings co default values dung."""
         settings = AppSettings()
-        assert settings.model_id == "claude-sonnet-4.5"
+        assert settings.model_id == "gpt-5.1"
         assert settings.output_format == "xml"
         assert settings.include_git_changes is True
         assert settings.enable_security_check is True
@@ -114,6 +114,7 @@ class TestAppSettings:
             "output_language",
             "template_tier",
             "rule_file_names",
+            "include_full_tree",
         }
         assert set(d.keys()) == expected_keys
 
@@ -168,7 +169,7 @@ class TestTypedSettingsManager:
         ):
             settings = load_app_settings()
             assert isinstance(settings, AppSettings)
-            assert settings.model_id == "claude-sonnet-4.5"
+            assert settings.model_id == "gpt-5.1"
 
     def test_load_app_settings_with_file(self, tmp_path):
         """Test load tu existing file."""
@@ -204,7 +205,7 @@ class TestTypedSettingsManager:
             "infrastructure.persistence.settings_manager.SETTINGS_FILE", settings_file
         ):
             settings = load_app_settings()
-            assert settings.model_id == "claude-sonnet-4.5"
+            assert settings.model_id == "gpt-5.1"
 
     def test_save_app_settings(self, tmp_path):
         """Test save -> load roundtrip."""
@@ -239,7 +240,7 @@ class TestTypedSettingsManager:
 
             saved = json.loads(settings_file.read_text())
             assert saved["custom_key"] == "custom_value"  # Extra key van con
-            assert saved["model_id"] == "claude-sonnet-4.5"
+            assert saved["model_id"] == "gpt-5.1"
 
     def test_update_app_setting_single(self, tmp_path):
         """Test update 1 field."""

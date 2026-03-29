@@ -654,7 +654,9 @@ class FileTreeWidget(QWidget):
         uncached = [f for f in selected_files if f not in self._model._token_cache]
 
         if not uncached:
-            # All cached — just emit done to refresh display
+            # All cached — STILL trigger update_token_counts_batch so folder aggregate cache is cleared
+            # and ancestors are notified (important when resolving newly discovered files).
+            self._model.update_token_counts_batch({})
             self.token_counting_done.emit()
             return
 

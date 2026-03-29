@@ -878,22 +878,40 @@ class FileTreeModel(QAbstractItemModel):
 
     def update_token_counts_batch(self, counts: Dict[str, int]) -> None:
         """Batch update token counts và emit dataChanged cho files + ancestor folders."""
-        if not counts:
-            return
+        # Update cache neu co du lieu moi
+        if counts:
+            self._token_cache.update(counts)
 
-        self._token_cache.update(counts)
+        # Luon invalidate folder stats cache de tinh lai tu cache moi (hoac do selection thay doi)
+        self._clear_folder_state_cache()
 
-        # Emit dataChanged for updated files + their ancestor folders
+        # Emit dataChanged for updated files + their ancestor folders (visible in tree)
         changed_nodes: Set[TreeNode] = set()
-        for path in counts:
+        workspace_path_str = (
+            self._workspace_path.as_posix() if self._workspace_path else ""
+        )
+
+        # Neu counts empty (force refresh), notify tat ca selected paths
+        paths_to_notify = list(counts.keys())
+        if not paths_to_notify:
+            paths_to_notify = list(self._selection_mgr.iterate_paths())
+
+        for path in paths_to_notify:
+            # 1. Notify the file itself (if in tree)
             node = self._path_to_node.get(path)
             if node is not None:
                 changed_nodes.add(node)
-                # Also mark ancestor folders for repaint (token total changed)
-                parent = node.parent
-                while parent is not None and parent is not self._invisible_root:
-                    changed_nodes.add(parent)
-                    parent = parent.parent
+
+            # 2. Notify all ancestors (if in tree) — important for lazy-loaded folders
+            p = Path(path).parent
+            while str(p) != "/" and len(str(p)) >= len(workspace_path_str):
+                p_str = p.as_posix()
+                parent_node = self._path_to_node.get(p_str)
+                if parent_node:
+                    changed_nodes.add(parent_node)
+                if p_str == workspace_path_str:
+                    break
+                p = p.parent
 
         for node in changed_nodes:
             idx = self._node_to_index(node)
@@ -987,6 +1005,15 @@ class FileTreeModel(QAbstractItemModel):
                 if self._generation == generation:
                     self._search_index = index
                     self._search_index_ready = True
+                    # FIX: Khi index xong, can re-resolve selection de count tokens cac files o vung chua load
+                    if self._selection_mgr.count() > 0:
+                        from infrastructure.adapters.qt_utils import run_on_main_thread
+
+                        run_on_main_thread(
+                            lambda: self.selection_changed.emit(
+                                self._selection_mgr.selected_paths
+                            )
+                        )
 
         thread = threading.Thread(target=_build, daemon=True)
         thread.start()
@@ -1010,7 +1037,10 @@ class FileTreeModel(QAbstractItemModel):
         return self._invisible_root
 
     def _clear_folder_state_cache(self) -> None:
+        """Clear cache cho folder tri-state calculation va stats."""
         self._folder_state_cache.clear()
+        if hasattr(self, "_folder_token_sum_cache"):
+            self._folder_token_sum_cache.clear()
 
     def _emit_tree_checkstate_changed(self) -> None:
         """Emit dataChanged cho toàn bộ visible rows (dùng cho bulk operations).
@@ -1209,12 +1239,18 @@ class FileTreeModel(QAbstractItemModel):
         return result
 
     def _emit_parent_changes(self, node: TreeNode) -> None:
-        """Emit dataChanged cho tất cả ancestors (cập nhật tri-state)."""
+        """Emit dataChanged cho tất cả ancestors (cập nhật tri-state và stats)."""
         current = node.parent
         while current is not None and current is not self._invisible_root:
             idx = self._node_to_index(current)
             if idx.isValid():
-                self.dataChanged.emit(idx, idx, [Qt.ItemDataRole.CheckStateRole])
+                # Refresh checkbox (tri-state) và cả stats (nếu có child thay đổi token)
+                roles = [
+                    Qt.ItemDataRole.CheckStateRole,
+                    FileTreeRoles.TOKEN_COUNT_ROLE,
+                    FileTreeRoles.LINE_COUNT_ROLE,
+                ]
+                self.dataChanged.emit(idx, idx, roles)
             current = current.parent
 
 

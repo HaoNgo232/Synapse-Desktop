@@ -1,7 +1,7 @@
 # Synapse Desktop
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20(Stable)%20%7C%20Windows%20(Beta)-orange)
 ![Qt](https://img.shields.io/badge/GUI-PySide6%20(Qt6)-41cd52)
 ![MCP](https://img.shields.io/badge/MCP-Server%20Ready-blueviolet)
@@ -291,8 +291,4 @@ Inspired by:
 - Workflow tool concepts for AI-assisted code analysis inspired by [RepoPrompt](https://repoprompt.com) and similar patterns in the AI tooling ecosystem
 
 ## License
-<!-- UPDATED: Changed license from MIT to GPL-3.0 as requested -->
-[GPL-3.0 License](LICENSE) © HaoNgo232
-
----
-*Note: This documentation was automatically analyzed and updated to reflect the latest Synapse Desktop structural decisions.*
+[MIT License](LICENSE) © HaoNgo232

@@ -299,8 +299,8 @@ class FileTreeDelegate(QStyledItemDelegate):
                 self._badge_width(text) for text, _ in badge_items
             ) + SPACING * (len(badge_items) - 1)
 
-        # Eye icon width (chi cho files)
-        eye_reserve = (EYE_ICON_SIZE + SPACING) if not is_dir else 0
+        # Eye icon no longer needed as label triggers preview
+        eye_reserve = 0
 
         # SPACE CALCULATION
         right_x_limit = rect.right() - BADGE_RIGHT_INSET
@@ -313,7 +313,13 @@ class FileTreeDelegate(QStyledItemDelegate):
 
         # 5. Draw label (with search highlight)
         painter.setFont(_get_font_bold() if is_dir else _get_font_normal())
-        painter.setPen(COLOR_TEXT_PRIMARY)
+
+        # Task 2: Highlight label color on hover to indicate interactiveness
+        is_row_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+        if not is_dir and is_row_hovered:
+            painter.setPen(COLOR_PRIMARY)
+        else:
+            painter.setPen(COLOR_TEXT_PRIMARY)
 
         fm = QFontMetrics(painter.font())
         elided_label = fm.elidedText(
@@ -323,7 +329,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         label_rect = QRect(x, y, label_width, height)
 
         if self._search_query and self._search_query in label.lower():
-            self._draw_highlighted_text(painter, label_rect, elided_label, height)
+            self._draw_highlighted_text(
+                painter, label_rect, elided_label, height, is_dir, is_row_hovered
+            )
         else:
             painter.drawText(
                 label_rect,
@@ -331,21 +339,8 @@ class FileTreeDelegate(QStyledItemDelegate):
                 elided_label,
             )
 
+        # Task 1: Eye icon removed (Action now triggered by label click)
         current_x = x + label_width + SPACING
-
-        # 6. Draw Eye icon (chi cho files) - NGAY SAU TEN FILE
-        if not is_dir:
-            is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
-            eye_color = QColor("#8888AA") if is_hovered else QColor("#444466")
-            eye_inner_size = 16  # Nho lai mot chut de hop voi text
-            eye_pixmap = _get_qta_pixmap("mdi6.eye-outline", eye_color, eye_inner_size)
-
-            painter.drawPixmap(
-                int(current_x + (EYE_ICON_SIZE - eye_inner_size) // 2),
-                int(y + (height - eye_inner_size) // 2),
-                eye_pixmap,
-            )
-            current_x += EYE_ICON_SIZE + SPACING
 
         # 7. Draw badges
         if badge_items:
@@ -384,11 +379,11 @@ class FileTreeDelegate(QStyledItemDelegate):
         x += CHECKBOX_SIZE + SPACING
         x += ICON_SIZE + SPACING
 
-        # Click vao checkbox/icon zone
+        # Click vao checkbox/icon zone: click_x < x
         if click_x < x:
             return "checkbox"
 
-        # Tinh toan label_width de biet eye icon bat dau tu dau
+        # Tinh toan label_width de biet label zone bat dau tu dau
         # Logic phai TRUNG KHOP voi paint()
         badge_items_count = 0
         badges_total_width = 0
@@ -398,10 +393,39 @@ class FileTreeDelegate(QStyledItemDelegate):
         if line_count is not None and line_count > 0:
             badges_total_width += self._badge_width(f"{line_count}L")
             badge_items_count += 1
+
+        # Check if is_rule to include rule badge width
+        is_rule = False
+        file_path = index.data(FileTreeRoles.FILE_PATH_ROLE)
+        if file_path and not is_dir:
+            model = index.model()
+            if hasattr(model, "sourceModel"):
+                source_model = model.sourceModel()
+                workspace = (
+                    source_model.get_workspace_path()
+                    if hasattr(source_model, "get_workspace_path")
+                    else None
+                )
+            else:
+                workspace = (
+                    model.get_workspace_path()
+                    if hasattr(model, "get_workspace_path")
+                    else None
+                )
+
+            if workspace:
+                from application.services.workspace_rules import is_rule_file
+
+                is_rule = is_rule_file(workspace, file_path)
+
+        if is_rule:
+            badges_total_width += self._badge_width("RULE")
+            badge_items_count += 1
+
         if badge_items_count > 0:
             badges_total_width += SPACING * (badge_items_count - 1)
 
-        eye_reserve = (EYE_ICON_SIZE + SPACING) if not is_dir else 0
+        eye_reserve = 0
         right_x_limit = item_rect.right() - BADGE_RIGHT_INSET
         available_for_label_and_eye = (
             right_x_limit
@@ -419,12 +443,9 @@ class FileTreeDelegate(QStyledItemDelegate):
         )
         label_width = fm.horizontalAdvance(elided_label)
 
-        # Eye zone: ngay sau label_width
-        if not is_dir:
-            eye_start = x + label_width + SPACING
-            eye_end = eye_start + EYE_ICON_SIZE
-            if eye_start <= click_x < eye_end:
-                return "eye"
+        # 1. Label zone: Trigger preview neu la file
+        if not is_dir and x <= click_x < x + label_width:
+            return "eye"  # Trigger preview cho label click
 
         return "other"
 
@@ -516,6 +537,8 @@ class FileTreeDelegate(QStyledItemDelegate):
         rect: QRect,
         text: str,
         row_height: int,
+        is_dir: bool,
+        is_hovered: bool,
     ) -> None:
         """Draw text với search highlight background."""
         query = self._search_query
@@ -540,7 +563,7 @@ class FileTreeDelegate(QStyledItemDelegate):
 
         # Draw before text
         if before:
-            painter.setPen(COLOR_TEXT_PRIMARY)
+            # Use current pen color (which might be highlighted for hover)
             painter.drawText(
                 x, y, rect.width(), row_height, Qt.AlignmentFlag.AlignVCenter, before
             )
@@ -567,7 +590,12 @@ class FileTreeDelegate(QStyledItemDelegate):
 
         # Draw after text
         if after:
-            painter.setPen(COLOR_TEXT_PRIMARY)
+            # Restore pen to what it was before search match override (primary if hovered, otherwise text_primary)
+            if not is_dir and is_hovered:
+                painter.setPen(COLOR_PRIMARY)
+            else:
+                painter.setPen(COLOR_TEXT_PRIMARY)
+
             painter.drawText(
                 int(x),
                 y,

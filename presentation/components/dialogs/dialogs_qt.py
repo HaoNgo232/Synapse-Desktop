@@ -40,10 +40,10 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer
+from PySide6.QtCore import Qt, Signal, Slot, QTimer, QEvent
 from PySide6.QtGui import QFont
 
-from presentation.config.theme import ThemeColors
+from presentation.config.theme import ThemeColors, ThemeFonts
 from infrastructure.adapters.qt_utils import run_on_main_thread
 from infrastructure.adapters.clipboard_utils import copy_to_clipboard
 from shared.utils.diff_filter_utils import should_auto_exclude as _should_auto_exclude
@@ -1145,7 +1145,7 @@ class FilePreviewDialogQt(BaseDialogQt):
     """Dialog preview nội dung file với line numbers."""
 
     MAX_PREVIEW_SIZE = 1024 * 1024  # 1MB
-    MAX_LINES = 5000
+    MAX_LINES = 100000
 
     def __init__(
         self,
@@ -1158,8 +1158,20 @@ class FilePreviewDialogQt(BaseDialogQt):
         self.file_path = file_path
         self._content = content
         self._highlight_line = highlight_line
-        self.setMinimumSize(900, 650)
+        self.setMinimumSize(1200, 850)
+
+        # Bỏ block modal để người dùng có thể click ra bên ngoài
+        # Override BaseDialogQt setting
+        self.setModal(False)
+
         self._build_ui()
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Đóng dialog khi người dùng click ra bên ngoài (mất focus)."""
+        if event.type() == QEvent.Type.ActivationChange:
+            if not self.isActiveWindow():
+                self.close()
+        super().changeEvent(event)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -1222,10 +1234,12 @@ class FilePreviewDialogQt(BaseDialogQt):
         # Code editor (read only) with syntax highlighting
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
-        self._text_edit.setFont(QFont("Cascadia Code, Fira Code, Consolas", 12))
+        # Sử dụng font chữ chung của app thay vì mono font cứng nhắc
+        self._text_edit.setFont(QFont(ThemeFonts.FAMILY_BODY, 13))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ "
             f"  background-color: #282a36; color: #f8f8f2; "
+            f"  font-family: {ThemeFonts.FAMILY_BODY}; font-size: 14px; "
             f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 8px; "
             f"}} "
             f"QScrollBar:vertical {{ "
@@ -1336,10 +1350,10 @@ class FilePreviewDialogQt(BaseDialogQt):
                 linenostart=1,
                 lineanchors="line",
                 prestyles=(
-                    "background-color: #282a36; color: #f8f8f2; "
-                    "font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; "
-                    "font-size: 12px; padding: 12px; border-radius: 4px; "
-                    "line-height: 1.5;"
+                    f"background-color: #282a36; color: #f8f8f2; "
+                    f"font-family: {ThemeFonts.FAMILY_BODY}; "
+                    f"font-size: 14px; padding: 12px; border-radius: 4px; "
+                    f"line-height: 1.5;"
                 ),
             )
             return highlight_fn(content, lexer, formatter)
@@ -1355,6 +1369,12 @@ class FilePreviewDialogQt(BaseDialogQt):
         content: Optional[str] = None,
         highlight_line: Optional[int] = None,
     ) -> None:
-        """Convenience static method to show the dialog."""
+        """
+        Hiển thị preview file.
+        Sử dụng show() thay vì exec() để không block main thread
+        và cho phép click ra ngoài để đóng.
+        """
         dialog = FilePreviewDialogQt(parent, file_path, content, highlight_line)
-        dialog.exec()
+        # Tự động dọn dẹp khi đóng
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.show()

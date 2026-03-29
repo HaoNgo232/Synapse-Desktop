@@ -22,5 +22,5 @@ env -u PYTHONHOME -u PYTHONPATH .venv/bin/pyrefly check
 
 4. Run unit tests with Pytest
 ```bash
-env -u PYTHONHOME -u PYTHONPATH .venv/bin/pytest tests/ -v
+env -u PYTHONHOME -u PYTHONPATH .venv/bin/pytest tests/ -v && python3 tools/architecture/check_architecture.py --strict
 ```

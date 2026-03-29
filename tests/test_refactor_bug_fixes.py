@@ -242,17 +242,11 @@ class TestSmartContextParameter:
         service = PromptBuildService()
         workspace = Path("/tmp/test_workspace")
 
-        with patch(
-            "application.services.prompt_build_service.generate_smart_context"
-        ) as mock_gen:
+        with patch("domain.prompt.generator.generate_smart_context") as mock_gen:
             mock_gen.return_value = "mock smart content"
-            with patch(
-                "application.services.prompt_build_service.generate_file_map"
-            ) as mock_map:
+            with patch("domain.prompt.generator.generate_file_map") as mock_map:
                 mock_map.return_value = ""
-                with patch(
-                    "application.services.prompt_build_service.build_smart_prompt"
-                ) as mock_build:
+                with patch("domain.prompt.generator.build_smart_prompt") as mock_build:
                     mock_build.return_value = "final prompt"
 
                     from application.services.prompt_helpers import (

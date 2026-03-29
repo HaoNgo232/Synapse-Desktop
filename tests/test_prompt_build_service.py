@@ -30,10 +30,10 @@ class TestProtocolCompliance:
 class TestPromptBuildService:
     """Test PromptBuildService build operations."""
 
-    @patch("application.services.prompt_build_service.get_git_logs")
-    @patch("application.services.prompt_build_service.get_git_diffs")
-    @patch("application.services.prompt_build_service.generate_prompt")
-    @patch("application.services.prompt_build_service.generate_file_contents_xml")
+    @patch("infrastructure.git.git_utils.get_git_logs")
+    @patch("infrastructure.git.git_utils.get_git_diffs")
+    @patch("domain.prompt.generator.generate_prompt")
+    @patch("domain.prompt.generator.generate_file_contents_xml")
     def test_build_prompt_xml(
         self, mock_gen_xml, mock_gen_prompt, mock_diff, mock_logs
     ):
@@ -69,10 +69,10 @@ class TestPromptBuildService:
         assert breakdown["content_tokens"] == 42
         mock_gen_prompt.assert_called_once()
 
-    @patch("application.services.prompt_build_service.get_git_logs")
-    @patch("application.services.prompt_build_service.get_git_diffs")
-    @patch("application.services.prompt_build_service.build_smart_prompt")
-    @patch("application.services.prompt_build_service.generate_smart_context")
+    @patch("infrastructure.git.git_utils.get_git_logs")
+    @patch("infrastructure.git.git_utils.get_git_diffs")
+    @patch("domain.prompt.generator.build_smart_prompt")
+    @patch("domain.prompt.generator.generate_smart_context")
     def test_build_prompt_smart(self, mock_smart_ctx, mock_build, mock_diff, mock_logs):
         """build_prompt smart format goi smart pipeline."""
         mock_svc = MagicMock()
@@ -106,7 +106,7 @@ class TestPromptBuildService:
         mock_smart_ctx.assert_called_once()
         mock_build.assert_called_once()
 
-    @patch("domain.prompt.generator.generate_file_map")
+    @patch("application.services.prompt_build_service.generate_file_map")
     def test_build_file_map(self, mock_map):
         """build_file_map delegate den generate_file_map."""
         service = PromptBuildService()
@@ -125,12 +125,14 @@ class TestPromptBuildService:
         )
 
         assert result == "tree output"
+        # Mocking check for generate_file_map in generator module
+        # Because PromptBuildService.build_file_map calls it directly
         mock_map.assert_called_once()
 
-    @patch("application.services.prompt_build_service.get_git_logs")
-    @patch("application.services.prompt_build_service.get_git_diffs")
-    @patch("application.services.prompt_build_service.generate_prompt")
-    @patch("application.services.prompt_build_service.generate_file_contents_xml")
+    @patch("infrastructure.git.git_utils.get_git_logs")
+    @patch("infrastructure.git.git_utils.get_git_diffs")
+    @patch("domain.prompt.generator.generate_prompt")
+    @patch("domain.prompt.generator.generate_file_contents_xml")
     def test_build_prompt_extracts_rules(
         self, mock_gen_xml, mock_gen_prompt, mock_diff, mock_logs, tmp_path
     ):

@@ -275,6 +275,7 @@ def apply_context_trimming(
     include_xml_formatting: bool,
     instructions_at_top: bool,
     semantic_index: str,
+    output_style: Any,
 ) -> Tuple[str, List[str]]:
     """Thực hiện cắt giảm context khi vượt quá giới hạn token."""
     from domain.prompt.context_trimmer import ContextTrimmer, PromptComponents
@@ -346,15 +347,6 @@ def apply_context_trimming(
                 semantic_index=semantic_index,
             )
         else:
-            from presentation.config.output_format import OutputStyle
-
-            output_style = (
-                OutputStyle.JSON
-                if output_format == "json"
-                else OutputStyle.PLAIN
-                if output_format == "plain"
-                else OutputStyle.XML
-            )
             file_contents_trimmed = reconstruct_file_contents(
                 trimmed_comp.file_contents, output_format
             )

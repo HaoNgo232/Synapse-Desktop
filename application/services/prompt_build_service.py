@@ -204,6 +204,7 @@ class PromptBuildService:
         git_logs = None
         file_contents = ""
         semantic_index = ""
+        output_style = _FORMAT_TO_STYLE["xml"]
 
         if output_format == "smart":
             prompt, smart_contents = build_smart_context_prompt(
@@ -344,6 +345,7 @@ class PromptBuildService:
                 include_xml_formatting,
                 instructions_at_top,
                 semantic_index,
+                output_style,
             )
             if notes:
                 trimmed = True

@@ -206,12 +206,8 @@ class TestPromptBuildServiceCodemapIntegration:
         codemap_paths = {str(workspace / "utils.py"), str(workspace / "config.py")}
 
         with (
-            patch(
-                "application.services.prompt_build_service.generate_file_contents_xml"
-            ) as mock_gen,
-            patch(
-                "application.services.prompt_build_service.collect_files"
-            ) as mock_collect,
+            patch("domain.prompt.generator.generate_file_contents_xml") as mock_gen,
+            patch("domain.prompt.file_collector.collect_files") as mock_collect,
         ):
             mock_gen.return_value = "<files>mixed content</files>"
 

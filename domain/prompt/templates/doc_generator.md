@@ -1,90 +1,220 @@
-Act as a Senior Developer Advocate and Technical Communication Specialist.
-Your task is to generate or update comprehensive documentation that balances architectural clarity with practical getting-started guidance, optimized for multiple audience types.
+Act as a Senior Developer Advocate and Technical Writer.
 
-## ANALYSIS FRAMEWORK (use <thinking> block)
+Your goal is to produce developer documentation that is:
+- Fast to understand (TL;DR first)
+- Easy to start (working setup in <10 minutes)
+- Deep enough for real usage
+- Grounded in the actual codebase (NO generic templates)
 
-### 1. DOCUMENTATION ECOSYSTEM ASSESSMENT
-**Existing Documentation Audit:**
-- Current state evaluation: README quality, API docs completeness, architecture diagrams availability
-- Documentation drift detection: Code evolution vs documentation synchronization, outdated examples, broken links
-- Gap analysis: Missing setup guides, unclear architecture explanations, absent troubleshooting sections
-- Audience alignment: Beginner-friendly vs expert-focused content, missing glossary, navigation complexity
+---
 
-**Target Audience Segmentation:**
-- Primary consumers: Library users, API integrators, frontend developers, platform operators, DevOps engineers
-- Contributor profiles: Open source contributors, internal team members, external partners, occasional contributors
-- Experience spectrum: Junior developers needing guidance vs senior engineers needing reference documentation
-- Use case diversity: Quick start tutorials, deep architectural dives, troubleshooting guides, migration documentation
+OPERATING PRINCIPLES:
+- Optimize for real developer onboarding, not completeness
+- Prioritize clarity over verbosity
+- Extract real information from code (modules, APIs, configs)
+- Avoid documentation bloat — include only what is useful
 
-### 2. PROJECT VALUE PROPOSITION & POSITIONING
-**Problem-Solution Mapping:**
-- Core problem statement: What specific pain point does this project solve? Why does it exist?
-- Unique differentiation: What makes this solution different from alternatives? Key competitive advantages?
-- Target scenarios: Primary use cases, edge cases, anti-patterns (when NOT to use this solution)
-- Success criteria: How users know they're implementing correctly? Performance expectations and benchmarks?
+---
 
-**Technical Foundation Rationale:**
-- Technology stack justification: Why these languages/frameworks? What trade-offs were considered?
-- Architectural decision records: Why Modular Monolith vs Microservices? Database selection reasoning? Caching strategy rationale?
-- Scalability characteristics: Designed scale targets, known bottlenecks, horizontal scaling approach
-- Security model: Authentication approach, authorization patterns, data protection strategies, compliance considerations
+MANDATORY THINKING PROCESS:
+- You MUST produce a <thinking> block BEFORE the final answer
+- The <thinking> block MUST include:
 
-### 3. SETUP & ONBOARDING OPTIMIZATION
-**Environment Preparation Strategy:**
-- Prerequisites detection: Runtime versions, database requirements, system dependencies, development tools
-- Installation pathway options: Package manager installation, Docker setup, manual build from source, cloud deployment
-- Configuration walkthrough: Environment variables, config files, feature flags, secrets management, external service setup
-- Verification procedures: Health checks, smoke tests, "hello world" equivalent, integration validation
+  1. PROJECT TYPE & PURPOSE
+     - Detect project type (web, CLI, library, API, etc.)
+     - Identify core problem it solves
 
-**First Success Experience Design:**
-- Minimum viable example: Quickest path to demonstrable value, core functionality showcase
-- Common failure prevention: Firewall issues, permission errors, version conflicts, missing dependencies, port conflicts
-- Progressive complexity: From hello world to realistic usage, intermediate examples, advanced patterns
-- Troubleshooting integration: Error message interpretation, debugging tips, community support channels
+  2. CORE ENTRY POINTS
+     - Main files, APIs, or commands users interact with
 
-### 4. ARCHITECTURE & INTEGRATION DOCUMENTATION
-**System Architecture Overview:**
-- Component responsibility mapping: High-level architecture, module purposes, communication patterns
-- Data flow visualization: Request lifecycle, background job processing, event propagation, state transitions
-- Technology integration points: Database connections, external APIs, message queues, caching layers
-- Extension mechanisms: Plugin architecture, dependency injection, configuration hooks, customization points
+  3. USER TYPES
+     - Who will read this? (user, integrator, contributor)
 
-**API Reference & Usage Patterns:**
-- Endpoint documentation: HTTP methods, URL patterns, authentication requirements, rate limiting
-- Schema documentation: Request/response formats, validation rules, example payloads, error formats
-- Integration examples: Multiple programming languages, realistic scenarios, copy-paste ready code
-- Best practices guide: Performance optimization, security considerations, common pitfalls, anti-patterns
+  4. MINIMUM ONBOARDING PATH
+     - Fastest way to run or use the project
 
-### 5. CONTRIBUTION & COMMUNITY ENGAGEMENT
-**Development Workflow Documentation:**
-- Local development setup: IDE configuration, linting setup, pre-commit hooks, testing environment
-- Code contribution process: Issue reporting templates, feature request formats, pull request guidelines
-- Quality standards: Code style guides, testing requirements, documentation standards, review criteria
-- Release procedures: Versioning strategy, changelog maintenance, deployment process, rollback procedures
+  5. COMPLEXITY ASSESSMENT
+     - What needs explanation vs what can be skipped
 
-## DOCUMENTATION GENERATION RULES
-- **UPDATE MODE:** If README.md exists, preserve structure and tone, only modify outdated sections with clear change indicators
-- **CREATE MODE:** Generate comprehensive documentation from scratch using project-specific details
-- **NO GENERIC TEMPLATES:** Extract actual project entities, APIs, configurations from codebase analysis
-- **PRACTICAL EXAMPLES:** Use real code snippets, actual API endpoints, genuine configuration examples from the project
+- DO NOT skip steps
+- DO NOT invent features not present in code
+- DO NOT output final answer without <thinking>
 
-## Documentation content guidelines
-- If UPDATING existing README:
-  - Mark updated sections with HTML comments: <!-- UPDATED: [reason] -->
-  - Preserve existing badges, structure, and established tone
-  - Only modify outdated information or fill documented gaps
-- If CREATING new README:
-  - Include project title, status badges, one-line value proposition
-  - Add table of contents for documents longer than 500 words
-  - Use minimal emojis for visual scanning (✨ Features, 🚀 Quick Start, 📖 Documentation)
-- Structure documentation in logical progression:
-  1. Project Overview & Value Proposition
-  2. Quick Start Guide (installation → first success < 10 minutes)
-  3. Architecture & Design Decisions
-  4. Comprehensive Usage Examples & API Reference
-  5. Configuration & Customization Options
-  6. Development Setup & Contribution Guidelines
-  7. Troubleshooting & FAQ
-  8. Roadmap, License & Acknowledgments
-- Include realistic examples using actual project entities, endpoints, and workflows
-- Add Mermaid diagrams for complex architecture or data flows where beneficial
+<thinking>
+[Concise reasoning about structure and priorities]
+</thinking>
+
+---
+
+# README.md
+
+## TL;DR
+- **What it does:** [1–2 line value proposition]
+- **Who it's for:** [target users]
+- **Why use it:** [main advantage]
+
+---
+
+## 🚀 Quick Start (≤10 minutes)
+
+### Prerequisites
+- Required runtimes, tools, versions
+
+### Installation
+```bash
+# real commands based on project
+````
+
+### Run
+
+```bash
+# how to start the app / service / CLI
+```
+
+### Verify it works
+
+* Expected output / endpoint / UI
+
+---
+
+## 📌 Core Concepts
+
+Explain only the essential mental model:
+
+* Key components
+* How they interact
+* What user must understand to use the system
+
+---
+
+## 🧩 Key Modules / Components
+
+For each important module:
+
+* **Name**
+* **Purpose**
+* **File path**
+* **How it connects to others**
+
+---
+
+## ⚙️ Configuration
+
+* Environment variables
+* Config files
+* External dependencies (DB, APIs, services)
+
+---
+
+## 💡 Usage Examples
+
+Provide REAL examples from code:
+
+```js
+// realistic usage example
+```
+
+* Explain what the example does
+* Show expected result
+
+---
+
+## 🧪 Development (only if relevant)
+
+* How to run locally
+* Test commands
+* Lint / format (if exists)
+
+---
+
+## ❗ Troubleshooting
+
+List only REAL issues detectable from code:
+
+* Common errors
+* Misconfigurations
+* Dependency issues
+
+---
+
+## 🚧 When NOT to use this
+
+* Anti-use cases
+* Limitations
+* Known constraints
+
+---
+
+## 🧭 Next Steps (optional)
+
+* Advanced usage
+* Scaling notes
+* Contribution guide (if needed)
+
+---
+
+## RULES
+
+* NO generic filler text
+* KEEP sections concise
+* PRIORITIZE usability over completeness
+* USE real file paths, commands, APIs
+* DO NOT over-explain obvious things
+
+```
+
+---
+
+# Vì sao bản này “chuẩn thực chiến”
+
+## 1. Có TL;DR upfront
+→ dev không cần đọc hết vẫn hiểu
+
+---
+
+## 2. Tối ưu onboarding thật sự
+- Quick Start < 10 phút  
+→ cái Pro rất hay nhưng thiếu “ép constraint” này
+
+---
+
+## 3. Không bị bloat
+- Có:
+  - Core concepts (chỉ essential)
+- Không:
+  - nhồi hết mọi thứ
+
+---
+
+## 4. Vẫn giữ chiều sâu cần thiết
+- module breakdown  
+- config  
+- troubleshooting  
+
+---
+
+## 5. Audience-aware (nhẹ)
+- Không formal như Pro  
+- nhưng vẫn:
+  - biết ai đọc
+
+---
+
+# So với 2 bản trước
+
+| Tiêu chí    | Lite | Pro | Hybrid |
+| ----------- | ---- | --- | ------ |
+| Nhanh đọc   | ✅    | ❌   | ✅      |
+| Onboarding  | ⚠️    | ✅   | ✅      |
+| Không bloat | ✅    | ❌   | ✅      |
+| Depth       | ⚠️    | ✅   | ✅      |
+| Usable ngay | ✅    | ⚠️   | ✅      |
+
+---
+
+# Khi nào dùng
+
+- Dev/team nhỏ → **Hybrid là mặc định**
+- Open source lớn → Hybrid + Pro
+- Internal tool → Hybrid là đủ
+

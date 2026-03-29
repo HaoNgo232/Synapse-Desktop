@@ -64,6 +64,17 @@ OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
         ],
         file_extension=".xml",
     ),
+    OutputStyle.PLAIN: OutputFormatConfig(
+        id="plain",
+        name="Plain Text",
+        description="Văn bản thô, tối thiểu định dạng",
+        benefits=[
+            "Tiết kiệm token nhất",
+            "Không có tag hay markdown thừa",
+            "Dành cho model context nhỏ",
+        ],
+        file_extension=".txt",
+    ),
     OutputStyle.MARKDOWN: OutputFormatConfig(
         id="markdown",
         name="Markdown",
@@ -85,17 +96,6 @@ OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
             "Cấu trúc chặt chẽ nhất",
         ],
         file_extension=".json",
-    ),
-    OutputStyle.PLAIN: OutputFormatConfig(
-        id="plain",
-        name="Plain Text",
-        description="Văn bản thô, tối thiểu định dạng",
-        benefits=[
-            "Tiết kiệm token nhất",
-            "Không có tag hay markdown thừa",
-            "Dành cho model context nhỏ",
-        ],
-        file_extension=".txt",
     ),
     OutputStyle.SMART: OutputFormatConfig(
         id="smart",

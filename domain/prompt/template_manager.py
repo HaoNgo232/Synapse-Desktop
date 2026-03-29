@@ -127,31 +127,10 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
-            "api_reviewer": TemplateInfo(
-                template_id="api_reviewer",
-                display_name="API Reviewer",
-                description="Review thiết kế API (REST, GraphQL, gRPC, component APIs) về contract, consistency, performance và security",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "flow_checker": TemplateInfo(
-                template_id="flow_checker",
-                display_name="Flow Checker",
-                description="Phân tích execution flow, data flow, control flow và phát hiện vấn đề về luồng xử lý",
-                is_custom=False,
-                has_lite=True,
-            ),
             "architecture_reviewer": TemplateInfo(
                 template_id="architecture_reviewer",
                 display_name="Architecture Reviewer",
                 description="Review kiến trúc tổng thể, SOLID compliance, design patterns và long-term maintainability",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "code_review_gate": TemplateInfo(
-                template_id="code_review_gate",
-                display_name="Code Review Gate",
-                description="Pre-merge quality gate với SOLID/Clean Code checklist và severity-based recommendations",
                 is_custom=False,
                 has_lite=True,
             ),
@@ -173,20 +152,6 @@ class BuiltInTemplateProvider(TemplateProvider):
                 template_id="pull_request_generator",
                 display_name="PR Generator",
                 description="Tạo tiêu đề và mô tả Pull Request chuẩn Conventional Commits từ git diff",
-                is_custom=False,
-                has_lite=True,
-            ),
-            # "dependency_auditor": TemplateInfo(
-            #     template_id="dependency_auditor",
-            #     display_name="Dependency Auditor",
-            #     description="Kiểm tra dependencies về security vulnerabilities, licenses, và outdated packages",
-            #     is_custom=False,
-            #     has_lite=True,
-            # ),
-            "devops_reviewer": TemplateInfo(
-                template_id="devops_reviewer",
-                display_name="DevOps Reviewer",
-                description="Review Docker, K8s, CI/CD pipelines và infrastructure configs về security và performance",
                 is_custom=False,
                 has_lite=True,
             ),
@@ -431,22 +396,6 @@ def _get_output_format_only() -> str:
         return fmt.replace("{{output_language}}", language).strip()
     except OSError:
         return ""
-
-
-def _append_output_format(content: str, opx_mode: bool = False) -> str:
-    """
-    Append shared output format vao content.
-    Hien tai phuong thuc nay duoc giu lai cho muc dich tuong thich or UI display
-    neu can, nhung Assembler moi la nguoi quyet dinh cuoi cung.
-    """
-    if opx_mode:
-        return content.strip()
-
-    fmt = _get_output_format_only()
-    if not fmt:
-        return content.strip()
-
-    return content.strip() + "\n\n" + fmt
 
 
 def list_templates() -> list[TemplateInfo]:

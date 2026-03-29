@@ -325,7 +325,14 @@ class FileTreeWidget(QWidget):
 
     def set_expanded_paths(self, paths: Set[str]) -> None:
         """Expand folders theo paths (session restore)."""
-        self._expand_paths_recursive(QModelIndex(), paths)
+        if not paths:
+            return
+
+        self._tree_view.setUpdatesEnabled(False)
+        try:
+            self._expand_paths_recursive(QModelIndex(), paths)
+        finally:
+            self._tree_view.setUpdatesEnabled(True)
 
     def clear_token_cache(self) -> None:
         """Clear token cache."""

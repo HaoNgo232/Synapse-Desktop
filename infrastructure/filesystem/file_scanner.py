@@ -15,7 +15,7 @@ Features:
 import os
 import time
 from pathlib import Path
-from typing import Callable, Optional, List, Any
+from typing import Callable, Optional, List, Any, Tuple
 from dataclasses import dataclass
 
 import pathspec
@@ -193,16 +193,19 @@ class FileScanner:
         self._progress = ScanProgress()
         self._last_progress_time = 0
 
-        # Build ignore spec
+        # Build initial ignore patterns (root + default + user)
         ignore_patterns = self._build_ignore_patterns(root_path, config)
-        spec = pathspec.PathSpec.from_lines("gitignore", tuple(ignore_patterns))  # type: ignore[arg-type]
+        # Spec stack: list of (PathSpec, base_path)
+        # base_path is the directory where the .gitignore was found
+        root_spec = pathspec.PathSpec.from_lines("gitignore", tuple(ignore_patterns))  # type: ignore[arg-type]
+        spec_stack = [(root_spec, root_path)]
 
         try:
             # Ưu tiên dùng Rust scanner nếu có
             if HAS_SCANDIR_RS:
                 return self._scan_with_rust(
                     root_path,
-                    spec,
+                    spec_stack,
                     progress_callback,
                 )
             else:
@@ -210,7 +213,7 @@ class FileScanner:
                 return self._scan_directory(
                     root_path,
                     root_path,
-                    spec,
+                    spec_stack,
                     progress_callback,
                 )
         finally:
@@ -221,21 +224,18 @@ class FileScanner:
     def _scan_with_rust(
         self,
         root_path: Path,
-        spec: pathspec.PathSpec,
+        spec_stack: List[Tuple[pathspec.PathSpec, Path]],
         progress_callback: Optional[ProgressCallback],
     ) -> TreeItem:
         """
         Scan sử dụng scandir-rs (Rust) - nhanh hơn 3-11x so với Python.
-
-        Rust scanner chạy trong background thread và release GIL,
-        cho phép Python code khác chạy song song.
-
-        NOTE: RustWalk trả về relative paths, không phải absolute paths!
         """
         from shared.logging_config import log_info
 
         if not HAS_SCANDIR_RS or RustWalk is None:
-            return self._scan_directory(root_path, root_path, spec, progress_callback)
+            return self._scan_directory(
+                root_path, root_path, spec_stack, progress_callback
+            )
 
         log_info("[FileScanner] Using scandir-rs (Rust) for fast scanning")
 
@@ -248,84 +248,93 @@ class FileScanner:
             is_dir=True,
         )
 
-        # Dict để build tree structure: absolute path -> TreeItem
-        path_to_item: dict[str, TreeItem] = {root_path_str: root_item}
+        # Dict để build tree structure: Path -> TreeItem
+        path_to_item: dict[Path, TreeItem] = {root_path: root_item}
 
         try:
             # Dùng Walk từ scandir-rs - tương tự os.walk() nhưng nhanh hơn nhiều
-            # NOTE: RustWalk trả về (rel_dirpath, dirs, files) với rel_dirpath là relative path
             for rel_dirpath, dirs, files in RustWalk(root_path_str):
                 if not is_scanning():
                     break
 
-                # Convert relative path to absolute path
-                # RustWalk: '' = root, 'subdir' = subdir, etc.
-                if rel_dirpath == "" or rel_dirpath == ".":
-                    abs_dirpath = root_path_str
-                else:
-                    abs_dirpath = os.path.join(root_path_str, rel_dirpath)
-
-                # Update progress
-                self._progress.directories += 1
-                self._progress.current_path = abs_dirpath
-                self._emit_progress(progress_callback)
+                abs_dirpath = os.path.join(root_path_str, rel_dirpath)
+                current_dir = Path(abs_dirpath)
 
                 # Get parent item
-                parent_item = path_to_item.get(abs_dirpath)
+                parent_item = path_to_item.get(current_dir)
                 if parent_item is None:
-                    # Parent không có trong tree - có thể bị ignore
                     continue
 
-                # Sort dirs và files
-                dirs_sorted = sorted(dirs, key=str.lower)
-                files_sorted = sorted(files, key=str.lower)
+                # Build active spec stack for this directory
+                active_stack = spec_stack.copy()
+                if current_dir != root_path:
+                    # Collect .gitignore specs from root to current_dir
+                    rel_parts = current_dir.relative_to(root_path).parts
+                    check_path = root_path
+                    for part in rel_parts:
+                        check_path = check_path / part
+                        if (
+                            check_path / ".gitignore"
+                        ).exists() and check_path != root_path:
+                            pats = self.ignore_engine.read_gitignore(check_path)
+                            if pats:
+                                s = pathspec.PathSpec.from_lines(
+                                    "gitignore", tuple(pats)
+                                )  # type: ignore[arg-type]
+                                active_stack.append((s, check_path))
 
                 # Process directories
-                for dir_name in dirs_sorted:
+                for dir_name in sorted(dirs, key=str.lower):
                     if not is_scanning():
                         break
-
                     abs_dir_path = os.path.join(abs_dirpath, dir_name)
+                    dir_obj = Path(abs_dir_path)
 
-                    # Check system path
-                    if is_system_path(Path(abs_dir_path)):
+                    if is_system_path(dir_obj):
                         continue
 
-                    # Check ignore patterns using relative path
-                    try:
-                        rel_path = Path(abs_dir_path).relative_to(root_path)
-                        rel_path_str = str(rel_path) + "/"
-                        if spec.match_file(rel_path_str):
+                    # Check ignore patterns against the stack
+                    is_ignored = False
+                    for s, base in active_stack:
+                        try:
+                            rel_to_base = dir_obj.relative_to(base)
+                            rel_path_str = str(rel_to_base) + "/"
+                            if s.match_file(rel_path_str):
+                                is_ignored = True
+                                break
+                        except ValueError:
                             continue
-                    except ValueError:
+
+                    if is_ignored:
                         continue
 
                     child = TreeItem(label=dir_name, path=abs_dir_path, is_dir=True)
                     parent_item.children.append(child)
-                    path_to_item[abs_dir_path] = child
+                    path_to_item[dir_obj] = child
 
                 # Process files
-                for file_name in files_sorted:
+                for file_name in sorted(files, key=str.lower):
                     if not is_scanning():
                         break
-
                     abs_file_path = os.path.join(abs_dirpath, file_name)
+                    file_obj = Path(abs_file_path)
 
-                    # Check system path
-                    if is_system_path(Path(abs_file_path)):
+                    if is_system_path(file_obj) or is_binary_file(file_obj):
                         continue
 
-                    # Skip binary files (parity with Python scanner)
-                    if is_binary_file(Path(abs_file_path)):
-                        continue
-
-                    # Check ignore patterns
-                    try:
-                        rel_path = Path(abs_file_path).relative_to(root_path)
-                        rel_path_str = str(rel_path)
-                        if spec.match_file(rel_path_str):
+                    # Check ignore patterns against the stack
+                    is_ignored = False
+                    for s, base in active_stack:
+                        try:
+                            rel_to_base = file_obj.relative_to(base)
+                            rel_path_str = str(rel_to_base)
+                            if s.match_file(rel_path_str):
+                                is_ignored = True
+                                break
+                        except ValueError:
                             continue
-                    except ValueError:
+
+                    if is_ignored:
                         continue
 
                     self._progress.files += 1
@@ -333,15 +342,15 @@ class FileScanner:
                         TreeItem(label=file_name, path=abs_file_path, is_dir=False)
                     )
 
-            # Final progress
             self._emit_progress(progress_callback, force=True)
 
         except Exception as e:
             from shared.logging_config import log_error
 
             log_error(f"[FileScanner] Rust scanner error: {e}, falling back to Python")
-            # Fallback nếu Rust scanner lỗi
-            return self._scan_directory(root_path, root_path, spec, progress_callback)
+            return self._scan_directory(
+                root_path, root_path, spec_stack, progress_callback
+            )
 
         return root_item
 
@@ -358,7 +367,7 @@ class FileScanner:
         self,
         current_path: Path,
         root_path: Path,
-        spec: pathspec.PathSpec,
+        spec_stack: List[Tuple[pathspec.PathSpec, Path]],
         progress_callback: Optional[ProgressCallback],
     ) -> TreeItem:
         """Scan một directory recursively với progress - optimized version."""
@@ -429,10 +438,19 @@ class FileScanner:
 
             rel_path_str = str(rel_path) + "/"
 
-            if spec.match_file(rel_path_str):
-                continue
+            # Check for nested .gitignore
+            new_spec_stack = spec_stack.copy()
+            if (entry_path / ".gitignore").exists():
+                nested_patterns = self.ignore_engine.read_gitignore(entry_path)
+                if nested_patterns:
+                    nested_spec = pathspec.PathSpec.from_lines(
+                        "gitignore", tuple(nested_patterns)
+                    )  # type: ignore[arg-type]
+                    new_spec_stack.append((nested_spec, entry_path))
 
-            child = self._scan_directory(entry_path, root_path, spec, progress_callback)
+            child = self._scan_directory(
+                entry_path, root_path, new_spec_stack, progress_callback
+            )
             item.children.append(child)
 
         # Process files in batches for better cancellation responsiveness
@@ -457,9 +475,19 @@ class FileScanner:
             except ValueError:
                 continue
 
-            rel_path_str = str(rel_path)
+            # Check ignore patterns against the stack
+            is_ignored = False
+            for s, base in spec_stack:
+                try:
+                    rel_to_base = entry_path.relative_to(base)
+                    rel_path_str = str(rel_to_base)
+                    if s.match_file(rel_path_str):
+                        is_ignored = True
+                        break
+                except ValueError:
+                    continue
 
-            if spec.match_file(rel_path_str):
+            if is_ignored:
                 continue
 
             self._progress.files += 1
@@ -510,7 +538,7 @@ class FileScanner:
 def scan_single_level(
     directory_path: Path,
     root_path: Path,
-    spec: pathspec.PathSpec,
+    spec_stack: List[Tuple[pathspec.PathSpec, Path]],
 ) -> TreeItem:
     """
     Scan chỉ một level của directory (không recursive).
@@ -520,10 +548,7 @@ def scan_single_level(
     Args:
         directory_path: Directory cần scan
         root_path: Root workspace path (để match ignore patterns)
-        spec: PathSpec cho ignore matching
-
-    Returns:
-        TreeItem với children là placeholder nếu có subdirs
+        spec_stack: PathSpec stack cho ignore matching
     """
     if not is_scanning():
         return TreeItem(
@@ -553,15 +578,25 @@ def scan_single_level(
             continue
 
         try:
-            rel_path = entry.relative_to(root_path)
+            entry.relative_to(root_path)
         except ValueError:
             continue
 
-        rel_path_str = str(rel_path)
-        if entry.is_dir():
-            rel_path_str += "/"
+        # Check ignore patterns against the stack
+        is_ignored = False
+        for s, base in spec_stack:
+            try:
+                rel_to_base = entry.relative_to(base)
+                rel_path_str = str(rel_to_base)
+                if entry.is_dir():
+                    rel_path_str += "/"
+                if s.match_file(rel_path_str):
+                    is_ignored = True
+                    break
+            except ValueError:
+                continue
 
-        if spec.match_file(rel_path_str):
+        if is_ignored:
             continue
 
         if entry.is_dir():
@@ -618,13 +653,14 @@ def scan_directory_lazy(
         ignore_engine=IgnoreEngine()
     )  # NOTE: Should pass in ignore_engine instance from caller
 
-    # Build ignore spec
+    # Build initial ignore spec
     ignore_patterns = scanner._build_ignore_patterns(root_path, config)
-    spec = pathspec.PathSpec.from_lines("gitignore", tuple(ignore_patterns))  # type: ignore[arg-type]
+    root_spec = pathspec.PathSpec.from_lines("gitignore", tuple(ignore_patterns))  # type: ignore[arg-type]
+    spec_stack = [(root_spec, root_path)]
 
     start_scanning()
     try:
-        return scan_single_level(directory_path, root_path, spec)
+        return scan_single_level(directory_path, root_path, spec_stack)
     finally:
         pass  # Don't stop scanning - caller manages this
 

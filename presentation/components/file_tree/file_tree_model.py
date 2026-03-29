@@ -11,6 +11,7 @@ KEY OPTIMIZATIONS:
 
 import logging
 import threading
+import os
 from pathlib import Path
 from typing import Optional, Set, Dict, List, Any, TYPE_CHECKING
 
@@ -625,14 +626,76 @@ class FileTreeModel(QAbstractItemModel):
         """
         Get danh sach selected file paths (chi files, khong folders).
 
-        Neu co folder duoc selected ma children chua loaded (lazy loading),
-        se scan filesystem truc tiep de tim tat ca files ben trong.
-        Dam bao token counting luon day du du tree chua expand.
-        Skip binary/image files.
+        Optimization:
+        1. Neu search index build xong -> Collect files tu index (Cuc nhanh, sub-ms).
+        2. Neu chua xong -> Rollback collect tu tree + scan disk (Legacy).
         """
         if self._workspace_path is None:
             return []
 
+        # 1. FAST PATH: Use Search Index if ready
+        if self._search_index_ready and self._search_index:
+            try:
+                return self._get_selected_paths_from_index()
+            except Exception as e:
+                logger.debug(
+                    f"Failed to use search index for selection, falling back: {e}"
+                )
+
+        # 2. SLOW PATH: Legacy disk scan (only for startup period)
+        return self._get_selected_paths_legacy()
+
+    def _get_selected_paths_from_index(self) -> List[str]:
+        """Resolve selected paths using flat search index (Lightning fast)."""
+        selected_paths = self._selection_mgr.selected_paths
+        if not selected_paths:
+            return []
+
+        # Convert to set of Path objects for fast check
+        # We only care about folders in selection for indexing
+        selected_folders: List[str] = []
+        selected_files: Set[str] = set()
+
+        for p in selected_paths:
+            # We don't know if it's a dir or file just from path string in _selection_mgr
+            # But we can check path_to_node or os.path.isdir
+            node = self._path_to_node.get(p)
+            if node:
+                if node.is_dir:
+                    selected_folders.append(
+                        p if p.endswith(os.path.sep) else p + os.path.sep
+                    )
+                else:
+                    selected_files.add(p)
+            else:
+                # Path not in loaded tree, must check disk or guess
+                if os.path.isdir(p):
+                    selected_folders.append(
+                        p if p.endswith(os.path.sep) else p + os.path.sep
+                    )
+                else:
+                    selected_files.add(p)
+
+        result: Set[str] = selected_files
+
+        # If any folder is selected, we must collect all its files from index
+        if selected_folders:
+            # Iterate through all files in search index (maps filename -> [paths])
+            for paths in self._search_index.values():
+                for file_path in paths:
+                    if file_path in result:
+                        continue
+
+                    # Check if file_path is inside any selected folder
+                    for folder in selected_folders:
+                        if file_path.startswith(folder):
+                            result.add(file_path)
+                            break
+
+        return sorted(list(result))
+
+    def _get_selected_paths_legacy(self) -> List[str]:
+        """Legacy resolution via disk scanning (Blocking behavior)."""
         from infrastructure.filesystem.file_utils import is_binary_file
         from application.services.workspace_index import collect_files_from_disk
 
@@ -647,10 +710,8 @@ class FileTreeModel(QAbstractItemModel):
                         result.append(p)
                         seen.add(p)
                 elif node.is_dir:
-                    # Folder selected — collect all files recursively
                     self._collect_files_deep(node, result, seen)
             else:
-                # Path trong selected nhung khong co trong model (e.g. deep unloaded file)
                 path_obj = Path(p)
                 if (
                     path_obj.is_file()
@@ -660,7 +721,6 @@ class FileTreeModel(QAbstractItemModel):
                     result.append(p)
                     seen.add(p)
                 elif path_obj.is_dir():
-                    # Delegate cho workspace_index scan disk (giong _collect_files_deep)
                     disk_files = collect_files_from_disk(
                         path_obj,
                         self._workspace_path,
@@ -670,7 +730,6 @@ class FileTreeModel(QAbstractItemModel):
                         if f not in seen:
                             result.append(f)
                             seen.add(f)
-
         return result
 
     def _collect_files_deep(

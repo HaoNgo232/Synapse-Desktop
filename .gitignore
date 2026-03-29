@@ -21,3 +21,4 @@ tools/architecture/baseline.json
 tools/validation/usecase_simulation_report.json
 tests/snapshots/plain_format.txt
 tests/snapshots/xml_format.txt
+tmp/

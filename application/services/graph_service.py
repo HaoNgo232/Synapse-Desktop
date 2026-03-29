@@ -161,68 +161,9 @@ class GraphService(IRelationshipGraphProvider):
 
     def on_files_changed(self, changed_files: list[str]) -> None:
         """
-        Incremental update khi một hoặc nhiều files thay đổi.
-
-        Chiến lược đơn giản:
-        - Nếu chưa có graph thì bỏ qua (sẽ full-build sau).
-        - Xóa mọi edges liên quan tới các files này.
-        - Rebuild edges mới cho từng file và merge vào graph hiện tại.
+        [Feature Disabled] - Tính năng update graph khi file đổi đã bị tắt theo yêu cầu.
         """
-
-        if not changed_files:
-            return
-
-        with self._lock:
-            if self._graph is None or self._workspace_root is None:
-                return
-            workspace_root = self._workspace_root
-            current_generation = self._generation  # Capture generation
-
-        builder = GraphBuilder(workspace_root=workspace_root)
-
-        # Chuẩn hóa đường dẫn theo workspace
-        normalized: list[str] = []
-        for path_str in changed_files:
-            p = Path(path_str)
-            if not p.is_absolute():
-                p = workspace_root / p
-            if p.exists() and p.is_file():
-                try:
-                    normalized.append(str(p.resolve()))
-                except OSError:
-                    normalized.append(str(p))
-
-        if not normalized:
-            return
-
-        incremental_graph = builder.build(
-            file_paths=normalized,
-            existing_resolver=None,
-            max_codemap_files=len(normalized),
-            imports_max_depth=2,
-        )
-
-        with self._lock:
-            # Check generation để tránh merge stale data
-            if current_generation != self._generation:
-                return  # Workspace đã thay đổi, discard result
-
-            # Khi generation không đổi thì _graph không thể None do đã check ở đầu method.
-            current_graph = self._graph
-
-            # Copy-on-write: Clone graph trước khi mutate để tránh race với readers
-            new_graph = self._clone_graph(current_graph)
-
-            for file_path in normalized:
-                new_graph.remove_edges_for_file(file_path)
-
-            for file_path in normalized:
-                edges = incremental_graph.get_edges_from(file_path)
-                if edges:
-                    new_graph.add_edges(edges)
-
-            # Atomic swap
-            self._graph = new_graph
+        pass
 
     def _clone_graph(self, graph: RelationshipGraph) -> RelationshipGraph:
         """Clone graph bằng cách copy tất cả edges."""
@@ -234,56 +175,27 @@ class GraphService(IRelationshipGraphProvider):
 
     def on_files_deleted(self, deleted_files: list[str]) -> None:
         """
-        Xử lý khi files bị xóa - remove stale edges khỏi graph.
-
-        Args:
-            deleted_files: Danh sách đường dẫn files đã bị xóa
+        [Feature Disabled] - Tính năng update graph khi file bị xóa đã bị tắt.
         """
-        if not deleted_files:
-            return
-
-        with self._lock:
-            if self._graph is None or self._workspace_root is None:
-                return
-
-            workspace_root = self._workspace_root
-
-            for path_str in deleted_files:
-                p = Path(path_str)
-                if not p.is_absolute():
-                    p = workspace_root / p
-                try:
-                    abs_path = str(p.resolve())
-                except OSError:
-                    abs_path = str(p)
-
-                self._graph.remove_edges_for_file(abs_path)
+        pass
 
     def on_workspace_changed(self, workspace_root: Path) -> None:
         """
-        Gọi khi user đổi workspace: trigger full build trên background thread.
+        Gọi khi user đổi workspace: chuẩn bị workspace mới và áp dụng lazy-load.
 
-        Method này không block UI; callers có thể tiếp tục dùng fallback
-        DependencyResolver cho đến khi graph sẵn sàng.
+        Graph sẽ không bị trigger build ngầm (tránh treo/nặng lúc khởi động).
+        Thay vào đó, nó sẽ được build đồng bộ (hoặc ngầm) khi các modules thực sự cần (ví dụ: qua ensure_built).
         """
         from shared.logging_config import log_info
 
         workspace_root = workspace_root.resolve()
-        log_info(f"[GraphService] on_workspace_changed -> {workspace_root}")
+        log_info(f"[GraphService] on_workspace_changed -> {workspace_root} (Lazy)")
 
         with self._lock:
             self._workspace_root = workspace_root
             self._generation += 1
-            generation = self._generation
-            # Đánh dấu đang build background
-            self._building = True
-
-        thread = threading.Thread(
-            target=self._build_graph_background,
-            args=(workspace_root, generation),
-            daemon=True,
-        )
-        thread.start()
+            self._graph = None
+            self._building = False
 
     # ===== Internal helpers =====
 

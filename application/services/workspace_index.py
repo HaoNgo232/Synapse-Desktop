@@ -14,6 +14,7 @@ KHONG import bat ky module Qt nao.
 
 import os
 import logging
+import pathspec
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set
 
@@ -23,110 +24,146 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build_search_index(
-    workspace_path: Path,
-    generation_check: Optional[Callable[[], bool]] = None,
-    ignore_engine: Optional["IgnoreEngine"] = None,
-) -> Dict[str, List[str]]:
-    """
-    Build flat search index tu workspace bang os.walk.
-
-    Dung cung logic ignore voi file tree:
-    pathspec (EXTENDED_IGNORE, excluded patterns, gitignore),
-    is_binary_file, is_system_path.
-
-    Args:
-        workspace_path: Duong dan workspace root.
-        generation_check: Optional callback to check if scan should abort.
-        ignore_engine: Optional IgnoreEngine instance (for cache reuse).
-        generation_check: Optional callback tra ve False neu index da stale
-                          (vi du: user doi workspace giua luc build).
-                          Neu None, khong check.
-
-    Returns:
-        Dict mapping filename_lower -> list of full paths.
-        Vi du: {"main.py": ["/home/user/project/main.py"]}
-    """
-    from shared.constants import DIRECTORY_QUICK_SKIP
-    from infrastructure.filesystem.file_utils import is_binary_file, is_system_path
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+def _get_ignore_spec(
+    workspace_path: Path, ignore_engine: "IgnoreEngine"
+) -> pathspec.PathSpec:
+    """Helper để lấy pathspec cho workspace."""
     from application.services.workspace_config import (
         get_excluded_patterns,
         get_use_gitignore,
     )
 
-    # Dung workspace_path lam root (co resolve)
-    root_path = workspace_path.resolve()
     excluded = get_excluded_patterns()
-
-    # Dung IgnoreEngine instance (inject hoac tao moi)
-    if ignore_engine is None:
-        ignore_engine = IgnoreEngine()
-    spec = ignore_engine.build_pathspec(
-        root_path,
+    return ignore_engine.build_pathspec(
+        workspace_path,
         use_default_ignores=True,
         excluded_patterns=excluded if excluded else None,
         use_gitignore=get_use_gitignore(),
     )
+
+
+def build_search_index(
+    workspace_path: Path,
+    generation_check: Optional[Callable[[], bool]] = None,
+    ignore_engine: Optional["IgnoreEngine"] = None,
+) -> Dict[str, List[str]]:
+    """Build flat search index sử dụng scandir-rs (nếu có) hoặc os.walk."""
+    from shared.constants import DIRECTORY_QUICK_SKIP
+    from infrastructure.filesystem.file_utils import (
+        is_binary_file,
+        is_system_path,
+        HAS_SCANDIR_RS,
+    )
+
+    scandir_rs = None
+    if HAS_SCANDIR_RS:
+        try:
+            import scandir_rs
+        except ImportError:
+            HAS_SCANDIR_RS = False
+
+    root_path = workspace_path.resolve()
+    if ignore_engine is None:
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+
+        ignore_engine = IgnoreEngine()
+
+    spec = _get_ignore_spec(root_path, ignore_engine)
     root_path_str = str(root_path)
+    if not root_path_str.endswith(os.path.sep):
+        root_path_str += os.path.sep
 
-    index: Dict[str, List[str]] = {}  # filename_lower -> [full_paths]
+    index: Dict[str, List[str]] = {}
 
+    # Optimization: Sử dụng scandir_rs.Walk nếu có (nhanh hơn rất nhiều)
+    walk_func = (
+        getattr(scandir_rs, "Walk", None) if (HAS_SCANDIR_RS and scandir_rs) else None
+    )
+
+    if walk_func:
+        try:
+            # Walk returns flattened list of entries if no filter provided
+            # return_type=2 means ReturnEntry
+            results = walk_func(
+                str(root_path),
+                follow_links=True,
+                include_dirs=False,  # Chỉ lấy files cho search index
+                include_files=True,
+                return_type=2,
+            ).collect()
+
+            for entry in results:
+                if generation_check and not generation_check():
+                    return {}
+
+                full_path = entry.path
+                filename = os.path.basename(full_path)
+
+                # Check quick skip dirs in path
+                if any(
+                    skip in full_path.split(os.path.sep)
+                    for skip in DIRECTORY_QUICK_SKIP
+                ):
+                    continue
+
+                entry_p = Path(full_path)
+                if is_system_path(entry_p) or is_binary_file(entry_p):
+                    continue
+
+                # Relative path calculation (fast)
+                if full_path.startswith(root_path_str):
+                    rel_path = full_path[len(root_path_str) :]
+                else:
+                    rel_path = filename
+
+                if spec.match_file(rel_path):
+                    continue
+
+                key = filename.lower()
+                if key not in index:
+                    index[key] = []
+                index[key].append(full_path)
+
+            return index
+        except Exception as e:
+            logger.debug(f"Scandir-rs walk failed, falling back to os.walk: {e}")
+
+    # Fallback to os.walk
     try:
         for dirpath, dirnames, filenames in os.walk(str(workspace_path)):
-            # Check xem index con fresh khong
-            if generation_check is not None and not generation_check():
+            if generation_check and not generation_check():
                 return {}
 
-            # Prune ignored dirs IN-PLACE — os.walk se KHONG enter vao
-            dirnames[:] = sorted(d for d in dirnames if d not in DIRECTORY_QUICK_SKIP)
+            # Prune directories
+            dirnames[:] = [d for d in dirnames if d not in DIRECTORY_QUICK_SKIP]
 
             for filename in filenames:
                 full_path = os.path.join(dirpath, filename)
-                entry = Path(full_path)
+                entry_p = Path(full_path)
 
-                # Skip system files va binary files
-                if is_system_path(entry) or is_binary_file(entry):
+                if is_system_path(entry_p) or is_binary_file(entry_p):
                     continue
 
-                # Check pathspec (gitignore, excluded patterns)
-                try:
-                    rel_path_str = os.path.relpath(full_path, root_path_str)
-                except ValueError:
-                    rel_path_str = filename
+                if full_path.startswith(root_path_str):
+                    rel_path = full_path[len(root_path_str) :]
+                else:
+                    rel_path = filename
 
-                if spec.match_file(rel_path_str):
+                if spec.match_file(rel_path):
                     continue
 
-                # Them vao index
                 key = filename.lower()
                 if key not in index:
                     index[key] = []
                 index[key].append(full_path)
     except Exception as e:
-        logger.debug(f"Error building search index for {workspace_path}: {e}")
+        logger.debug(f"Error building search index: {e}")
 
     return index
 
 
 def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[str]:
-    """
-    Tim files theo query trong search index (case-insensitive substring).
-
-    Ho tro 2 che do tim kiem:
-    - Tim theo ten file (mac dinh): query la substring cua ten file
-    - Tim theo noi dung file (prefix "code:"): quet noi dung cac file trong index
-
-    Independent voi lazy loading — tim duoc ca files chua expand trong tree.
-
-    Args:
-        index: Search index tu build_search_index()
-        query: Chuoi tim kiem (case-insensitive).
-               Neu bat dau bang "code:", se tim trong noi dung file.
-
-    Returns:
-        Sorted list cac full paths matching query.
-    """
+    """Tìm files theo query trong search index (case-insensitive substring)."""
     if not index:
         return []
 
@@ -134,7 +171,7 @@ def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[s
     if not query_stripped:
         return []
 
-    # Kiem tra prefix "code:" de chuyen sang che do tim kiem noi dung file
+    # Check for "code:" prefix
     CODE_PREFIX = "code:"
     if query_stripped.lower().startswith(CODE_PREFIX):
         content_query = query_stripped[len(CODE_PREFIX) :].strip()
@@ -142,7 +179,6 @@ def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[s
             return []
         return _search_content_in_files(index, content_query)
 
-    # Che do mac dinh: tim theo ten file (case-insensitive substring)
     query_lower = query_stripped.lower()
     results: List[str] = []
     for filename_lower, paths in index.items():
@@ -156,34 +192,15 @@ def search_in_index(index: Dict[str, List[str]], query: Optional[str]) -> List[s
 def _search_content_in_files(
     index: Dict[str, List[str]], content_query: str
 ) -> List[str]:
-    """
-    Tim kiem noi dung ben trong cac file da duoc index.
-
-    Quet tung file trong flat index, doc noi dung va tim substring
-    (case-insensitive). Bo qua cac file khong doc duoc (encoding loi,
-    permission denied, file qua lon).
-
-    Args:
-        index: Search index tu build_search_index() (filename_lower -> [full_paths])
-        content_query: Chuoi can tim trong noi dung file (chua strip, chua lower)
-
-    Returns:
-        Sorted list cac full paths chua noi dung matching query.
-    """
-    # Gioi han kich thuoc file de tranh doc file qua lon (2MB)
+    """Tìm kiếm nội dung trong các file đã được indexed."""
     MAX_CONTENT_SEARCH_SIZE = 2 * 1024 * 1024
-
     query_lower = content_query.lower()
     results: List[str] = []
 
-    for _filename, paths in index.items():
+    for paths in index.values():
         for full_path in paths:
             try:
-                import os
-
-                # Bo qua file qua lon de tranh block UI lau
-                file_size = os.path.getsize(full_path)
-                if file_size > MAX_CONTENT_SEARCH_SIZE:
+                if os.path.getsize(full_path) > MAX_CONTENT_SEARCH_SIZE:
                     continue
 
                 with open(full_path, "r", encoding="utf-8", errors="replace") as f:
@@ -192,7 +209,6 @@ def _search_content_in_files(
                 if query_lower in content.lower():
                     results.append(full_path)
             except (OSError, PermissionError, UnicodeDecodeError):
-                # Bo qua cac file khong doc duoc
                 continue
 
     results.sort()
@@ -204,80 +220,102 @@ def collect_files_from_disk(
     workspace_path: Optional[Path] = None,
     ignore_engine: Optional["IgnoreEngine"] = None,
 ) -> List[str]:
-    """
-    Scan filesystem truc tiep de tim tat ca files trong folder.
-
-    Dung cho folders chua lazy-loaded trong tree model.
-    Respect excluded patterns, gitignore, va binary extensions.
-
-    Args:
-        folder: Thu muc can scan.
-        workspace_path: Workspace root (bat buoc de ignore patterns
-                        match dung relative path o moi level).
-                        Raise ValueError neu None.
-        ignore_engine: Optional IgnoreEngine instance (for cache reuse).
-
-    Returns:
-        List cac full paths (khong trung lap, da loc binary/ignored).
-    """
-    from infrastructure.filesystem.file_utils import is_binary_file, is_system_path
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
-    from application.services.workspace_config import (
-        get_excluded_patterns,
-        get_use_gitignore,
-    )
+    """Scan filesystem trực tiếp để lấy tất cả files trong folder (lazy loading fallback)."""
     from shared.constants import DIRECTORY_QUICK_SKIP
-
-    # workspace_path bat buoc - caller phai truyen
-    if workspace_path is None:
-        raise ValueError(
-            "workspace_path is required for collect_files_from_disk. "
-            "Caller must provide workspace root path."
-        )
-    root_path = workspace_path.resolve()
-
-    excluded = get_excluded_patterns()
-
-    # Dung IgnoreEngine instance (inject hoac tao moi)
-    if ignore_engine is None:
-        ignore_engine = IgnoreEngine()
-    spec = ignore_engine.build_pathspec(
-        root_path,
-        use_default_ignores=True,
-        excluded_patterns=excluded if excluded else None,
-        use_gitignore=get_use_gitignore(),
+    from infrastructure.filesystem.file_utils import (
+        is_binary_file,
+        is_system_path,
+        HAS_SCANDIR_RS,
     )
 
+    scandir_rs = None
+    if HAS_SCANDIR_RS:
+        try:
+            import scandir_rs
+        except ImportError:
+            HAS_SCANDIR_RS = False
+
+    if workspace_path is None:
+        raise ValueError("workspace_path is required")
+
+    root_path = workspace_path.resolve()
+    if ignore_engine is None:
+        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+
+        ignore_engine = IgnoreEngine()
+
+    spec = _get_ignore_spec(root_path, ignore_engine)
     root_path_str = str(root_path)
+    if not root_path_str.endswith(os.path.sep):
+        root_path_str += os.path.sep
+
     result: List[str] = []
     seen: Set[str] = set()
 
-    try:
-        for dirpath, dirnames, filenames in os.walk(str(folder)):
-            # Prune ignored directories IN-PLACE — tranh traverse node_modules (100K+ files)
-            dirnames[:] = sorted(d for d in dirnames if d not in DIRECTORY_QUICK_SKIP)
+    # Use scandir_rs if available
+    walk_func = (
+        getattr(scandir_rs, "Walk", None) if (HAS_SCANDIR_RS and scandir_rs) else None
+    )
+    if walk_func:
+        try:
+            entries = walk_func(
+                str(folder),
+                follow_links=True,
+                include_dirs=False,
+                include_files=True,
+                return_type=2,
+            ).collect()
 
-            for filename in filenames:
-                full_path = os.path.join(dirpath, filename)
-                entry = Path(full_path)
-
-                # Skip system files va binary files
-                if is_system_path(entry) or is_binary_file(entry):
+            for entry in entries:
+                full_path = entry.path
+                if any(
+                    skip in full_path.split(os.path.sep)
+                    for skip in DIRECTORY_QUICK_SKIP
+                ):
                     continue
 
-                # Check pathspec (gitignore, excluded patterns)
-                try:
-                    rel_path_str = os.path.relpath(full_path, root_path_str)
-                except ValueError:
-                    rel_path_str = filename
+                entry_p = Path(full_path)
+                if is_system_path(entry_p) or is_binary_file(entry_p):
+                    continue
 
-                if spec.match_file(rel_path_str):
+                if full_path.startswith(root_path_str):
+                    rel_path = full_path[len(root_path_str) :]
+                else:
+                    rel_path = os.path.basename(full_path)
+
+                if spec.match_file(rel_path):
                     continue
 
                 if full_path not in seen:
                     result.append(full_path)
                     seen.add(full_path)
-    except (PermissionError, OSError) as e:
-        logger.debug(f"Error scanning {folder}: {e}")
+            return result
+        except Exception:
+            pass
+
+    # Fallback to os.walk
+    try:
+        for dirpath, dirnames, filenames in os.walk(str(folder)):
+            dirnames[:] = [d for d in dirnames if d not in DIRECTORY_QUICK_SKIP]
+            for filename in filenames:
+                full_path = os.path.join(dirpath, filename)
+                entry_p = Path(full_path)
+
+                if is_system_path(entry_p) or is_binary_file(entry_p):
+                    continue
+
+                if full_path.startswith(root_path_str):
+                    rel_path = full_path[len(root_path_str) :]
+                else:
+                    rel_path = filename
+
+                if spec.match_file(rel_path):
+                    continue
+
+                if full_path not in seen:
+                    result.append(full_path)
+                    seen.add(full_path)
+    except (PermissionError, OSError):
+        pass
 
     return result

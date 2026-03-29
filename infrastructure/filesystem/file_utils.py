@@ -5,18 +5,34 @@ Su dung pathspec thay vi ignore library.
 Ignore/gitignore logic duoc delegate cho core.ignore_engine (single source of truth).
 """
 
+import os
 import platform
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Tuple
 import pathspec
 from shared.constants import (
     BINARY_EXTENSIONS,
-    DIRECTORY_QUICK_SKIP,
 )
 
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
+
+HAS_SCANDIR_RS = False
+try:
+    import scandir_rs
+
+    HAS_SCANDIR_RS = True
+except ImportError:
+    pass
+
+if HAS_SCANDIR_RS:
+    try:
+        from shared.logging_config import log_info
+
+        log_info("[file_utils] scandir-rs available")
+    except ImportError:  # In scripts, shared.logging_config might not be setup
+        pass
 
 # Pre-compile regex for is_system_path (module-level optimization)
 _WINDOWS_RESERVED_PATTERN = re.compile(
@@ -41,42 +57,64 @@ class TreeItem:
     is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
 
 
-def is_binary_file(file_path: Path) -> bool:
+def is_binary_file(path: Path) -> bool:
     """
-    Check if file is binary using extension, magic bytes, and null byte detection.
-    Returns True if file is binary (image, video, audio, executable, etc.)
+    Check xem một file có phải là binary không.
 
-    OPTIMIZED: Check extension first (no I/O), then magic bytes if needed.
-    Delegates to core.binary_detection for low-level checks.
+    Optimization:
+    1. Kiểm tra extension trước (fast whitelist/blacklist)
+    2. Chỉ đọc nội dung nếu extension không xác định.
     """
-    # 1. Check extension first (FAST - no I/O)
-    if file_path.suffix.lower() in BINARY_EXTENSIONS:
+    from shared.constants import BINARY_EXTENSIONS
+
+    # 1. Fast check by extension
+    ext = path.suffix.lower()
+    if ext in BINARY_EXTENSIONS:
         return True
 
-    # 2. Check if file exists and has content
-    if not file_path.is_file():
+    # Whitelist các extension text phổ biến để skip I/O
+    TEXT_EXTENSIONS = {
+        ".py",
+        ".js",
+        ".ts",
+        ".html",
+        ".css",
+        ".md",
+        ".txt",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".xml",
+        ".c",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".rb",
+        ".sh",
+        ".sql",
+        ".mod",
+        ".sum",
+    }
+    if ext in TEXT_EXTENSIONS:
         return False
 
+    # 2. Fallback to magic bytes check
     try:
-        file_size = file_path.stat().st_size
-        if file_size == 0:
-            return False
+        # Kiểm tra file size trước, file cực lớn (>5MB) mà không có extension
+        # text thì khả năng cao là binary (ví dụ dump file).
+        if path.stat().st_size > 5 * 1024 * 1024:
+            return True
 
-        # 3. For files without extension or unknown extension, check content
-        # Only read first 8KB to minimize I/O
-        chunk_size = min(8192, file_size)
-        with open(file_path, "rb") as f:
-            chunk = f.read(chunk_size)
-
-        # 4. Use low-level binary detection (optimized)
-        from shared.constants.binary_detection import _looks_binary_fast
-
-        return _looks_binary_fast(chunk)
-
-    except Exception:
-        pass
-
-    return False
+        with open(path, "rb") as f:
+            chunk = f.read(1024)
+            # Nếu chứa null byte thì khả năng cao là binary
+            return b"\x00" in chunk
+    except (PermissionError, OSError):
+        return False
 
 
 def is_binary_by_extension(file_path: Path) -> bool:
@@ -156,8 +194,11 @@ def scan_directory(
         use_gitignore=use_gitignore,
     )
 
+    # Initial spec stack
+    spec_stack = [(spec, root_path)]
+
     # Build tree recursively
-    return _build_tree(root_path, root_path, spec)
+    return _build_tree(root_path, root_path, spec_stack)
 
 
 def scan_directory_shallow(
@@ -195,17 +236,20 @@ def scan_directory_shallow(
         use_gitignore=use_gitignore,
     )
 
+    # Initial spec stack
+    spec_stack = [(spec, root_path)]
+
     # Build tree voi depth limit
     # current_depth=1 vi root la level 1, children la level 2
     return _build_tree_shallow(
-        root_path, root_path, spec, current_depth=1, max_depth=depth
+        root_path, root_path, spec_stack, current_depth=1, max_depth=depth
     )
 
 
 def _build_tree_shallow(
     current_path: Path,
     root_path: Path,
-    spec: pathspec.PathSpec,
+    spec_stack: List[Tuple[pathspec.PathSpec, Path]],
     current_depth: int,
     max_depth: int,
 ) -> TreeItem:
@@ -221,45 +265,107 @@ def _build_tree_shallow(
         return item
 
     try:
-        entries = list(current_path.iterdir())
-    except PermissionError:
+        # Use scandir_rs if available for much faster listing
+        if HAS_SCANDIR_RS:
+            try:
+                # Scandir returns (entries, stats). In older versions it might be different.
+                # Based on dir(scandir_rs), we use Scandir.
+                # Use getattr to satisfy static analysis (Pyrefly)
+                scandir_func = getattr(scandir_rs, "Scandir", None)
+                if scandir_func:
+                    results = scandir_func(str(current_path)).collect()
+                    # results is a list of Entry objects.
+                    # We convert to Path objects so existing code works.
+                    entries = [Path(entry.path) for entry in results]
+                else:
+                    entries = list(current_path.iterdir())
+            except Exception:
+                # Fallback to iterdir if scandir_rs fails
+                entries = list(current_path.iterdir())
+        else:
+            entries = list(current_path.iterdir())
+    except (PermissionError, OSError):
         return item
 
     # Sort: directories first, then alphabetically
     entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
 
-    for entry in entries:
-        # Check system path first
-        if is_system_path(entry):
+    # Optimization: Pre-calculate base strings
+    spec_stack_with_strs = []
+    for s, base in spec_stack:
+        base_str = str(base)
+        if not base_str.endswith(os.path.sep):
+            base_str += os.path.sep
+        spec_stack_with_strs.append((s, base_str))
+
+    for entry_path in entries:
+        # Check system path first (fast exclude)
+        if is_system_path(entry_path):
             continue
 
-        # Get relative path for ignore matching
-        try:
-            rel_path = entry.relative_to(root_path)
-        except ValueError:
+        entry_path_str = str(entry_path)
+        is_dir = entry_path.is_dir()
+
+        # Check against spec stack using string operations instead of Path.relative_to
+        is_ignored = False
+        for s, base_str in spec_stack_with_strs:
+            if entry_path_str.startswith(base_str):
+                # Extract relative path
+                rel_path = entry_path_str[len(base_str) :]
+                if is_dir and not rel_path.endswith("/"):
+                    rel_path += "/"
+
+                if s.match_file(rel_path):
+                    is_ignored = True
+                    break
+
+        if is_ignored:
             continue
 
-        rel_path_str = str(rel_path)
-        if entry.is_dir():
-            rel_path_str += "/"
+        # optimization: Only lookup .gitignore if we are planning to recurse
+        # or if we need it for children matching in this level.
+        # If max_depth is 1 and we are at root, we still need it for children.
+        # But if max_depth is 1 and current_depth is 1, we don't need to push
+        # NEW .gitignores for placeholder folders.
+        if is_dir and current_depth < max_depth:
+            # Check for nested .gitignore
+            # Use os.path.join for speed over /
+            gitignore_path = os.path.join(entry_path_str, ".gitignore")
+            if os.path.exists(gitignore_path):
+                engine = IgnoreEngine()
+                pats = engine.read_gitignore(entry_path)
+                if pats:
+                    new_spec = engine.build_pathspec(
+                        entry_path,
+                        use_default_ignores=False,
+                        excluded_patterns=pats,
+                        use_gitignore=False,
+                    )
+                    next_spec_stack = spec_stack + [(new_spec, entry_path)]
+                else:
+                    next_spec_stack = spec_stack
+            else:
+                next_spec_stack = spec_stack
+        else:
+            next_spec_stack = spec_stack
 
-        # Check if should be ignored
-        if spec.match_file(rel_path_str):
-            continue
-
-        # Xử lý directories
-        if entry.is_dir():
+        # Recursion logic
+        if is_dir:
             if current_depth < max_depth:
                 # Còn trong depth limit → recurse
                 child = _build_tree_shallow(
-                    entry, root_path, spec, current_depth + 1, max_depth
+                    entry_path,
+                    root_path,
+                    next_spec_stack,
+                    current_depth + 1,
+                    max_depth,
                 )
                 item.children.append(child)
             else:
                 # Vượt depth limit → tạo placeholder với is_loaded=False
                 child = TreeItem(
-                    label=entry.name,
-                    path=str(entry),
+                    label=entry_path.name,
+                    path=str(entry_path),
                     is_dir=True,
                     children=[],
                     is_loaded=False,  # Chưa scan children
@@ -269,7 +375,10 @@ def _build_tree_shallow(
             # Files luôn được thêm
             item.children.append(
                 TreeItem(
-                    label=entry.name, path=str(entry), is_dir=False, is_loaded=True
+                    label=entry_path.name,
+                    path=str(entry_path),
+                    is_dir=False,
+                    is_loaded=True,
                 )
             )
 
@@ -277,7 +386,9 @@ def _build_tree_shallow(
 
 
 def _build_tree(
-    current_path: Path, root_path: Path, spec: pathspec.PathSpec
+    current_path: Path,
+    root_path: Path,
+    spec_stack: List[Tuple[pathspec.PathSpec, Path]],
 ) -> TreeItem:
     """Build tree structure recursively"""
     item = TreeItem(
@@ -302,25 +413,35 @@ def _build_tree(
         if is_system_path(entry):
             continue
 
-        # Get relative path for ignore matching
-        try:
-            rel_path = entry.relative_to(root_path)
-        except ValueError:
-            continue
+        # Check check against spec stack
+        is_ignored = False
+        for s, base in spec_stack:
+            try:
+                rel_to_base = entry.relative_to(base)
+                rel_to_base_str = str(rel_to_base)
+                if entry.is_dir():
+                    rel_to_base_str += "/"
+                if s.match_file(rel_to_base_str):
+                    is_ignored = True
+                    break
+            except ValueError:
+                continue
 
-        rel_path_str = str(rel_path)
-
-        # Add trailing slash for directories (pathspec expects this)
-        if entry.is_dir():
-            rel_path_str += "/"
-
-        # Check if should be ignored
-        if spec.match_file(rel_path_str):
+        if is_ignored:
             continue
 
         # Recurse for directories
         if entry.is_dir():
-            child = _build_tree(entry, root_path, spec)
+            # Check for nested .gitignore
+            new_spec_stack = spec_stack.copy()
+            if (entry / ".gitignore").exists():
+                engine = IgnoreEngine()
+                pats = engine.read_gitignore(entry)
+                if pats:
+                    new_spec = pathspec.PathSpec.from_lines("gitignore", tuple(pats))  # type: ignore
+                    new_spec_stack.append((new_spec, entry))
+
+            child = _build_tree(entry, root_path, new_spec_stack)
             item.children.append(child)
         else:
             item.children.append(
@@ -388,10 +509,6 @@ def get_selected_file_paths(tree: TreeItem, selected_paths: set[str]) -> list[Pa
     return sorted(result_set)  # Sort for deterministic ordering
 
 
-# _find_git_root da chuyen sang core.ignore_engine.find_git_root
-# Re-export o dong dau file de backward compat
-
-
 def load_folder_children(
     folder_item: TreeItem,
     ignore_engine: IgnoreEngine,
@@ -432,13 +549,29 @@ def load_folder_children(
         )
     root_path = workspace_root.resolve()
 
-    # Delegate cho ignore_engine (single source of truth)
+    # Initial spec
     spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=use_default_ignores,
         excluded_patterns=excluded_patterns,
         use_gitignore=use_gitignore,
     )
+    spec_stack = [(spec, root_path)]
+
+    # Build spec stack by looking up path
+    if folder_path != root_path:
+        try:
+            rel_parts = folder_path.relative_to(root_path).parts
+            check_path = root_path
+            for part in rel_parts:
+                check_path = check_path / part
+                if (check_path / ".gitignore").exists() and check_path != root_path:
+                    pats = ignore_engine.read_gitignore(check_path)
+                    if pats:
+                        s = pathspec.PathSpec.from_lines("gitignore", tuple(pats))  # type: ignore
+                        spec_stack.append((s, check_path))
+        except ValueError:
+            pass
 
     # Scan children
     try:
@@ -455,36 +588,22 @@ def load_folder_children(
         if is_system_path(entry):
             continue
 
-        # IGNORE MATCHING: Check both relative path AND entry name
-        # Vì patterns như "node_modules" cần match cả khi ở subfolder
-        entry_name = entry.name
+        # Check against spec stack
+        is_ignored = False
+        for s, base in spec_stack:
+            try:
+                rel_to_base = entry.relative_to(base)
+                rel_to_base_str = str(rel_to_base)
+                if entry.is_dir():
+                    rel_to_base_str += "/"
+                if s.match_file(rel_to_base_str):
+                    is_ignored = True
+                    break
+            except ValueError:
+                continue
 
-        # Quick check cho common ignore directories
-        # Dùng shared DIRECTORY_QUICK_SKIP - bao gồm tất cả ngôn ngữ/framework
-        if entry_name in DIRECTORY_QUICK_SKIP:
+        if is_ignored:
             continue
-
-        # Check với spec cho các patterns khác
-        try:
-            rel_path = entry.relative_to(root_path)
-            rel_path_str = str(rel_path)
-        except ValueError:
-            rel_path_str = entry_name
-
-        # Optimize: Single pathspec check for directories
-        # NOTE: Single check is sufficient because:
-        # 1. DIRECTORY_QUICK_SKIP handles common dirs by name
-        # 2. Pathspec uses gitignore semantics where unanchored patterns match at any level
-        # 3. Anchored patterns (starting with /) correctly match against rel_path_str
-        if entry.is_dir():
-            rel_path_str += "/"
-            # Check if should be ignored (single check instead of 2)
-            if spec.match_file(rel_path_str):
-                continue
-        else:
-            # Check if should be ignored
-            if spec.match_file(rel_path_str):
-                continue
 
         # Add child
         if entry.is_dir():

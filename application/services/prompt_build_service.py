@@ -696,41 +696,10 @@ class PromptBuildService:
 
     def _compute_semantic_index(self, workspace: Path) -> str:
         """
-        Tinh semantic index metadata tu GraphService.
-        ...
-        Returns:
-            Formatted XML string (<semantic_index>) hoac "" neu khong co du lieu
+        [Feature Disabled] - Tạm thời tắt tính năng tính toán Semantic Index/Project Metadata
+        để tăng tốc độ phản hồi (tránh quét full ổ cứng trên project lớn).
         """
-        from shared.logging_config import log_info
-
-        if self._graph_service is None:
-            log_info("[PromptBuild] _graph_service is None, skipping semantic index")
-            return ""
-
-        try:
-            # ensure_built: blocking build neu chua co, tra ve ngay neu da san sang
-            log_info(f"[PromptBuild] Ensuring graph is built for {workspace}...")
-            graph = self._graph_service.ensure_built(workspace)
-
-            from application.services.project_metadata_service import (
-                ProjectMetadataService,
-            )
-            from domain.metadata.formatter import format_project_structure
-
-            metadata = ProjectMetadataService().compute(graph, workspace_root=workspace)
-            xml = format_project_structure(metadata)
-            if xml:
-                log_info(
-                    f"[PromptBuild] Semantic index computed: {metadata.file_count} files, {len(metadata.top_files)} top, {len(metadata.modules)} modules"
-                )
-            else:
-                log_info("[PromptBuild] Semantic index computed but XML is empty")
-            return xml
-        except Exception as e:
-            from shared.logging_config import log_error
-
-            log_error("[PromptBuild] Failed to compute semantic index", exc=e)
-            return ""
+        return ""
 
 
 class QtClipboardService:

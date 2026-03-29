@@ -123,6 +123,7 @@ class IgnoreEngine:
         return spec
 
     def read_gitignore(self, root_path: Path) -> List[str]:
+        """Doc .gitignore va .git/info/exclude cho mot directory cu the."""
         gitignore_path = root_path / ".gitignore"
         cache_key = str(root_path)
 
@@ -147,37 +148,52 @@ class IgnoreEngine:
             try:
                 gitignore_mtime = gitignore_path.stat().st_mtime
                 content = gitignore_path.read_text(encoding="utf-8", errors="replace")
-                patterns.extend(content.splitlines())
+                # Loc bo cac line rong hoac comment
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        patterns.append(line)
             except (OSError, IOError):
                 pass
 
+        # Doc .git/info/exclude neu o root
         exclude_path = root_path / ".git" / "info" / "exclude"
         if exclude_path.exists():
             try:
                 content = exclude_path.read_text(encoding="utf-8", errors="replace")
-                patterns.extend(content.splitlines())
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        patterns.append(line)
             except (OSError, IOError):
                 pass
 
+        # Store with lock
+        with self._lock:
+            self._gitignore_cache[cache_key] = (gitignore_mtime, patterns.copy())
+        return patterns
+
+    def read_global_gitignore(self) -> List[str]:
+        """Doc global gitignore tu home directory."""
+        patterns: List[str] = []
         home = Path.home()
-        global_ignore_candidates = [
+        candidates = [
             home / ".config" / "git" / "ignore",
             home / ".gitignore_global",
             home / ".gitignore",
         ]
 
-        for candidate in global_ignore_candidates:
+        for candidate in candidates:
             if candidate.exists():
                 try:
                     content = candidate.read_text(encoding="utf-8", errors="replace")
-                    patterns.extend(content.splitlines())
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            patterns.append(line)
                     break
                 except (OSError, IOError):
                     pass
-
-        # Store with lock
-        with self._lock:
-            self._gitignore_cache[cache_key] = (gitignore_mtime, patterns.copy())
         return patterns
 
     def find_git_root(self, start_path: Path) -> Path:

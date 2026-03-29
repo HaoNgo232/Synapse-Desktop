@@ -219,6 +219,7 @@ DIRECTORY_QUICK_SKIP: frozenset[str] = frozenset(
         "tmp",
         "temp",
         ".tmp",
+        ".synapse",
     }
 )
 
@@ -332,6 +333,7 @@ EXTENDED_IGNORE_PATTERNS = [
     "**/repomix-output.*",
     "**/repopack-output.*",
     "**/synapse-output.*",
+    "**/.synapse/**",
 ]
 
 # Diff auto-exclude patterns (untick by default trong Copy Diff flow)

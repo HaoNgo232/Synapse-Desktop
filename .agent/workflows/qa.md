@@ -24,3 +24,5 @@ env -u PYTHONHOME -u PYTHONPATH .venv/bin/pyrefly check
 ```bash
 env -u PYTHONHOME -u PYTHONPATH .venv/bin/pytest tests/ -v && python3 tools/architecture/check_architecture.py --strict
 ```
+
+5. env -u PYTHONHOME -u PYTHONPATH .venv/bin/pytest tests/ui/ -v

@@ -115,7 +115,6 @@ When working with LLMs for coding, managing context is a massive pain. Copy-past
 ---
 
 ## 🖥️ Application Interface
-
 **1. Context Management (Main Interface)**
 ![Select files and folders to send to AI](assets/image.png)
 *Select files and view the calculated token count before copying the prompt.*

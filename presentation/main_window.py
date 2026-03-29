@@ -57,7 +57,6 @@ _TAB_CONFIG = [
     ("📁", "Context"),
     ("⚡", "Apply"),
     ("🕐", "History"),
-    ("📋", "Logs"),
     ("⚙️", "Settings"),
 ]
 
@@ -165,11 +164,9 @@ class SynapseMainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        # Import views (lazy to avoid circular imports)
         from presentation.views.context.context_view_qt import ContextViewQt
         from presentation.views.apply.apply_view_qt import ApplyViewQt
         from presentation.views.history.history_view_qt import HistoryViewQt
-        from presentation.views.logs.logs_view_qt import LogsViewQt
         from presentation.views.settings.settings_view_qt import SettingsViewQt
 
         # Tao ServiceContainer tai composition root de quan ly lifecycle cua tat ca services
@@ -183,7 +180,6 @@ class SynapseMainWindow(QMainWindow):
 
             self._services = ServiceContainer()
 
-        # Create views voi explicit DI tu container
         self.context_view = ContextViewQt(
             self._get_workspace_path,
             prompt_builder=self._services.prompt_builder,
@@ -194,7 +190,6 @@ class SynapseMainWindow(QMainWindow):
         )
         self.apply_view = ApplyViewQt(self._get_workspace_path)
         self.history_view = HistoryViewQt(self._on_reapply_from_history)
-        self.logs_view = LogsViewQt()
         self.settings_view = SettingsViewQt(self._on_settings_changed)
 
         # Add tabs with icon + text
@@ -202,7 +197,6 @@ class SynapseMainWindow(QMainWindow):
             self.context_view,
             self.apply_view,
             self.history_view,
-            self.logs_view,
             self.settings_view,
         ]
         for (icon, label), view in zip(_TAB_CONFIG, views):
@@ -580,14 +574,12 @@ class SynapseMainWindow(QMainWindow):
         """Handle tab change — refresh relevant views."""
         self._current_tab_index = index
 
-        view_names = ["context", "apply", "history", "logs", "settings"]
+        view_names = ["context", "apply", "history", "settings"]
         if 0 <= index < len(view_names):
             set_active_view(view_names[index])
 
         if index == 2:
             self.history_view.on_view_activated()
-        if index == 3:
-            self.logs_view.on_view_activated()
 
     def _on_settings_changed(self) -> None:
         """Handle settings change — reload context view."""

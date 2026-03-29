@@ -170,11 +170,11 @@ class FileTreeWidget(QWidget):
         self._select_all_btn.setIcon(QIcon(os.path.join(assets_dir, "select-all.svg")))
         self._select_all_btn.setIconSize(QSize(20, 20))
         self._select_all_btn.setProperty("class", "flat")
-        self._select_all_btn.setFixedSize(36, 28)
+        self._select_all_btn.setFixedSize(30, 30)
         self._select_all_btn.setToolTip("Select All")
         self._select_all_btn.setStyleSheet(
-            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
-            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
+            f"QPushButton {{ color: #CBD5E1; background: transparent; border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 0; min-width: 30px; min-height: 30px; }} "
+            f"QPushButton:hover {{ color: {ThemeColors.TEXT_PRIMARY}; background: {ThemeColors.BG_HOVER}; border-color: {ThemeColors.BORDER_LIGHT}; }}"
         )
         actions_layout.addWidget(self._select_all_btn)
 
@@ -183,11 +183,11 @@ class FileTreeWidget(QWidget):
         self._deselect_all_btn.setIcon(QIcon(os.path.join(assets_dir, "uncheck.svg")))
         self._deselect_all_btn.setIconSize(QSize(20, 20))
         self._deselect_all_btn.setProperty("class", "flat")
-        self._deselect_all_btn.setFixedSize(36, 28)
+        self._deselect_all_btn.setFixedSize(30, 30)
         self._deselect_all_btn.setToolTip("Deselect All")
         self._deselect_all_btn.setStyleSheet(
-            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
-            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
+            f"QPushButton {{ color: #CBD5E1; background: transparent; border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 0; min-width: 30px; min-height: 30px; }} "
+            f"QPushButton:hover {{ color: {ThemeColors.TEXT_PRIMARY}; background: {ThemeColors.BG_HOVER}; border-color: {ThemeColors.BORDER_LIGHT}; }}"
         )
         actions_layout.addWidget(self._deselect_all_btn)
 
@@ -196,11 +196,11 @@ class FileTreeWidget(QWidget):
         self._collapse_btn.setIcon(QIcon(os.path.join(assets_dir, "colapse.svg")))
         self._collapse_btn.setIconSize(QSize(20, 20))
         self._collapse_btn.setProperty("class", "flat")
-        self._collapse_btn.setFixedSize(36, 28)
+        self._collapse_btn.setFixedSize(30, 30)
         self._collapse_btn.setToolTip("Collapse All")
         self._collapse_btn.setStyleSheet(
-            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
-            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
+            f"QPushButton {{ color: #CBD5E1; background: transparent; border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 0; min-width: 30px; min-height: 30px; }} "
+            f"QPushButton:hover {{ color: {ThemeColors.TEXT_PRIMARY}; background: {ThemeColors.BG_HOVER}; border-color: {ThemeColors.BORDER_LIGHT}; }}"
         )
         actions_layout.addWidget(self._collapse_btn)
 
@@ -209,11 +209,11 @@ class FileTreeWidget(QWidget):
         self._expand_btn.setIcon(QIcon(os.path.join(assets_dir, "expand.svg")))
         self._expand_btn.setIconSize(QSize(20, 20))
         self._expand_btn.setProperty("class", "flat")
-        self._expand_btn.setFixedSize(36, 28)
+        self._expand_btn.setFixedSize(30, 30)
         self._expand_btn.setToolTip("Expand All")
         self._expand_btn.setStyleSheet(
-            "QPushButton { color: #CBD5E1; background: transparent; border: 1px solid #475569; border-radius: 4px; } "
-            "QPushButton:hover { color: #F1F5F9; background: #334155; border-color: #64748B; }"
+            f"QPushButton {{ color: #CBD5E1; background: transparent; border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 0; min-width: 30px; min-height: 30px; }} "
+            f"QPushButton:hover {{ color: {ThemeColors.TEXT_PRIMARY}; background: {ThemeColors.BG_HOVER}; border-color: {ThemeColors.BORDER_LIGHT}; }}"
         )
         actions_layout.addWidget(self._expand_btn)
 

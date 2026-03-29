@@ -241,7 +241,7 @@ class ContextViewQt(
             self._token_usage_bar.update_stats(tokens=0, limit=200000, files=0)
 
         if hasattr(self, "_context_info_label"):
-            self._context_info_label.setText("0 files · 0 tokens")
+            self._context_info_label.setText("")
         if hasattr(self, "_limit_warning"):
             self._limit_warning.hide()
 
@@ -673,18 +673,23 @@ class ContextViewQt(
         self._word_count_label.setText(f"{word_count} words")
         QTimer.singleShot(150, self._update_token_display)
 
-    @Slot(int)
-    def _on_format_changed(self, index: int) -> None:
-        """Handle format dropdown change."""
-        format_id = self._format_combo.currentData()
-        if format_id:
-            try:
-                self._selected_output_style = get_style_by_id(format_id)
-                update_app_setting(output_format=format_id)
-                if self._copy_controller:
-                    self._copy_controller._prompt_cache.invalidate_all()
-            except ValueError:
-                pass
+    @Slot(str)
+    def _on_format_changed(self, format_id: str) -> None:
+        """Handle format change via menu action."""
+        if not format_id:
+            return
+        try:
+            self._selected_output_style = get_style_by_id(format_id)
+            update_app_setting(output_format=format_id)
+
+            # Update button text to reflect selection
+            if hasattr(self, "_format_btn"):
+                self._format_btn.setText(self._selected_output_style.name)
+
+            if self._copy_controller:
+                self._copy_controller._prompt_cache.invalidate_all()
+        except ValueError:
+            pass
 
     @Slot(str)
     def _on_tier_changed(self, tier: str) -> None:
@@ -805,7 +810,7 @@ class ContextViewQt(
 
                 sub.addSeparator()
 
-                dlt = sub.addAction("❌ Delete")
+                dlt = sub.addAction("Delete")
                 dlt.setData({"action": "delete", "id": tmpl.template_id})
             else:
                 action = menu.addAction(tmpl.display_name)
@@ -814,7 +819,7 @@ class ContextViewQt(
                 action.setData(tmpl.template_id)
 
         menu.addSeparator()
-        add_action = menu.addAction("➕ Manage/Add Custom Template...")
+        add_action = menu.addAction("Manage/Add Custom Template...")
         add_action.setData("__CREATE_CUSTOM__")
 
     @Slot()
@@ -851,7 +856,7 @@ class ContextViewQt(
         # Clear All — relocated from standalone button for safety
         if history:
             menu.addSeparator()
-            clear_all_action = menu.addAction("🗑 Clear All History")
+            clear_all_action = menu.addAction("Clear All History")
             clear_all_action.setData({"action": "clear_all"})
 
     @Slot(object)
@@ -912,8 +917,8 @@ class ContextViewQt(
         """Update token count display tu cached values. Khong trigger counting.
 
         Hien thi file tokens + instruction tokens tren toolbar.
-        Tooltip canh bao rang actual copy se co them overhead
-        (tree map, git, OPX, XML structure).
+        Tooltip phan tach ro 'instruction tokens' khi chua chon file nao
+        de tranh confusion '39 tokens khi 0 files'.
         """
         model = self.file_tree_widget.get_model()
         file_count = model.get_selected_file_count()
@@ -928,9 +933,8 @@ class ContextViewQt(
         total_file_tokens = self.file_tree_widget.get_total_tokens()
         total = total_file_tokens + instruction_tokens
 
-        # Update Usage Bar (Toolbar) & Actions Panel Labels
+        # Update Usage Bar (Toolbar) — single source of truth cho token stats
         if hasattr(self, "_token_usage_bar"):
-            # Lay limit tu model_id da duoc luu tru khi chon tren toolbar
             from presentation.config.model_config import (
                 get_model_by_id,
                 DEFAULT_MODEL_ID,
@@ -944,28 +948,28 @@ class ContextViewQt(
             self._token_usage_bar.update_stats(
                 tokens=total, limit=limit, files=file_count
             )
-            self._token_usage_bar.setToolTip(
-                f"Breakdown:\n"
-                f"- {total_file_tokens:,} from files\n"
-                f"- {instruction_tokens:,} from instructions\n\n"
-                f"Model: {model_cfg.name if model_cfg else 'Unknown'}\n"
-                "Max limit based on selected model."
-            )
 
-            # Update compact labels in actions panel
-            if hasattr(self, "_context_info_label"):
-                self._context_info_label.setText(
-                    f"{file_count} files · {total:,} tokens"
+            # Tooltip chia ro nguon token: file vs instruction.
+            # Dac biet quan trong khi file_count=0 ma instruction_tokens>0
+            # de user khong bi confused 'tai sao co 39 tokens khi chua chon file'.
+            if file_count == 0 and instruction_tokens > 0:
+                tooltip_note = (
+                    f"Tip: {instruction_tokens:,} tokens are from your instructions,\n"
+                    f"not from files. Select files to see file token counts."
+                )
+            else:
+                tooltip_note = (
+                    "Actual copy may include overhead (XML tags, tree structure)."
                 )
 
-            # Update Warning (Fixed height)
-            if hasattr(self, "_limit_warning"):
-                if total > limit:
-                    over = total - limit
-                    self._limit_warning.setText(f"⚠ Over limit by {over:,} tokens!")
-                    self._limit_warning.show()
-                else:
-                    self._limit_warning.hide()
+            self._token_usage_bar.setToolTip(
+                f"Token breakdown:\n"
+                f"  Files:        {total_file_tokens:,} tokens\n"
+                f"  Instructions: {instruction_tokens:,} tokens\n"
+                f"  Total:        {total:,} tokens\n\n"
+                f"Model: {model_cfg.name if model_cfg else 'Unknown'}\n"
+                f"{tooltip_note}"
+            )
 
     @Slot(str)
     def _on_model_changed(self, model_id: str) -> None:

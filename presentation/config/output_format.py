@@ -53,17 +53,6 @@ class OutputFormatConfig:
 # ============================================================================
 
 OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
-    OutputStyle.MARKDOWN: OutputFormatConfig(
-        id="markdown",
-        name="Markdown",
-        description="Code blocks với syntax highlighting",
-        benefits=[
-            "Dễ đọc cho người dùng",
-            "Tương thích mọi LLM",
-            "Hiển thị đẹp trong chat",
-        ],
-        file_extension=".md",
-    ),
     OutputStyle.XML: OutputFormatConfig(
         id="xml",
         name="XML",
@@ -74,6 +63,17 @@ OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
             "Tối ưu cho Claude & GPT",
         ],
         file_extension=".xml",
+    ),
+    OutputStyle.MARKDOWN: OutputFormatConfig(
+        id="markdown",
+        name="Markdown",
+        description="Code blocks với syntax highlighting",
+        benefits=[
+            "Dễ đọc cho người dùng",
+            "Tương thích mọi LLM",
+            "Hiển thị đẹp trong chat",
+        ],
+        file_extension=".md",
     ),
     OutputStyle.JSON: OutputFormatConfig(
         id="json",

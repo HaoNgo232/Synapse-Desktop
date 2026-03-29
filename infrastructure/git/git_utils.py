@@ -8,7 +8,7 @@ import sys
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Any
 import logging
 
 # Single source of truth cho path display - thay the ban sao inline cu
@@ -58,6 +58,28 @@ def _generate_diff_summary_xml() -> str:
 {DIFF_SUMMARY_NOTES}
 </notes>
 </file_summary>
+"""
+
+
+def _generate_diff_summary_plain() -> str:
+    """Tạo file summary dạng plain text cho Copy Diff Only."""
+    return f"""{"=" * 48}
+FILE SUMMARY
+{"=" * 48}
+{DIFF_SUMMARY_HEADER}
+
+Purpose:
+{DIFF_SUMMARY_PURPOSE}
+
+File Format:
+{DIFF_SUMMARY_FORMAT}
+
+Usage Guidelines:
+- Use file path to distinguish between files.
+- Apply changes to the original repository files, not this packed version.
+
+Notes:
+{DIFF_SUMMARY_NOTES}
 """
 
 
@@ -658,6 +680,7 @@ def build_diff_only_prompt(
     include_related_files: bool = False,
     related_depth: int = 1,
     related_max_files: int = 20,
+    output_format: str = "xml",
 ) -> str:
     """
     Build prompt from diff result for Copy Diff Only feature.
@@ -672,107 +695,229 @@ def build_diff_only_prompt(
         include_related_files: Include imported related files content
         related_depth: Import depth for related files
         related_max_files: Max related files to include
+        output_format: "xml" hoặc "plain" / "text" / "markdown" / "json"
 
     Returns:
         Formatted prompt string
     """
-    parts = [_generate_diff_summary_xml(), ""]
-    parts.extend(
-        [
-            "<diff_context>",
-            f"Files changed: {diff_result.files_changed}",
-            f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
-        ]
-    )
-    if diff_result.commits_included > 0:
-        parts.append(f"Commits included: {diff_result.commits_included}")
-    parts.extend(["</diff_context>", ""])
+    if hasattr(output_format, "value"):
+        output_format = str(output_format.value)
 
-    if include_tree_structure and diff_result.changed_files:
-        tree_str = _build_tree_from_paths(diff_result.changed_files[:50])
-        parts.extend(["<structure>", tree_str, "</structure>", ""])
+    is_xml = output_format.lower() == "xml"
+    is_json = output_format.lower() == "json"
+    is_plain = output_format.lower() in ("plain", "text")
 
-    parts.extend(["<git_diff>", diff_result.diff_content, "</git_diff>"])
-
-    if include_changed_content and diff_result.changed_files:
-        parts.extend(["", "<changed_files_content>"])
-        for file_path in diff_result.changed_files[:20]:
-            # Resolve path: changed_files tu git la relative, can workspace de doc
-            full_path = (
-                (workspace_root / file_path) if workspace_root else Path(file_path)
-            )
-            if full_path.exists() and full_path.is_file():
-                try:
-                    content = full_path.read_text(encoding="utf-8", errors="replace")
-                    if len(content) <= 50000:
-                        from shared.utils.language_utils import get_language_from_path
-
-                        lang = get_language_from_path(str(full_path))
-                        path_display = path_for_display(
-                            full_path, workspace_root, use_relative_paths
-                        )
-                        parts.extend(
-                            [
-                                f'<file path="{path_display}">',
-                                f"```{lang}",
-                                content,
-                                "```",
-                                "</file>",
-                            ]
-                        )
-                except Exception:
-                    pass
-        parts.append("</changed_files_content>")
-
-    if include_related_files and workspace_root and diff_result.changed_files:
-        try:
-            from shared.utils.import_parser import get_related_files
-
-            related_files = get_related_files(
-                changed_files=diff_result.changed_files,
-                workspace_root=workspace_root,
-                depth=max(1, related_depth),
-                max_files=max(1, related_max_files),
-            )
-
-            if related_files:
-                parts.extend(["", "<related_files_content>"])
-                for file_path in related_files:
-                    full_path = workspace_root / file_path
-                    if full_path.exists() and full_path.is_file():
-                        try:
-                            content = full_path.read_text(
-                                encoding="utf-8", errors="replace"
-                            )
-                            if len(content) <= 50000:
-                                from shared.utils.language_utils import (
-                                    get_language_from_path,
-                                )
-
-                                lang = get_language_from_path(str(full_path))
-                                path_display = path_for_display(
-                                    full_path, workspace_root, use_relative_paths
-                                )
-                                parts.extend(
-                                    [
-                                        f'<file path="{path_display}">',
-                                        f"```{lang}",
-                                        content,
-                                        "```",
-                                        "</file>",
-                                    ]
-                                )
-                        except Exception:
-                            pass
-                parts.append("</related_files_content>")
-        except Exception:
-            # Neu parser co van de thi bo qua related files de khong break Copy Diff
-            pass
-
-    if instructions and instructions.strip():
+    if is_xml:
+        parts = [_generate_diff_summary_xml(), ""]
         parts.extend(
-            ["", "<user_instructions>", instructions.strip(), "</user_instructions>"]
+            [
+                "<diff_context>",
+                f"Files changed: {diff_result.files_changed}",
+                f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
+            ]
         )
+        if diff_result.commits_included > 0:
+            parts.append(f"Commits included: {diff_result.commits_included}")
+        parts.extend(["</diff_context>", ""])
+
+        if include_tree_structure and diff_result.changed_files:
+            tree_str = _build_tree_xml_from_paths(diff_result.changed_files[:50])
+            parts.extend(["<structure>", tree_str, "</structure>", ""])
+
+        parts.extend(["<git_diff>", diff_result.diff_content, "</git_diff>"])
+
+        if include_changed_content and diff_result.changed_files:
+            parts.extend(["", "<changed_files_content>"])
+            for file_path in diff_result.changed_files[:20]:
+                full_path = (
+                    (workspace_root / file_path) if workspace_root else Path(file_path)
+                )
+                if full_path.exists() and full_path.is_file():
+                    try:
+                        content = full_path.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
+                        if len(content) <= 50000:
+                            from shared.utils.language_utils import (
+                                get_language_from_path,
+                            )
+
+                            lang = get_language_from_path(str(full_path))
+                            path_display = path_for_display(
+                                full_path, workspace_root, use_relative_paths
+                            )
+                            parts.extend(
+                                [
+                                    f'<file path="{path_display}">',
+                                    f"```{lang}",
+                                    content,
+                                    "```",
+                                    "</file>",
+                                ]
+                            )
+                    except Exception:
+                        pass
+            parts.append("</changed_files_content>")
+
+        if include_related_files and workspace_root and diff_result.changed_files:
+            try:
+                from shared.utils.import_parser import get_related_files
+
+                related_files = get_related_files(
+                    changed_files=diff_result.changed_files,
+                    workspace_root=workspace_root,
+                    depth=max(1, related_depth),
+                    max_files=max(1, related_max_files),
+                )
+
+                if related_files:
+                    parts.extend(["", "<related_files_content>"])
+                    for file_path in related_files:
+                        full_path = workspace_root / file_path
+                        if full_path.exists() and full_path.is_file():
+                            try:
+                                content = full_path.read_text(
+                                    encoding="utf-8", errors="replace"
+                                )
+                                if len(content) <= 50000:
+                                    from shared.utils.language_utils import (
+                                        get_language_from_path,
+                                    )
+
+                                    lang = get_language_from_path(str(full_path))
+                                    path_display = path_for_display(
+                                        full_path, workspace_root, use_relative_paths
+                                    )
+                                    parts.extend(
+                                        [
+                                            f'<file path="{path_display}">',
+                                            f"```{lang}",
+                                            content,
+                                            "```",
+                                            "</file>",
+                                        ]
+                                    )
+                            except Exception:
+                                pass
+                    parts.append("</related_files_content>")
+            except Exception:
+                pass
+
+        if instructions and instructions.strip():
+            parts.extend(
+                [
+                    "",
+                    "<user_instructions>",
+                    instructions.strip(),
+                    "</user_instructions>",
+                ]
+            )
+
+    elif is_json:
+        # Simple JSON assembly cho diff
+        import json
+
+        data: dict[str, Any] = {
+            "summary": DIFF_SUMMARY_HEADER,
+            "purpose": DIFF_SUMMARY_PURPOSE,
+            "context": {
+                "files_changed": diff_result.files_changed,
+                "insertions": diff_result.insertions,
+                "deletions": diff_result.deletions,
+                "commits_included": diff_result.commits_included,
+            },
+            "diff": diff_result.diff_content,
+        }
+        if include_tree_structure and diff_result.changed_files:
+            data["structure"] = _build_tree_from_paths(diff_result.changed_files[:50])
+
+        if include_changed_content and diff_result.changed_files:
+            contents = []
+            for file_path in diff_result.changed_files[:20]:
+                full_path = (
+                    (workspace_root / file_path) if workspace_root else Path(file_path)
+                )
+                if full_path.exists() and full_path.is_file():
+                    try:
+                        content = full_path.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
+                        if len(content) <= 50000:
+                            path_display = path_for_display(
+                                full_path, workspace_root, use_relative_paths
+                            )
+                            contents.append({"path": path_display, "content": content})
+                    except Exception:
+                        pass
+            data["changed_files_content"] = contents
+
+        if instructions and instructions.strip():
+            data["user_instructions"] = instructions.strip()
+
+        return json.dumps(data, indent=2, ensure_ascii=False)
+
+    elif (
+        is_plain or True
+    ):  # Sử dụng is_plain để pass lint, True để đảm bảo fallback luôn chạy
+        # Plain text (fallback cho ca markdown de don gian)
+        parts = [_generate_diff_summary_plain(), ""]
+        parts.extend(
+            [
+                f"{'-' * 48}",
+                "DIFF CONTEXT",
+                f"{'-' * 48}",
+                f"Files changed: {diff_result.files_changed}",
+                f"Lines: +{diff_result.insertions} / -{diff_result.deletions}",
+            ]
+        )
+        if diff_result.commits_included > 0:
+            parts.append(f"Commits included: {diff_result.commits_included}")
+        parts.append("")
+
+        if include_tree_structure and diff_result.changed_files:
+            tree_str = _build_tree_from_paths(diff_result.changed_files[:50])
+            parts.extend([f"{'-' * 48}", "STRUCTURE", f"{'-' * 48}", tree_str, ""])
+
+        parts.extend(
+            [f"{'-' * 48}", "GIT DIFF", f"{'-' * 48}", diff_result.diff_content]
+        )
+
+        if include_changed_content and diff_result.changed_files:
+            parts.extend(["", f"{'-' * 48}", "CHANGED FILES CONTENT", f"{'-' * 48}"])
+            for file_path in diff_result.changed_files[:20]:
+                full_path = (
+                    (workspace_root / file_path) if workspace_root else Path(file_path)
+                )
+                if full_path.exists() and full_path.is_file():
+                    try:
+                        content = full_path.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
+                        if len(content) <= 50000:
+                            path_display = path_for_display(
+                                full_path, workspace_root, use_relative_paths
+                            )
+                            parts.extend(
+                                [
+                                    "",
+                                    f"File: {path_display}",
+                                    f"{'=' * len(path_display)}",
+                                    content,
+                                ]
+                            )
+                    except Exception:
+                        pass
+
+        if instructions and instructions.strip():
+            parts.extend(
+                [
+                    "",
+                    f"{'-' * 48}",
+                    "USER INSTRUCTIONS",
+                    f"{'-' * 48}",
+                    instructions.strip(),
+                ]
+            )
 
     return "\n".join(parts)
 
@@ -796,6 +941,25 @@ def _build_tree_from_paths(file_paths: List[str]) -> str:
     return "\n".join(lines)
 
 
+def _build_tree_xml_from_paths(file_paths: List[str]) -> str:
+    """Xây dựng cấu trúc cây XML từ danh sách file paths."""
+    tree_dict: dict = {}
+    for file_path in file_paths:
+        path_parts = file_path.replace("\\", "/").split("/")
+        current = tree_dict
+        for i, part in enumerate(path_parts):
+            if i == len(path_parts) - 1:
+                current[part] = None  # file
+            else:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+
+    lines: list = []
+    _render_tree_xml_dict(tree_dict, lines, indent_level=1)
+    return "\n".join(lines)
+
+
 def _render_tree_dict(tree_dict: dict, lines: list, prefix: str = "") -> None:
     """Render tree dict dùng ├──/└──/│ giống _build_tree_string trong prompt_generator."""
     # Sắp xếp: folders trước, files sau (giống scan_directory)
@@ -812,3 +976,20 @@ def _render_tree_dict(tree_dict: dict, lines: list, prefix: str = "") -> None:
             # Prefix cho children: "    " nếu là item cuối, "│   " nếu còn item khác
             new_prefix = prefix + ("    " if is_last else "│   ")
             _render_tree_dict(children, lines, new_prefix)
+
+
+def _render_tree_xml_dict(tree_dict: dict, lines: list, indent_level: int = 1) -> None:
+    """Render tree dict thành XML tags."""
+    indent = "  " * indent_level
+    # Sắp xếp: folders trước, files sau
+    items = sorted(tree_dict.items(), key=lambda x: (x[1] is None, x[0]))
+
+    for name, children in items:
+        if children is None:
+            # File tag
+            lines.append(f'{indent}<file name="{name}" status="modified" />')
+        else:
+            # Folder tag
+            lines.append(f'{indent}<folder name="{name}">')
+            _render_tree_xml_dict(children, lines, indent_level + 1)
+            lines.append(f"{indent}</folder>")

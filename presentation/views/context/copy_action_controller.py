@@ -1426,6 +1426,7 @@ class CopyActionController(QObject):
                 include_tree: bool,
                 include_related: bool = False,
                 related_depth: int = 1,
+                output_format: str = "xml",
             ) -> str:
                 return build_diff_only_prompt(
                     diff_result,
@@ -1436,7 +1437,11 @@ class CopyActionController(QObject):
                     use_relative_paths=use_rel,
                     include_related_files=include_related,
                     related_depth=related_depth,
+                    output_format=output_format,
                 )
+
+            style = self._view.get_output_style()
+            fmt_id = style.value if hasattr(style, "value") else str(style)
 
             dialog = DiffOnlyDialogQt(
                 workspace=workspace,
@@ -1445,6 +1450,7 @@ class CopyActionController(QObject):
                 tokenization_service=self._view.get_tokenization_service(),
                 instructions=instructions,
                 on_success=lambda msg: self._view.show_status(msg),
+                output_format=fmt_id,
             )
             dialog.exec()
         except Exception as e:

@@ -68,7 +68,7 @@ class CachedRepoLike(Protocol):
 
 
 BuildDiffPromptCallback: TypeAlias = Callable[
-    ["DiffOnlyResult", str, bool, bool, bool, int],
+    ["DiffOnlyResult", str, bool, bool, bool, int, str],
     str,
 ]
 
@@ -272,6 +272,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         tokenization_service: "ITokenizationService",
         instructions: str = "",
         on_success: Optional[Callable[[str], None]] = None,
+        output_format: str = "xml",
     ):
         super().__init__(parent, "Copy Diff Only")
         self.workspace = workspace
@@ -279,6 +280,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self._tokenization_service = tokenization_service
         self.instructions = instructions
         self.on_success = on_success
+        self.output_format = output_format
         self._file_checkboxes: dict[str, QCheckBox] = {}
         self._refresh_generation = 0  # Generation counter để tránh race condition
         self._active_workers: list[
@@ -545,6 +547,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
             self._include_tree.isChecked(),
             include_related,
             related_depth,
+            self.output_format,
         )
 
         from infrastructure.adapters.clipboard_utils import copy_to_clipboard

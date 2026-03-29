@@ -69,8 +69,9 @@ class ParsedEdit:
 SELF_CLOSING_REGEX = re.compile(r"<\s*edit\b([^>]*)/>", re.IGNORECASE)
 
 # Paired edit: <edit ...>...</edit>
+# Su dung (?:[^/>]|/[^>])* de tranh match self-closing tag "/>" nhu la ">" cua paired tag.
 PAIRED_REGEX = re.compile(
-    r"<\s*edit\b([^>]*)>([\s\S]*?)<\s*/\s*edit\s*>", re.IGNORECASE
+    r"<\s*edit\b((?:[^/>]|/[^>])*)>([\s\S]*?)<\s*/\s*edit\s*>", re.IGNORECASE
 )
 
 # Attribute parser: key="value" or key='value'
@@ -145,6 +146,8 @@ def _collect_edits(xml: str) -> list[ParsedEdit]:
     edits: list[ParsedEdit] = []
 
     # Self-closing edits: <edit ... />
+    # Collect positions to prevent PAIRED_REGEX from double-matching
+    self_closing_positions: set[int] = set()
     for match in SELF_CLOSING_REGEX.finditer(xml):
         edits.append(
             ParsedEdit(
@@ -153,16 +156,21 @@ def _collect_edits(xml: str) -> list[ParsedEdit]:
                 body=None,
             )
         )
+        self_closing_positions.add(match.start())
 
     # Paired edits: <edit ...>...</edit>
+    # Skip positions already claimed by self-closing matches to avoid duplicates.
+    # This prevents PAIRED_REGEX's [^>]* from matching the / in self-closing />
+    # and producing a spurious paired edit that spans to the next </edit>.
     for match in PAIRED_REGEX.finditer(xml):
-        edits.append(
-            ParsedEdit(
-                index=match.start(),
-                attrs=_parse_attributes(match.group(1) or ""),
-                body=match.group(2) or "",
+        if match.start() not in self_closing_positions:
+            edits.append(
+                ParsedEdit(
+                    index=match.start(),
+                    attrs=_parse_attributes(match.group(1) or ""),
+                    body=match.group(2) or "",
+                )
             )
-        )
 
     # Sort theo vi tri xuat hien trong XML
     return sorted(edits, key=lambda e: e.index)
@@ -237,7 +245,9 @@ def _handle_create_or_replace(body: str, op: str, file_action: FileAction) -> No
     if not match:
         raise ValueError("Missing <put> block")
 
-    content = _extract_between_markers(match.group(1) or "", "<<<", ">>>") or ""
+    content = _extract_between_markers(match.group(1) or "", "<<<", ">>>")
+    if content is None:
+        raise ValueError("Missing <<< >>> marker block in <put>")
     description = _extract_why(body) or (
         "Create file" if op == "new" else "Replace file"
     )
@@ -260,7 +270,9 @@ def _handle_patch(body: str, file_action: FileAction) -> None:
     if not search:
         raise ValueError("Empty or missing marker block in <find>")
 
-    content = _extract_between_markers(put_match.group(1) or "", "<<<", ">>>") or ""
+    content = _extract_between_markers(put_match.group(1) or "", "<<<", ">>>")
+    if content is None:
+        raise ValueError("Missing <<< >>> marker block in <put>")
     description = _extract_why(body) or "Patch region"
 
     file_action.changes.append(
@@ -302,46 +314,86 @@ def _extract_why(body: str) -> Optional[str]:
     return None
 
 
+def _trim_content(s: str, content_start: int, content_end: int) -> str:
+    """
+    Extract va trim whitespace tu content giua hai vi tri boundary.
+
+    Args:
+        s: Text buffer goc (KHONG bi modify)
+        content_start: Vi tri bat dau content (ngay sau start marker)
+        content_end: Vi tri ket thuc content (ngay truoc end marker)
+
+    Returns:
+        Trimmed content string, hoac "" neu rong
+    """
+    # Skip leading whitespace
+    while content_start < len(s) and s[content_start] in " \t\r\n":
+        content_start += 1
+
+    # Skip trailing whitespace
+    end_idx = content_end - 1
+    while end_idx >= 0 and s[end_idx] in " \t\r\n":
+        end_idx -= 1
+
+    if end_idx < content_start:
+        return ""
+
+    return s[content_start : end_idx + 1]
+
+
 def _extract_between_markers(text: str, start: str, end: str) -> Optional[str]:
     """
     Extract content between <<< and >>> markers.
 
-    Bao gom auto-heal cho truong hop chat/markdown truncate markers:
-    - < hoac << tren mot dong -> coi nhu <<<
-    - > hoac >> tren mot dong -> coi nhu >>>
+    Two-phase strategy:
+    1. Fast path: tim <<< va >>> truc tiep, KHONG modify text.
+       Content duoc giu nguyen 100%. Xu ly 99% truong hop.
+    2. Slow path: neu marker khong tim thay, dung position-based detection
+       tim lone < hoac > nhu truncated marker. Text buffer KHONG BAO GIO
+       bi modify — chi xac dinh vi tri boundary.
+
+    Viec KHONG dung re.sub global la critical: tranh corrupt code content
+    chua > hoac < tren dong rieng (HTML closing bracket, XML template, etc.)
     """
     s = text.strip()
 
-    # Conservative auto-heal: Only single < or > to avoid bitshift confusion
-    # Modern LLMs are smart enough to output correct <<< markers
-    s = re.sub(r"^[ \t]*<\s*$", "<<<", s, flags=re.MULTILINE)
-    s = re.sub(r"^[ \t]*>\s*$", ">>>", s, flags=re.MULTILINE)
-
-    # Removed << and >> auto-heal to prevent bitshift operator corruption
-    # If needed, users can manually fix incomplete markers in AI response
-
+    # ── Fast path: standard markers ──────────────────────────────────
     first = s.find(start)
-    if first == -1:
-        return None
-
     last = s.rfind(end)
-    if last == -1 or last <= first:
-        return None
 
-    # Skip whitespace sau start marker
-    start_idx = first + len(start)
-    while start_idx < len(s) and s[start_idx] in " \t\r\n":
-        start_idx += 1
+    if first != -1 and last != -1 and last > first:
+        # Ca hai marker tim thay — extract truc tiep, zero modification
+        return _trim_content(s, first + len(start), last)
 
-    # Skip whitespace truoc end marker
-    end_idx = last - 1
-    while end_idx >= 0 and s[end_idx] in " \t\r\n":
-        end_idx -= 1
+    # ── Slow path: position-based auto-heal ──────────────────────────
+    # Chi chay khi standard markers thieu.
+    # KHONG BAO GIO modify text buffer — chi tim vi tri boundary.
 
-    if end_idx < start_idx:
-        return ""
+    # Xac dinh start boundary
+    if first != -1:
+        content_start_pos = first + len(start)
+    else:
+        # Tim lone < tren mot dong nhu truncated <<<
+        m = re.search(r"^[ \t]*<\s*$", s, flags=re.MULTILINE)
+        if not m:
+            return None
+        first = m.start()
+        content_start_pos = m.end()  # Content bat dau ngay sau lone <
 
-    return s[start_idx : end_idx + 1]
+    # Xac dinh end boundary
+    if last != -1 and last > first:
+        content_end_pos = last
+    else:
+        # Tim lone > CUOI CUNG tren mot dong sau content_start_pos
+        end_pos = -1
+        for m in re.finditer(r"^[ \t]*>\s*$", s, flags=re.MULTILINE):
+            if m.start() > content_start_pos:
+                end_pos = m.start()
+        if end_pos == -1:
+            return None
+        content_end_pos = end_pos
+
+    return _trim_content(s, content_start_pos, content_end_pos)
 
 
 def _sanitize_response(raw: str) -> str:

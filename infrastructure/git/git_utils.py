@@ -705,6 +705,7 @@ def build_diff_only_prompt(
 
     is_xml = output_format.lower() == "xml"
     is_json = output_format.lower() == "json"
+    is_markdown = output_format.lower() == "markdown"
     is_plain = output_format.lower() in ("plain", "text")
 
     if is_xml:
@@ -829,7 +830,9 @@ def build_diff_only_prompt(
             "diff": diff_result.diff_content,
         }
         if include_tree_structure and diff_result.changed_files:
-            data["structure"] = _build_tree_from_paths(diff_result.changed_files[:50])
+            data["structure"] = _build_tree_xml_from_paths(
+                diff_result.changed_files[:50]
+            )
 
         if include_changed_content and diff_result.changed_files:
             contents = []
@@ -855,6 +858,67 @@ def build_diff_only_prompt(
             data["user_instructions"] = instructions.strip()
 
         return json.dumps(data, indent=2, ensure_ascii=False)
+
+    elif is_markdown:
+        # Markdown format
+        parts = ["# FILE SUMMARY", _generate_diff_summary_plain(), ""]
+        parts.extend(
+            [
+                "## DIFF CONTEXT",
+                f"- Files changed: {diff_result.files_changed}",
+                f"- Lines: +{diff_result.insertions} / -{diff_result.deletions}",
+            ]
+        )
+        if diff_result.commits_included > 0:
+            parts.append(f"- Commits included: {diff_result.commits_included}")
+        parts.append("")
+
+        if include_tree_structure and diff_result.changed_files:
+            tree_str = _build_tree_from_paths(diff_result.changed_files[:50])
+            parts.extend(["## STRUCTURE", "```", tree_str, "```", ""])
+
+        parts.extend(["## GIT DIFF", "```diff", diff_result.diff_content, "```"])
+
+        if include_changed_content and diff_result.changed_files:
+            parts.extend(["", "## CHANGED FILES CONTENT"])
+            for file_path in diff_result.changed_files[:20]:
+                full_path = (
+                    (workspace_root / file_path) if workspace_root else Path(file_path)
+                )
+                if full_path.exists() and full_path.is_file():
+                    try:
+                        content = full_path.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
+                        if len(content) <= 50000:
+                            from shared.utils.language_utils import (
+                                get_language_from_path,
+                            )
+
+                            lang = get_language_from_path(str(full_path))
+                            path_display = path_for_display(
+                                full_path, workspace_root, use_relative_paths
+                            )
+                            parts.extend(
+                                [
+                                    "",
+                                    f"### File: {path_display}",
+                                    f"```{lang}",
+                                    content,
+                                    "```",
+                                ]
+                            )
+                    except Exception:
+                        pass
+
+        if instructions and instructions.strip():
+            parts.extend(
+                [
+                    "",
+                    "## USER INSTRUCTIONS",
+                    "> " + instructions.strip().replace("\n", "\n> "),
+                ]
+            )
 
     elif (
         is_plain or True

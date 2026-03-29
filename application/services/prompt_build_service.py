@@ -17,15 +17,17 @@ from domain.prompt.generator import (
     generate_file_contents_xml,
     generate_file_contents_json,
     generate_file_contents_plain,
-    generate_prompt,
-    generate_smart_context,
-    build_smart_prompt,
     OutputStyle,
 )
-from domain.prompt.file_collector import collect_files
 from infrastructure.filesystem.file_utils import TreeItem
-from infrastructure.git.git_utils import get_git_diffs, get_git_logs
 from shared.types.prompt_types_extra import BuildResult
+from application.services.prompt_helpers import (
+    count_per_file_tokens,
+    calculate_prompt_breakdown,
+    apply_context_trimming,
+    build_smart_context_prompt,
+    compute_semantic_index,
+)
 
 
 # Mapping output_format string -> OutputStyle enum
@@ -195,7 +197,7 @@ class PromptBuildService:
                     cp_path = (workspace / cp).resolve()
                 normalized_codemap.add(str(cp_path))
 
-        # Initialize variables de tranh loi uninitialized trong breakdown
+        # Initialize variables de tranh loi uninitialized
         file_map = ""
         project_rules = ""
         git_diffs = None
@@ -204,27 +206,31 @@ class PromptBuildService:
         semantic_index = ""
 
         if output_format == "smart":
-            prompt = self._build_smart(
+            prompt, smart_contents = build_smart_context_prompt(
                 all_file_paths,
                 workspace,
                 instructions,
                 include_git_changes,
                 use_relative_paths,
+                self._graph_service,
                 tree_item,
                 selected_paths,
                 instructions_at_top=instructions_at_top,
                 full_tree=full_tree,
             )
+            self._last_smart_contents = smart_contents
         else:
             # 0. Fetch git data neu can
             if include_git_changes:
+                from infrastructure.git.git_utils import get_git_diffs, get_git_logs
+
                 git_diffs = get_git_diffs(workspace)
                 git_logs = get_git_logs(workspace, max_commits=5)
 
-            # 1. Generate file map (with all paths including rules)
+            # 1. Generate file map
             if tree_item:
                 _sel = selected_paths if selected_paths is not None else set()
-                if output_format == "xml":
+                if output_format in ("xml", "json"):
                     from domain.prompt.generator import generate_file_structure_xml
 
                     file_map = generate_file_structure_xml(
@@ -245,17 +251,15 @@ class PromptBuildService:
                         show_all=full_tree,
                     )
 
-            # 2. Load Project Rules from workspace
+            # 2. Load Project Rules
             from application.services.workspace_rules import get_rule_file_contents
 
             project_rules = get_rule_file_contents(workspace)
 
-            # 3. Generate file contents using all selected paths
-            #    Truyen codemap_paths de tach full vs codemap-only
+            # 3. Generate file contents
             all_path_strs = {str(p) for p in all_file_paths}
-
             content_gen = _FORMAT_TO_GENERATOR.get(
-                output_format, generate_file_contents_xml
+                output_format, _FORMAT_TO_GENERATOR["xml"]
             )
             file_contents = content_gen(
                 selected_paths=all_path_strs,
@@ -264,13 +268,13 @@ class PromptBuildService:
                 codemap_paths=normalized_codemap,
             )
 
-            # 4. Assemble prompt voi git data va xml formatting
-            output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
-            semantic_index = self._compute_semantic_index(workspace, output_format)
-            if semantic_index:
-                from shared.logging_config import log_info
+            # 4. Assemble prompt
+            output_style = _FORMAT_TO_STYLE.get(output_format, _FORMAT_TO_STYLE["xml"])
+            semantic_index = compute_semantic_index(
+                workspace, self._graph_service, output_format
+            )
 
-                log_info(f"[PromptBuild] Injected semantic index for {workspace}")
+            from domain.prompt.generator import generate_prompt
 
             prompt = generate_prompt(
                 file_map=file_map,
@@ -288,64 +292,27 @@ class PromptBuildService:
 
         token_count = self._tokenization_service.count_tokens(prompt)
 
-        # Build breakdown dict
-        breakdown = {
-            "instruction_tokens": self._tokenization_service.count_tokens(instructions)
-            if instructions
-            else 0,
-            "tree_tokens": self._tokenization_service.count_tokens(file_map)
-            if file_map
-            else 0,
-            "rule_tokens": self._tokenization_service.count_tokens(project_rules)
-            if project_rules
-            else 0,
-            "diff_tokens": (
-                self._tokenization_service.count_tokens(
-                    (git_diffs.work_tree_diff + git_diffs.staged_diff)
-                    if git_diffs
-                    else ""
-                )
-                + self._tokenization_service.count_tokens(
-                    git_logs.log_content if git_logs else ""
-                )
-            )
-            if include_git_changes
-            else 0,
-        }
+        # 5. Build breakdown
+        breakdown = calculate_prompt_breakdown(
+            instructions,
+            file_map,
+            project_rules,
+            git_diffs,
+            git_logs,
+            file_contents,
+            include_git_changes,
+            include_xml_formatting,
+            self._tokenization_service,
+            output_format,
+            token_count,
+        )
 
         if output_format == "smart":
-            # Smart context dung build_smart_prompt, khong co OPX
             breakdown["content_tokens"] = self._tokenization_service.count_tokens(
                 getattr(self, "_last_smart_contents", "")
             )
-            breakdown["opx_tokens"] = 0
-        else:
-            breakdown["content_tokens"] = self._tokenization_service.count_tokens(
-                file_contents
-            )
-            opx_t = 0
-            if include_xml_formatting:
-                try:
-                    from domain.prompt.opx_instruction import (
-                        XML_FORMATTING_INSTRUCTIONS,
-                    )
 
-                    opx_t = self._tokenization_service.count_tokens(
-                        XML_FORMATTING_INSTRUCTIONS
-                    )
-                except ImportError:
-                    opx_t = 0
-            breakdown["opx_tokens"] = opx_t
-
-        # Tinh structure tokens (overhead cua tags va assembly)
-        sum_parts = sum(breakdown.values())
-        breakdown["structure_tokens"] = max(0, token_count - sum_parts)
-
-        # ====================================================================
-        # Per-file token counting - dem token cho tung file rieng le
-        # ====================================================================
-        from application.services.prompt_helpers import count_per_file_tokens
-
+        # 6. Per-file token counting
         per_file_tokens = count_per_file_tokens(
             all_file_paths,
             workspace,
@@ -355,116 +322,35 @@ class PromptBuildService:
             codemap_paths=normalized_codemap,
         )
 
-        # ====================================================================
-        # Auto-trim: cat giam context khi vuot max_tokens budget
-        # ====================================================================
+        # 7. Auto-trim
         trimmed = False
         trimmed_notes: list[str] = []
 
         if max_tokens is not None and token_count > max_tokens:
-            from domain.prompt.context_trimmer import (
-                ContextTrimmer,
-                PromptComponents,
+            prompt_trimmed, notes = apply_context_trimming(
+                max_tokens,
+                all_file_paths,
+                workspace,
+                use_relative_paths,
+                dep_path_set,
+                instructions,
+                project_rules,
+                file_map,
+                git_diffs,
+                git_logs,
+                breakdown,
+                self._tokenization_service,
+                output_format,
+                include_xml_formatting,
+                instructions_at_top,
+                semantic_index,
             )
-
-            # Thu thap per-file contents de trimmer xu ly
-            file_content_dict: Dict[str, str] = {}
-            dep_display_paths: set[str] = set()
-            entries = collect_files(
-                selected_paths={str(p) for p in all_file_paths},
-                workspace_root=workspace,
-                use_relative_paths=use_relative_paths,
-            )
-            protected_display_paths: set[str] = set()
-            for entry in entries:
-                if entry.content is not None:
-                    file_content_dict[entry.display_path] = entry.content
-                    if str(entry.path) in dep_path_set:
-                        dep_display_paths.add(entry.display_path)
-                    else:
-                        # File explicitly selected by user — protect from trimming
-                        protected_display_paths.add(entry.display_path)
-
-            git_diffs_text = ""
-            git_logs_text = ""
-            if git_diffs:
-                git_diffs_text = (git_diffs.work_tree_diff or "") + (
-                    git_diffs.staged_diff or ""
-                )
-            if git_logs:
-                git_logs_text = git_logs.log_content or ""
-
-            components = PromptComponents(
-                instructions=instructions,
-                project_rules=project_rules,
-                file_map=file_map,
-                file_contents=file_content_dict,
-                git_diffs_text=git_diffs_text,
-                git_logs_text=git_logs_text,
-                structure_overhead=breakdown.get("structure_tokens", 0)
-                + breakdown.get("opx_tokens", 0),
-                dependency_paths=dep_display_paths,
-                protected_paths=protected_display_paths,
-            )
-
-            trimmer = ContextTrimmer(self._tokenization_service, max_tokens)
-            trim_result = trimmer.trim(components)
-
-            if trim_result.levels_applied > 0:
+            if notes:
                 trimmed = True
-                trimmed_notes = trim_result.notes
-
-                # Re-assemble prompt tu trimmed components
-                trimmed_comp = trim_result.components
-                if output_format == "smart":
-                    prompt = self._build_smart(
-                        all_file_paths,
-                        workspace,
-                        trimmed_comp.instructions,
-                        bool(trimmed_comp.git_diffs_text),
-                        use_relative_paths,
-                        tree_item,
-                        selected_paths,
-                        instructions_at_top=instructions_at_top,
-                    )
-                else:
-                    output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
-                    # Re-format trimmed in-memory data
-                    from application.services.prompt_helpers import (
-                        reconstruct_file_contents,
-                    )
-
-                    file_contents = reconstruct_file_contents(
-                        trimmed_comp.file_contents, output_format
-                    )
-
-                    prompt = generate_prompt(
-                        file_map=trimmed_comp.file_map,
-                        file_contents=file_contents,
-                        user_instructions=trimmed_comp.instructions,
-                        output_style=output_style,
-                        include_xml_formatting=include_xml_formatting,
-                        git_diffs=git_diffs if trimmed_comp.git_diffs_text else None,
-                        git_logs=git_logs if trimmed_comp.git_logs_text else None,
-                        project_rules=trimmed_comp.project_rules,
-                        workspace_root=workspace,
-                        instructions_at_top=instructions_at_top,
-                        semantic_index=semantic_index,
-                    )
-
-                # Append trimmed notes section vao prompt
-                if trimmed_notes:
-                    notes_section = "\n<trimmed_context_notes>\n"
-                    for note in trimmed_notes:
-                        notes_section += f"- {note}\n"
-                    notes_section += "</trimmed_context_notes>\n"
-                    prompt += notes_section
-
+                trimmed_notes = notes
+                prompt = prompt_trimmed
                 token_count = self._tokenization_service.count_tokens(prompt)
-
-                # Re-count per-file tokens
-                from application.services.prompt_helpers import count_per_file_tokens
-
+                # Re-count per-file tokens after trimming
                 per_file_tokens = count_per_file_tokens(
                     all_file_paths,
                     workspace,
@@ -485,7 +371,7 @@ class PromptBuildService:
             trimmed_notes=trimmed_notes,
             breakdown=breakdown,
             files=per_file_tokens,
-            dependency_graph=None,  # Feature 3 se cap nhat tu MCP layer
+            dependency_graph=None,
         )
 
     def count_tokens(self, text: str) -> int:
@@ -502,7 +388,6 @@ class PromptBuildService:
         """
         Generate file map tu TreeItem va selected paths.
         """
-        from domain.prompt.generator import generate_file_map
 
         return generate_file_map(
             tree_item,
@@ -510,120 +395,3 @@ class PromptBuildService:
             workspace_root=workspace,
             use_relative_paths=use_relative_paths,
         )
-
-    def _build_smart(
-        self,
-        file_paths: List[Path],
-        workspace: Path,
-        instructions: str,
-        include_git_changes: bool,
-        use_relative_paths: bool,
-        tree_item: Optional[TreeItem] = None,
-        selected_paths: Optional[Set[str]] = None,
-        instructions_at_top: bool = False,
-        full_tree: bool = False,
-    ) -> str:
-        """
-        Build smart context prompt với code maps và relationships.
-
-        Args:
-            file_paths: Danh sách file paths
-            workspace: Workspace root
-            instructions: User instructions
-            include_git_changes: Có include git không
-            use_relative_paths: Có dùng relative paths không
-            tree_item: Root TreeItem cho file map
-            selected_paths: Set paths đã chọn
-            instructions_at_top: Di chuyển instructions lên đầu
-        """
-        # Convert paths to string set cho generate_smart_context
-        path_strs = {str(p) for p in file_paths}
-
-        # Load Project Rules from workspace
-        from application.services.workspace_rules import get_rule_file_contents
-
-        project_rules = get_rule_file_contents(workspace)
-
-        smart_contents = generate_smart_context(
-            selected_paths=path_strs,
-            include_relationships=True,  # Giu nguyen behavior truoc refactor
-            workspace_root=workspace,
-            use_relative_paths=use_relative_paths,
-        )
-        # Store for breakdown calculation
-        self._last_smart_contents = smart_contents
-
-        # Generate file map
-        file_map = ""
-        if tree_item and selected_paths:
-            file_map = generate_file_map(
-                tree_item,
-                selected_paths,
-                workspace_root=workspace,
-                use_relative_paths=use_relative_paths,
-                show_all=full_tree,
-            )
-
-        # Fetch git data neu can
-        git_diffs = None
-        git_logs = None
-        if include_git_changes:
-            git_diffs = get_git_diffs(workspace)
-            git_logs = get_git_logs(workspace, max_commits=5)
-
-        # 4. Assemble prompt voi git data va semantic index
-        semantic_index = self._compute_semantic_index(workspace, "xml")
-        if semantic_index:
-            from shared.logging_config import log_info
-
-            log_info(f"[PromptBuild] Injected semantic index (smart) for {workspace}")
-
-        return build_smart_prompt(
-            smart_contents=smart_contents,
-            file_map=file_map,
-            user_instructions=instructions,
-            git_diffs=git_diffs,
-            git_logs=git_logs,
-            project_rules=project_rules,
-            workspace_root=workspace,
-            instructions_at_top=instructions_at_top,
-            semantic_index=semantic_index,
-        )
-
-    def _compute_semantic_index(
-        self, workspace: Path, output_format: str = "xml"
-    ) -> str:
-        """
-        Tính toán semantic index (mối quan hệ giữa các files) cho prompt context.
-        Sử dụng GraphService để lấy thông tin dependency/inheritance.
-        """
-        if not self._graph_service:
-            return ""
-
-        try:
-            # Fast path: use already built graph (non-blocking)
-            graph = self._graph_service.get_graph()
-            if not graph:
-                return ""
-
-            if output_format == "plain":
-                from domain.relationships.summary_generator import (
-                    generate_relationship_summary_plain,
-                )
-
-                return generate_relationship_summary_plain(
-                    graph, workspace_root=workspace
-                )
-            else:
-                from domain.relationships.summary_generator import (
-                    generate_relationship_summary_xml,
-                )
-
-                return generate_relationship_summary_xml(
-                    graph, workspace_root=workspace
-                )
-        except Exception as e:
-            from shared.logging_config import log_error
-
-            log_error(f"[PromptBuild] Failed to count semantic index: {e}")
-            return ""

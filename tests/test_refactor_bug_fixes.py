@@ -255,12 +255,17 @@ class TestSmartContextParameter:
                 ) as mock_build:
                     mock_build.return_value = "final prompt"
 
-                    service._build_smart(
+                    from application.services.prompt_helpers import (
+                        build_smart_context_prompt,
+                    )
+
+                    build_smart_context_prompt(
                         file_paths=[Path("/tmp/test.py")],
                         workspace=workspace,
                         instructions="test",
                         include_git_changes=False,
                         use_relative_paths=False,
+                        graph_service=service._graph_service,
                     )
 
             # Verify include_relationships=True duoc truyen

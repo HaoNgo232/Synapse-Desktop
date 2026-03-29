@@ -48,13 +48,11 @@ def test_graph_service_on_workspace_changed_triggers_background_build(
     service = GraphService()
     service.on_workspace_changed(workspace)
 
-    # Chờ background thread build xong (max 2s)
-    for _ in range(20):
-        if service.get_graph() is not None:
-            break
-        time.sleep(0.1)
+    # Lazy build: Graph still None until ensure_built or sync build
+    assert service.get_graph() is None
 
-    graph = service.get_graph()
+    # Now trigger build
+    graph = service.ensure_built(workspace)
     assert graph is not None
     assert graph.file_count() >= 2
 
@@ -123,14 +121,14 @@ def test_graph_service_generation_counter_prevents_stale_builds(tmp_path: Path) 
 
     service = GraphService()
 
-    # Trigger 2 builds liên tiếp
+    # Trigger 2 builds liên tiếp - Generation tăng
     service.on_workspace_changed(workspace)
     service.on_workspace_changed(workspace)
 
-    # Chờ cả 2 builds xong
-    time.sleep(0.5)
-
-    # Graph cuối cùng phải là của build thứ 2
-    graph = service.get_graph()
-    assert graph is not None
+    # Graph vẫn None vì lazy
+    assert service.get_graph() is None
     assert service._generation >= 2
+
+    # Build thật sự
+    graph = service.ensure_built(workspace)
+    assert graph is not None

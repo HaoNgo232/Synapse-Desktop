@@ -7,6 +7,7 @@ def test_semantic_index_is_disabled_and_fast():
     # Arrangement
     mock_token_svc = MagicMock()
     mock_graph_svc = MagicMock()
+    mock_graph_svc.get_graph.return_value = None
 
     svc = PromptBuildService(
         tokenization_service=mock_token_svc, graph_service=mock_graph_svc

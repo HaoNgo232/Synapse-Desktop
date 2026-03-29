@@ -11,10 +11,8 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from application.services.service_interfaces import IPromptBuilder, IClipboardService
-from application.services.prompt_build_service import (
-    PromptBuildService,
-    QtClipboardService,
-)
+from application.services.prompt_build_service import PromptBuildService
+from infrastructure.adapters.clipboard_service import QtClipboardService
 
 
 class TestProtocolCompliance:
@@ -108,7 +106,7 @@ class TestPromptBuildService:
         mock_smart_ctx.assert_called_once()
         mock_build.assert_called_once()
 
-    @patch("application.services.prompt_build_service.generate_file_map")
+    @patch("domain.prompt.generator.generate_file_map")
     def test_build_file_map(self, mock_map):
         """build_file_map delegate den generate_file_map."""
         service = PromptBuildService()

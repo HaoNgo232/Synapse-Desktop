@@ -33,9 +33,18 @@ class TestFileWatcher:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir)
 
-            # Start watcher
+            # Start watcher - Async start
             watcher.start(path, on_change=callback)
-            assert watcher.is_running()
+
+            # Wait for background thread to start observer
+            for _ in range(20):
+                if watcher.is_running():
+                    break
+                time.sleep(0.05)
+
+            assert watcher.is_running(), (
+                "Watcher should be running after background start"
+            )
             assert watcher.current_path == path
 
             # Stop watcher
@@ -64,6 +73,9 @@ class TestFileWatcher:
 
             # Start với debounce ngắn để test nhanh
             watcher.start(path, on_change=callback, debounce_seconds=0.1)
+
+            # Đợi background thread khởi động observer
+            time.sleep(0.2)
 
             # Tạo file mới
             test_file = path / "new_file.txt"
@@ -106,10 +118,12 @@ class TestFileWatcher:
 
                 # Start path 1
                 watcher.start(path1, on_change=callback)
+                time.sleep(0.1)
                 assert watcher.current_path == path1
 
                 # Start path 2 (phải tự động stop path 1)
                 watcher.start(path2, on_change=callback)
+                time.sleep(0.1)
                 assert watcher.current_path == path2
 
                 watcher.stop()

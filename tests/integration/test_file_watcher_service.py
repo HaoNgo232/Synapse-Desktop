@@ -60,6 +60,8 @@ class TestFileWatcherIntegration:
 
         # Start watcher voi debounce ngan
         watcher.start(tmp_path, callbacks=callbacks, debounce_seconds=0.1)
+        # Doi background thread start observer
+        time.sleep(0.3)
 
         try:
             # Tao cac file (trigger events)

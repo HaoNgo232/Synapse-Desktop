@@ -22,10 +22,8 @@ Design decisions:
 import logging
 from typing import Any
 
-from application.services.prompt_build_service import (
-    PromptBuildService,
-    QtClipboardService,
-)
+from application.services.prompt_build_service import PromptBuildService
+from infrastructure.adapters.clipboard_service import QtClipboardService
 from infrastructure.adapters.cache_registry import CacheRegistry
 from application.services.tokenization_service import TokenizationService
 from application.services.service_interfaces import IPromptBuilder, IClipboardService

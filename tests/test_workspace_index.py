@@ -195,7 +195,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -217,7 +217,7 @@ class TestBuildSearchIndex:
         (tmp_path / "image.png").write_bytes(b"\x89PNG\r\n")
 
         def mock_is_binary(path):
-            return path.suffix == ".png"
+            return str(path).endswith(".png")
 
         mock_spec = MagicMock()
         mock_spec.match_file.return_value = False
@@ -240,7 +240,7 @@ class TestBuildSearchIndex:
                 side_effect=mock_is_binary,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -282,7 +282,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -320,7 +320,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -396,7 +396,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -418,7 +418,8 @@ class TestCollectFilesFromDisk:
         (tmp_path / "photo.jpg").write_bytes(b"\xff\xd8\xff\xe0")
 
         def mock_is_binary(path):
-            return path.suffix in (".jpg", ".png")
+            path_str = str(path)
+            return path_str.endswith(".jpg") or path_str.endswith(".png")
 
         mock_spec = MagicMock()
         mock_spec.match_file.return_value = False
@@ -441,7 +442,7 @@ class TestCollectFilesFromDisk:
                 side_effect=mock_is_binary,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -479,7 +480,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path",
+                "infrastructure.filesystem.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(

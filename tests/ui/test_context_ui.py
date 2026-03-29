@@ -48,7 +48,7 @@ def test_context_view_default_services_injected(qtbot):
             "application.services.prompt_build_service.PromptBuildService"
         ) as mock_pb,
         patch(
-            "application.services.prompt_build_service.QtClipboardService"
+            "infrastructure.adapters.clipboard_service.QtClipboardService"
         ) as mock_cs,
     ):
         from presentation.views.context.context_view_qt import ContextViewQt

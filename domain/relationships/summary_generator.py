@@ -64,3 +64,51 @@ def generate_relationship_summary_xml(
 
     lines.append("</semantic_index>")
     return "\n".join(lines)
+
+
+def generate_relationship_summary_plain(
+    graph: RelationshipGraph,
+    workspace_root: Optional[Path] = None,
+    max_entries: int = 50,
+) -> str:
+    """
+    Generate PLAIN text summary of project relationships (Semantic Index) for prompt.
+    """
+    if graph.edge_count() == 0:
+        return ""
+
+    from shared.utils.path_utils import path_for_display
+
+    def _display(path_str: str) -> str:
+        return path_for_display(Path(path_str), workspace_root, True)
+
+    lines = []
+    lines.append(
+        f"Project Overview: {graph.file_count()} files, {graph.edge_count()} relationships."
+    )
+
+    in_degree = {}
+    for file_path in graph.all_files():
+        in_degree[file_path] = len(graph.get_edges_to(file_path))
+
+    top_targets = sorted(in_degree.keys(), key=lambda k: in_degree[k], reverse=True)[
+        :max_entries
+    ]
+
+    if top_targets:
+        lines.append("\nKey Dependencies:")
+        for target in top_targets:
+            if in_degree[target] == 0:
+                continue
+
+            edges_in = graph.get_edges_to(target)
+            kinds = {}
+            for e in edges_in:
+                kinds[e.kind.value] = kinds.get(e.kind.value, 0) + 1
+
+            kind_str = ", ".join([f"{count} {k}" for k, count in kinds.items()])
+            lines.append(
+                f"  - {_display(target)}: {in_degree[target]} dependents ({kind_str})"
+            )
+
+    return "\n".join(lines)

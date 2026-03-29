@@ -108,7 +108,7 @@ class ContextViewQt(
         self._prompt_builder = prompt_builder
 
         if clipboard_service is None:
-            from application.services.prompt_build_service import QtClipboardService
+            from infrastructure.adapters.clipboard_service import QtClipboardService
 
             clipboard_service = QtClipboardService()
         self._clipboard_service = clipboard_service

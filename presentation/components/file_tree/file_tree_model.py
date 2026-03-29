@@ -29,7 +29,11 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from infrastructure.filesystem.file_utils import TreeItem, scan_directory_shallow
+from infrastructure.filesystem.file_utils import (
+    TreeItem,
+    scan_directory_shallow,
+    is_binary_file,
+)
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
 from domain.selection.manager import SelectionManager
 
@@ -692,9 +696,13 @@ class FileTreeModel(QAbstractItemModel):
             for paths in self._search_index.values():
                 for file_path in paths:
                     if file_path.startswith(folder_tuple):
-                        result.add(file_path)
+                        # Filter out binary files before adding to selection
+                        if not is_binary_file(file_path):
+                            result.add(file_path)
 
-        return sorted(list(result))
+        # Final filter to ensure no manually added binary files remain
+        final_list = [p for p in result if not is_binary_file(p)]
+        return sorted(final_list)
 
     def _get_selected_paths_legacy(self) -> List[str]:
         """Partial resolution — chỉ trả về files đã loaded, không scan disk để tránh block UI."""
@@ -705,7 +713,7 @@ class FileTreeModel(QAbstractItemModel):
             node = self._path_to_node.get(p)
             if node is not None:
                 if not node.is_dir:
-                    if p not in seen:
+                    if p not in seen and not is_binary_file(p):
                         result.append(p)
                         seen.add(p)
                 elif node.is_dir and node.is_loaded:
@@ -723,8 +731,9 @@ class FileTreeModel(QAbstractItemModel):
             if child.path in seen:
                 continue
             if not child.is_dir:
-                result.append(child.path)
-                seen.add(child.path)
+                if not is_binary_file(child.path):
+                    result.append(child.path)
+                    seen.add(child.path)
             elif child.is_dir and child.is_loaded:
                 self._collect_files_deep_loaded_only(child, result, seen)
 

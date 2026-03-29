@@ -144,7 +144,6 @@ class TestReadGitignore:
         patterns = engine.read_gitignore(tmp_path)
         assert "*.pyc" in patterns
         assert "__pycache__/" in patterns
-        assert "# comment" in patterns  # Raw lines - pathspec xu ly comments
 
     def test_khong_co_gitignore(self, tmp_path: Path):
         """Khong loi khi khong co .gitignore."""

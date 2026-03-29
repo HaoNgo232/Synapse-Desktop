@@ -22,11 +22,10 @@ from domain.prompt.generator import (
     build_smart_prompt,
     OutputStyle,
 )
-from domain.relationships.summary_generator import generate_relationship_summary_xml
 from domain.prompt.file_collector import collect_files
 from infrastructure.filesystem.file_utils import TreeItem
 from infrastructure.git.git_utils import get_git_diffs, get_git_logs
-from shared.types.prompt_types_extra import BuildResult, FileTokenInfo
+from shared.types.prompt_types_extra import BuildResult
 
 
 # Mapping output_format string -> OutputStyle enum
@@ -267,7 +266,7 @@ class PromptBuildService:
 
             # 4. Assemble prompt voi git data va xml formatting
             output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
-            semantic_index = self._compute_semantic_index(workspace)
+            semantic_index = self._compute_semantic_index(workspace, output_format)
             if semantic_index:
                 from shared.logging_config import log_info
 
@@ -345,11 +344,14 @@ class PromptBuildService:
         # ====================================================================
         # Per-file token counting - dem token cho tung file rieng le
         # ====================================================================
-        per_file_tokens = self._count_per_file_tokens(
+        from application.services.prompt_helpers import count_per_file_tokens
+
+        per_file_tokens = count_per_file_tokens(
             all_file_paths,
             workspace,
             use_relative_paths,
             dep_path_set,
+            self._tokenization_service,
             codemap_paths=normalized_codemap,
         )
 
@@ -428,7 +430,11 @@ class PromptBuildService:
                 else:
                     output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
                     # Re-format trimmed in-memory data
-                    file_contents = self._reconstruct_file_contents(
+                    from application.services.prompt_helpers import (
+                        reconstruct_file_contents,
+                    )
+
+                    file_contents = reconstruct_file_contents(
                         trimmed_comp.file_contents, output_format
                     )
 
@@ -457,11 +463,14 @@ class PromptBuildService:
                 token_count = self._tokenization_service.count_tokens(prompt)
 
                 # Re-count per-file tokens
-                per_file_tokens = self._count_per_file_tokens(
+                from application.services.prompt_helpers import count_per_file_tokens
+
+                per_file_tokens = count_per_file_tokens(
                     all_file_paths,
                     workspace,
                     use_relative_paths,
                     dep_path_set,
+                    self._tokenization_service,
                     codemap_paths=normalized_codemap,
                 )
 
@@ -479,115 +488,8 @@ class PromptBuildService:
             dependency_graph=None,  # Feature 3 se cap nhat tu MCP layer
         )
 
-    def _reconstruct_file_contents(
-        self, trimmed_contents: Dict[str, str], output_format: str
-    ) -> str:
-        """
-        Re-format trimmed dictionary content vao string theo output_format.
-        (Thay vi doc lai tu disk).
-        """
-        if not trimmed_contents:
-            return ""
-
-        parts = []
-        if output_format == "xml":
-            for path, content in trimmed_contents.items():
-                parts.append(f'<file path="{path}">\n{content}\n</file>')
-            return "\n\n".join(parts)
-        elif output_format == "json":
-            import json as _json
-
-            arr = []
-            for path, content in trimmed_contents.items():
-                arr.append({"path": path, "content": content})
-            return _json.dumps(arr, indent=2)
-        else:
-            # plain
-            for path, content in trimmed_contents.items():
-                parts.append(f"{path}\n" + "-" * len(path) + f"\n{content}")
-            return "\n\n".join(parts)
-
-    def _count_per_file_tokens(
-        self,
-        file_paths: List[Path],
-        workspace: Path,
-        use_relative_paths: bool,
-        dep_path_set: set[str],
-        codemap_paths: Optional[Set[str]] = None,
-    ) -> List[FileTokenInfo]:
-        """
-        Dem token cho tung file rieng le de cung cap metadata chi tiet.
-
-        Args:
-            file_paths: Tat ca file paths (primary + dependency)
-            workspace: Workspace root path
-            use_relative_paths: Co dung relative paths khong
-            dep_path_set: Set cac dependency file paths (str) de danh dau is_dependency
-            codemap_paths: Set cac file paths la codemap-only
-
-        Returns:
-            List[FileTokenInfo] voi token count per file
-        """
-        entries = collect_files(
-            selected_paths={str(p) for p in file_paths},
-            workspace_root=workspace,
-            use_relative_paths=use_relative_paths,
-        )
-
-        codemap_set = codemap_paths or set()
-
-        result: list[FileTokenInfo] = []
-        for entry in entries:
-            # Normalize entry.path to absolute for comparison
-            entry_path_abs = str(entry.path)
-            if not Path(entry_path_abs).is_absolute():
-                entry_path_abs = str((workspace / entry_path_abs).resolve())
-
-            is_codemap_file = entry_path_abs in codemap_set
-            tokens = 0
-
-            if is_codemap_file and entry.content:
-                # Count tokens on codemap content (AST only)
-                from domain.smart_context import smart_parse, is_supported
-
-                ext = Path(str(entry.path)).suffix.lstrip(".")
-                if is_supported(ext):
-                    smart = smart_parse(
-                        str(entry.path), entry.content, include_relationships=False
-                    )
-                    if smart:
-                        tokens = self._tokenization_service.count_tokens(smart)
-                    else:
-                        tokens = self._tokenization_service.count_tokens(entry.content)
-                else:
-                    tokens = self._tokenization_service.count_tokens(entry.content)
-            elif entry.content:
-                tokens = self._tokenization_service.count_tokens(entry.content)
-
-            result.append(
-                FileTokenInfo(
-                    path=entry.display_path,
-                    tokens=tokens,
-                    is_dependency=str(entry.path) in dep_path_set,
-                    was_trimmed=False,
-                    is_codemap=is_codemap_file,
-                )
-            )
-
-        return result
-
     def count_tokens(self, text: str) -> int:
-        """Dem so luong tokens trong text.
-
-        Delegate sang TokenizationService singleton de dam bao
-        cung tokenizer instance duoc su dung cho tat ca operations.
-
-        Args:
-            text: Noi dung can dem tokens
-
-        Returns:
-            So luong tokens
-        """
+        """Dem so luong tokens trong text."""
         return self._tokenization_service.count_tokens(text)
 
     def build_file_map(
@@ -599,16 +501,9 @@ class PromptBuildService:
     ) -> str:
         """
         Generate file map tu TreeItem va selected paths.
-
-        Args:
-            tree_item: Root TreeItem
-            selected_paths: Set paths da chon
-            workspace: Workspace root (optional)
-            use_relative_paths: Co dung relative paths khong
-
-        Returns:
-            File map string (tree format)
         """
+        from domain.prompt.generator import generate_file_map
+
         return generate_file_map(
             tree_item,
             selected_paths,
@@ -677,7 +572,7 @@ class PromptBuildService:
             git_logs = get_git_logs(workspace, max_commits=5)
 
         # 4. Assemble prompt voi git data va semantic index
-        semantic_index = self._compute_semantic_index(workspace)
+        semantic_index = self._compute_semantic_index(workspace, "xml")
         if semantic_index:
             from shared.logging_config import log_info
 
@@ -695,7 +590,9 @@ class PromptBuildService:
             semantic_index=semantic_index,
         )
 
-    def _compute_semantic_index(self, workspace: Path) -> str:
+    def _compute_semantic_index(
+        self, workspace: Path, output_format: str = "xml"
+    ) -> str:
         """
         Tính toán semantic index (mối quan hệ giữa các files) cho prompt context.
         Sử dụng GraphService để lấy thông tin dependency/inheritance.
@@ -704,47 +601,29 @@ class PromptBuildService:
             return ""
 
         try:
-            # Đảm bảo graph đã được build hoàn chỉnh (lazy-load if needed)
-            # ensure_built sẽ đợi nếu background build đang chạy cho cùng workspace
-            graph = self._graph_service.ensure_built(workspace)
+            # Fast path: use already built graph (non-blocking)
+            graph = self._graph_service.get_graph()
             if not graph:
                 return ""
 
-            # Sử dụng summary generator để tạo XML context
-            return generate_relationship_summary_xml(graph, workspace_root=workspace)
+            if output_format == "plain":
+                from domain.relationships.summary_generator import (
+                    generate_relationship_summary_plain,
+                )
+
+                return generate_relationship_summary_plain(
+                    graph, workspace_root=workspace
+                )
+            else:
+                from domain.relationships.summary_generator import (
+                    generate_relationship_summary_xml,
+                )
+
+                return generate_relationship_summary_xml(
+                    graph, workspace_root=workspace
+                )
         except Exception as e:
             from shared.logging_config import log_error
 
             log_error(f"[PromptBuild] Failed to count semantic index: {e}")
             return ""
-
-
-class QtClipboardService:
-    """
-    Clipboard service su dung Qt QApplication.clipboard().
-
-    Phu thuoc Qt runtime nen chi dung trong app context.
-    """
-
-    def copy_to_clipboard(self, text: str) -> tuple[bool, str]:
-        """
-        Copy text ra system clipboard qua Qt.
-
-        Returns:
-            (success, error_message): (True, "") if success, (False, error_msg) if failed
-        """
-        try:
-            from PySide6.QtWidgets import QApplication
-
-            clipboard = QApplication.clipboard()
-            if clipboard is None:
-                msg = "QApplication.clipboard() returned None"
-                logger.warning(msg)
-                return False, msg
-
-            clipboard.setText(text)
-            return True, ""
-        except Exception as e:
-            msg = f"Clipboard error: {e}"
-            logger.warning("Failed to copy to clipboard: %s", e)
-            return False, msg

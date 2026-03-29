@@ -177,7 +177,7 @@ class TestClipboardServiceAPI:
 
     def test_qt_clipboard_service_returns_tuple(self):
         """QtClipboardService.copy_to_clipboard tra ve tuple[bool, str]."""
-        from application.services.prompt_build_service import QtClipboardService
+        from infrastructure.adapters.clipboard_service import QtClipboardService
 
         service = QtClipboardService()
 
@@ -198,7 +198,7 @@ class TestClipboardServiceAPI:
 
     def test_qt_clipboard_service_returns_error_on_failure(self):
         """QtClipboardService tra ve (False, error_msg) khi that bai."""
-        from application.services.prompt_build_service import QtClipboardService
+        from infrastructure.adapters.clipboard_service import QtClipboardService
 
         service = QtClipboardService()
 
@@ -321,10 +321,8 @@ class TestDependencyInjection:
     def test_context_view_creates_defaults_when_none(self):
         """ContextViewQt tao default services khi khong truyen vao."""
         from presentation.views.context.context_view_qt import ContextViewQt
-        from application.services.prompt_build_service import (
-            PromptBuildService,
-            QtClipboardService,
-        )
+        from application.services.prompt_build_service import PromptBuildService
+        from infrastructure.adapters.clipboard_service import QtClipboardService
 
         with patch(
             "presentation.views.context.context_view_qt.QWidget.__init__",

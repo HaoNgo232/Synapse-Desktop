@@ -10,7 +10,8 @@ from typing import List, Optional
 from PySide6.QtWidgets import QTextEdit, QWidget, QVBoxLayout
 from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
 
-from presentation.components.diff_viewer import DiffLine, DiffLineType, DiffColors
+from presentation.components.diff_viewer import DiffColors
+from shared.types.diff_types import DiffLine, DiffLineType
 
 
 class DiffViewerWidget(QWidget):
@@ -41,7 +42,7 @@ class DiffViewerWidget(QWidget):
         self._text_edit.setFont(QFont("Cascadia Code, Fira Code, Consolas", 11))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{ "
-            f"background-color: {DiffColors.CONTEXT_BG}; "
+            f"background-color: {DiffColors.UNCHANGED_BG}; "
             f"border: 1px solid #334155; "
             f"border-radius: 6px; "
             f"padding: 4px; }}"
@@ -65,13 +66,13 @@ class DiffViewerWidget(QWidget):
             fmt = QTextCharFormat()
 
             # Set background và text color theo line type
-            if line.line_type == DiffLineType.ADDED:
+            if line.type == DiffLineType.ADDED:
                 fmt.setBackground(QColor(DiffColors.ADDED_BG))
                 fmt.setForeground(QColor(DiffColors.ADDED_TEXT))
-            elif line.line_type == DiffLineType.REMOVED:
+            elif line.type == DiffLineType.REMOVED:
                 fmt.setBackground(QColor(DiffColors.REMOVED_BG))
                 fmt.setForeground(QColor(DiffColors.REMOVED_TEXT))
-            elif line.line_type == DiffLineType.HEADER:
+            elif line.content.startswith("@@") or line.content.startswith("["):
                 fmt.setBackground(QColor(DiffColors.HEADER_BG))
                 fmt.setForeground(QColor(DiffColors.HEADER_TEXT))
             else:
@@ -79,14 +80,12 @@ class DiffViewerWidget(QWidget):
 
             # Line number prefix
             prefix = ""
-            if line.line_type == DiffLineType.ADDED and line.new_line_no:
+            if line.type == DiffLineType.ADDED and line.new_line_no:
                 prefix = f"{line.new_line_no:>4} "
-            elif line.line_type == DiffLineType.REMOVED and line.old_line_no:
+            elif line.type == DiffLineType.REMOVED and line.old_line_no:
                 prefix = f"{line.old_line_no:>4} "
             elif line.old_line_no and line.new_line_no:
                 prefix = f"{line.old_line_no:>4} "
-            elif line.line_type == DiffLineType.HEADER:
-                prefix = "     "
             else:
                 prefix = "     "
 

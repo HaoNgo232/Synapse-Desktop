@@ -97,14 +97,12 @@ class TestPromptBuildServiceCodemapIntegration:
             assert any(str(workspace / "utils.py") == p for p in normalized)
 
     def test_count_per_file_tokens_sets_is_codemap_flag(self, service, workspace):
-        """Test that _count_per_file_tokens correctly sets is_codemap flag."""
+        """Test that count_per_file_tokens correctly sets is_codemap flag."""
         # Arrange
         file_paths = [workspace / "main.py", workspace / "utils.py"]
         codemap_paths = {str(workspace / "utils.py")}
 
-        with patch(
-            "application.services.prompt_build_service.collect_files"
-        ) as mock_collect:
+        with patch("application.services.prompt_helpers.collect_files") as mock_collect:
             # Mock file entries
             entry1 = Mock()
             entry1.path = workspace / "main.py"
@@ -118,12 +116,19 @@ class TestPromptBuildServiceCodemapIntegration:
 
             mock_collect.return_value = [entry1, entry2]
 
-            # Act
-            result = service._count_per_file_tokens(
+            # Act - dung count_per_file_tokens tu prompt_helpers
+            from application.services.prompt_helpers import count_per_file_tokens
+
+            mock_tokenizer = Mock()
+            mock_tokenizer.count_tokens = Mock(
+                side_effect=lambda text: len(text.split())
+            )
+            result = count_per_file_tokens(
                 file_paths=file_paths,
                 workspace=workspace,
                 use_relative_paths=True,
                 dep_path_set=set(),
+                tokenization_service=mock_tokenizer,
                 codemap_paths=codemap_paths,
             )
 

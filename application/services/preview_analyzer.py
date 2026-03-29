@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional, List
 
 from domain.prompt.opx_parser import FileAction
-from presentation.components.diff_viewer import (
-    DiffLine,
+from shared.types.diff_types import DiffLine
+from domain.diff.generator import (
     generate_diff_lines,
     generate_create_diff_lines,
     generate_delete_diff_lines,

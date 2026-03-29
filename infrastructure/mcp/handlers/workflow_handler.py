@@ -1081,7 +1081,7 @@ def register_tools(mcp_instance: Any) -> None:
 
                 def mod_conv(p: ContractPackLike) -> ContractPackLike:
                     if content and content not in p.conventions:
-                        p.conventions.append(cast(str, content))
+                        p.conventions.append(content)
                     return p
 
                 pack = await asyncio.to_thread(
@@ -1102,7 +1102,7 @@ def register_tools(mcp_instance: Any) -> None:
 
                 def mod_anti(p: ContractPackLike) -> ContractPackLike:
                     if content and content not in p.anti_patterns:
-                        p.anti_patterns.append(cast(str, content))
+                        p.anti_patterns.append(content)
                     return p
 
                 pack = await asyncio.to_thread(

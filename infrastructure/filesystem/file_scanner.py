@@ -19,6 +19,7 @@ from typing import Callable, Optional, List, Any, Tuple
 from dataclasses import dataclass
 
 import pathspec
+from collections import OrderedDict
 
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
 from infrastructure.filesystem.file_utils import (
@@ -26,18 +27,15 @@ from infrastructure.filesystem.file_utils import (
     is_system_path,
     is_binary_file,
 )
+from shared.constants import DIRECTORY_QUICK_SKIP
 
-# Try import scandir_rs (Rust-based, much faster)
-# Some environments do not expose typed symbols for scandir_rs.Walk,
-# so resolve dynamically to keep runtime behavior and satisfy static analysis.
+# Try import scandir_rs (Rust-based)
+# WARNING: We intentionally disable scandir_rs because its Walk generator
+# does NOT support dynamic directory pruning (like os.walk's dirs.remove()).
+# This causes it to unconditionally crawl massive ignored folders (like node_modules, .git, .venv),
+# leading to catastrophic performance degradation on real-world projects.
+HAS_SCANDIR_RS = False
 RustWalk: Any = None
-try:
-    import scandir_rs
-
-    RustWalk = getattr(scandir_rs, "Walk", None)
-    HAS_SCANDIR_RS = callable(RustWalk)
-except ImportError:
-    HAS_SCANDIR_RS = False
 
 
 # ============================================
@@ -140,6 +138,31 @@ class ScanConfig:
 
 # Type alias cho progress callback
 ProgressCallback = Callable[[ScanProgress], None]
+
+
+class LRUSpecCache:
+    """
+    Cache giới hạn kích thước sử dụng chiến lược Least Recently Used.
+    Giúp tránh memory leak khi scan monorepo cực lớn.
+    """
+
+    def __init__(self, maxsize=1000):
+        self._cache: OrderedDict[Path, list] = OrderedDict()
+        self._maxsize = maxsize
+
+    def get(self, key, default=None):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return default
+
+    def __setitem__(self, key, value):
+        self._cache[key] = value
+        if len(self._cache) > self._maxsize:
+            self._cache.popitem(last=False)
+
+    def __contains__(self, key):
+        return key in self._cache
 
 
 class FileScanner:
@@ -250,6 +273,9 @@ class FileScanner:
 
         # Dict để build tree structure: Path -> TreeItem
         path_to_item: dict[Path, TreeItem] = {root_path: root_item}
+        # Cache lưu trữ active_stack cho từng directory - Sử dụng LRU để tránh memory leak
+        path_to_spec_stack: LRUSpecCache = LRUSpecCache(maxsize=2000)
+        path_to_spec_stack[root_path] = spec_stack
 
         try:
             # Dùng Walk từ scandir-rs - tương tự os.walk() nhưng nhanh hơn nhiều
@@ -265,23 +291,25 @@ class FileScanner:
                 if parent_item is None:
                     continue
 
-                # Build active spec stack for this directory
-                active_stack = spec_stack.copy()
                 if current_dir != root_path:
-                    # Collect .gitignore specs from root to current_dir
-                    rel_parts = current_dir.relative_to(root_path).parts
-                    check_path = root_path
-                    for part in rel_parts:
-                        check_path = check_path / part
-                        if (
-                            check_path / ".gitignore"
-                        ).exists() and check_path != root_path:
-                            pats = self.ignore_engine.read_gitignore(check_path)
-                            if pats:
-                                s = pathspec.PathSpec.from_lines(
-                                    "gitignore", tuple(pats)
-                                )  # type: ignore[arg-type]
-                                active_stack.append((s, check_path))
+                    # Kế thừa spec stack từ thư mục cha
+                    parent_dir = current_dir.parent
+                    parent_stack = path_to_spec_stack.get(parent_dir, spec_stack)
+                    active_stack = (
+                        list(parent_stack) if parent_stack else spec_stack.copy()
+                    )
+
+                    # Cập nhật nếu có thêm .gitignore ở hiện tại
+                    if (current_dir / ".gitignore").exists():
+                        pats = self.ignore_engine.read_gitignore(current_dir)
+                        if pats:
+                            s = pathspec.PathSpec.from_lines("gitignore", tuple(pats))  # type: ignore[arg-type]
+                            active_stack.append((s, current_dir))
+
+                    # Cache cho các thư mục con
+                    path_to_spec_stack[current_dir] = active_stack
+                else:
+                    active_stack = spec_stack
 
                 # Process directories
                 for dir_name in sorted(dirs, key=str.lower):
@@ -428,7 +456,7 @@ class FileScanner:
 
             entry_path = Path(entry.path)
 
-            if is_system_path(entry_path):
+            if is_system_path(entry_path) or entry.name in DIRECTORY_QUICK_SKIP:
                 continue
 
             try:
@@ -438,14 +466,31 @@ class FileScanner:
 
             rel_path_str = str(rel_path) + "/"
 
+            # ========= FIX: Kiểm tra directory có bị ignore không =========
+            is_ignored = False
+            for s, base in spec_stack:
+                try:
+                    rel_to_base = entry_path.relative_to(base)
+                    rel_to_base_str = str(rel_to_base) + "/"
+                    if s.match_file(rel_to_base_str):
+                        is_ignored = True
+                        break
+                except ValueError:
+                    continue
+
+            if is_ignored:
+                continue
+            # ===============================================================
+
             # Check for nested .gitignore
             new_spec_stack = spec_stack.copy()
             if (entry_path / ".gitignore").exists():
                 nested_patterns = self.ignore_engine.read_gitignore(entry_path)
                 if nested_patterns:
                     nested_spec = pathspec.PathSpec.from_lines(
-                        "gitignore", tuple(nested_patterns)
-                    )  # type: ignore[arg-type]
+                        "gitignore",
+                        nested_patterns,  # type: ignore
+                    )
                     new_spec_stack.append((nested_spec, entry_path))
 
             child = self._scan_directory(

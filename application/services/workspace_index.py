@@ -51,7 +51,7 @@ def build_search_index(
     from shared.constants import DIRECTORY_QUICK_SKIP
     from infrastructure.filesystem.file_utils import (
         is_binary_file,
-        is_system_path,
+        is_system_path_str,
         HAS_SCANDIR_RS,
     )
 
@@ -92,23 +92,27 @@ def build_search_index(
                 return_type=2,
             ).collect()
 
+            # Optimization: Pre-build skip patterns with separators
+            _sep = os.path.sep
+            _skip_with_sep = {_sep + s + _sep for s in DIRECTORY_QUICK_SKIP}
+
             for entry in results:
                 if generation_check and not generation_check():
                     return {}
 
-                full_path = entry.path
+                full_path: str = entry.path
+
+                # Fast skip directory check using substring matching
+                # Thêm separator ở đầu và cuối để match chính xác component
+                check_path = _sep + full_path + _sep
+                if any(s in check_path for s in _skip_with_sep):
+                    continue
+
+                # Skip system and binary files using strings to avoid Path() overhead in hot loop
+                if is_system_path_str(full_path) or is_binary_file(full_path):
+                    continue
+
                 filename = os.path.basename(full_path)
-
-                # Check quick skip dirs in path
-                if any(
-                    skip in full_path.split(os.path.sep)
-                    for skip in DIRECTORY_QUICK_SKIP
-                ):
-                    continue
-
-                entry_p = Path(full_path)
-                if is_system_path(entry_p) or is_binary_file(entry_p):
-                    continue
 
                 # Relative path calculation (fast)
                 if full_path.startswith(root_path_str):
@@ -139,9 +143,8 @@ def build_search_index(
 
             for filename in filenames:
                 full_path = os.path.join(dirpath, filename)
-                entry_p = Path(full_path)
 
-                if is_system_path(entry_p) or is_binary_file(entry_p):
+                if is_system_path_str(full_path) or is_binary_file(full_path):
                     continue
 
                 if full_path.startswith(root_path_str):
@@ -224,7 +227,7 @@ def collect_files_from_disk(
     from shared.constants import DIRECTORY_QUICK_SKIP
     from infrastructure.filesystem.file_utils import (
         is_binary_file,
-        is_system_path,
+        is_system_path_str,
         HAS_SCANDIR_RS,
     )
 
@@ -266,16 +269,18 @@ def collect_files_from_disk(
                 return_type=2,
             ).collect()
 
+            _sep = os.path.sep
+            _skip_with_sep = {_sep + s + _sep for s in DIRECTORY_QUICK_SKIP}
+
             for entry in entries:
-                full_path = entry.path
-                if any(
-                    skip in full_path.split(os.path.sep)
-                    for skip in DIRECTORY_QUICK_SKIP
-                ):
+                full_path: str = entry.path
+
+                # Fast skip directory check using substring matching instead of split()
+                check_path = _sep + full_path + _sep
+                if any(s in check_path for s in _skip_with_sep):
                     continue
 
-                entry_p = Path(full_path)
-                if is_system_path(entry_p) or is_binary_file(entry_p):
+                if is_system_path_str(full_path) or is_binary_file(full_path):
                     continue
 
                 if full_path.startswith(root_path_str):
@@ -295,13 +300,21 @@ def collect_files_from_disk(
 
     # Fallback to os.walk
     try:
+        _sep = os.path.sep
+        _skip_with_sep = {_sep + s + _sep for s in DIRECTORY_QUICK_SKIP}
+
         for dirpath, dirnames, filenames in os.walk(str(folder)):
             dirnames[:] = [d for d in dirnames if d not in DIRECTORY_QUICK_SKIP]
             for filename in filenames:
                 full_path = os.path.join(dirpath, filename)
-                entry_p = Path(full_path)
 
-                if is_system_path(entry_p) or is_binary_file(entry_p):
+                # Fast skip directory check
+                check_path = _sep + full_path + _sep
+                if any(s in check_path for s in _skip_with_sep):
+                    continue
+
+                # Skip system and binary files using strings
+                if is_system_path_str(full_path) or is_binary_file(full_path):
                     continue
 
                 if full_path.startswith(root_path_str):

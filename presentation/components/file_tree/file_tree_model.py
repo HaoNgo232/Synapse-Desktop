@@ -81,21 +81,23 @@ class TreeNode:
 
     @staticmethod
     def from_tree_item(
-        item: TreeItem,
+        item: "TreeItem",
         parent: Optional["TreeNode"] = None,
         row: int = 0,
         depth: int = 0,
         max_depth: int = 1,
+        path_index: Optional[Dict[str, "TreeNode"]] = None,
     ) -> "TreeNode":
         """
         Chuyển đổi TreeItem sang TreeNode (recursive, depth-limited).
 
         Args:
-            item: TreeItem từ file_utils
+            item: TreeItem nguồn (filesystem structure)
             parent: Parent TreeNode
             row: Row index trong parent
             depth: Depth hiện tại
             max_depth: Depth tối đa để load children
+            path_index: Dict để build path -> node index đồng thời
         """
         node = TreeNode(
             label=item.label,
@@ -106,6 +108,9 @@ class TreeNode:
             row=row,
         )
 
+        if path_index is not None:
+            path_index[item.path] = node
+
         # Load children nếu trong depth limit
         if item.is_dir and depth < max_depth:
             for i, child_item in enumerate(item.children):
@@ -115,6 +120,7 @@ class TreeNode:
                     row=i,
                     depth=depth + 1,
                     max_depth=max_depth,
+                    path_index=path_index,
                 )
                 node.children.append(child_node)
 
@@ -599,15 +605,16 @@ class FileTreeModel(QAbstractItemModel):
             )
             if tree_item:
                 self._root_tree_item = tree_item
+                # Consolidate build + index vao 1 recursion duy nhat de tiet kiem thoi gian
                 self._root_node = TreeNode.from_tree_item(
                     tree_item,
                     parent=self._invisible_root,
                     row=0,
                     depth=0,
                     max_depth=1,
+                    path_index=self._path_to_node,  # Pass index dict de update luon khi build
                 )
                 self._invisible_root.children = [self._root_node]
-                self._build_path_index(self._root_node)
             else:
                 self._root_node = None
                 self._invisible_root.children = []
@@ -651,14 +658,10 @@ class FileTreeModel(QAbstractItemModel):
         if not selected_paths:
             return []
 
-        # Convert to set of Path objects for fast check
-        # We only care about folders in selection for indexing
         selected_folders: List[str] = []
         selected_files: Set[str] = set()
 
         for p in selected_paths:
-            # We don't know if it's a dir or file just from path string in _selection_mgr
-            # But we can check path_to_node or os.path.isdir
             node = self._path_to_node.get(p)
             if node:
                 if node.is_dir:
@@ -667,38 +670,34 @@ class FileTreeModel(QAbstractItemModel):
                     )
                 else:
                     selected_files.add(p)
+            elif os.path.isdir(p):
+                selected_folders.append(
+                    p if p.endswith(os.path.sep) else p + os.path.sep
+                )
             else:
-                # Path not in loaded tree, must check disk or guess
-                if os.path.isdir(p):
-                    selected_folders.append(
-                        p if p.endswith(os.path.sep) else p + os.path.sep
-                    )
-                else:
-                    selected_files.add(p)
+                selected_files.add(p)
 
-        result: Set[str] = selected_files
+        result: Set[str] = set(selected_files)
 
-        # If any folder is selected, we must collect all its files from index
         if selected_folders:
-            # Iterate through all files in search index (maps filename -> [paths])
+            # Optimization: Loại bỏ folders là con của folder khác (tránh check thừa)
+            selected_folders.sort()
+            pruned: List[str] = []
+            for f in selected_folders:
+                if not pruned or not f.startswith(pruned[-1]):
+                    pruned.append(f)
+
+            # Build single combined check using tuple for startswith (optimized in C)
+            folder_tuple = tuple(pruned)
             for paths in self._search_index.values():
                 for file_path in paths:
-                    if file_path in result:
-                        continue
-
-                    # Check if file_path is inside any selected folder
-                    for folder in selected_folders:
-                        if file_path.startswith(folder):
-                            result.add(file_path)
-                            break
+                    if file_path.startswith(folder_tuple):
+                        result.add(file_path)
 
         return sorted(list(result))
 
     def _get_selected_paths_legacy(self) -> List[str]:
-        """Legacy resolution via disk scanning (Blocking behavior)."""
-        from infrastructure.filesystem.file_utils import is_binary_file
-        from application.services.workspace_index import collect_files_from_disk
-
+        """Partial resolution — chỉ trả về files đã loaded, không scan disk để tránh block UI."""
         result: List[str] = []
         seen: Set[str] = set()
 
@@ -706,31 +705,28 @@ class FileTreeModel(QAbstractItemModel):
             node = self._path_to_node.get(p)
             if node is not None:
                 if not node.is_dir:
-                    if p not in seen and not is_binary_file(Path(p)):
+                    if p not in seen:
                         result.append(p)
                         seen.add(p)
-                elif node.is_dir:
-                    self._collect_files_deep(node, result, seen)
-            else:
-                path_obj = Path(p)
-                if (
-                    path_obj.is_file()
-                    and p not in seen
-                    and not is_binary_file(path_obj)
-                ):
-                    result.append(p)
-                    seen.add(p)
-                elif path_obj.is_dir():
-                    disk_files = collect_files_from_disk(
-                        path_obj,
-                        self._workspace_path,
-                        ignore_engine=self._ignore_engine,
+                elif node.is_dir and node.is_loaded:
+                    # Chỉ collect từ loaded nodes, không scan disk
+                    self._collect_files_deep_loaded_only(
+                        child_node=node, result=result, seen=seen
                     )
-                    for f in disk_files:
-                        if f not in seen:
-                            result.append(f)
-                            seen.add(f)
         return result
+
+    def _collect_files_deep_loaded_only(
+        self, child_node: TreeNode, result: List[str], seen: Set[str]
+    ) -> None:
+        """Helper để collect files đệ quy chỉ từ các node đã được load."""
+        for child in child_node.children:
+            if child.path in seen:
+                continue
+            if not child.is_dir:
+                result.append(child.path)
+                seen.add(child.path)
+            elif child.is_dir and child.is_loaded:
+                self._collect_files_deep_loaded_only(child, result, seen)
 
     def _collect_files_deep(
         self, node: TreeNode, result: List[str], seen: Set[str]
@@ -1183,13 +1179,22 @@ class FileTreeModel(QAbstractItemModel):
         """
         Tính tổng tokens của tất cả selected files trong folder.
 
-        Chỉ tính files đã có token count trong cache.
-        Returns None nếu không có file nào selected hoặc chưa counted.
+        Dùng cache để tránh duyệt O(N) qua _token_cache trong data() call.
+        Mới: Sử dụng memoization hoặc cache dựa trên generation.
         """
+        # Trộn generation của selection và model để đồng bộ cache
+        cache_key = f"{node.path}_{self._selection_mgr._selection_generation}_{self._generation}"
+        if hasattr(self, "_folder_token_sum_cache"):
+            if cache_key in self._folder_token_sum_cache:
+                return self._folder_token_sum_cache[cache_key]
+        else:
+            self._folder_token_sum_cache = {}
+
         total = 0
         has_any = False
         folder_prefix = node.path + "/"
 
+        # O(N) fallback nhưng được cached
         for file_path, count in self._token_cache.items():
             if file_path.startswith(folder_prefix) and count > 0:
                 # Chỉ tính files đang selected
@@ -1199,7 +1204,9 @@ class FileTreeModel(QAbstractItemModel):
                     total += count
                     has_any = True
 
-        return total if has_any else None
+        result = total if has_any else None
+        self._folder_token_sum_cache[cache_key] = result
+        return result
 
     def _emit_parent_changes(self, node: TreeNode) -> None:
         """Emit dataChanged cho tất cả ancestors (cập nhật tri-state)."""

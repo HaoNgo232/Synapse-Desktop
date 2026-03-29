@@ -12,7 +12,6 @@ tach ra thanh cac module rieng biet.
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from watchdog.observers import Observer
 
 from shared.logging_config import log_info, log_error
 from application.interfaces.file_watcher_port import (
@@ -112,13 +111,11 @@ class FileWatcher(IFileWatcherService):
                 debouncer=self._debouncer,
             )
 
-            self._observer = Observer()
-            self._observer.schedule(
-                self._handler,
-                str(path),
-                recursive=True,
-            )
-            self._observer.start()
+            # Optimization: Move observer initialization to background thread
+            # inotify _add_dir_watch recursive can take SECONDS on Large Projects.
+            from infrastructure.adapters.qt_utils import schedule_background
+
+            schedule_background(self._start_observer_bg, None, None, None, str(path))
 
             self._current_path = path
             log_info(f"[FileWatcher] Started watching: {path}")
@@ -126,6 +123,21 @@ class FileWatcher(IFileWatcherService):
         except Exception as e:
             log_error(f"[FileWatcher] Failed to start: {e}")
             self.stop()
+
+    def _start_observer_bg(self, path_str: str) -> None:
+        """Thuc thi schedule va start observer tren background thread."""
+        try:
+            from watchdog.observers import Observer
+
+            self._observer = Observer()
+            self._observer.schedule(
+                self._handler,  # type: ignore
+                path_str,
+                recursive=True,
+            )
+            self._observer.start()
+        except Exception as e:
+            log_error(f"[FileWatcher] Background start failed: {e}")
 
     def stop(self) -> None:
         """Dung theo doi."""
@@ -135,18 +147,31 @@ class FileWatcher(IFileWatcherService):
 
         self._handler = None
 
-        observer = self._observer
-        if observer is not None:
-            try:
-                observer.stop()
-                observer.join(timeout=2.0)
-                log_info(f"[FileWatcher] Stopped watching: {self._current_path}")
-            except Exception as e:
-                log_error(f"[FileWatcher] Error stopping: {e}")
-            finally:
-                self._observer = None
+        if self._observer is not None:
+            # Optimization: Move observer stop/join to background thread
+            # stopping 20k+ inotify watches is EXTREMELY slow (SECONDS).
+            from infrastructure.adapters.qt_utils import schedule_background
+
+            schedule_background(
+                self._stop_observer_bg,
+                None,
+                None,
+                None,
+                self._observer,
+                self._current_path,
+            )
+            self._observer = None
 
         self._current_path = None
+
+    def _stop_observer_bg(self, observer: Any, path: Optional[Path]) -> None:
+        """Thuc thi stop va join observer tren background thread."""
+        try:
+            observer.stop()
+            observer.join(timeout=2.0)
+            log_info(f"[FileWatcher] Background stop complete: {path}")
+        except Exception as e:
+            log_error(f"[FileWatcher] Background stop failed: {path} - {e}")
 
     def is_running(self) -> bool:
         """Kiem tra watcher co dang chay khong."""

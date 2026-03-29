@@ -20,9 +20,9 @@ from infrastructure.filesystem.ignore_engine import IgnoreEngine
 
 HAS_SCANDIR_RS = False
 try:
-    import scandir_rs
+    # import scandir_rs
 
-    HAS_SCANDIR_RS = True
+    HAS_SCANDIR_RS = False  # Tắt do Walk không hỗ trợ pruning
 except ImportError:
     pass
 
@@ -39,41 +39,9 @@ _WINDOWS_RESERVED_PATTERN = re.compile(
     r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", re.IGNORECASE
 )
 
-
-@dataclass
-class TreeItem:
-    """
-    Mot item trong file tree (file hoac folder).
-    Tuong duong VscodeTreeItem trong TypeScript.
-
-    is_loaded: True nếu children đã được scan (cho lazy loading).
-               False = folder chưa được scan, children = []
-    """
-
-    label: str  # Ten hien thi (filename/dirname)
-    path: str  # Duong dan tuyet doi
-    is_dir: bool = False
-    children: list["TreeItem"] = field(default_factory=list)
-    is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
-
-
-def is_binary_file(path: Path) -> bool:
-    """
-    Check xem một file có phải là binary không.
-
-    Optimization:
-    1. Kiểm tra extension trước (fast whitelist/blacklist)
-    2. Chỉ đọc nội dung nếu extension không xác định.
-    """
-    from shared.constants import BINARY_EXTENSIONS
-
-    # 1. Fast check by extension
-    ext = path.suffix.lower()
-    if ext in BINARY_EXTENSIONS:
-        return True
-
-    # Whitelist các extension text phổ biến để skip I/O
-    TEXT_EXTENSIONS = {
+# Optimization: Module-level constants (tạo 1 lần duy nhất)
+_TEXT_EXTENSIONS = frozenset(
+    {
         ".py",
         ".js",
         ".ts",
@@ -98,18 +66,73 @@ def is_binary_file(path: Path) -> bool:
         ".sql",
         ".mod",
         ".sum",
+        ".toml",
+        ".cfg",
+        ".ini",
+        ".env",
+        ".jsx",
+        ".tsx",
+        ".vue",
+        ".svelte",
+        ".scss",
+        ".less",
+        ".graphql",
+        ".proto",
+        ".tf",
+        ".dockerfile",
     }
-    if ext in TEXT_EXTENSIONS:
+)
+
+
+@dataclass
+class TreeItem:
+    """
+    Mot item trong file tree (file hoac folder).
+    Tuong duong VscodeTreeItem trong TypeScript.
+
+    is_loaded: True nếu children đã được scan (cho lazy loading).
+               False = folder chưa được scan, children = []
+    """
+
+    label: str  # Ten hien thi (filename/dirname)
+    path: str  # Duong dan tuyet doi
+    is_dir: bool = False
+    children: list["TreeItem"] = field(default_factory=list)
+    is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
+
+
+def is_binary_file(path_or_str: Path | str) -> bool:
+    """
+    Check xem một file có phải là binary không.
+    Hàm này hỗ trợ cả Path object và string path để tối ưu hiệu năng trong vòng lặp lớn.
+
+    Optimization:
+    1. Kiểm tra extension trước (fast whitelist/blacklist)
+    2. Chỉ đọc nội dung nếu extension không xác định.
+    """
+    from shared.constants import BINARY_EXTENSIONS
+
+    # Convert to string for suffix check
+    path_str = str(path_or_str)
+    _, ext = os.path.splitext(path_str)
+    ext = ext.lower()
+
+    # 1. Fast check by extension
+    if ext in BINARY_EXTENSIONS:
+        return True
+
+    # Whitelist các extension text phổ biến để skip I/O
+    if ext in _TEXT_EXTENSIONS:
         return False
 
     # 2. Fallback to magic bytes check
     try:
         # Kiểm tra file size trước, file cực lớn (>5MB) mà không có extension
         # text thì khả năng cao là binary (ví dụ dump file).
-        if path.stat().st_size > 5 * 1024 * 1024:
+        if os.path.getsize(path_str) > 5 * 1024 * 1024:
             return True
 
-        with open(path, "rb") as f:
+        with open(path_str, "rb") as f:
             chunk = f.read(1024)
             # Nếu chứa null byte thì khả năng cao là binary
             return b"\x00" in chunk
@@ -125,14 +148,13 @@ def is_binary_by_extension(file_path: Path) -> bool:
     return file_path.suffix.lower() in BINARY_EXTENSIONS
 
 
-def is_system_path(file_path: Path) -> bool:
+def is_system_path_str(path_str: str) -> bool:
     """
-    Check if path is an OS system path that should be excluded.
-    Supports: Windows, macOS, Linux
+    Version nhanh của is_system_path nhận input là string.
+    Dùng để tối ưu trong các vòng lặp quét hàng chục nghìn file.
     """
     system = platform.system()
-    name = file_path.name
-    path_str = str(file_path)
+    name = os.path.basename(path_str)
 
     if system == "Windows":
         # Check reserved names using pre-compiled regex
@@ -152,11 +174,18 @@ def is_system_path(file_path: Path) -> bool:
 
     elif system == "Linux":
         # Critical Linux system directories
-        # Chi check neu scan tu root hoac cac thu muc nay nam trong project
         if path_str.startswith(("/proc/", "/sys/", "/dev/")):
             return True
 
     return False
+
+
+def is_system_path(file_path: Path) -> bool:
+    """
+    Check if path is an OS system path that should be excluded.
+    Supports: Windows, macOS, Linux
+    """
+    return is_system_path_str(str(file_path))
 
 
 def scan_directory(
@@ -198,7 +227,7 @@ def scan_directory(
     spec_stack = [(spec, root_path)]
 
     # Build tree recursively
-    return _build_tree(root_path, root_path, spec_stack)
+    return _build_tree(root_path, root_path, spec_stack, ignore_engine)
 
 
 def scan_directory_shallow(
@@ -242,7 +271,12 @@ def scan_directory_shallow(
     # Build tree voi depth limit
     # current_depth=1 vi root la level 1, children la level 2
     return _build_tree_shallow(
-        root_path, root_path, spec_stack, current_depth=1, max_depth=depth
+        root_path,
+        root_path,
+        spec_stack,
+        current_depth=1,
+        max_depth=depth,
+        engine=ignore_engine,
     )
 
 
@@ -252,6 +286,7 @@ def _build_tree_shallow(
     spec_stack: List[Tuple[pathspec.PathSpec, Path]],
     current_depth: int,
     max_depth: int,
+    engine: IgnoreEngine,
 ) -> TreeItem:
     """Build tree structure với depth limit (cho lazy loading)"""
     item = TreeItem(
@@ -265,29 +300,15 @@ def _build_tree_shallow(
         return item
 
     try:
-        # Use scandir_rs if available for much faster listing
-        if HAS_SCANDIR_RS:
-            try:
-                # Scandir returns (entries, stats). In older versions it might be different.
-                # Based on dir(scandir_rs), we use Scandir.
-                # Use getattr to satisfy static analysis (Pyrefly)
-                scandir_func = getattr(scandir_rs, "Scandir", None)
-                if scandir_func:
-                    results = scandir_func(str(current_path)).collect()
-                    # results is a list of Entry objects.
-                    # We convert to Path objects so existing code works.
-                    entries = [Path(entry.path) for entry in results]
-                else:
-                    entries = list(current_path.iterdir())
-            except Exception:
-                # Fallback to iterdir if scandir_rs fails
-                entries = list(current_path.iterdir())
-        else:
-            entries = list(current_path.iterdir())
+        # Sử dụng os.scandir thay vì Path.iterdir để tránh hàng loạt lời gọi stat()
+        # os.scandir trả về DirEntry object chứa sẵn info về is_dir/is_file.
+        # Rất quan trọng cho ổ đĩa mạng hoặc ổ đĩa chậm.
+        entries = list(os.scandir(str(current_path)))
     except (PermissionError, OSError):
         return item
 
     # Sort: directories first, then alphabetically
+    # DirEntry don't have is_dir method in older versions, use is_dir() - it's cached from scandir.
     entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
 
     # Optimization: Pre-calculate base strings
@@ -298,15 +319,17 @@ def _build_tree_shallow(
             base_str += os.path.sep
         spec_stack_with_strs.append((s, base_str))
 
-    for entry_path in entries:
+    for entry in entries:
+        # DirEntry behavior
+        entry_path_str = entry.path
+        entry_name = entry.name
+        is_dir = entry.is_dir()
+
         # Check system path first (fast exclude)
-        if is_system_path(entry_path):
+        if is_system_path_str(entry_path_str):
             continue
 
-        entry_path_str = str(entry_path)
-        is_dir = entry_path.is_dir()
-
-        # Check against spec stack using string operations instead of Path.relative_to
+        # Check against spec stack using string operations
         is_ignored = False
         for s, base_str in spec_stack_with_strs:
             if entry_path_str.startswith(base_str):
@@ -322,61 +345,54 @@ def _build_tree_shallow(
         if is_ignored:
             continue
 
+        # Convert to Path object only once if needed for downstream tools
+        # For small project root, this overhead is negligible compared to stat() calls.
+        p_obj = Path(entry_path_str)
+
         # optimization: Only lookup .gitignore if we are planning to recurse
-        # or if we need it for children matching in this level.
-        # If max_depth is 1 and we are at root, we still need it for children.
-        # But if max_depth is 1 and current_depth is 1, we don't need to push
-        # NEW .gitignores for placeholder folders.
         if is_dir and current_depth < max_depth:
             # Check for nested .gitignore
-            # Use os.path.join for speed over /
             gitignore_path = os.path.join(entry_path_str, ".gitignore")
             if os.path.exists(gitignore_path):
-                engine = IgnoreEngine()
-                pats = engine.read_gitignore(entry_path)
+                pats = engine.read_gitignore(p_obj)
                 if pats:
                     new_spec = engine.build_pathspec(
-                        entry_path,
+                        p_obj,
                         use_default_ignores=False,
                         excluded_patterns=pats,
                         use_gitignore=False,
                     )
-                    next_spec_stack = spec_stack + [(new_spec, entry_path)]
+                    next_spec_stack = spec_stack + [(new_spec, p_obj)]
                 else:
                     next_spec_stack = spec_stack
             else:
                 next_spec_stack = spec_stack
-        else:
-            next_spec_stack = spec_stack
 
-        # Recursion logic
-        if is_dir:
-            if current_depth < max_depth:
-                # Còn trong depth limit → recurse
-                child = _build_tree_shallow(
-                    entry_path,
-                    root_path,
-                    next_spec_stack,
-                    current_depth + 1,
-                    max_depth,
-                )
-                item.children.append(child)
-            else:
-                # Vượt depth limit → tạo placeholder với is_loaded=False
-                child = TreeItem(
-                    label=entry_path.name,
-                    path=str(entry_path),
-                    is_dir=True,
-                    children=[],
-                    is_loaded=False,  # Chưa scan children
-                )
-                item.children.append(child)
+            # recurse
+            child = _build_tree_shallow(
+                p_obj,
+                root_path,
+                next_spec_stack,
+                current_depth + 1,
+                max_depth,
+                engine,
+            )
+            item.children.append(child)
+        elif is_dir:
+            # Placeholder cho thu muc chua load
+            child = TreeItem(
+                label=entry_name,
+                path=entry_path_str,
+                is_dir=True,
+                is_loaded=False,
+            )
+            item.children.append(child)
         else:
-            # Files luôn được thêm
+            # Files
             item.children.append(
                 TreeItem(
-                    label=entry_path.name,
-                    path=str(entry_path),
+                    label=entry_name,
+                    path=entry_path_str,
                     is_dir=False,
                     is_loaded=True,
                 )
@@ -389,6 +405,7 @@ def _build_tree(
     current_path: Path,
     root_path: Path,
     spec_stack: List[Tuple[pathspec.PathSpec, Path]],
+    engine: IgnoreEngine,
 ) -> TreeItem:
     """Build tree structure recursively"""
     item = TreeItem(
@@ -435,13 +452,17 @@ def _build_tree(
             # Check for nested .gitignore
             new_spec_stack = spec_stack.copy()
             if (entry / ".gitignore").exists():
-                engine = IgnoreEngine()
                 pats = engine.read_gitignore(entry)
                 if pats:
-                    new_spec = pathspec.PathSpec.from_lines("gitignore", tuple(pats))  # type: ignore
+                    new_spec = engine.build_pathspec(
+                        entry,
+                        use_default_ignores=False,
+                        excluded_patterns=pats,
+                        use_gitignore=False,
+                    )
                     new_spec_stack.append((new_spec, entry))
 
-            child = _build_tree(entry, root_path, new_spec_stack)
+            child = _build_tree(entry, root_path, new_spec_stack, engine)
             item.children.append(child)
         else:
             item.children.append(

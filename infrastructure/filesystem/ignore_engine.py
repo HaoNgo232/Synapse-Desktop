@@ -45,6 +45,10 @@ class IgnoreEngine:
         self._gitignore_cache: Dict[str, Tuple[float, list]] = {}
         # Cache cho PathSpec objects: cache_key -> (mtime, PathSpec)
         self._pathspec_cache: Dict[str, Tuple[float, pathspec.PathSpec]] = {}
+        # Cache cho global gitignore patterns
+        self._global_gitignore_cache: Optional[List[str]] = None
+        # Cache cho git root: path -> git_root_path
+        self._git_root_cache: Dict[str, Path] = {}
         # Thread safety lock
         self._lock = threading.Lock()
 
@@ -79,6 +83,13 @@ class IgnoreEngine:
                 for pat in parent_pats:
                     if pat not in gitignore_pats:
                         gitignore_pats.append(pat)
+
+            # ========= FIX: Thêm lại global gitignore =========
+            global_pats = self.read_global_gitignore()
+            for pat in global_pats:
+                if pat not in gitignore_pats:
+                    gitignore_pats.append(pat)
+            # ===================================================
 
             patterns.extend(gitignore_pats)
 
@@ -174,7 +185,10 @@ class IgnoreEngine:
         return patterns
 
     def read_global_gitignore(self) -> List[str]:
-        """Doc global gitignore tu home directory."""
+        """Doc global gitignore tu home directory ( cached cho instance)."""
+        if self._global_gitignore_cache is not None:
+            return self._global_gitignore_cache
+
         patterns: List[str] = []
         home = Path.home()
         candidates = [
@@ -183,25 +197,42 @@ class IgnoreEngine:
             home / ".gitignore",
         ]
 
-        for candidate in candidates:
-            if candidate.exists():
-                try:
-                    content = candidate.read_text(encoding="utf-8", errors="replace")
-                    for line in content.splitlines():
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            patterns.append(line)
-                    break
-                except (OSError, IOError):
-                    pass
+        # Use lock to update single shared cache
+        with self._lock:
+            if self._global_gitignore_cache is not None:
+                return self._global_gitignore_cache
+
+            for candidate in candidates:
+                if candidate.exists():
+                    try:
+                        content = candidate.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
+                        for line in content.splitlines():
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                patterns.append(line)
+                        break
+                    except (OSError, IOError):
+                        pass
+            self._global_gitignore_cache = patterns
         return patterns
 
     def find_git_root(self, start_path: Path) -> Path:
+        """Tim git root directory bang cach di nguoc len tren (co cache)."""
+        path_str = str(start_path)
+        with self._lock:
+            if path_str in self._git_root_cache:
+                return self._git_root_cache[path_str]
+
         root_path = start_path
         while root_path.parent != root_path:
             if (root_path / ".git").exists():
                 break
             root_path = root_path.parent
+
+        with self._lock:
+            self._git_root_cache[path_str] = root_path
         return root_path
 
     def clear_cache(self) -> None:

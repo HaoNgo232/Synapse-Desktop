@@ -172,6 +172,10 @@ python main_window.py
 Synapse stores all data locally at `~/.config/synapse-desktop/` (Linux) or `~/.synapse-desktop/` (Windows). No telemetry is collected.
 Contains: `settings.json`, `session.json`, `history.json`, `recent_folders.json`, `logs/`, and `backups/`.
 
+### Environment Variables
+<!-- ADDED: Environment Variables configuration section -->
+- `SYNAPSE_DEBUG=1`: Run the application with verbose debug logging to standard output. Useful for troubleshooting MCP connections and internal errors.
+
 ---
 
 ## 🔧 OPX Format & Continuous Memory
@@ -267,10 +271,16 @@ This section is intended for developers who wish to understand or contribute to 
 - `infrastructure/mcp/skills/`: 7 workflow skill definitions (Markdown files).
 - `domain/workflow/`: Advanced workflow implementations (`context_builder`, `code_reviewer`, `bug_investigator`, `refactor_workflow`, `test_builder`).
 
-### Development
-- Code Style: Type hints everywhere.
-- Thread Safety: Never call Qt widget methods from a background thread directly. Use `SignalBridge`.
-- Running Tests: `python -m pytest tests/ -v`
+### Development Guidelines
+<!-- UPDATED: Added comprehensive development guidelines from AGENTS.md -->
+- **Code Style (SOLID & DDD)**: Strict adherence to Domain-Driven Design (DDD) principles separating `domain`, `application`, `infrastructure` and `presentation`. Follow SOLID principles.
+- **Type Hints**: Fully typed codebase required. We use `pyrefly` in strict mode to enforce typing.
+- **Testing**: 
+  - Standard test run: `pytest tests/ -v`
+  - Focus on individual files when iterating: `pytest tests/test_token_counter.py -v`
+- **Linting & Formatting**: Handled via `ruff` (`ruff format .` and `ruff check --fix .`). Unused imports/vars checked explicitly.
+- **UI Thread Safety**: Never update PySide6 UI directly from background threads. Use `SignalBridge`, `run_on_main_thread()`, or `schedule_background()` from `qt_utils` for async operations.
+- **Naming Conventions**: `PascalCase` for Classes, `snake_case` for functions/variables, `UPPER_SNAKE_CASE` for constants. Prefix private methods with an underscore (`_method`).
 
 ---
 
@@ -282,4 +292,8 @@ Inspired by:
 - Workflow tool concepts for AI-assisted code analysis inspired by [RepoPrompt](https://repoprompt.com) and similar patterns in the AI tooling ecosystem
 
 ## License
-MIT © HaoNgo232
+<!-- UPDATED: Changed license from MIT to GPL-3.0 as requested -->
+[GPL-3.0 License](LICENSE) © HaoNgo232
+
+---
+*Note: This documentation was automatically analyzed and updated to reflect the latest Synapse Desktop structural decisions.*

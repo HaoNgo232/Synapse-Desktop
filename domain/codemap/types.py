@@ -10,7 +10,10 @@ from typing import Optional
 
 
 class SymbolKind(Enum):
-    """Loại symbol trong code."""
+    """
+    Phân loại các loại symbol trong mã nguồn.
+    Dùng để định danh cấu trúc code (Class, Function, etc.) trong Code Map.
+    """
 
     CLASS = "class"
     INTERFACE = "interface"
@@ -21,6 +24,8 @@ class SymbolKind(Enum):
     METHOD = "method"
     VARIABLE = "variable"
     IMPORT = "import"
+    MODULE = "module"  # Dùng cho Namespace/Module (TS, Go, Rust)
+    TYPE = "type"  # Dùng cho Type Aliases (TS, Go)
 
 
 class RelationshipKind(Enum):

@@ -5,7 +5,7 @@ Module này parse code và extract tất cả symbols (classes, functions, metho
 với metadata (line numbers, signatures, parent).
 """
 
-import os
+from pathlib import Path
 from typing import Optional
 from tree_sitter import Parser, Node  # type: ignore
 
@@ -16,27 +16,26 @@ from domain.smart_context.loader import get_language
 
 def extract_symbols(file_path: str, content: str) -> list[Symbol]:
     """
-    Extract tất cả symbols từ file content.
+    Trích xuất toàn bộ symbols (classes, functions, methods, variables) từ file content.
+
+    Tự động nhận diện nếu file là Điểm Khởi Đầu (Entry Point) của dự án
+    để đánh dấu đặc biệt cho AI Reviewer.
 
     Args:
         file_path: Đường dẫn file (để xác định ngôn ngữ)
         content: Nội dung raw của file
 
     Returns:
-        List các Symbol objects
-
-    Example:
-        >>> symbols = extract_symbols("app.py", "class Foo:\\n    def bar(self): pass")
-        >>> len(symbols)
-        2
-        >>> symbols[0].kind
-        SymbolKind.CLASS
+        List các Symbol objects (bao gồm cả dấu hiệu Entry Point nếu có)
     """
-    # Lấy file extension
-    _, ext = os.path.splitext(file_path)
-    ext = ext.lstrip(".")
+    # Lấy file extension (loại bỏ dấu chấm)
+    suffix = Path(file_path).suffix
+    if not suffix:
+        return []
 
-    # Get language config
+    ext = suffix.lstrip(".")
+
+    # Lấy cấu hình ngôn ngữ tương ứng
     config = get_config_by_extension(ext)
     if not config:
         return []
@@ -46,16 +45,33 @@ def extract_symbols(file_path: str, content: str) -> list[Symbol]:
         return []
 
     try:
-        # Parse content
+        # Parse nội dung sử dụng Tree-sitter
         parser = Parser(language)
         tree = parser.parse(bytes(content, "utf-8"))
 
         if not tree or not tree.root_node:
             return []
 
-        # Extract symbols từ AST
+        # Tích lũy kết quả symbols
         symbols: list[Symbol] = []
         lines = content.split("\n")
+
+        # 1. Nhận diện Entry Point (Bootstrapping analysis)
+        # Nếu file là điểm khởi đầu, chèn một nhãn Module đặc biệt lên đầu
+        if _is_likely_entry_point(file_path, content):
+            symbols.append(
+                Symbol(
+                    name="📍 [ENTRY POINT]",
+                    kind=SymbolKind.MODULE,
+                    file_path=file_path,
+                    line_start=1,
+                    line_end=1,
+                    signature=f"FILE: {Path(file_path).name} (BOOTSTRAPPER)",
+                    parent=None,
+                )
+            )
+
+        # 2. Duyệt đệ quy cây AST để tìm các thành phần cấu trúc
         _extract_symbols_recursive(
             tree.root_node, lines, file_path, symbols, parent=None
         )
@@ -63,7 +79,48 @@ def extract_symbols(file_path: str, content: str) -> list[Symbol]:
         return symbols
 
     except Exception:
+        # Tránh crash UI nếu có lỗi parse không mong muốn
         return []
+
+
+def _is_likely_entry_point(file_path: str, content: str) -> bool:
+    """
+    Kiểm tra xem một file có khả năng là Điểm Khởi Đầu (Entry Point) của dự án hay không.
+    Dùng quy luật heuristic dựa trên tên file và nội dung khởi động đặc thù.
+    """
+    filename = Path(file_path).name.lower()
+
+    # Quy tắc 1: Tên file tiêu chuẩn của các Frameworks phổ biến
+    entry_filenames = [
+        "main.py",
+        "app.py",
+        "index.py",
+        "manage.py",
+        "wsgi.py",
+        "server.py",  # Python
+        "main.ts",
+        "index.ts",
+        "app.module.ts",
+        "server.ts",
+        "start.sh",  # TS/JS
+        "main.go",  # Go
+    ]
+    if filename in entry_filenames:
+        return True
+
+    # Quy tắc 2: Chứa các khối lệnh khởi động đặc trưng của Python
+    if (
+        'if __name__ == "__main__":' in content
+        or 'if __name__ == "__main__" ' in content
+    ):
+        return True
+
+    # Quy tắc 3: Chứa các hàm khởi động phổ biến (NestJS, Express, FastAPI, Uvicorn)
+    boot_keywords = ["bootstrap(", "app.listen(", "FastAPI(", "uvicorn.run("]
+    if any(k in content for k in boot_keywords):
+        return True
+
+    return False
 
 
 def _extract_symbols_recursive(

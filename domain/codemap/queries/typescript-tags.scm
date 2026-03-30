@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 (function_signature
   name: (identifier) @name.definition.function) @definition.function
 

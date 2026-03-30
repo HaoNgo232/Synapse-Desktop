@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 ;; derived from: https://github.com/stadelmanma/tree-sitter-fortran
 ;; License: MIT
 

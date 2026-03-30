@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 ;; defun/defsubst
 (function_definition name: (symbol) @name.definition.function) @definition.function
 

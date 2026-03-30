@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 (classlessPredicate
   name: (predicateName) @name.definition.function) @definition.function
 

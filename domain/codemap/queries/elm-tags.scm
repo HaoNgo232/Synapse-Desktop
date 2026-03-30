@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 (value_declaration (function_declaration_left (lower_case_identifier) @name.definition.function)) @definition.function
 
 (function_call_expr (value_expr (value_qid) @name.reference.function)) @reference.function

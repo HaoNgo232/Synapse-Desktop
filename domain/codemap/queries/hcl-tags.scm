@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 ;; Based on https://github.com/tree-sitter-grammars/tree-sitter-hcl/blob/main/make_grammar.js
 ;; Which has Apache 2.0 License
 ;; tags.scm for Terraform (tree-sitter-hcl)

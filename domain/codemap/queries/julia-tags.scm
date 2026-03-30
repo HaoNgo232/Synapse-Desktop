@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 ;; derived from: https://github.com/tree-sitter/tree-sitter-julia
 ;; License: MIT
 

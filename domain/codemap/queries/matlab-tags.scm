@@ -1,3 +1,6 @@
+; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
+; 
+
 (class_definition
   name: (identifier) @name.definition.class) @definition.class
 

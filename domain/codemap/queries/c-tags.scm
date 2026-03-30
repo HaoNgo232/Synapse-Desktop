@@ -1,9 +1,9 @@
-"""Tree-sitter query for C - Port từ Repomix queryC.ts"""
+(struct_specifier name: (type_identifier) @name.definition.class body:(_)) @definition.class
 
-QUERY = """
-(comment) @comment
-(struct_specifier name: (type_identifier) @name.definition.class) @definition.class
+(declaration type: (union_specifier name: (type_identifier) @name.definition.class)) @definition.class
+
 (function_declarator declarator: (identifier) @name.definition.function) @definition.function
+
 (type_definition declarator: (type_identifier) @name.definition.type) @definition.type
+
 (enum_specifier name: (type_identifier) @name.definition.type) @definition.type
-"""

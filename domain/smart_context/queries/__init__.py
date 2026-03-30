@@ -1,52 +1,31 @@
 """
-Smart Context Queries Package
-
-Export tất cả tree-sitter queries cho các ngôn ngữ được hỗ trợ.
-Mỗi query trong file riêng để dễ maintain và extend.
+Central Registry cho Tree-sitter Queries (SCM) của toàn bộ hệ thống Synapse.
+Load từ domain/codemap/queries/ để đảm bảo Single Source of Truth.
 """
 
-# Phase 1: Foundation
-from domain.smart_context.queries.python import QUERY as QUERY_PYTHON
-from domain.smart_context.queries.javascript import QUERY as QUERY_JAVASCRIPT
-from domain.smart_context.queries.typescript import QUERY as QUERY_TYPESCRIPT
+from pathlib import Path
 
-# Phase 2: Developer Tools
-from domain.smart_context.queries.rust import QUERY as QUERY_RUST
-from domain.smart_context.queries.go import QUERY as QUERY_GO
 
-# Phase 3: Enterprise
-from domain.smart_context.queries.java import QUERY as QUERY_JAVA
-from domain.smart_context.queries.c_sharp import QUERY as QUERY_CSHARP
-from domain.smart_context.queries.c import QUERY as QUERY_C
-from domain.smart_context.queries.cpp import QUERY as QUERY_CPP
+def _load_query(lang: str) -> str:
+    # Aider/Synapse pattern: {lang}-tags.scm
+    query_path = Path("domain/codemap/queries") / f"{lang}-tags.scm"
+    if query_path.exists():
+        return query_path.read_text()
+    return ""
 
-# Phase 4: Web & Scripting
-from domain.smart_context.queries.ruby import QUERY as QUERY_RUBY
-from domain.smart_context.queries.php import QUERY as QUERY_PHP
-from domain.smart_context.queries.swift import QUERY as QUERY_SWIFT
 
-# Phase 5: Special
-from domain.smart_context.queries.css import QUERY as QUERY_CSS
-from domain.smart_context.queries.solidity import QUERY as QUERY_SOLIDITY
-
-__all__ = [
-    # Phase 1
-    "QUERY_PYTHON",
-    "QUERY_JAVASCRIPT",
-    "QUERY_TYPESCRIPT",
-    # Phase 2
-    "QUERY_RUST",
-    "QUERY_GO",
-    # Phase 3
-    "QUERY_JAVA",
-    "QUERY_CSHARP",
-    "QUERY_C",
-    "QUERY_CPP",
-    # Phase 4
-    "QUERY_RUBY",
-    "QUERY_PHP",
-    "QUERY_SWIFT",
-    # Phase 5
-    "QUERY_CSS",
-    "QUERY_SOLIDITY",
-]
+# Cung cấp mapping constants cho Smart Context Config (Backward Compatibility + Unity)
+QUERY_PYTHON = _load_query("python")
+QUERY_JAVASCRIPT = _load_query("javascript")
+QUERY_TYPESCRIPT = _load_query("typescript")
+QUERY_RUST = _load_query("rust")
+QUERY_GO = _load_query("go")
+QUERY_JAVA = _load_query("java")
+QUERY_CSHARP = _load_query("c_sharp")
+QUERY_C = _load_query("c")
+QUERY_CPP = _load_query("cpp")
+QUERY_RUBY = _load_query("ruby")
+QUERY_PHP = _load_query("php")
+QUERY_SWIFT = _load_query("swift")
+QUERY_CSS = _load_query("css")
+QUERY_SOLIDITY = _load_query("solidity")

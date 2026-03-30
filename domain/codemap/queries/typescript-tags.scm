@@ -1,17 +1,3 @@
-"""Tree-sitter query for TypeScript - Port từ Repomix queryTypescript.ts"""
-
-QUERY = """
-(import_statement
-  (import_clause (identifier) @name.reference.module)) @definition.import
-
-(import_statement
-  (import_clause
-    (named_imports
-      (import_specifier
-        name: (identifier) @name.reference.module))) @definition.import)
-
-(comment) @comment
-
 (function_signature
   name: (identifier) @name.definition.function) @definition.function
 
@@ -53,23 +39,3 @@ QUERY = """
 
 (enum_declaration
   name: (identifier) @name.definition.enum) @definition.enum
-
-(lexical_declaration
-    (variable_declarator
-      name: (identifier) @name.definition.function
-      value: (arrow_function)
-    )
-  ) @definition.function
-
-(variable_declaration
-    (variable_declarator
-      name: (identifier) @name.definition.function
-      value: (arrow_function)
-    )
-) @definition.function
-
-(assignment_expression
-    left: [(identifier) @name.definition.function]
-    right: (arrow_function)
-) @definition.function
-"""

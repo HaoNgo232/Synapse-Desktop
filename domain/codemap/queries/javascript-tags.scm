@@ -1,15 +1,10 @@
-"""Tree-sitter query for JavaScript - Port từ Repomix queryJavascript.ts"""
-
-QUERY = """
-(comment) @comment
-
 (
   (comment)* @doc
   .
   (method_definition
     name: (property_identifier) @name.definition.method) @definition.method
   (#not-eq? @name.definition.method "constructor")
-  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
   (#select-adjacent! @doc @definition.method)
 )
 
@@ -22,7 +17,7 @@ QUERY = """
     (class_declaration
       name: (_) @name.definition.class)
   ] @definition.class
-  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
   (#select-adjacent! @doc @definition.class)
 )
 
@@ -30,6 +25,8 @@ QUERY = """
   (comment)* @doc
   .
   [
+    (function
+      name: (identifier) @name.definition.function)
     (function_declaration
       name: (identifier) @name.definition.function)
     (generator_function
@@ -37,7 +34,7 @@ QUERY = """
     (generator_function_declaration
       name: (identifier) @name.definition.function)
   ] @definition.function
-  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
   (#select-adjacent! @doc @definition.function)
 )
 
@@ -47,8 +44,8 @@ QUERY = """
   (lexical_declaration
     (variable_declarator
       name: (identifier) @name.definition.function
-      value: [(arrow_function) (function_declaration)]) @definition.function)
-  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+      value: [(arrow_function) (function)]) @definition.function)
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
   (#select-adjacent! @doc @definition.function)
 )
 
@@ -58,8 +55,8 @@ QUERY = """
   (variable_declaration
     (variable_declarator
       name: (identifier) @name.definition.function
-      value: [(arrow_function) (function_declaration)]) @definition.function)
-  (#strip! @doc "^[\\\\s\\\\*/]+|^[\\\\s\\\\*/]$")
+      value: [(arrow_function) (function)]) @definition.function)
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
   (#select-adjacent! @doc @definition.function)
 )
 
@@ -69,12 +66,12 @@ QUERY = """
     (member_expression
       property: (property_identifier) @name.definition.function)
   ]
-  right: [(arrow_function) (function_declaration)]
+  right: [(arrow_function) (function)]
 ) @definition.function
 
 (pair
   key: (property_identifier) @name.definition.function
-  value: [(arrow_function) (function_declaration)]) @definition.function
+  value: [(arrow_function) (function)]) @definition.function
 
 (
   (call_expression
@@ -89,4 +86,3 @@ QUERY = """
 
 (new_expression
   constructor: (_) @name.reference.class) @reference.class
-"""

@@ -271,6 +271,14 @@ class PromptBuildService:
 
             # 4. Assemble prompt
             output_style = _FORMAT_TO_STYLE.get(output_format, _FORMAT_TO_STYLE["xml"])
+
+            # Ensure graph is built before computing semantic index (Guaranteed Semantic)
+            if self._graph_service:
+                try:
+                    self._graph_service.ensure_built(workspace)
+                except Exception as e:
+                    logger.warning("Failed to ensure graph built: %s", e)
+
             semantic_index = compute_semantic_index(
                 workspace, self._graph_service, output_format
             )

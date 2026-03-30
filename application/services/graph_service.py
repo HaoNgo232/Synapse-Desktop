@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Tuple, Any
 
 from domain.relationships.builder import GraphBuilder
 from domain.relationships.graph import RelationshipGraph
@@ -46,6 +46,9 @@ class GraphService(IRelationshipGraphProvider):
         self._generation: int = 0
         self._building: bool = False
         self._ignore_engine = ignore_engine
+
+        # AST Tree Cache: source_abs -> (mtime, tree, content_hash) (Phase 4)
+        self._tree_cache: Dict[str, Tuple[float, Any, int]] = {}
 
     # ===== IRelationshipGraphProvider API =====
 
@@ -256,5 +259,6 @@ class GraphService(IRelationshipGraphProvider):
             existing_resolver=None,
             max_codemap_files=500,
             imports_max_depth=2,
+            tree_cache=self._tree_cache,  # Pass cache to builder
         )
         return graph

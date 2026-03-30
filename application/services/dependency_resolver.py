@@ -137,11 +137,20 @@ class DependencyResolver:
         self._file_index.clear()
         self._module_index.clear()
 
+        from infrastructure.filesystem.file_utils import (
+            is_binary_file,
+            is_system_path_str,
+        )
+
         all_files = collect_files_from_disk(
             workspace_root, workspace_path=workspace_root
         )
 
         for file_path_str in all_files:
+            # Skip system/binary to speed up indexing
+            if is_system_path_str(file_path_str) or is_binary_file(file_path_str):
+                continue
+
             file_path = Path(file_path_str)
 
             # Index by filename (cho fallback search)

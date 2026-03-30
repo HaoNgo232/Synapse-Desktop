@@ -88,8 +88,12 @@ def extract_symbols(file_path: str, content: str) -> List[Symbol]:
         return []
 
 
+# Global cache cho compiled queries (Phase 5 Optimization)
+_QUERY_CACHE: dict[str, Query] = {}
+
+
 def _get_query_for_extension(ext: str, language) -> Optional[Query]:
-    """Load SCM Query từ domain/codemap/queries/"""
+    """Load SCM Query từ domain/codemap/queries/ với cơ chế cache."""
     lang_map = {
         "py": "python",
         "ts": "typescript",
@@ -103,12 +107,20 @@ def _get_query_for_extension(ext: str, language) -> Optional[Query]:
         "java": "java",
     }
     lang_name = lang_map.get(ext, ext)
+
+    # Check cache first
+    cache_key = f"{lang_name}:{id(language)}"
+    if cache_key in _QUERY_CACHE:
+        return _QUERY_CACHE[cache_key]
+
     # QUAN TRỌNG: Đường dẫn đã chuyển về domain/codemap/queries/
     query_path = Path("domain/codemap/queries") / f"{lang_name}-tags.scm"
 
     if query_path.exists():
         try:
-            return Query(language, query_path.read_text())
+            query = Query(language, query_path.read_text())
+            _QUERY_CACHE[cache_key] = query
+            return query
         except Exception:
             return None
     return None

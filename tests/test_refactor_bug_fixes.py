@@ -228,50 +228,6 @@ class TestClipboardServiceAPI:
 
 
 # ============================================================
-# Priority 3: Smart Context Parameter
-# ============================================================
-
-
-class TestSmartContextParameter:
-    """Dam bao include_relationships=True trong smart context."""
-
-    def test_build_smart_passes_include_relationships(self):
-        """PromptBuildService._build_smart phai pass include_relationships=True."""
-        from application.services.prompt_build_service import PromptBuildService
-
-        service = PromptBuildService()
-        workspace = Path("/tmp/test_workspace")
-
-        with patch("domain.prompt.generator.generate_smart_context") as mock_gen:
-            mock_gen.return_value = "mock smart content"
-            with patch("domain.prompt.generator.generate_file_map") as mock_map:
-                mock_map.return_value = ""
-                with patch("domain.prompt.generator.build_smart_prompt") as mock_build:
-                    mock_build.return_value = "final prompt"
-
-                    from application.services.prompt_helpers import (
-                        build_smart_context_prompt,
-                    )
-
-                    build_smart_context_prompt(
-                        file_paths=[Path("/tmp/test.py")],
-                        workspace=workspace,
-                        instructions="test",
-                        include_git_changes=False,
-                        use_relative_paths=False,
-                        graph_service=service._graph_service,
-                    )
-
-            # Verify include_relationships=True duoc truyen
-            mock_gen.assert_called_once()
-            call_kwargs = mock_gen.call_args
-            # Check keyword argument
-            assert call_kwargs.kwargs.get("include_relationships") is True or (
-                len(call_kwargs.args) > 2 and call_kwargs.args[2] is True
-            ), "include_relationships must be True"
-
-
-# ============================================================
 # Priority 4: Dependency Injection
 # ============================================================
 

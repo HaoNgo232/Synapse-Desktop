@@ -379,9 +379,9 @@ class ContextViewQt(
 
     def is_smart_mode_active(self) -> bool:
         """Kiểm tra xem Smart Mode có đang active không.
-        (Hiện tại check dựa trên _selected_output_style == OutputStyle.SMART)
+        Hiện tại tính năng Smart Mode (OutputStyle.SMART) đã bị loại bỏ.
         """
-        return self._selected_output_style == OutputStyle.SMART
+        return False
 
     def parent_widget(self):
         return self

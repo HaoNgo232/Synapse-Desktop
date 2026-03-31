@@ -132,104 +132,6 @@ def compute_semantic_index(
         return ""
 
 
-def build_smart_context_prompt(
-    file_paths: List[Path],
-    workspace: Path,
-    instructions: str,
-    include_git_changes: bool,
-    use_relative_paths: bool,
-    graph_service: Optional[Any],
-    tree_item: Optional[Any] = None,
-    selected_paths: Optional[Set[str]] = None,
-    instructions_at_top: bool = False,
-    full_tree: bool = False,
-    semantic_index: bool = True,
-) -> Tuple[str, str]:
-    """
-    Builds a smart context prompt with code maps and relationships.
-    Returns a tuple (prompt, smart_contents) to allow the caller to calculate breakdown.
-    """
-    from domain.prompt.generator import (
-        generate_smart_context,
-        generate_file_map,
-        build_smart_prompt,
-    )
-    from application.services.workspace_rules import get_rule_file_contents
-    from infrastructure.git.git_utils import get_git_diffs, get_git_logs
-
-    path_strs = {str(p) for p in file_paths}
-    project_rules = get_rule_file_contents(workspace)
-
-    # 1. Generate Dependency Graph (PART 1)
-    from domain.codemap.dependency_graph_generator import DependencyGraphGenerator
-
-    graph_gen = DependencyGraphGenerator(workspace)
-
-    # Collect contents to extract relationships
-    file_contents_dict = {}
-    for p in file_paths:
-        try:
-            if p.is_file():
-                file_contents_dict[str(p)] = p.read_text(
-                    encoding="utf-8", errors="replace"
-                )
-        except Exception:
-            continue
-
-    dep_graph = graph_gen.generate_graph(file_contents_dict)
-
-    # 2. Generate File Contents (PART 2)
-    raw_smart_contents = generate_smart_context(
-        selected_paths=path_strs,
-        include_relationships=False,  # Claude Opus 4.6 specification does not require internal call graph
-        workspace_root=workspace,
-        use_relative_paths=use_relative_paths,
-    )
-
-    # 3. Assemble Hybrid Context (Opus 4.6)
-    header_1 = "═══════════════════════════════════════\nPART 1: PROJECT DEPENDENCY GRAPH\n(File/module relationships — top-down view)\n═══════════════════════════════════════"
-    header_2 = "═══════════════════════════════════════\nPART 2: FILE CONTENTS (COMPRESSED)\n(Individual file content — signatures, types, contracts)\n═══════════════════════════════════════"
-
-    smart_contents = f"{header_1}\n\n{dep_graph}\n\n{header_2}\n\n{raw_smart_contents}"
-
-    # Generate file map
-    file_map = ""
-    if tree_item and selected_paths:
-        file_map = generate_file_map(
-            tree_item,
-            selected_paths,
-            workspace_root=workspace,
-            use_relative_paths=use_relative_paths,
-            show_all=full_tree,
-        )
-
-    # Fetch git data
-    git_diffs = None
-    git_logs = None
-    if include_git_changes:
-        git_diffs = get_git_diffs(workspace)
-        git_logs = get_git_logs(workspace, max_commits=5)
-
-    # Injected semantic index
-    semantic_index_text = ""
-    if semantic_index:
-        semantic_index_text = compute_semantic_index(workspace, graph_service, "xml")
-
-    prompt = build_smart_prompt(
-        smart_contents=smart_contents,
-        file_map=file_map,
-        user_instructions=instructions,
-        git_diffs=git_diffs,
-        git_logs=git_logs,
-        project_rules=project_rules,
-        workspace_root=workspace,
-        instructions_at_top=instructions_at_top,
-        semantic_index=semantic_index_text,
-    )
-
-    return prompt, smart_contents
-
-
 def calculate_prompt_breakdown(
     instructions: str,
     file_map: str,
@@ -264,21 +166,16 @@ def calculate_prompt_breakdown(
         else 0,
     }
 
-    if output_format == "smart":
-        # logic for smart token would be handled by caller if it's special
-        breakdown["content_tokens"] = 0
-        breakdown["opx_tokens"] = 0
-    else:
-        breakdown["content_tokens"] = tokenization_service.count_tokens(file_contents)
-        opx_t = 0
-        if include_xml_formatting:
-            try:
-                from domain.prompt.opx_instruction import XML_FORMATTING_INSTRUCTIONS
+    breakdown["content_tokens"] = tokenization_service.count_tokens(file_contents)
+    opx_t = 0
+    if include_xml_formatting:
+        try:
+            from domain.prompt.opx_instruction import XML_FORMATTING_INSTRUCTIONS
 
-                opx_t = tokenization_service.count_tokens(XML_FORMATTING_INSTRUCTIONS)
-            except ImportError:
-                opx_t = 0
-        breakdown["opx_tokens"] = opx_t
+            opx_t = tokenization_service.count_tokens(XML_FORMATTING_INSTRUCTIONS)
+        except ImportError:
+            opx_t = 0
+    breakdown["opx_tokens"] = opx_t
 
     # Calculate structure tokens (overhead from tags and assembly)
     sum_parts = sum(breakdown.values())
@@ -308,7 +205,7 @@ def apply_context_trimming(
     """Performs context trimming when token limit is exceeded."""
     from domain.prompt.context_trimmer import ContextTrimmer, PromptComponents
     from domain.prompt.file_collector import collect_files
-    from domain.prompt.generator import generate_prompt, build_smart_prompt
+    from domain.prompt.generator import generate_prompt
 
     # Collect per-file contents for the trimmer to process
     file_content_dict: Dict[str, str] = {}
@@ -354,43 +251,22 @@ def apply_context_trimming(
 
     if trim_result.levels_applied > 0:
         trimmed_comp = trim_result.components
-        if output_format == "smart":
-            # Smart context logic for re-assembly
-            from domain.prompt.generator import generate_smart_context
-
-            smart_contents_trimmed = generate_smart_context(
-                selected_paths={str(p) for p in all_file_paths},
-                workspace_root=workspace,
-                use_relative_paths=use_relative_paths,
-            )
-            prompt = build_smart_prompt(
-                smart_contents=smart_contents_trimmed,
-                file_map=trimmed_comp.file_map,
-                user_instructions=trimmed_comp.instructions,
-                git_diffs=git_diffs if trimmed_comp.git_diffs_text else None,
-                git_logs=git_logs if trimmed_comp.git_logs_text else None,
-                project_rules=trimmed_comp.project_rules,
-                workspace_root=workspace,
-                instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index_text,
-            )
-        else:
-            file_contents_trimmed = reconstruct_file_contents(
-                trimmed_comp.file_contents, output_format
-            )
-            prompt = generate_prompt(
-                file_map=trimmed_comp.file_map,
-                file_contents=file_contents_trimmed,
-                user_instructions=trimmed_comp.instructions,
-                output_style=output_style,
-                include_xml_formatting=include_xml_formatting,
-                git_diffs=git_diffs if trimmed_comp.git_diffs_text else None,
-                git_logs=git_logs if trimmed_comp.git_logs_text else None,
-                project_rules=trimmed_comp.project_rules,
-                workspace_root=workspace,
-                instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index_text,
-            )
+        file_contents_trimmed = reconstruct_file_contents(
+            trimmed_comp.file_contents, output_format
+        )
+        prompt = generate_prompt(
+            file_map=trimmed_comp.file_map,
+            file_contents=file_contents_trimmed,
+            user_instructions=trimmed_comp.instructions,
+            output_style=output_style,
+            include_xml_formatting=include_xml_formatting,
+            git_diffs=git_diffs if trimmed_comp.git_diffs_text else None,
+            git_logs=git_logs if trimmed_comp.git_logs_text else None,
+            project_rules=trimmed_comp.project_rules,
+            workspace_root=workspace,
+            instructions_at_top=instructions_at_top,
+            semantic_index=semantic_index_text,
+        )
 
         # Append trimmed notes
         if trim_result.notes:

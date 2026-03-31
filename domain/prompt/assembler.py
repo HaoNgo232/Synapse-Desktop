@@ -485,7 +485,7 @@ def _assemble_plain(
 
     prompt_parts.append(f"{'=' * 48}\nDIRECTORY STRUCTURE\n{'=' * 48}\n{file_map}")
 
-    prompt_parts.append(f"{'=' * 48}\nFILE CONTENTS\n{'=' * 48}\n{file_contents}")
+    prompt_parts.append(f"{'=' * 48}\nFILE CONTEXT\n{'=' * 48}\n{file_contents}")
 
     # Them Git context voi instruction text, guard None values
     has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
@@ -580,8 +580,8 @@ def _assemble_markdown(
     if not instructions_at_top and semantic_index and semantic_index.strip():
         prompt += f"## Semantic Index\n\n{_strip_xml_simple(semantic_index)}\n\n"
 
-    prompt += f"## Structure\n\n{file_map}\n\n"
-    prompt += f"## File Contents\n\n{file_contents}\n"
+    prompt += f"## Directory Structure\n\n{file_map}\n\n"
+    prompt += f"## File Context\n\n{file_contents}\n"
 
     prompt = _append_git_changes_markdown(prompt, git_diffs, git_logs)
 
@@ -608,8 +608,29 @@ def _assemble_markdown(
 
 def _strip_xml_simple(text: str) -> str:
     """Loại bỏ các thẻ XML cơ bản để chuyển sang văn bản thuần túy."""
-    # Strip tags but keep inner content
-    text = re.sub(r"<[^>]+>", "", text)
-    # Clean up multiple newlines
-    text = re.sub(r"\n\s*\n", "\n\n", text)
-    return text.strip()
+    if not text:
+        return ""
+
+    # 1. Capture attribute values like total_files="1" or path="a.py"
+    # if the main content is empty after stripping tags.
+    attr_pattern = r'(\w+)="([^"]+)"'
+    attrs = re.findall(attr_pattern, text)
+    attr_summary = ""
+    if attrs:
+        attr_summary = ", ".join(
+            [
+                f"{k}: {v}"
+                for k, v in attrs
+                if k in ("total_files", "total_edges", "path", "dependents")
+            ]
+        )
+
+    # 2. Strip tags but keep inner content
+    stripped = re.sub(r"<[^>]+>", "", text).strip()
+
+    if not stripped and attr_summary:
+        return f"Metadata: {attr_summary}"
+
+    # Clean up multiple newlines to max 2
+    stripped = re.sub(r"\n\s*\n", "\n\n", stripped)
+    return stripped

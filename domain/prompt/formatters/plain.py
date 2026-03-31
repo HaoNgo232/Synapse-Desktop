@@ -12,10 +12,13 @@ def format_files_plain(entries: list[FileEntry]) -> str:
     Render List[FileEntry] thanh plain text format.
 
     Format:
-        File: path/to/file
-        ----------------
+        FILE: path/to/file
+        ------------------
+        LAYER: ...
+        ROLE: ...
+        DEPENDS ON: ...
+
         content
-        ----------------
 
     Args:
         entries: List file entries da doc tu file_collector
@@ -26,14 +29,6 @@ def format_files_plain(entries: list[FileEntry]) -> str:
     file_elements: list[str] = []
 
     for entry in entries:
-        file_header = f"===== FILE: {entry.display_path} ====="
-        layer_info = f"LAYER: {entry.layer}\n" if entry.layer else ""
-        role_info = f"ROLE: {entry.role}\n" if entry.role else ""
-        deps_info = ""
-        if entry.dependencies:
-            deps_joined = ", ".join(entry.dependencies)
-            deps_info = f"DEPENDS ON: {deps_joined}\n"
-
         if entry.error:
             if entry.error == "Binary file":
                 content_display = "Binary file (skipped)"
@@ -42,13 +37,23 @@ def format_files_plain(entries: list[FileEntry]) -> str:
             else:
                 content_display = entry.error
         elif entry.content is not None:
-            content_display = entry.content.strip()
+            # Metadata header
+            meta_lines = []
+            if entry.layer:
+                meta_lines.append(f"LAYER: {entry.layer}")
+            if entry.role:
+                meta_lines.append(f"ROLE: {entry.role}")
+            if entry.dependencies:
+                meta_lines.append(f"DEPENDS ON: {', '.join(entry.dependencies)}")
+
+            meta_block = "\n".join(meta_lines) + "\n" if meta_lines else ""
+            content_display = f"{meta_block}\n{entry.content.strip()}"
         else:
             content_display = ""
 
-        # Ghép tất cả lại: Header, Metadata, rồi mới đến Code
+        # Ghép tất cả lại: Header ranh giới, Metadata, rồi mới đến Code
         file_elements.append(
-            f"{file_header}\n{layer_info}{role_info}{deps_info}\n{content_display}"
+            f"FILE: {entry.display_path}\n{'-' * (len(entry.display_path) + 6)}\n{content_display}"
         )
 
     if not file_elements:

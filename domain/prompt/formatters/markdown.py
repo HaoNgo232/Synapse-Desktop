@@ -18,7 +18,10 @@ def format_files_markdown(entries: list[FileEntry]) -> str:
     Render List[FileEntry] thanh markdown code blocks.
 
     Format:
-        File: path/to/file
+        ### File path: path/to/file
+        LAYER: ...
+        ROLE: ...
+        DEPENDS ON: ...
         ```language
         content
         ```
@@ -30,7 +33,7 @@ def format_files_markdown(entries: list[FileEntry]) -> str:
         entries: List file entries da doc tu file_collector
 
     Returns:
-        File contents string voi markdown code blocks
+        File contents string voi markdown code blocks Vo dấu markdown
     """
     if not entries:
         return ""
@@ -63,7 +66,7 @@ def format_files_markdown(entries: list[FileEntry]) -> str:
             meta_block = "\n".join(meta_lines) + "\n" if meta_lines else ""
 
             output.write(
-                f"File: {entry.display_path}\n"
+                f"### File path: {entry.display_path}\n"
                 f"{meta_block}"
                 f"{delimiter}{entry.language}\n"
                 f"{entry.content}\n"

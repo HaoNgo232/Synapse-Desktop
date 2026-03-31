@@ -25,7 +25,6 @@ from application.services.prompt_helpers import (
     count_per_file_tokens,
     calculate_prompt_breakdown,
     apply_context_trimming,
-    build_smart_context_prompt,
     compute_semantic_index,
 )
 
@@ -90,23 +89,21 @@ class PromptBuildService:
         """
         Generate prompt theo output format (backward-compatible API).
 
-        Gọi nội bộ build_prompt_full() và chuyển đổi kết quả
-        về tuple 3 phần tử để tương thích với code cũ.
+        Goi noi bo build_prompt_full() va chuyen doi ket qua
+        ve tuple 3 phan tu de tuong thich voi code cu.
 
         Args:
-            file_paths: Danh sách file paths đã resolve
+            file_paths: Danh sach file paths da resolve
             workspace: Workspace root path
             instructions: User instructions text
-            output_format: "xml", "json", "plain", hoặc "smart"
-            include_git_changes: Có include git diff không
-            use_relative_paths: Có dùng relative paths không
+            output_format: "xml", "json", "plain"
+            include_git_changes: Co include git diff khong
+            use_relative_paths: Co dung relative paths khong
             tree_item: Root TreeItem cho file map (optional)
-            selected_paths: Set paths đã chọn cho file map (optional)
-            include_xml_formatting: Có bao gồm OPX không
-            codemap_paths: Optional set các file paths chỉ lấy AST signatures.
-                           Các file trong set này sẽ được xuất dạng codemap
-                           thay vì full content.
-            instructions_at_top: Di chuyển instructions lên đầu
+            selected_paths: Set paths da chon cho file map (optional)
+            include_xml_formatting: Co bao gom OPX khong
+            codemap_paths: Optional set cac file paths chi lay AST signatures.
+            instructions_at_top: Di chuyen instructions len dau
 
         Returns:
             Tuple (prompt_text, token_count, breakdown)
@@ -148,7 +145,7 @@ class PromptBuildService:
         semantic_index: bool = True,
     ) -> BuildResult:
         """
-        Generate prompt và trả về BuildResult đầy đủ với metadata.
+        Generate prompt va tra ve BuildResult day du voi metadata.
 
         Đây là API chính cho multi-agent workflow. Trả về BuildResult
         bao gồm per-file token counts, breakdown, trim notes, và
@@ -158,7 +155,7 @@ class PromptBuildService:
             file_paths: Danh sách primary file paths đã resolve
             workspace: Workspace root path
             instructions: User instructions text
-            output_format: "xml", "json", "plain", hoặc "smart"
+            output_format: "xml", "json", "plain"
             include_git_changes: Có include git diff không
             use_relative_paths: Có dùng relative paths không
             tree_item: Root TreeItem cho file map (optional)
@@ -168,13 +165,8 @@ class PromptBuildService:
             profile: Tên profile đã áp dụng (Feature 1, chỉ để lưu metadata)
             max_tokens: Giới hạn token tối đa (None = không giới hạn)
             codemap_paths: Optional set các file paths chỉ lấy AST signatures.
-                           Có thể là absolute paths. Các file này sẽ được render
-                           dạng codemap (function/class signatures) thay vì full content.
-                           Trong output_format="smart", tham số này không có tác dụng
-                           vì smart format đã là codemap-only.
             instructions_at_top: Di chuyển instructions lên đầu
             full_tree: Nếu True, hiển thị toàn bộ sơ đồ thư mục của workspace.
-                       Nếu False (mặc định), chỉ hiển thị các file được chọn.
 
         Returns:
             BuildResult voi tat ca metadata can thiet
@@ -207,103 +199,86 @@ class PromptBuildService:
         git_logs = None
         file_contents = ""
         semantic_index_text = ""
-        output_style = _FORMAT_TO_STYLE["xml"]
+        output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
 
-        if output_format == "smart":
-            prompt, smart_contents = build_smart_context_prompt(
-                all_file_paths,
-                workspace,
-                instructions,
-                include_git_changes,
-                use_relative_paths,
-                self._graph_service,
-                tree_item,
-                selected_paths,
-                instructions_at_top=instructions_at_top,
-                full_tree=full_tree,
-                semantic_index=semantic_index,
-            )
-            self._last_smart_contents = smart_contents
-        else:
-            # 0. Fetch git data neu can
-            if include_git_changes:
-                from infrastructure.git.git_utils import get_git_diffs, get_git_logs
+        # 0. Fetch git data neu can
+        if include_git_changes:
+            from infrastructure.git.git_utils import get_git_diffs, get_git_logs
 
-                git_diffs = get_git_diffs(workspace)
-                git_logs = get_git_logs(workspace, max_commits=5)
+            git_diffs = get_git_diffs(workspace)
+            git_logs = get_git_logs(workspace, max_commits=5)
 
-            # 1. Generate file map
-            if tree_item:
-                _sel = selected_paths if selected_paths is not None else set()
-                if output_format in ("xml", "json"):
-                    from domain.prompt.generator import generate_file_structure_xml
+        # 1. Generate file map
+        if tree_item:
+            _sel = selected_paths if selected_paths is not None else set()
+            if output_format in ("xml", "json"):
+                from domain.prompt.generator import generate_file_structure_xml
 
-                    file_map = generate_file_structure_xml(
-                        tree_item,
-                        _sel,
-                        workspace_root=workspace,
-                        use_relative_paths=use_relative_paths,
-                        show_all=full_tree,
-                    )
-                else:
-                    from domain.prompt.generator import generate_file_map
+                file_map = generate_file_structure_xml(
+                    tree_item,
+                    _sel,
+                    workspace_root=workspace,
+                    use_relative_paths=use_relative_paths,
+                    show_all=full_tree,
+                )
+            else:
+                from domain.prompt.generator import generate_file_map
 
-                    file_map = generate_file_map(
-                        tree_item,
-                        _sel,
-                        workspace_root=workspace,
-                        use_relative_paths=use_relative_paths,
-                        show_all=full_tree,
-                    )
-
-            # 2. Load Project Rules
-            from application.services.workspace_rules import get_rule_file_contents
-
-            project_rules = get_rule_file_contents(workspace)
-
-            # 3. Generate file contents
-            all_path_strs = {str(p) for p in all_file_paths}
-            content_gen = _FORMAT_TO_GENERATOR.get(
-                output_format, _FORMAT_TO_GENERATOR["xml"]
-            )
-            file_contents = content_gen(
-                selected_paths=all_path_strs,
-                workspace_root=workspace,
-                use_relative_paths=use_relative_paths,
-                codemap_paths=normalized_codemap,
-            )
-
-            # 4. Assemble prompt
-            output_style = _FORMAT_TO_STYLE.get(output_format, _FORMAT_TO_STYLE["xml"])
-
-            # Ensure graph is built before computing semantic index (Guaranteed Semantic)
-            if self._graph_service:
-                try:
-                    self._graph_service.ensure_built(workspace)
-                except Exception as e:
-                    logger.warning("Failed to ensure graph built: %s", e)
-
-            semantic_index_text = ""
-            if semantic_index:
-                semantic_index_text = compute_semantic_index(
-                    workspace, self._graph_service, output_format
+                file_map = generate_file_map(
+                    tree_item,
+                    _sel,
+                    workspace_root=workspace,
+                    use_relative_paths=use_relative_paths,
+                    show_all=full_tree,
                 )
 
-            from domain.prompt.generator import generate_prompt
+        # 2. Load Project Rules
+        from application.services.workspace_rules import get_rule_file_contents
 
-            prompt = generate_prompt(
-                file_map=file_map,
-                file_contents=file_contents,
-                user_instructions=instructions,
-                output_style=output_style,
-                include_xml_formatting=include_xml_formatting,
-                git_diffs=git_diffs,
-                git_logs=git_logs,
-                project_rules=project_rules,
-                workspace_root=workspace,
-                instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index_text,
+        project_rules = get_rule_file_contents(workspace)
+
+        # 3. Generate file contents
+        all_path_strs = {str(p) for p in all_file_paths}
+        content_gen = _FORMAT_TO_GENERATOR.get(
+            output_format, _FORMAT_TO_GENERATOR["xml"]
+        )
+        file_contents = content_gen(
+            selected_paths=all_path_strs,
+            workspace_root=workspace,
+            use_relative_paths=use_relative_paths,
+            codemap_paths=normalized_codemap,
+        )
+
+        # 4. Assemble prompt
+        # Ensure graph is built before computing semantic index (Guaranteed Semantic)
+        # ONLY IF semantic_index toggle is ON to respect user preference and performance.
+        if self._graph_service and semantic_index:
+            try:
+                self._graph_service.ensure_built(workspace)
+            except Exception as e:
+                logger.warning("Failed to ensure graph built: %s", e)
+
+        semantic_index_text = ""
+        if semantic_index:
+            semantic_index_text = compute_semantic_index(
+                workspace, self._graph_service, output_format
             )
+
+        from domain.prompt.generator import generate_prompt
+
+        prompt = generate_prompt(
+            file_map=file_map,
+            file_contents=file_contents,
+            user_instructions=instructions,
+            output_style=output_style,
+            include_xml_formatting=include_xml_formatting,
+            git_diffs=git_diffs,
+            git_logs=git_logs,
+            project_rules=project_rules,
+            workspace_root=workspace,
+            instructions_at_top=instructions_at_top,
+            semantic_index=semantic_index_text,
+        )
 
         token_count = self._tokenization_service.count_tokens(prompt)
 
@@ -321,11 +296,6 @@ class PromptBuildService:
             output_format,
             token_count,
         )
-
-        if output_format == "smart":
-            breakdown["content_tokens"] = self._tokenization_service.count_tokens(
-                getattr(self, "_last_smart_contents", "")
-            )
 
         # 6. Per-file token counting
         per_file_tokens = count_per_file_tokens(

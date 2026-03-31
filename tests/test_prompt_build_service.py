@@ -3,7 +3,7 @@ Tests cho PromptBuildService va service interfaces.
 
 Verify:
 1. IPromptBuilder / IClipboardService protocol compliance
-2. PromptBuildService.build_prompt cho xml va smart formats
+2. PromptBuildService.build_prompt cho xml và các định dạng chuẩn
 3. PromptBuildService.build_file_map delegation
 """
 
@@ -68,43 +68,6 @@ class TestPromptBuildService:
         assert isinstance(breakdown, dict)
         assert breakdown["content_tokens"] == 42
         mock_gen_prompt.assert_called_once()
-
-    @patch("infrastructure.git.git_utils.get_git_logs")
-    @patch("infrastructure.git.git_utils.get_git_diffs")
-    @patch("domain.prompt.generator.build_smart_prompt")
-    @patch("domain.prompt.generator.generate_smart_context")
-    def test_build_prompt_smart(self, mock_smart_ctx, mock_build, mock_diff, mock_logs):
-        """build_prompt smart format goi smart pipeline."""
-        mock_svc = MagicMock()
-        mock_svc.count_tokens.return_value = 100
-        service = PromptBuildService(tokenization_service=mock_svc)
-
-        mock_smart_ctx.return_value = "smart context output"
-        mock_build.return_value = "smart prompt"
-        mock_diff.return_value = None
-        mock_logs.return_value = None
-
-        with patch(
-            "infrastructure.persistence.settings_manager.load_app_settings"
-        ) as mock_settings:
-            mock_settings_inst = MagicMock()
-            mock_settings_inst.get_rule_filenames_set.return_value = set()
-            mock_settings.return_value = mock_settings_inst
-
-            prompt, count, breakdown = service.build_prompt(
-                file_paths=[Path("/a.py")],
-                workspace=Path("/project"),
-                instructions="refactor",
-                output_format="smart",
-                include_git_changes=True,
-                use_relative_paths=True,
-            )
-
-        assert prompt == "smart prompt"
-        assert count == 100
-        assert isinstance(breakdown, dict)
-        mock_smart_ctx.assert_called_once()
-        mock_build.assert_called_once()
 
     @patch("application.services.prompt_build_service.generate_file_map")
     def test_build_file_map(self, mock_map):

@@ -183,6 +183,13 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
+            "think_first": TemplateInfo(
+                template_id="think_first",
+                display_name="Think-first",
+                description="Bắt buộc agent viết <thinking> block với reasoning chi tiết trước khi trả lời cuối cùng",
+                is_custom=False,
+                has_lite=True,
+            ),
         }
 
     def list_templates(self) -> list[TemplateInfo]:

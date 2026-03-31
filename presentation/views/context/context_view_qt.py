@@ -138,7 +138,71 @@ class ContextViewQt(
         # Setup keyboard shortcuts
         self._setup_shortcuts()
 
+        # Setup Graph signals
+        self._setup_graph_signals()
+
     # ===== Public API =====
+
+    def _setup_graph_signals(self) -> None:
+        """Connect graph service signals to UI."""
+        if not self._graph_provider:
+            return
+
+        signals = getattr(self._graph_provider, "signals", None)
+        if signals:
+            signals.build_started.connect(self._on_graph_build_started)
+            signals.build_status.connect(self._on_graph_build_status)
+            signals.build_progress.connect(self._on_graph_build_progress)
+            signals.build_finished.connect(self._on_graph_build_finished)
+            signals.build_error.connect(self._on_graph_build_error)
+
+    def _get_status_bar(self):
+        from PySide6.QtWidgets import QMainWindow
+
+        window = self.window()
+        if isinstance(window, QMainWindow):
+            return window.statusBar()
+        return None
+
+    @Slot()
+    def _on_graph_build_started(self) -> None:
+        sb = self._get_status_bar()
+        if sb:
+            sb.showMessage("🔄 Preparing semantic graph...")
+        if hasattr(self, "_opx_btn"):
+            self._opx_btn.setText("🔄 Preparing semantic graph...")
+
+    @Slot(str)
+    def _on_graph_build_status(self, message: str) -> None:
+        sb = self._get_status_bar()
+        if sb:
+            sb.showMessage(f"🔄 {message}")
+        if hasattr(self, "_opx_btn"):
+            self._opx_btn.setText(f"🔄 {message}")
+
+    @Slot(int, int)
+    def _on_graph_build_progress(self, current: int, total: int) -> None:
+        sb = self._get_status_bar()
+        percent = int((current / total) * 100) if total > 0 else 0
+        status_text = f"⚡ Building semantic graph... {percent}% ({current}/{total})"
+        if sb:
+            sb.showMessage(status_text)
+        if hasattr(self, "_opx_btn"):
+            self._opx_btn.setText(status_text)
+
+    @Slot(float, int)
+    def _on_graph_build_finished(self, duration: float, tokens: int) -> None:
+        sb = self._get_status_bar()
+        if sb:
+            sb.showMessage(f"✨ Semantic cache loaded in {duration:.2f}s", 5000)
+
+    @Slot(str)
+    def _on_graph_build_error(self, message: str) -> None:
+        sb = self._get_status_bar()
+        if sb:
+            sb.showMessage(f"❌ Graph build error: {message}", 5000)
+        if hasattr(self, "_opx_btn"):
+            self._opx_btn.setText("❌ Error building graph")
 
     def _setup_shortcuts(self) -> None:
         """Setup keyboard shortcuts."""
@@ -509,6 +573,11 @@ class ContextViewQt(
                 tooltip="\n".join(tooltip_lines),
                 duration=8000,
             )
+
+        # Show success message on StatusBar
+        sb = self._get_status_bar()
+        if sb:
+            sb.showMessage(f"✅ Context copied! Processed {token_count:,} tokens", 5000)
 
     def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
         paths = set()

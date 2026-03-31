@@ -3,14 +3,27 @@ from __future__ import annotations
 import threading
 import pickle
 import os
+import time
 from pathlib import Path
 from typing import Optional, Any
 from collections import OrderedDict
+from PySide6.QtCore import QObject, Signal
 
 from domain.relationships.builder import GraphBuilder
 from domain.relationships.graph import RelationshipGraph
 from domain.relationships.port import IRelationshipGraphProvider
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
+
+
+class GraphSignals(QObject):
+    """Signals để UI lắng nghe quá trình build graph. (Thread-safe)"""
+
+    build_started = Signal()
+    build_status = Signal(str)  # Thông báo trạng thái (e.g. "Loading cache...")
+    build_progress = Signal(int, int)  # (current, total)
+    build_finished = Signal(float, int)  # (duration_seconds, token_count)
+    build_error = Signal(str)
+
 
 """
 GraphService - Quan ly lifecycle cua RelationshipGraph o application layer.
@@ -57,6 +70,9 @@ class GraphService(IRelationshipGraphProvider):
         )
         self._MAX_TREE_CACHE = 500
 
+        # Signals cho UI UX Pro Max
+        self.signals = GraphSignals()
+
     # ===== IRelationshipGraphProvider API =====
 
     def get_graph(self) -> RelationshipGraph | None:
@@ -78,7 +94,6 @@ class GraphService(IRelationshipGraphProvider):
         Phù hợp cho các luồng synchronous như MCP server, scripts nội bộ.
         """
         from shared.logging_config import log_info
-        import time
 
         workspace_root = workspace_root.resolve()
 
@@ -130,21 +145,29 @@ class GraphService(IRelationshipGraphProvider):
 
         log_info(f"[GraphService] ensure_built: building graph for {workspace_root}...")
         start = time.time()
+        self.signals.build_started.emit()
 
         try:
             # Tải cache từ disk nếu bộ nhớ rỗng (Lần đầu khởi động app)
             if not self._tree_cache:
+                self.signals.build_status.emit("Loading semantic cache from disk...")
                 self.load_cache(workspace_root)
 
             # Build bên ngoài lock để không block readers
+            self.signals.build_status.emit("Analyzing project structure...")
             graph = self._build_graph_sync(workspace_root)
 
             # Lưu cache sau khi hoàn tất build
             self.save_cache(workspace_root)
+
+            duration = time.time() - start
+            # TODO: Truyền token_count thực tế nếu có
+            self.signals.build_finished.emit(duration, 0)
         except Exception as e:
             # Bug #3 Fix: Reset flag nếu build thất bại
             with self._lock:
                 self._building = False
+            self.signals.build_error.emit(str(e))
             raise e
 
         duration = time.time() - start
@@ -221,7 +244,6 @@ class GraphService(IRelationshipGraphProvider):
         Build graph trên background thread, sau đó swap nếu generation còn hợp lệ.
         """
         from shared.logging_config import log_info, log_error
-        import time
 
         log_info(f"[GraphService] Background build started for {workspace_root}")
         start = time.time()
@@ -268,6 +290,10 @@ class GraphService(IRelationshipGraphProvider):
         file_paths = [p for p in all_files if Path(p).is_file()]
 
         builder = GraphBuilder(workspace_root=workspace_root)
+
+        # Chúng ta có thể bổ sung callback vào Builder nếu muốn xem tiến trình chi tiết
+        # Hiện tại ta coi build() là một khối duy nhất cho 10k files (Nhưng tốn 1-3s)
+        self.signals.build_status.emit("Connecting relationships (Adjacency)...")
         graph = builder.build(
             file_paths=file_paths,
             existing_resolver=None,

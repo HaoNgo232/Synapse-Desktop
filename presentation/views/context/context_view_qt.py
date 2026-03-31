@@ -372,6 +372,11 @@ class ContextViewQt(
         toggle = getattr(self, "_full_tree_toggle", None)
         return toggle.isChecked() if toggle is not None else False
 
+    def get_semantic_index(self) -> bool:
+        """Adapter: Read semantic-index toggle state from actions panel."""
+        toggle = getattr(self, "_semantic_index_toggle", None)
+        return toggle.isChecked() if toggle is not None else False
+
     def is_smart_mode_active(self) -> bool:
         """Kiểm tra xem Smart Mode có đang active không.
         (Hiện tại check dựa trên _selected_output_style == OutputStyle.SMART)

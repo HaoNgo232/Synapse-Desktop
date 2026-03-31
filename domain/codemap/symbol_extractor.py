@@ -1,5 +1,5 @@
 """
-Symbol Extractor - Extract symbols từ code sử dụng Tree-sitter Queries (SCM)
+Symbol Extractor - Extracts symbols from code using Tree-sitter Queries (SCM)
 """
 
 from pathlib import Path
@@ -12,8 +12,8 @@ from domain.smart_context.loader import get_language
 
 def extract_symbols(file_path: str, content: str) -> List[Symbol]:
     """
-    Trích xuất toàn bộ symbols sử dụng cơ chế Tree-sitter Queries (SCM).
-    Query nằm trong domain/codemap/queries/ để đảm bảo kiến trúc Domain-driven.
+    Extracts all symbols using Tree-sitter Queries (SCM).
+    Queries reside in domain/codemap/queries/ to ensure Domain-driven architecture.
     """
     suffix = Path(file_path).suffix
     if not suffix:
@@ -30,16 +30,16 @@ def extract_symbols(file_path: str, content: str) -> List[Symbol]:
         if not tree or not tree.root_node:
             return []
 
-        # 1. Load Query SCM từ Domain folder
+        # 1. Load SCM Query from Domain folder
         query = _get_query_for_extension(ext, language)
         symbols: List[Symbol] = []
         lines = content.split("\n")
 
-        # Đánh dấu Entry Point (Heuristic)
+        # Mark Entry Point (Heuristic)
         if _is_likely_entry_point(file_path, content):
             symbols.append(
                 Symbol(
-                    name="📍 [ENTRY POINT]",
+                    name="[ENTRY POINT]",
                     kind=SymbolKind.MODULE,
                     file_path=file_path,
                     line_start=1,
@@ -50,7 +50,7 @@ def extract_symbols(file_path: str, content: str) -> List[Symbol]:
             )
 
         if query:
-            # 2. Thực thi Query
+            # 2. Execute Query
             cursor = QueryCursor(query)
             captures_dict = cursor.captures(tree.root_node)
             seen_defs: Set[Tuple[int, int, int]] = set()
@@ -88,15 +88,16 @@ def extract_symbols(file_path: str, content: str) -> List[Symbol]:
         return []
 
 
-# Global cache cho compiled queries (Phase 5 Optimization)
+# Global cache for compiled queries (Phase 5 Optimization)
 _QUERY_CACHE: dict[str, Query] = {}
 
 
 def _get_query_for_extension(ext: str, language) -> Optional[Query]:
-    """Load SCM Query từ domain/codemap/queries/ với cơ chế cache."""
+    """Loads SCM Query from domain/codemap/queries/ with caching mechanism."""
     lang_map = {
         "py": "python",
         "ts": "typescript",
+        "tsx": "tsx",
         "js": "javascript",
         "go": "go",
         "rs": "rust",
@@ -113,7 +114,7 @@ def _get_query_for_extension(ext: str, language) -> Optional[Query]:
     if cache_key in _QUERY_CACHE:
         return _QUERY_CACHE[cache_key]
 
-    # QUAN TRỌNG: Đường dẫn đã chuyển về domain/codemap/queries/
+    # IMPORTANT: Path has been moved to domain/codemap/queries/
     query_path = Path("domain/codemap/queries") / f"{lang_name}-tags.scm"
 
     if query_path.exists():
@@ -127,7 +128,7 @@ def _get_query_for_extension(ext: str, language) -> Optional[Query]:
 
 
 def _tag_to_kind(tag: str, ext: str) -> SymbolKind:
-    """Map tag name sang SymbolKind."""
+    """Maps tag name to SymbolKind."""
     tag = tag.lower()
     if "class" in tag:
         return SymbolKind.CLASS
@@ -151,7 +152,7 @@ def _tag_to_kind(tag: str, ext: str) -> SymbolKind:
 
 
 def _find_parent_name(node: Node, symbols: List[Symbol]) -> Optional[str]:
-    """Tìm parent symbol."""
+    """Finds the parent symbol."""
     curr = node.parent
     while curr:
         start, end = curr.start_point[0] + 1, curr.end_point[0] + 1
@@ -169,7 +170,7 @@ def _find_parent_name(node: Node, symbols: List[Symbol]) -> Optional[str]:
 
 
 def _is_likely_entry_point(file_path: str, content: str) -> bool:
-    """Nhận diện Entry Point."""
+    """Identifies the Entry Point."""
     filename = Path(file_path).name.lower()
     entry_filenames = [
         "main.py",
@@ -191,7 +192,7 @@ def _is_likely_entry_point(file_path: str, content: str) -> bool:
 
 
 def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
-    """Trích xuất signature kèm Docstring/Decorators."""
+    """Extracts signature including Docstring/Decorators."""
     def_node = node
     while def_node.parent and (
         "identifier" in def_node.type
@@ -276,7 +277,7 @@ def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
 
 
 def _parse_doc_text(raw_text: str) -> str:
-    """Làm sạch Docstring/JSDoc."""
+    """Cleans up Docstring/JSDoc."""
     if not raw_text:
         return ""
     content = raw_text.strip().strip("*/'\"").strip()

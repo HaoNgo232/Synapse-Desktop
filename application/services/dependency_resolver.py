@@ -66,6 +66,27 @@ IMPORT_QUERIES: Dict[str, str] = {
             function: (identifier) @func (#eq? @func "require")
             arguments: (arguments (string) @import.source))
     """,
+    "go": """
+        (import_spec path: [(interpreted_string_literal) (raw_string_literal)] @import.source)
+    """,
+    "rust": """
+        (use_declaration argument: (path_expression) @import.source)
+        (extern_crate_declaration name: (identifier) @import.source)
+    """,
+    "ruby": """
+        (call
+            method: (identifier) @func (#match? @func "require(_relative)?")
+            arguments: (argument_list (string) @import.source))
+    """,
+    "java": """
+        (import_declaration name: (dotted_name) @import.module)
+    """,
+    "cpp": """
+        (preproc_include path: [(string_literal) (system_lib_string) (header_name)] @import.source)
+    """,
+    "c_sharp": """
+        (using_directive name: [(identifier) (qualified_name)] @import.module)
+    """,
 }
 
 
@@ -896,6 +917,15 @@ class DependencyResolver:
             "tsx": "typescript",
             "mts": "typescript",
             "cts": "typescript",
+            "go": "go",
+            "rs": "rust",
+            "rb": "ruby",
+            "java": "java",
+            "cpp": "cpp",
+            "hpp": "cpp",
+            "c": "cpp",  # C sharing C++ include style
+            "h": "cpp",
+            "cs": "c_sharp",
         }
         return ext_to_lang.get(ext.lower(), "")
 

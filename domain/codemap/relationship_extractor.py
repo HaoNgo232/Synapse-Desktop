@@ -1,10 +1,10 @@
 """
-Relationship Extractor - Extract relationships từ code
+Relationship Extractor - Extracts relationships from code
 
-Module này parse code và extract relationships:
+This module parses code and extracts relationships:
 - Function calls (CALLS)
 - Class inheritance (INHERITS)
-- Imports (IMPORTS) - reuse từ dependency_resolver
+- Imports (IMPORTS) - reused from dependency_resolver
 """
 
 import os
@@ -20,7 +20,6 @@ from domain.codemap.queries import (
     QUERY_PYTHON_INHERITANCE,
     QUERY_JS_CALLS,
     QUERY_JS_INHERITANCE,
-    QUERY_JS_IMPORTS,
     QUERY_GO_CALLS,
     QUERY_RUST_CALLS,
     QUERY_RUST_INHERITANCE,
@@ -34,21 +33,22 @@ def extract_relationships(
     known_symbols: Optional[Set[str]] = None,
     tree=None,
     language: Optional[Language] = None,
+    workspace_root: Optional[Path] = None,
 ) -> list[Relationship]:
     """
-    Extract tất cả relationships từ file content.
+    Extracts all relationships from file content.
 
     Args:
-        file_path: Đường dẫn file (để xác định ngôn ngữ)
-        content: Nội dung raw của file
-        known_symbols: Set các symbol names trong workspace (optional)
-        tree: Pre-parsed AST tree (optional, để reuse từ smart_parse)
-        language: Pre-loaded language (optional, để reuse)
+        file_path: File path (to determine language)
+        content: Raw content of the file
+        known_symbols: Set of symbol names in workspace (optional)
+        tree: Pre-parsed AST tree (optional, reuse from smart_parse)
+        language: Pre-loaded language (optional, reuse)
 
     Returns:
-        List các Relationship objects
+        List of Relationship objects
 
-    PERFORMANCE: Nếu tree được truyền vào, skip parsing -> ~50% faster
+    PERFORMANCE: If tree is provided, skip parsing -> ~50% faster
     """
     # Lấy file extension
     _, ext = os.path.splitext(file_path)
@@ -87,8 +87,10 @@ def extract_relationships(
         inheritance = _extract_inheritance(language, tree, lines, ext, file_path)
         relationships.extend(inheritance)
 
-        # Extract imports (currently for JS/TS)
-        imports = _extract_imports(language, tree, lines, ext, file_path)
+        # Extract imports (resolve to workspace-relative modules)
+        imports = _extract_imports(
+            language, tree, lines, ext, file_path, workspace_root=workspace_root
+        )
         relationships.extend(imports)
 
         # Filter by known_symbols nếu có
@@ -110,7 +112,7 @@ def _extract_calls(
     language: Language, tree, lines: list[str], ext: str, file_path: str
 ) -> list[Relationship]:
     """
-    Extract function/method calls từ AST.
+    Extracts function/method calls from AST.
 
     Args:
         lines: Pre-split lines from content (OPTIMIZATION)
@@ -180,7 +182,7 @@ def _extract_inheritance(
     language: Language, tree, lines: list[str], ext: str, file_path: str
 ) -> list[Relationship]:
     """
-    Extract class inheritance từ AST.
+    Extracts class inheritance from AST.
 
     Args:
         lines: Pre-split lines from content (OPTIMIZATION)
@@ -304,7 +306,12 @@ def _extract_js_ts_inheritance(tree) -> list[Relationship]:
 
 
 def _extract_imports(
-    language: Language, tree, lines: list[str], ext: str, file_path: str
+    language: Language,
+    tree,
+    lines: list[str],
+    ext: str,
+    file_path: str,
+    workspace_root: Optional[Path] = None,
 ) -> list[Relationship]:
     """
     Extract imports for JS/TS and resolve to workspace-relative modules when possible.
@@ -312,23 +319,39 @@ def _extract_imports(
     Args:
         lines: Pre-split lines from content (OPTIMIZATION)
     """
-    if ext not in {"js", "jsx", "ts", "tsx", "mjs", "cjs", "mts", "cts"}:
+    source_path = os.path.abspath(file_path)
+    source_dir = os.path.dirname(source_path)
+
+    # Use workspace_root if available, fallback to source_dir
+    root = workspace_root if workspace_root else Path(source_dir)
+    resolver = DependencyResolver(root)
+
+    # Build file index if workspace_root is provided to enable reliable resolution
+    if workspace_root:
+        resolver.build_file_index_from_disk(workspace_root)
+
+    lang_name = resolver._get_lang_name(ext)
+    if not lang_name:
         return []
 
     try:
-        query = Query(language, QUERY_JS_IMPORTS)
+        from application.services.dependency_resolver import IMPORT_QUERIES
+
+        query_string = IMPORT_QUERIES.get(lang_name, "")
+        if not query_string:
+            return []
+
+        query = Query(language, query_string)
         query_cursor = QueryCursor(query)
         captures = query_cursor.captures(tree.root_node)
-
-        source_path = os.path.abspath(file_path)
-        source_dir = os.path.dirname(source_path)
-        resolver = DependencyResolver(Path(source_dir))
 
         relationships: list[Relationship] = []
         seen: set[tuple[str, int]] = set()
 
-        for _capture_name, nodes in captures.items():
+        for capture_name, nodes in captures.items():
             for node in nodes:
+                # Extract row from the first node (if nodes is a list)
+                # Our query usually only captures 1 node for 1 capture name
                 start_row = node.start_point[0]
                 start_col = node.start_point[1]
                 end_col = node.end_point[1]
@@ -337,17 +360,36 @@ def _extract_imports(
                     continue
 
                 raw_import = lines[start_row][start_col:end_col].strip().strip("\"'")
+                # Remove < > in C++ includes
+                if raw_import.startswith("<") and raw_import.endswith(">"):
+                    raw_import = raw_import[1:-1]
+
                 if not raw_import:
                     continue
 
-                # Try resolve via resolver. If unresolved, keep raw module path.
+                # JS/TS specific: resolution might be needed for file-to-file
                 target = raw_import
-                resolved = resolver.resolve_js_import(raw_import, Path(source_dir))
-                if resolved:
-                    try:
-                        target = str(resolved.resolve())
-                    except Exception:
-                        target = str(resolved)
+                if lang_name in {"javascript", "typescript"}:
+                    resolved = resolver.resolve_js_import(raw_import, Path(source_dir))
+                    if resolved:
+                        try:
+                            target = str(resolved.resolve())
+                        except Exception:
+                            target = str(resolved)
+                elif lang_name == "python":
+                    resolved = resolver._resolve_python_import(
+                        raw_import, Path(source_dir)
+                    )
+                    if resolved:
+                        try:
+                            target = str(resolved.resolve())
+                        except Exception:
+                            target = str(resolved)
+                elif lang_name == "go":
+                    # Go imports in AST include quotes, strip them for the target path
+                    target = raw_import.strip('"')
+                else:
+                    pass
 
                 key = (target, start_row + 1)
                 if key in seen:
@@ -372,12 +414,12 @@ def _build_function_boundaries_map(
     root_node, lines: list[str]
 ) -> list[tuple[int, int, str]]:
     """
-    Build map of function boundaries một lần để lookup via binary search.
+    Builds a map of function boundaries once for lookup via binary search.
 
     Returns:
         List of (start_line, end_line, function_name) tuples, sorted by start_line ASC
 
-    PERFORMANCE: Build map 1 lần thay vì traverse tree mỗi lần tìm enclosing function.
+    PERFORMANCE: Build map once instead of traversing the tree each time to find enclosing function.
     Sorted ASC by start_line to enable bisect-based O(log n) lookup.
     """
     boundaries: list[tuple[int, int, str]] = []
@@ -412,37 +454,37 @@ def _find_enclosing_function_fast(
     target_line: int, boundaries_map: list[tuple[int, int, str]]
 ) -> Optional[str]:
     """
-    Tìm enclosing function sử dụng binary search + backward scan.
+    Finds enclosing function using binary search + backward scan.
 
     Algorithm:
-    1. bisect_right tìm insertion point cho target_line → O(log n)
-    2. Scan ngược từ insertion point tìm innermost function chứa target_line
-       → O(k) với k = số nested levels (thường 1-3, rất nhỏ)
+    1. bisect_right finds insertion point for target_line → O(log n)
+    2. Backward scan from insertion point to find the innermost function containing target_line
+       → O(k) where k = number of nested levels (usually 1-3, very small)
 
     Complexity:
-    - Average case: O(log n) — bisect dominates, backward scan chỉ vài bước
-    - Worst case: O(n) — khi tất cả functions đều nested (rất hiếm)
-    - Nhanh hơn linear scan đáng kể cho files có nhiều functions (>50)
+    - Average case: O(log n) — bisect dominates, backward scan only a few steps
+    - Worst case: O(n) — when all functions are nested (very rare)
+    - Significantly faster than linear scan for files with many functions (>50)
 
     Args:
-        target_line: Line number của target node (0-indexed)
-        boundaries_map: Pre-built function boundaries, PHẢI sorted by start_line ASC
+        target_line: Line number of target node (0-indexed)
+        boundaries_map: Pre-built function boundaries, MUST BE sorted by start_line ASC
 
     Returns:
-        Function name hoặc None
+        Function name or None
     """
     from bisect import bisect_right
 
     if not boundaries_map:
         return None
 
-    # bisect_right: tìm index sao cho tất cả entries trước nó có start_line <= target_line
-    # Dùng key function để chỉ so sánh start_line (phần tử đầu của tuple)
+    # bisect_right: find index such that all entries before it have start_line <= target_line
+    # Use key function to only compare start_line (first element of the tuple)
     idx = bisect_right(boundaries_map, target_line, key=lambda x: x[0])
 
-    # Scan ngược từ idx-1 để tìm innermost enclosing function
-    # Innermost = function có start_line lớn nhất mà vẫn chứa target_line
-    # Vì sorted ASC, entry gần idx nhất là innermost candidate
+    # Backward scan from idx-1 to find the innermost enclosing function
+    # Innermost = function with the largest start_line that still contains target_line
+    # Since sorted ASC, entry closest to idx is the innermost candidate
     best_name: Optional[str] = None
 
     for i in range(idx - 1, -1, -1):
@@ -452,23 +494,23 @@ def _find_enclosing_function_fast(
             continue  # Shouldn't happen due to bisect, but safety check
 
         if start_line <= target_line <= end_line:
-            # Found enclosing function. Vì ta scan từ cao → thấp start_line,
-            # match đầu tiên là innermost (start_line lớn nhất)
+            # Found enclosing function. Since we scan from high → low start_line,
+            # the first match is the innermost (highest start_line)
             return func_name
 
-        # Optimization: nếu end_line < target_line VÀ ta đã rời khỏi vùng
-        # có thể chứa target, các entries trước đó cũng không thể chứa
-        # (trừ khi có outer function bao quanh). Tiếp tục scan để tìm outer.
-        # Nhưng nếu đã tìm được best_name, có thể break sớm hơn.
+        # Optimization: if end_line < target_line AND we have left the area
+        # that could contain target, previous entries cannot contain it either
+        # (unless there is an outer function wrapping around). Continue scanning for outer.
+        # But if best_name is already found, we could break earlier.
 
     return best_name
 
 
 def _find_enclosing_function(root_node, target_node, lines: list[str]) -> Optional[str]:
     """
-    Tìm function/method chứa target_node.
+    Finds the function/method containing target_node.
 
-    DEPRECATED: Sử dụng _find_enclosing_function_fast với boundaries map để performance tốt hơn.
+    DEPRECATED: Use _find_enclosing_function_fast with boundaries map for better performance.
 
     Returns:
         Function/method name hoặc None

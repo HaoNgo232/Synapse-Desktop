@@ -20,7 +20,6 @@ from infrastructure.filesystem.file_utils import TreeItem, is_binary_file
 # Single source of truth cho path display
 from shared.utils.path_utils import path_for_display
 
-from shared.utils.language_utils import get_language_from_path
 from infrastructure.git.git_utils import GitDiffResult, GitLogResult
 from presentation.config.output_format import OutputStyle
 
@@ -722,20 +721,25 @@ def generate_smart_context(
                 all_contents.append(result[1])
 
     # Phase 2: Tinh Smart Markdown Delimiter
-    delimiter = calculate_markdown_delimiter(all_contents)
+    calculate_markdown_delimiter(all_contents)
 
-    # Phase 3: Generate output voi dynamic delimiter
+    # Phase 3: Generate output
     contents: list[str] = []
-    contents_append = contents.append
+
+    # Border 36 chars
+    BORDER = "────────────────────────────────────"
 
     for path, smart_content, error in file_data:
         path_display = path_for_display(path, workspace_root, use_relative_paths)
         if error:
-            contents_append(f"File: {path_display}\n*** Skipped: {error} ***\n")
+            contents.append(
+                f"{BORDER}\nFile: {path_display}\n{BORDER}\n*** Skipped: {error} ***\n"
+            )
         elif smart_content is not None:
-            language = get_language_from_path(str(path))
-            contents_append(
-                f"File: {path_display} [Smart Context]\n{delimiter}{language}\n{smart_content}\n{delimiter}\n"
+            # Opus 4.6 Format: Border -> File Path -> Border -> Content
+            # Loai bo markdown delimiters (` ``` `) de tranh AI bi roi khi nén
+            contents.append(
+                f"{BORDER}\nFile: {path_display}\n{BORDER}\n{smart_content}\n"
             )
 
     return "\n".join(contents).strip()

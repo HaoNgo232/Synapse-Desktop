@@ -30,6 +30,9 @@ def get_language(extension: str) -> Optional[Language]:
     if not config:
         return None
 
+    # THE CHỐT: .tsx và .ts dùng hai entry points khác nhau trong tree-sitter-typescript
+    # ta dùng name của config để phân biệt (đã tách ra trong config.py)
+
     # Check cache
     if config.name not in _language_cache:
         # Load và cache

@@ -29,8 +29,8 @@ def test_go_symbol_extraction_query_based():
         s.name == "HelloWorld" and s.kind == SymbolKind.FUNCTION for s in symbols
     )
     assert any(s.name == "User" and s.kind == SymbolKind.STRUCT for s in symbols)
-    assert "HelloWorld in Go" in next(
-        s.signature for s in symbols if s.name == "HelloWorld"
+    assert "HelloWorld in Go" in (
+        next(s.signature for s in symbols if s.name == "HelloWorld") or ""
     )
 
 
@@ -49,5 +49,5 @@ def test_typescript_jsdoc_full_extraction():
     # Test này kiểm chứng sự 'ngang tài ngang sức' giữa các ngôn ngữ qua SCM
     symbols = extract_symbols("math.ts", ts_code)
     func_symbol = next(s for s in symbols if s.name == "add")
-    assert "Tinh tong hai so." in func_symbol.signature
-    assert "@param a" in func_symbol.signature
+    assert "Tinh tong hai so." in (func_symbol.signature or "")
+    assert "@param a" in (func_symbol.signature or "")

@@ -52,8 +52,19 @@ def format_files_markdown(entries: list[FileEntry]) -> str:
                 f"File: {entry.display_path}\n*** Skipped: {entry.error} ***\n"
             )
         elif entry.content is not None:
+            # Metadata header
+            meta_lines = []
+            if entry.layer:
+                meta_lines.append(f"LAYER: {entry.layer}")
+            if entry.role:
+                meta_lines.append(f"ROLE: {entry.role}")
+            if entry.dependencies:
+                meta_lines.append(f"DEPENDS ON: {', '.join(entry.dependencies)}")
+            meta_block = "\n".join(meta_lines) + "\n" if meta_lines else ""
+
             output.write(
                 f"File: {entry.display_path}\n"
+                f"{meta_block}"
                 f"{delimiter}{entry.language}\n"
                 f"{entry.content}\n"
                 f"{delimiter}\n"

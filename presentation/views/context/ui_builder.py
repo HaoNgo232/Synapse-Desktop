@@ -1032,6 +1032,21 @@ class UIBuilderMixin:
             )
         )
         opt_wrap.addLayout(_tree_row)
+
+        _semantic_row, self._semantic_index_toggle = create_toggle_row(
+            "Semantic index",
+            "Đính kèm sơ đồ liên kết giữa các file (file relationships) vào prompt. Lưu ý: Quá trình này tiêu tốn tài nguyên và có thể chạy lâu với project lớn.",
+        )
+        saved_semantic = load_app_settings().enable_semantic_index
+        self._semantic_index_toggle.setChecked(saved_semantic)
+        self._semantic_index_toggle.toggled.connect(
+            lambda checked: (
+                update_app_setting(enable_semantic_index=checked),
+                self._copy_controller._prompt_cache.invalidate_all(),
+                self._update_token_display(),
+            )
+        )
+        opt_wrap.addLayout(_semantic_row)
         layout.addLayout(opt_wrap)
 
         return container

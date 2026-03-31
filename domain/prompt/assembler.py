@@ -15,6 +15,7 @@ Tat ca format deu bao gom:
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -207,20 +208,15 @@ def _append_git_changes_markdown(
     git_logs: Optional[GitLogResult],
 ) -> str:
     """
-    Them section git_changes vao prompt dang Markdown voi instruction text.
-
-    Luu y: Su dung hybrid format - noi dung Markdown (headers, code blocks)
-    duoc boc trong XML semantic tags (<git_changes>) de AI de dang
-    nhan dien ranh gioi cac section. Day la thiet ke co y do.
+    Thêm section git_changes vào prompt dạng Markdown thuần.
     """
-    # Kiem tra co du lieu thuc su truoc khi tao section
     has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
     has_logs = git_logs and git_logs.log_content
 
     if has_diffs or has_logs:
-        prompt += "\n<git_changes>\n"
+        prompt += "\n## Git Changes\n"
         if has_diffs:
-            assert git_diffs is not None  # type narrowing cho Pyrefly
+            assert git_diffs is not None
             prompt += f"> {GIT_DIFF_INSTRUCTION}\n\n"
             if git_diffs.work_tree_diff:
                 prompt += f"### Git Diff (Work Tree)\n```diff\n{git_diffs.work_tree_diff}\n```\n\n"
@@ -229,10 +225,9 @@ def _append_git_changes_markdown(
                     f"### Git Diff (Staged)\n```diff\n{git_diffs.staged_diff}\n```\n\n"
                 )
         if has_logs:
-            assert git_logs is not None  # type narrowing cho Pyrefly
+            assert git_logs is not None
             prompt += f"> {GIT_LOG_INSTRUCTION}\n\n"
             prompt += f"### Git Log\n```\n{git_logs.log_content}\n```\n\n"
-        prompt += "</git_changes>\n"
     return prompt
 
 
@@ -257,8 +252,21 @@ def _assemble_xml(
     )
     current_date = datetime.now().strftime("%Y-%m-%d")
 
+    # Minimizing Agent Role logic (unified logic for all formats)
+    role = (
+        AGENT_ROLE_INSTRUCTION
+        if not include_xml_formatting
+        else "Analyze the provided codebase."
+    )
+
     if include_xml_formatting:
-        file_summary = generate_file_summary_xml_minimal()
+        file_summary_content = generate_file_summary_xml_minimal()
+        # In OPX mode, we still want to clarify the agent role if it's missing from minimal summary
+        if "<agent_role>" not in file_summary_content:
+            file_summary_content = file_summary_content.replace(
+                "<file_summary>", f"<file_summary>\n<agent_role>\n{role}\n</agent_role>"
+            )
+        file_summary = file_summary_content
     else:
         file_summary = generate_file_summary_xml()
 
@@ -333,9 +341,16 @@ def _assemble_json(
     except json.JSONDecodeError:
         files_data = {}
 
+    # Minimizing Agent Role in OPX mode
+    role = (
+        AGENT_ROLE_INSTRUCTION
+        if not include_xml_formatting
+        else "Analyze the provided codebase."
+    )
+
     # Thêm system instruction và file summary vào JSON output
     prompt_data: dict[str, object] = {
-        "system_instruction": AGENT_ROLE_INSTRUCTION,
+        "system_instruction": role,
         "file_summary": {
             "generated_by": "Synapse Desktop",
             "purpose": SUMMARY_PURPOSE,
@@ -343,7 +358,7 @@ def _assemble_json(
             "usage_guidelines": SUMMARY_USAGE_GUIDELINES,
             "notes": SUMMARY_NOTES,
         },
-        "semantic_index": semantic_index.strip() if semantic_index else "",
+        "semantic_index": _strip_xml_simple(semantic_index) if semantic_index else "",
         "structure": file_map,
         "files": files_data,
     }
@@ -359,7 +374,7 @@ def _assemble_json(
             new_data["project_rules"] = project_rules.strip()
 
         if semantic_index and semantic_index.strip():
-            new_data["semantic_index"] = semantic_index.strip()
+            new_data["semantic_index"] = _strip_xml_simple(semantic_index)
 
         new_data.update(
             {
@@ -401,8 +416,13 @@ def _assemble_json(
     if not instructions_at_top and project_rules and project_rules.strip():
         prompt_data["project_rules"] = project_rules.strip()
 
-    if not instructions_at_top and user_instructions and user_instructions.strip():
-        prompt_data["user_instructions"] = user_instructions.strip()
+    if user_instructions and user_instructions.strip():
+        if instructions_at_top:
+            prompt_data["reminder"] = (
+                "REITERATION: Please follow the user_instructions provided at the beginning of this prompt."
+            )
+        else:
+            prompt_data["user_instructions"] = user_instructions.strip()
 
     return json.dumps(prompt_data, ensure_ascii=False, indent=2)
 
@@ -433,13 +453,18 @@ def _assemble_plain(
             )
         if semantic_index and semantic_index.strip():
             prompt_parts.append(
-                f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{semantic_index.strip()}"
+                f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{_strip_xml_simple(semantic_index)}"
             )
 
-    # Thêm Agent Role và File Summary ở đầu prompt
-    prompt_parts.append(
-        f"{'=' * 48}\nSYSTEM INSTRUCTION\n{'=' * 48}\n{AGENT_ROLE_INSTRUCTION}"
+    # Minimizing Agent Role in OPX mode
+    role = (
+        AGENT_ROLE_INSTRUCTION
+        if not include_xml_formatting
+        else "Analyze the provided codebase."
     )
+
+    # Thêm Agent Role và File Summary ở đầu prompt
+    prompt_parts.append(f"{'=' * 48}\nSYSTEM INSTRUCTION\n{'=' * 48}\n{role}")
 
     prompt_parts.append(
         f"{'=' * 48}\n"
@@ -453,9 +478,9 @@ def _assemble_plain(
     )
 
     if not instructions_at_top and semantic_index and semantic_index.strip():
-        # Clean tags if it's plain text mode? No, better keep it semantic.
+        # Clean tags for plain text mode
         prompt_parts.append(
-            f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{semantic_index.strip()}"
+            f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{_strip_xml_simple(semantic_index)}"
         )
 
     prompt_parts.append(f"{'=' * 48}\nDIRECTORY STRUCTURE\n{'=' * 48}\n{file_map}")
@@ -467,7 +492,7 @@ def _assemble_plain(
     if has_diffs:
         assert git_diffs is not None  # type narrowing cho Pyrefly
         prompt_parts.append(
-            f"{'-' * 32}\n"
+            f"{'=' * 48}\n"
             f"{GIT_DIFF_INSTRUCTION}\n\n"
             f"Work Tree Diff:\n{git_diffs.work_tree_diff or '(no changes)'}\n\n"
             f"Staged Diff:\n{git_diffs.staged_diff or '(no changes)'}"
@@ -477,11 +502,11 @@ def _assemble_plain(
     if has_logs:
         assert git_logs is not None  # type narrowing cho Pyrefly
         prompt_parts.append(
-            f"{'-' * 32}\n{GIT_LOG_INSTRUCTION}\n\nGit Logs:\n{git_logs.log_content}"
+            f"{'=' * 48}\n{GIT_LOG_INSTRUCTION}\n\nGit Logs:\n{git_logs.log_content}"
         )
 
     if include_xml_formatting:
-        prompt_parts.append(f"{'-' * 32}\n{XML_FORMATTING_INSTRUCTIONS}")
+        prompt_parts.append(f"{'=' * 48}\n{XML_FORMATTING_INSTRUCTIONS}")
 
     if not instructions_at_top and project_rules and project_rules.strip():
         prompt_parts.append(
@@ -494,13 +519,18 @@ def _assemble_plain(
 
         fmt = _get_output_format_only()
         if fmt:
-            prompt_parts.append(f"{'-' * 32}\nOUTPUT FORMAT:\n{fmt}")
+            prompt_parts.append(f"{'=' * 48}\nOUTPUT FORMAT:\n{fmt}")
 
-    # User instructions ở cuối cùng (recency bias giúp LLM xử lý tốt hơn) - nếu không ép instructions_at_top
-    if not instructions_at_top and user_instructions and user_instructions.strip():
-        prompt_parts.append(
-            f"{'=' * 48}\nUSER INSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
-        )
+    # User instructions ở cuối cùng (recency bias giúp LLM xử lý tốt hơn)
+    if user_instructions and user_instructions.strip():
+        if instructions_at_top:
+            prompt_parts.append(
+                f"{'=' * 48}\nREMINDER\n{'=' * 48}\nREITERATION: Please follow the user_instructions provided at the beginning of this prompt."
+            )
+        else:
+            prompt_parts.append(
+                f"{'=' * 48}\nUSER INSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
+            )
 
     return "\n\n".join(prompt_parts)
 
@@ -525,64 +555,61 @@ def _assemble_markdown(
     # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
     if instructions_at_top:
         if user_instructions and user_instructions.strip():
-            prompt += f"<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+            prompt += f"## User Instructions\n\n{user_instructions.strip()}\n\n"
         if project_rules and project_rules.strip():
-            prompt += f"<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
-        if prompt:
-            prompt += "\n"
+            prompt += f"## Project Rules\n\n{project_rules.strip()}\n\n"
+        if semantic_index and semantic_index.strip():
+            prompt += f"## Semantic Index\n\n{_strip_xml_simple(semantic_index)}\n\n"
 
-    # Header với Agent Role và File Summary
-    prompt += f"""<file_summary>
-{GENERATION_HEADER}
+    # Minimizing Agent Role logic (unified logic for all formats)
+    role = (
+        AGENT_ROLE_INSTRUCTION
+        if not include_xml_formatting
+        else "Analyze the provided codebase."
+    )
 
-<agent_role>
-{AGENT_ROLE_INSTRUCTION}
-</agent_role>
-
-<purpose>
-{SUMMARY_PURPOSE}
-</purpose>
-
-<file_format>
-{SUMMARY_FILE_FORMAT_MARKDOWN}
-</file_format>
-
-<usage_guidelines>
-{SUMMARY_USAGE_GUIDELINES}
-</usage_guidelines>
-
-<notes>
-{SUMMARY_NOTES}
-</notes>
-</file_summary>\n"""
+    # Header với Agent Role và File Summary (Markdown thuần)
+    prompt += f"## File Summary\n\n{GENERATION_HEADER}\n\n"
+    prompt += f"### Agent Role\n{role}\n\n"
+    prompt += f"### Purpose\n{SUMMARY_PURPOSE}\n\n"
+    prompt += f"### File Format\n{SUMMARY_FILE_FORMAT_MARKDOWN}\n\n"
+    prompt += f"### Usage Guidelines\n{SUMMARY_USAGE_GUIDELINES}\n\n"
+    prompt += f"### Notes\n{SUMMARY_NOTES}\n\n"
 
     # 3. Semantic Index (if not at top)
     if not instructions_at_top and semantic_index and semantic_index.strip():
-        prompt += f"{semantic_index.strip()}\n\n"
+        prompt += f"## Semantic Index\n\n{_strip_xml_simple(semantic_index)}\n\n"
 
-    prompt += f"""<file_map>
-{file_map}
-</file_map>
+    prompt += f"## Structure\n\n{file_map}\n\n"
+    prompt += f"## File Contents\n\n{file_contents}\n"
 
-<file_contents>
-{file_contents}
-</file_contents>
-"""
     prompt = _append_git_changes_markdown(prompt, git_diffs, git_logs)
 
     if not instructions_at_top and project_rules and project_rules.strip():
-        prompt += f"\n<project_rules>\n{project_rules.strip()}\n</project_rules>\n"
+        prompt += f"\n## Project Rules\n\n{project_rules.strip()}\n"
 
     if include_xml_formatting:
-        prompt += f"\n{XML_FORMATTING_INSTRUCTIONS}\n"
+        prompt += f"\n## Formatting Instructions\n\n{XML_FORMATTING_INSTRUCTIONS}\n"
     else:
         from domain.prompt.template_manager import _get_output_format_only
 
         fmt = _get_output_format_only()
         if fmt:
-            prompt += f"\n<output_format>\n{fmt}\n</output_format>\n"
+            prompt += f"\n## Output Format\n\n{fmt}\n"
 
-    if not instructions_at_top and user_instructions and user_instructions.strip():
-        prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
+    if user_instructions and user_instructions.strip():
+        if instructions_at_top:
+            prompt += "\n## Reminder\n\nREITERATION: Please follow the user_instructions provided at the beginning of this prompt.\n"
+        else:
+            prompt += f"\n## User Instructions\n\n{user_instructions.strip()}\n"
 
     return prompt
+
+
+def _strip_xml_simple(text: str) -> str:
+    """Loại bỏ các thẻ XML cơ bản để chuyển sang văn bản thuần túy."""
+    # Strip tags but keep inner content
+    text = re.sub(r"<[^>]+>", "", text)
+    # Clean up multiple newlines
+    text = re.sub(r"\n\s*\n", "\n\n", text)
+    return text.strip()

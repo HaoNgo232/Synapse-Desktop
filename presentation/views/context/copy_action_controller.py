@@ -193,6 +193,7 @@ def _build_fingerprint(
     h.update(f"xml={include_xml}\n".encode())
     h.update(f"top={instructions_at_top}\n".encode())
     h.update(f"full_tree={load_app_settings().include_full_tree}\n".encode())
+    h.update(f"semantic_index={load_app_settings().enable_semantic_index}\n".encode())
     # Note: though full_tree comes from UI toggle, it is synced to settings.
 
     # Instructions
@@ -324,6 +325,7 @@ class CopyActionViewProtocol(Protocol):
     def get_ignore_engine(self) -> Any: ...
     def get_copy_as_file(self) -> bool: ...
     def get_full_tree(self) -> bool: ...
+    def get_semantic_index(self) -> bool: ...
     def is_smart_mode_active(self) -> bool: ...
 
 
@@ -1050,6 +1052,7 @@ class CopyActionController(QObject):
                     include_xml_formatting=include_xml,
                     instructions_at_top=instructions_at_top,
                     full_tree=self._view.get_full_tree(),
+                    semantic_index=self._view.get_semantic_index(),
                 )
 
             snapshot = {"copy_mode": "Copy + OPX" if include_xml else "Copy Context"}
@@ -1136,6 +1139,7 @@ class CopyActionController(QObject):
                 tree_item=tree_item,
                 selected_paths=selected_path_strs,
                 full_tree=self._view.get_full_tree(),
+                semantic_index=self._view.get_semantic_index(),
             )
 
         # snapshot is now passed directly as pre_snapshot argument in run_copy

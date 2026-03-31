@@ -84,9 +84,15 @@ LANGUAGE_CONFIGS: list[LanguageConfig] = [
     ),
     LanguageConfig(
         name="typescript",
-        extensions=["ts", "tsx", "mts", "mtsx", "cts"],
+        extensions=["ts", "mts", "cts"],
         query=QUERY_TYPESCRIPT,
         loader=lambda: Language(tstypescript.language_typescript()),
+    ),
+    LanguageConfig(
+        name="tsx",
+        extensions=["tsx", "mtsx"],
+        query=QUERY_TYPESCRIPT,  # TSX shares same query
+        loader=lambda: Language(tstypescript.language_tsx()),
     ),
     LanguageConfig(
         name="rust",

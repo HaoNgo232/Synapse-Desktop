@@ -1,5 +1,5 @@
 """
-Prompt Helpers - Tách logic đếm token per-file và các utility ra khỏi PromptBuildService.
+Prompt Helpers - Separates token counting logic and utilities from PromptBuildService.
 """
 
 from pathlib import Path
@@ -20,7 +20,7 @@ def count_per_file_tokens(
     codemap_paths: Optional[Set[str]] = None,
 ) -> List[FileTokenInfo]:
     """
-    Dem token cho tung file rieng le de cung cap metadata chi tiet.
+    Counts tokens for each file individually to provide detailed metadata.
     """
     entries = collect_files(
         selected_paths={str(p) for p in file_paths},
@@ -73,7 +73,7 @@ def reconstruct_file_contents(
     trimmed_contents: Dict[str, str], output_format: str
 ) -> str:
     """
-    Re-format trimmed dictionary content vao string theo output_format.
+    Re-formats trimmed dictionary content into a string based on the output_format.
     """
     if not trimmed_contents:
         return ""
@@ -103,8 +103,8 @@ def compute_semantic_index(
     output_format: str = "xml",
 ) -> str:
     """
-    Tính toán semantic index (mối quan hệ giữa các files) cho prompt context.
-    Sử dụng GraphService để lấy thông tin dependency/inheritance.
+    Computes the semantic index (relationships between files) for the prompt context.
+    Uses GraphService to retrieve dependency/inheritance information.
     """
     if not graph_service:
         return ""
@@ -143,10 +143,11 @@ def build_smart_context_prompt(
     selected_paths: Optional[Set[str]] = None,
     instructions_at_top: bool = False,
     full_tree: bool = False,
+    semantic_index: bool = True,
 ) -> Tuple[str, str]:
     """
-    Build smart context prompt với code maps và relationships.
-    Trả về tuple (prompt, smart_contents) để caller có thể tính breakdown.
+    Builds a smart context prompt with code maps and relationships.
+    Returns a tuple (prompt, smart_contents) to allow the caller to calculate breakdown.
     """
     from domain.prompt.generator import (
         generate_smart_context,
@@ -159,12 +160,37 @@ def build_smart_context_prompt(
     path_strs = {str(p) for p in file_paths}
     project_rules = get_rule_file_contents(workspace)
 
-    smart_contents = generate_smart_context(
+    # 1. Generate Dependency Graph (PART 1)
+    from domain.codemap.dependency_graph_generator import DependencyGraphGenerator
+
+    graph_gen = DependencyGraphGenerator(workspace)
+
+    # Collect contents to extract relationships
+    file_contents_dict = {}
+    for p in file_paths:
+        try:
+            if p.is_file():
+                file_contents_dict[str(p)] = p.read_text(
+                    encoding="utf-8", errors="replace"
+                )
+        except Exception:
+            continue
+
+    dep_graph = graph_gen.generate_graph(file_contents_dict)
+
+    # 2. Generate File Contents (PART 2)
+    raw_smart_contents = generate_smart_context(
         selected_paths=path_strs,
-        include_relationships=True,
+        include_relationships=False,  # Claude Opus 4.6 specification does not require internal call graph
         workspace_root=workspace,
         use_relative_paths=use_relative_paths,
     )
+
+    # 3. Assemble Hybrid Context (Opus 4.6)
+    header_1 = "═══════════════════════════════════════\nPART 1: PROJECT DEPENDENCY GRAPH\n(File/module relationships — top-down view)\n═══════════════════════════════════════"
+    header_2 = "═══════════════════════════════════════\nPART 2: FILE CONTENTS (COMPRESSED)\n(Individual file content — signatures, types, contracts)\n═══════════════════════════════════════"
+
+    smart_contents = f"{header_1}\n\n{dep_graph}\n\n{header_2}\n\n{raw_smart_contents}"
 
     # Generate file map
     file_map = ""
@@ -185,7 +211,9 @@ def build_smart_context_prompt(
         git_logs = get_git_logs(workspace, max_commits=5)
 
     # Injected semantic index
-    semantic_index = compute_semantic_index(workspace, graph_service, "xml")
+    semantic_index_text = ""
+    if semantic_index:
+        semantic_index_text = compute_semantic_index(workspace, graph_service, "xml")
 
     prompt = build_smart_prompt(
         smart_contents=smart_contents,
@@ -196,7 +224,7 @@ def build_smart_context_prompt(
         project_rules=project_rules,
         workspace_root=workspace,
         instructions_at_top=instructions_at_top,
-        semantic_index=semantic_index,
+        semantic_index=semantic_index_text,
     )
 
     return prompt, smart_contents
@@ -215,7 +243,7 @@ def calculate_prompt_breakdown(
     output_format: str,
     total_token_count: int,
 ) -> Dict[str, int]:
-    """Tính toán chi tiết breakdown token cho prompt."""
+    """Calculates detailed token breakdown for the prompt."""
     breakdown = {
         "instruction_tokens": tokenization_service.count_tokens(instructions)
         if instructions
@@ -252,7 +280,7 @@ def calculate_prompt_breakdown(
                 opx_t = 0
         breakdown["opx_tokens"] = opx_t
 
-    # Tinh structure tokens (overhead cua tags va assembly)
+    # Calculate structure tokens (overhead from tags and assembly)
     sum_parts = sum(breakdown.values())
     breakdown["structure_tokens"] = max(0, total_token_count - sum_parts)
     return breakdown
@@ -274,15 +302,15 @@ def apply_context_trimming(
     output_format: str,
     include_xml_formatting: bool,
     instructions_at_top: bool,
-    semantic_index: str,
+    semantic_index_text: str,
     output_style: Any,
 ) -> Tuple[str, List[str]]:
-    """Thực hiện cắt giảm context khi vượt quá giới hạn token."""
+    """Performs context trimming when token limit is exceeded."""
     from domain.prompt.context_trimmer import ContextTrimmer, PromptComponents
     from domain.prompt.file_collector import collect_files
     from domain.prompt.generator import generate_prompt, build_smart_prompt
 
-    # Thu thap per-file contents de trimmer xu ly
+    # Collect per-file contents for the trimmer to process
     file_content_dict: Dict[str, str] = {}
     dep_display_paths: Set[str] = set()
     entries = collect_files(
@@ -344,7 +372,7 @@ def apply_context_trimming(
                 project_rules=trimmed_comp.project_rules,
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index,
+                semantic_index=semantic_index_text,
             )
         else:
             file_contents_trimmed = reconstruct_file_contents(
@@ -361,7 +389,7 @@ def apply_context_trimming(
                 project_rules=trimmed_comp.project_rules,
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index,
+                semantic_index=semantic_index_text,
             )
 
         # Append trimmed notes

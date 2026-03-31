@@ -27,7 +27,7 @@ def format_files_json(entries: list[FileEntry]) -> str:
     Returns:
         JSON string chua file paths va contents
     """
-    files_dict: dict[str, str] = {}
+    files_dict: dict[str, object] = {}
 
     for entry in entries:
         if entry.error:
@@ -38,6 +38,14 @@ def format_files_json(entries: list[FileEntry]) -> str:
             else:
                 files_dict[entry.display_path] = entry.error
         elif entry.content is not None:
-            files_dict[entry.display_path] = entry.content
+            file_obj: dict[str, object] = {"content": entry.content}
+            if entry.layer:
+                file_obj["layer"] = entry.layer
+            if entry.role:
+                file_obj["role"] = entry.role
+            if entry.dependencies:
+                file_obj["dependencies"] = entry.dependencies
+
+            files_dict[entry.display_path] = file_obj
 
     return json.dumps(files_dict, ensure_ascii=False)

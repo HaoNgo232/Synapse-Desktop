@@ -1,21 +1,23 @@
 """
 Smart Context Parser - Tree-sitter Code Structure Extraction
 
-Hợp nhất với Code Map Engine: Sử dụng Query-based (SCM) chuẩn hóa từ Domain.
-Cung cấp khả năng trích xuất cấu trúc code đa ngôn ngữ chính xác cao cho Smart Context.
+Unified with Code Map Engine: Uses standardized Query-based (SCM) from Domain.
+Provides high-precision multilingual code structure extraction for Smart Context.
 """
 
 import logging
 import os
 import threading
+from pathlib import Path
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
-# Chunk separator giống Repomix
+# Chunk separator as per Opus 4.6 specification
 CHUNK_SEPARATOR = "⋮----"
+SECTION_SEPARATOR = "⋮----"  # Used for both Part 1 and Part 2 separation
 
-# LRU Cache cho relationships
+# LRU Cache for relationships
 _CACHE_MAX_SIZE = int(os.environ.get("SYNAPSE_RELATIONSHIP_CACHE_SIZE", "128"))
 _RELATIONSHIPS_CACHE: dict[str, str] = {}
 _CACHE_LOCK = threading.Lock()
@@ -44,15 +46,25 @@ def _cache_relationships(
 
 
 def smart_parse(
-    file_path: str, content: str, include_relationships: bool = False
+    file_path: str,
+    content: str,
+    include_relationships: bool = False,
+    workspace_root: Optional[str] = None,
+    all_files_content: Optional[dict[str, str]] = None,
 ) -> Optional[str]:
     """
-    Parse file content và trích xuất cấu trúc code (Smart Context).
-    SỬ DỤNG CHUNG ENGINE VỚI CODE MAP ĐỂ ĐẠT ĐỘ CHÍNH XÁC CAO NHẤT.
+    Parses file content and extracts code structure (Hybrid Compressed Context).
+    According to Opus 4.6 specification:
+    Part 1: Project Dependency Graph (If requested/with workspace_root)
+    Part 2: Compressed File Contents (Signatures, types, imports - bodies stripped)
     """
-    # Tránh Circular Import bằng cách import local
     from domain.codemap.symbol_extractor import extract_symbols
+    from domain.codemap.relationship_extractor import extract_relationships
+    from domain.codemap.types import RelationshipKind
     from domain.smart_context.config import is_supported
+    from domain.smart_context.loader import get_language
+    from domain.codemap.dependency_graph_generator import DependencyGraphGenerator
+    from tree_sitter import Parser
 
     _, ext = os.path.splitext(file_path)
     ext = ext.lstrip(".")
@@ -61,36 +73,71 @@ def smart_parse(
         return None
 
     try:
-        # Sử dụng Code Map Engine
-        symbols = extract_symbols(file_path, content)
-        if not symbols:
+        language = get_language(ext)
+        if not language:
+            logger.debug(f"Language loader failed for extension: {ext}")
             return None
 
+        parser = Parser(language)
+        tree = parser.parse(bytes(content, "utf-8"))
+
+        # 1. Extract Symbols (Signatures)
+        symbols = extract_symbols(file_path, content)
+        # Don't return None immediately here; try to get at least imports
+
+        # 2. Extract Imports
+        relationships = extract_relationships(
+            file_path,
+            content,
+            tree=tree,
+            language=language,
+            workspace_root=Path(workspace_root) if workspace_root else None,
+        )
+        imports = [r for r in relationships if r.kind == RelationshipKind.IMPORTS]
+
+        # Get raw import lines from content
+        lines = content.split("\n")
+        import_lines = []
+        seen_import_rows = set()
+        for imp in imports:
+            row = imp.source_line - 1
+            if row < len(lines) and row not in seen_import_rows:
+                import_lines.append(lines[row].strip())
+                seen_import_rows.add(row)
+
         chunks: List[str] = []
-        for s in symbols:
-            if s.name == "📍 [ENTRY POINT]":
-                chunks.append(f"// {s.signature}")
-                continue
 
-            # Format Smart Context tinh gọn
-            kind_prefix = f"[{s.kind.name}] " if s.kind.name != "VARIABLE" else ""
-            prefix = f"{s.parent} > " if s.parent else ""
-            line_info = f" (L{s.line_start}-{s.line_end})"
+        # Add imports to the beginning (if any)
+        if import_lines:
+            chunks.append("\n".join(import_lines))
 
-            chunk = f"{kind_prefix}{prefix}{s.signature}{line_info}"
-            chunks.append(chunk)
+        # 3. Add Symbol Signatures
+        if symbols:
+            for s in symbols:
+                if s.name == "[ENTRY POINT]":
+                    chunks.append(f"// {s.signature}")
+                    continue
+                # Signature extraction (already contains decorators/docstrings from SymbolExtractor)
+                chunk = s.signature if s.signature else s.name
+                chunks.append(chunk)
+        elif not import_lines:
+            # If both symbols and imports are missing, the file is either empty or structure parsing failed
+            return f"// FILE: {file_path} (Empty or unextractable)"
 
-        result = f"\n{CHUNK_SEPARATOR}\n".join(chunks)
+        # Assemble Compressed Content
+        compressed_content = f"\n{CHUNK_SEPARATOR}\n".join(chunks)
 
-        if include_relationships:
-            relationships_section = _build_relationships_section(file_path, content)
-            if relationships_section:
-                result += f"\n\n{relationships_section}"
+        # 4. Part 1: Dependency Graph (Only if requested and multiple files context is provided)
+        if workspace_root and all_files_content:
+            graph_gen = DependencyGraphGenerator(Path(workspace_root))
+            graph_output = graph_gen.generate_graph(all_files_content)
+            if graph_output:
+                return f"{graph_output}\n\n{SECTION_SEPARATOR}\n\n{compressed_content}"
 
-        return result
+        return compressed_content
 
     except Exception as e:
-        logger.debug("smart_parse failed: %s", e)
+        logger.error("smart_parse failed for %s: %s", file_path, e, exc_info=True)
         return None
 
 

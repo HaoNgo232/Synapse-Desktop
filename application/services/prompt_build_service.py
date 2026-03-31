@@ -85,6 +85,7 @@ class PromptBuildService:
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
         full_tree: bool = False,
+        semantic_index: bool = False,
     ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt theo output format (backward-compatible API).
@@ -123,6 +124,7 @@ class PromptBuildService:
             codemap_paths=codemap_paths,
             instructions_at_top=instructions_at_top,
             full_tree=full_tree,
+            semantic_index=semantic_index,
         )
         return result.to_legacy_tuple()
 
@@ -143,6 +145,7 @@ class PromptBuildService:
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
         full_tree: bool = False,
+        semantic_index: bool = True,
     ) -> BuildResult:
         """
         Generate prompt và trả về BuildResult đầy đủ với metadata.
@@ -203,7 +206,7 @@ class PromptBuildService:
         git_diffs = None
         git_logs = None
         file_contents = ""
-        semantic_index = ""
+        semantic_index_text = ""
         output_style = _FORMAT_TO_STYLE["xml"]
 
         if output_format == "smart":
@@ -218,6 +221,7 @@ class PromptBuildService:
                 selected_paths,
                 instructions_at_top=instructions_at_top,
                 full_tree=full_tree,
+                semantic_index=semantic_index,
             )
             self._last_smart_contents = smart_contents
         else:
@@ -279,9 +283,11 @@ class PromptBuildService:
                 except Exception as e:
                     logger.warning("Failed to ensure graph built: %s", e)
 
-            semantic_index = compute_semantic_index(
-                workspace, self._graph_service, output_format
-            )
+            semantic_index_text = ""
+            if semantic_index:
+                semantic_index_text = compute_semantic_index(
+                    workspace, self._graph_service, output_format
+                )
 
             from domain.prompt.generator import generate_prompt
 
@@ -296,7 +302,7 @@ class PromptBuildService:
                 project_rules=project_rules,
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index,
+                semantic_index=semantic_index_text,
             )
 
         token_count = self._tokenization_service.count_tokens(prompt)
@@ -352,7 +358,7 @@ class PromptBuildService:
                 output_format,
                 include_xml_formatting,
                 instructions_at_top,
-                semantic_index,
+                semantic_index_text,
                 output_style,
             )
             if notes:

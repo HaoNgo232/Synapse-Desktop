@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import threading
+import pickle
+import os
 from pathlib import Path
-from typing import Optional, Dict, Tuple, Any
+from typing import Optional, Any
+from collections import OrderedDict
 
 from domain.relationships.builder import GraphBuilder
 from domain.relationships.graph import RelationshipGraph
@@ -47,8 +50,12 @@ class GraphService(IRelationshipGraphProvider):
         self._building: bool = False
         self._ignore_engine = ignore_engine
 
-        # AST Tree Cache: source_abs -> (mtime, tree, content_hash) (Phase 4)
-        self._tree_cache: Dict[str, Tuple[float, Any, int]] = {}
+        # AST Tree + Adjacency Cache: source_abs -> (mtime, tree, hash, targets) (Phase 5)
+        # Sử dụng OrderedDict để implement LRU eviction
+        self._tree_cache: OrderedDict[str, tuple[float, Any, str, set[str]]] = (
+            OrderedDict()
+        )
+        self._MAX_TREE_CACHE = 500
 
     # ===== IRelationshipGraphProvider API =====
 
@@ -125,8 +132,15 @@ class GraphService(IRelationshipGraphProvider):
         start = time.time()
 
         try:
+            # Tải cache từ disk nếu bộ nhớ rỗng (Lần đầu khởi động app)
+            if not self._tree_cache:
+                self.load_cache(workspace_root)
+
             # Build bên ngoài lock để không block readers
             graph = self._build_graph_sync(workspace_root)
+
+            # Lưu cache sau khi hoàn tất build
+            self.save_cache(workspace_root)
         except Exception as e:
             # Bug #3 Fix: Reset flag nếu build thất bại
             with self._lock:
@@ -261,4 +275,64 @@ class GraphService(IRelationshipGraphProvider):
             imports_max_depth=2,
             tree_cache=self._tree_cache,  # Pass cache to builder
         )
+
+        # LRU Eviction: Giới hạn bộ nhớ cho AST trees
+        while len(self._tree_cache) > self._MAX_TREE_CACHE:
+            self._tree_cache.popitem(last=False)
+
         return graph
+
+    def save_cache(self, workspace_root: Path) -> None:
+        """Lưu Adjacency Cache xuống ổ đĩa (.synapse/graph_cache.pkl)."""
+        from shared.logging_config import log_info, log_error
+
+        cache_dir = workspace_root / ".synapse"
+        cache_file = cache_dir / "graph_cache.pkl"
+
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            # CHUẨN BỊ DATA: KHÔNG lưu Tree object vì là C-native, chỉ lưu mtime, hash, targets
+            # record: (mtime, tree, hash, targets) -> (mtime, None, hash, targets)
+            savable_cache = OrderedDict()
+            with self._lock:
+                for path, data in self._tree_cache.items():
+                    # data: (mtime, tree, hash, targets)
+                    savable_cache[path] = (data[0], None, data[2], data[3])
+
+            with open(cache_file, "wb") as f:
+                pickle.dump(savable_cache, f)
+
+            log_info(
+                f"[GraphService] Performance cache saved: {len(savable_cache)} files"
+            )
+        except Exception as e:
+            log_error(f"[GraphService] Failed to save cache: {e}")
+
+    def load_cache(self, workspace_root: Path) -> None:
+        """Tải Adjacency Cache từ ổ đĩa."""
+        from shared.logging_config import log_info
+
+        cache_file = workspace_root / ".synapse" / "graph_cache.pkl"
+        if not cache_file.exists():
+            return
+
+        try:
+            with open(cache_file, "rb") as f:
+                loaded_cache = pickle.load(f)
+
+            if isinstance(loaded_cache, (dict, OrderedDict)):
+                with self._lock:
+                    # Update local cache, giữ nguyên tree nếu đã có (Dù load_cache thường gọi lúc khởi động)
+                    for path, data in loaded_cache.items():
+                        if path not in self._tree_cache:
+                            self._tree_cache[path] = data
+                log_info(
+                    f"[GraphService] Performance cache loaded: {len(loaded_cache)} files"
+                )
+        except Exception:
+            # Xóa cache file nếu bị lỗi (checksum mismatch, etc.)
+            try:
+                os.remove(cache_file)
+            except Exception:
+                pass

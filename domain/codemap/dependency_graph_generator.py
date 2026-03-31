@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from application.services.dependency_resolver import DependencyResolver
 
 
@@ -10,16 +10,22 @@ class DependencyGraphGenerator:
     Thể hiện quan hệ giữa các file trong project dưới dạng flat list.
     """
 
-    def __init__(self, workspace_root: Path):
+    def __init__(
+        self, workspace_root: Path, resolver: Optional[DependencyResolver] = None
+    ):
         """
         Khởi tạo DependencyGraphGenerator.
 
         Args:
             workspace_root: Root path của workspace
+            resolver: Optional DependencyResolver đã build sẵn index
         """
         self.workspace_root = workspace_root
-        self.resolver = DependencyResolver(workspace_root)
-        self.resolver.build_file_index_from_disk(workspace_root)
+        if resolver:
+            self.resolver = resolver
+        else:
+            self.resolver = DependencyResolver(workspace_root)
+            self.resolver.build_file_index_from_disk(workspace_root)
 
     def generate_graph(self, file_contents: Dict[str, str]) -> str:
         """

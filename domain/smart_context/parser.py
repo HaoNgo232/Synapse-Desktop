@@ -9,7 +9,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ def smart_parse(
     include_relationships: bool = False,
     workspace_root: Optional[str] = None,
     all_files_content: Optional[dict[str, str]] = None,
+    resolver: Optional[Any] = None,  # NEW: hỗ trợ inject resolver
 ) -> Optional[str]:
     """
     Parses file content and extracts code structure (Hybrid Compressed Context).
@@ -81,8 +82,8 @@ def smart_parse(
         parser = Parser(language)
         tree = parser.parse(bytes(content, "utf-8"))
 
-        # 1. Extract Symbols (Signatures)
-        symbols = extract_symbols(file_path, content)
+        # 1. Extract Symbols (Signatures) - Reuse tree đã parse
+        symbols = extract_symbols(file_path, content, tree=tree, language=language)
         # Don't return None immediately here; try to get at least imports
 
         # 2. Extract Imports
@@ -129,7 +130,10 @@ def smart_parse(
 
         # 4. Part 1: Dependency Graph (Only if requested and multiple files context is provided)
         if workspace_root and all_files_content:
-            graph_gen = DependencyGraphGenerator(Path(workspace_root))
+            # Inject resolver để tránh rebuild index (Full Directory Walk)
+            graph_gen = DependencyGraphGenerator(
+                Path(workspace_root), resolver=resolver
+            )
             graph_output = graph_gen.generate_graph(all_files_content)
             if graph_output:
                 return f"{graph_output}\n\n{SECTION_SEPARATOR}\n\n{compressed_content}"

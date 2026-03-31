@@ -10,23 +10,31 @@ from domain.codemap.types import Symbol, SymbolKind
 from domain.smart_context.loader import get_language
 
 
-def extract_symbols(file_path: str, content: str) -> List[Symbol]:
+def extract_symbols(
+    file_path: str,
+    content: str,
+    tree=None,  # NEW: hỗ trợ reuse tree
+    language=None,  # NEW: hỗ trợ reuse language
+) -> List[Symbol]:
     """
-    Extracts all symbols using Tree-sitter Queries (SCM).
-    Queries reside in domain/codemap/queries/ to ensure Domain-driven architecture.
+    Trích xuất tất cả symbols sử dụng Tree-sitter Queries (SCM).
+    Các queries nằm ở domain/codemap/queries/ để đảm bảo kiến trúc Domain-driven.
     """
     suffix = Path(file_path).suffix
     if not suffix:
         return []
 
     ext = suffix.lstrip(".")
-    language = get_language(ext)
+    if language is None:
+        language = get_language(ext)
     if not language:
         return []
 
     try:
-        parser = Parser(language)
-        tree = parser.parse(bytes(content, "utf-8"))
+        if tree is None:
+            parser = Parser(language)
+            tree = parser.parse(bytes(content, "utf-8"))
+
         if not tree or not tree.root_node:
             return []
 
@@ -114,8 +122,9 @@ def _get_query_for_extension(ext: str, language) -> Optional[Query]:
     if cache_key in _QUERY_CACHE:
         return _QUERY_CACHE[cache_key]
 
-    # IMPORTANT: Path has been moved to domain/codemap/queries/
-    query_path = Path("domain/codemap/queries") / f"{lang_name}-tags.scm"
+    # SCM Queries nằm trong thư mục queries cùng cấp với file này
+    query_dir = Path(__file__).resolve().parent / "queries"
+    query_path = query_dir / f"{lang_name}-tags.scm"
 
     if query_path.exists():
         try:
@@ -152,20 +161,23 @@ def _tag_to_kind(tag: str, ext: str) -> SymbolKind:
 
 
 def _find_parent_name(node: Node, symbols: List[Symbol]) -> Optional[str]:
-    """Finds the parent symbol."""
-    curr = node.parent
-    while curr:
-        start, end = curr.start_point[0] + 1, curr.end_point[0] + 1
-        for s in symbols:
-            if s.line_start <= start and s.line_end >= end:
-                if s.kind in [
-                    SymbolKind.CLASS,
-                    SymbolKind.MODULE,
-                    SymbolKind.INTERFACE,
-                    SymbolKind.STRUCT,
-                ]:
-                    return s.name
-        curr = curr.parent
+    """Tìm tên của symbol chứa node này (Parent)."""
+    target_start = node.start_point[0] + 1
+    target_end = node.end_point[0] + 1
+
+    # Vì symbols được sorted theo line_start, ta tìm ngược từ cuối (LIFO)
+    # để lấy được child gần nhất chứa node này (Innermost match)
+    for s in reversed(symbols):
+        if s.kind not in [
+            SymbolKind.CLASS,
+            SymbolKind.MODULE,
+            SymbolKind.INTERFACE,
+            SymbolKind.STRUCT,
+        ]:
+            continue
+        # Kiểm tra boundary (s bao quanh node)
+        if s.line_start <= target_start and s.line_end >= target_end:
+            return s.name
     return None
 
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 import os
 import concurrent.futures
+import time
+import hashlib
 from pathlib import Path
 from typing import Iterable, Optional, Dict, Set, List, Any
 from dataclasses import dataclass
@@ -23,8 +25,8 @@ class FileProcessingResult:
     direct_imports: set[str]
     symbols: list[tuple[str, str]]  # list of (symbol_name, file_abs)
     relationships: List[Any]  # list of Relationship objects
-    tree_info: Optional[tuple[str, tuple[float, Any, int]]] = (
-        None  # (path, (mtime, tree, hash))
+    tree_info: Optional[tuple[str, tuple[float, Any, str, set[str]]]] = (
+        None  # (path, (mtime, tree, hash, targets))
     )
 
 
@@ -42,7 +44,7 @@ class GraphBuilder:
         existing_resolver: Optional[DependencyResolver] = None,
         max_codemap_files: int = 500,
         imports_max_depth: int = 2,
-        tree_cache: Optional[dict[str, tuple[float, Any, int]]] = None,
+        tree_cache: Optional[dict[str, tuple[float, Any, str, set[str]]]] = None,
     ) -> RelationshipGraph:
         """
         Build RelationshipGraph sử dụng chiến lược Unified Parallel Pass.
@@ -58,6 +60,17 @@ class GraphBuilder:
 
         if not normalized_files:
             return graph
+
+        from shared.logging_config import log_info
+
+        # Performance counters
+        stats = {
+            "total_files": len(normalized_files),
+            "codemap_files": 0,
+            "tree_cache_hits": 0,
+            "tree_cache_misses": 0,
+            "start_time": time.perf_counter(),
+        }
 
         # 2. Chuẩn bị Resolver (Cần thiết để resolve import names)
         resolver = existing_resolver or DependencyResolver(self._workspace_root)
@@ -86,9 +99,15 @@ class GraphBuilder:
             }
             for future in concurrent.futures.as_completed(future_to_file):
                 try:
-                    res = future.result()
+                    res, f_stats = future.result()
                     if res:
                         results.append(res)
+                        if f_stats.get("is_codemap"):
+                            stats["codemap_files"] += 1
+                            if f_stats.get("cache_hit"):
+                                stats["tree_cache_hits"] += 1
+                            else:
+                                stats["tree_cache_misses"] += 1
                 except Exception:
                     continue
 
@@ -157,6 +176,15 @@ class GraphBuilder:
                     )
                 )
 
+        duration = time.perf_counter() - stats["start_time"]
+        log_info(
+            f"[GraphBuilder] Build finished in {duration:.2f}s:\n"
+            f"  - Total files: {stats['total_files']}\n"
+            f"  - CodeMap files processed: {stats['codemap_files']}\n"
+            f"  - Tree cache hit: {stats['tree_cache_hits']}\n"
+            f"  - Tree cache miss: {stats['tree_cache_misses']}"
+        )
+
         return graph
 
     def _process_file(
@@ -164,51 +192,79 @@ class GraphBuilder:
         file_path: Path,
         resolver: DependencyResolver,
         do_codemap: bool,
-        old_tree_data: Optional[tuple[float, Any, int]] = None,
-    ) -> Optional[FileProcessingResult]:
+        old_tree_data: Optional[tuple[float, Any, str, set[str]]] = None,
+    ) -> tuple[Optional[FileProcessingResult], dict]:
         """
         Xử lý đơn lẻ một file: Read disk (1 lần) + Parse AST (1 lần) + Extract Multi-Extractors.
-        Hỗ trợ Incremental Parsing bằng cách dùng hash reuse (Phase 4).
+        Returns (Result, Stats)
         """
+        stats = {"is_codemap": do_codemap, "cache_hit": False}
         try:
             source_abs = str(file_path.resolve())
             content = file_path.read_text(encoding="utf-8", errors="ignore")
-            content_hash = hash(content)
+            # MD5 hash is stable across Python sessions (hash() is not)
+            content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
             mtime = file_path.stat().st_mtime
 
-            # --- Pha 1: Extract Quick Imports ---
-            direct_deps = resolver.get_related_files_with_depth(file_path, max_depth=1)
+            # --- Pha 1: Extract Quick Imports (With Adjacency Cache) ---
             targets = set()
-            for target_path, _ in direct_deps.items():
-                if target_path.exists():
-                    try:
-                        targets.add(str(target_path.resolve()))
-                    except OSError:
-                        targets.add(str(target_path))
+
+            # Reuse targets if content hasn't changed (Phase 5 Incremental Optimization)
+            if old_tree_data and old_tree_data[2] == content_hash:
+                targets = old_tree_data[3]  # Reuse targets
+                stats["cache_hit"] = True
+            else:
+                direct_deps = resolver.get_related_files_with_depth(
+                    file_path, max_depth=1
+                )
+                for target_path, _ in direct_deps.items():
+                    if target_path.exists():
+                        try:
+                            targets.add(str(target_path.resolve()))
+                        except OSError:
+                            targets.add(str(target_path))
 
             # Nếu không cần CodeMap, thoát sớm để tiết kiệm CPU
             if not do_codemap:
-                return FileProcessingResult(source_abs, targets, [], [], None)
+                return FileProcessingResult(
+                    source_abs,
+                    targets,
+                    [],
+                    [],
+                    (source_abs, (mtime, None, content_hash, targets)),
+                ), stats
 
-            # --- Pha 2: Extract Symbols & Relationships ---
             ext = file_path.suffix.lstrip(".")
             language = get_language(ext)
             if not language:
-                return FileProcessingResult(source_abs, targets, [], [], None)
+                return FileProcessingResult(source_abs, targets, [], [], None), stats
 
             # PHASE 4: CONTENT HASH REUSE
             tree = None
-            if old_tree_data and old_tree_data[2] == content_hash:
+            if (
+                old_tree_data
+                and old_tree_data[2] == content_hash
+                and old_tree_data[1] is not None
+            ):
                 tree = old_tree_data[1]
+                stats["cache_hit"] = True  # Giữ nguyên hoặc cộng dồn hit
             else:
                 parser = Parser(language)
                 tree = parser.parse(bytes(content, "utf-8"))
 
             if not tree or not tree.root_node:
-                return FileProcessingResult(source_abs, targets, [], [], None)
+                return FileProcessingResult(
+                    source_abs,
+                    targets,
+                    [],
+                    [],
+                    (source_abs, (mtime, None, content_hash, targets)),
+                ), stats
 
-            # 2a. Symbols
-            symbols_raw = extract_symbols(str(file_path), content)
+            # 2a. Symbols (Reuse tree đã parse)
+            symbols_raw = extract_symbols(
+                str(file_path), content, tree=tree, language=language
+            )
             symbols = []
             for sym in symbols_raw:
                 if sym.kind in (
@@ -232,8 +288,8 @@ class GraphBuilder:
                 targets,
                 symbols,
                 relationships,
-                tree_info=(source_abs, (mtime, tree, content_hash)),
-            )
+                tree_info=(source_abs, (mtime, tree, content_hash, targets)),
+            ), stats
 
         except Exception:
-            return None
+            return None, stats

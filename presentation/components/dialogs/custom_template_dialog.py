@@ -26,11 +26,15 @@ from domain.prompt.template_manager import CUSTOM_TEMPLATES_DIR
 class CustomTemplateDialog(QDialog):
     """Dialog tao moi Custom Template."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, template_id: str = None):
         super().__init__(parent)
-        self.setWindowTitle("Create Custom Template")
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(400)
+        self.template_id = template_id
+        if self.template_id:
+            self.setWindowTitle("Edit Custom Template")
+        else:
+            self.setWindowTitle("Create Custom Template")
+        self.setMinimumWidth(900)
+        self.setMinimumHeight(700)
         self.setStyleSheet(
             f"""
             QDialog {{
@@ -73,6 +77,8 @@ class CustomTemplateDialog(QDialog):
             """
         )
         self._build_ui()
+        if self.template_id:
+            self._load_existing_data()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -125,6 +131,22 @@ class CustomTemplateDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
+    def _load_existing_data(self):
+        """Load dữ liệu template cũ vào fields."""
+        from domain.prompt.template_manager import get_template_info, load_template
+
+        try:
+            info = get_template_info(self.template_id)
+            content = load_template(self.template_id)
+
+            self.name_input.setText(info.display_name)
+            self.desc_input.setText(info.description)
+            self.content_input.setPlainText(content)
+            
+            self.btn_save.setText("Update Template")
+        except Exception as e:
+            QMessageBox.warning(self, "Lỗi", f"Không thể load dữ liệu template: {e}")
+
     def _generate_filename(self, name: str) -> str:
         """Sinh ten file tu ten template, tranh ki tu dac biet."""
         clean_name = re.sub(r"[^a-zA-Z0-9\s-]", "", name).strip()
@@ -145,14 +167,15 @@ class CustomTemplateDialog(QDialog):
             return
 
         filename = self._generate_filename(name)
+        new_template_id = filename.replace(".md", "")
         file_path = CUSTOM_TEMPLATES_DIR / filename
 
-        # Kiem tra trung lap
-        if file_path.exists():
+        # Kiem tra trung lap: Neu la create moi hoac edit sang ten moi ma trung file da co
+        if file_path.exists() and (not self.template_id or self.template_id != new_template_id):
             reply = QMessageBox.question(
                 self,
                 "Ghi đè",
-                f"Template '{filename}' đã tồn tại.\nBạn có muốn ghi đè không?",
+                f"Template '{filename}' đã tồn tại.\nBạn có muốn ghi đè lên template hiện có không?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.No:
@@ -165,8 +188,20 @@ class CustomTemplateDialog(QDialog):
         try:
             # Dam bao thu muc ton tai
             os.makedirs(CUSTOM_TEMPLATES_DIR, exist_ok=True)
+            
+            # Ghi file moi/update truoc
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(full_content)
+                
+            # Neu dang edit va doi ten (dan den doi filename) thanh cong -> xoa file cu
+            if self.template_id and self.template_id != new_template_id:
+                old_path = CUSTOM_TEMPLATES_DIR / f"{self.template_id}.md"
+                if old_path.exists():
+                    try:
+                        old_path.unlink()
+                    except OSError:
+                        # Neu khong xoa duoc file cu cung khong block user, chi log lai
+                        pass
 
             self.accept()
         except Exception as e:

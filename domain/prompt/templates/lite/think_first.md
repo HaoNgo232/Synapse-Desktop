@@ -4,3 +4,5 @@ MANDATORY THINKING PROCESS:
 <thinking>
 [Step-by-step execution reasoning here]
 </thinking>
+
+{{Your prompt here}}

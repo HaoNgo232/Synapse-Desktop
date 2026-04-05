@@ -808,6 +808,10 @@ class ContextViewQt(
             action_type = data.get("action")
             template_id = str(data.get("id", ""))
 
+            if action_type == "edit" and template_id:
+                self._show_custom_template_dialog(template_id)
+                return
+
             if action_type == "delete" and template_id:
                 reply = QMessageBox.question(
                     self,
@@ -839,15 +843,16 @@ class ContextViewQt(
         except Exception as e:
             self._show_status(f"Failed to load template: {e}", is_error=True)
 
-    def _show_custom_template_dialog(self) -> None:
-        """Hien thi dialog cho phep tao Custom Template."""
+    def _show_custom_template_dialog(self, template_id: str = None) -> None:
+        """Hien thi dialog cho phep tao/sua Custom Template."""
         from presentation.components.dialogs.custom_template_dialog import (
             CustomTemplateDialog,
         )
 
-        dialog = CustomTemplateDialog(self)
+        dialog = CustomTemplateDialog(self, template_id=template_id)
         if dialog.exec():
-            self._show_status("Custom template saved! You can now use it.")
+            status = "Custom template saved!" if not template_id else "Template updated!"
+            self._show_status(status)
 
     @Slot()
     def _populate_template_menu(self) -> None:
@@ -884,6 +889,9 @@ class ContextViewQt(
 
                 ins = sub.addAction("Insert")
                 ins.setData({"action": "insert", "id": tmpl.template_id})
+
+                edt = sub.addAction("Edit")
+                edt.setData({"action": "edit", "id": tmpl.template_id})
 
                 sub.addSeparator()
 

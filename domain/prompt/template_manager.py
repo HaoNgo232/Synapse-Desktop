@@ -186,7 +186,7 @@ class BuiltInTemplateProvider(TemplateProvider):
             "think_first": TemplateInfo(
                 template_id="think_first",
                 display_name="Think-first",
-                description="Bắt buộc agent viết <thinking> block với reasoning chi tiết trước khi trả lời cuối cùng",
+                description="Kích hoạt mô hình suy luận Chain-of-Thought (CoT). Phù hợp cho các model không hỗ trợ native Reasoning tự nhiên.",
                 is_custom=False,
                 has_lite=True,
             ),

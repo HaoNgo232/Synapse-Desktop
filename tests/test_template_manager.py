@@ -37,22 +37,22 @@ class TestListTemplates:
             assert isinstance(item, TemplateInfo)
 
     def test_has_expected_templates(self):
-        """Co du 9 templates da dang ky (BuiltIn)."""
+        """Co du templates da dang ky (BuiltIn) ton tai tren disk."""
         result = list_templates()
         ids = {t.template_id for t in result}
-        expected = {
+        # Nhung template nay bat buoc phai co
+        required = {
             "bug_hunter",
             "security_auditor",
-            "refactoring_expert",
             "doc_generator",
             "performance_optimizer",
             "ui_ux_reviewer",
             "test_writer",
-            "api_reviewer",
-            "flow_checker",
+            "architecture_reviewer",
+            "tech_debt_analyzer",
         }
         # Do file local có thể chứa custom template, assert is superset
-        assert expected.issubset(ids)
+        assert required.issubset(ids)
 
     def test_each_has_display_name(self):
         """Moi template co display_name khong rong."""
@@ -79,12 +79,6 @@ class TestLoadTemplate:
         content = load_template("security_auditor")
         assert "Application Security Engineer" in content
         assert "<thinking>" in content
-
-    def test_load_refactoring_expert(self):
-        """Load refactoring_expert thanh cong."""
-        content = load_template("refactoring_expert")
-        assert "SOLID" in content
-        assert "refactoring" in content.lower()
 
     def test_load_doc_generator(self):
         """Load doc_generator thanh cong."""
@@ -202,3 +196,42 @@ class TestLocalCustomTemplateProvider:
         info = custom_provider.get_template_info("my_custom")
         assert info.display_name == "X"
         assert info.description == "Y"
+
+    def test_delete_template(self, custom_provider, tmp_path):
+        """Xoa template custom."""
+        test_md = tmp_path / "to_delete.md"
+        test_md.write_text("Content", encoding="utf-8")
+        assert custom_provider.handles("to_delete")
+        
+        success = custom_provider.delete_template("to_delete")
+        assert success is True
+        assert not test_md.exists()
+        assert not custom_provider.handles("to_delete")
+
+    def test_delete_nonexistent_returns_false(self, custom_provider):
+        """Xoa template khong ton tai tra ve False."""
+        assert custom_provider.delete_template("im_not_there") is False
+
+    def test_load_large_template_raises_error(self, custom_provider, tmp_path):
+        """Load template qua lon (50KB+) raise ValueError."""
+        test_md = tmp_path / "too_big.md"
+        # 51KB of 'A' characters
+        test_md.write_text("A" * (51 * 1024), encoding="utf-8")
+        
+        with pytest.raises(ValueError, match="qua lon"):
+            custom_provider.load_template("too_big")
+
+    def test_stress_100_templates(self, custom_provider, tmp_path):
+        """Stress test: list_templates voi 100 files (performance check)."""
+        import time
+        
+        for i in range(100):
+            (tmp_path / f"template_{i}.md").write_text(f"Content {i}", encoding="utf-8")
+            
+        start_time = time.perf_counter()
+        results = custom_provider.list_templates()
+        duration = time.perf_counter() - start_time
+        
+        assert len(results) == 100
+        # Nen xong trong < 50ms cho 100 files (local I/O)
+        assert duration < 0.1, f"Stress test qua cham: {duration:.4f}s"

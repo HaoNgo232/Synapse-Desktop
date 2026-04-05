@@ -1,7 +1,7 @@
 """
 OPX (Overwrite Patch XML) Instruction - System Prompt constant
 
-Translated from: /home/hao/Desktop/labs/overwrite/src/prompts/xml-instruction.ts
+Translated from: src/prompts/xml-instruction.ts
 This is the instruction given to LLMs to format their responses in OPX format.
 """
 

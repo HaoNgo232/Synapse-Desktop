@@ -27,6 +27,8 @@ from infrastructure.git.git_utils import (
     filter_diff_by_files,
 )
 
+REPO_ROOT = Path(__file__).parent.parent
+
 
 class TestIsGitRepo:
     """Test is_git_repo() function."""
@@ -48,13 +50,13 @@ class TestIsGitRepo:
             assert result is False
 
     @pytest.mark.skipif(
-        not os.path.exists("/home/hao/Desktop/labs/synapse-desktop/.git"),
+        not (REPO_ROOT / ".git").exists(),
         reason="Not running in git repo",
     )
     def test_actual_git_repo(self):
         """Actual git repo returns True."""
         # Sử dụng thư mục project hiện tại (đã biết là git repo)
-        result = is_git_repo(Path("/home/hao/Desktop/labs/synapse-desktop"))
+        result = is_git_repo(REPO_ROOT)
         assert result is True
 
 
@@ -267,25 +269,25 @@ class TestIntegration:
     """Integration tests với actual git commands (nếu available)."""
 
     @pytest.mark.skipif(
-        not os.path.exists("/home/hao/Desktop/labs/synapse-desktop/.git"),
+        not (REPO_ROOT / ".git").exists(),
         reason="Not running in git repo",
     )
     def test_get_git_diffs_real(self):
         """Get diffs from actual git repo."""
-        result = get_git_diffs(Path("/home/hao/Desktop/labs/synapse-desktop"))
+        result = get_git_diffs(REPO_ROOT)
 
         # Có thể là None nếu không có changes, nhưng không nên error
         if result is not None:
             assert isinstance(result, GitDiffResult)
 
     @pytest.mark.skipif(
-        not os.path.exists("/home/hao/Desktop/labs/synapse-desktop/.git"),
+        not (REPO_ROOT / ".git").exists(),
         reason="Not running in git repo",
     )
     def test_get_git_logs_real(self):
         """Get logs from actual git repo."""
         result = get_git_logs(
-            Path("/home/hao/Desktop/labs/synapse-desktop"), max_commits=3
+            REPO_ROOT, max_commits=3
         )
 
         assert result is not None

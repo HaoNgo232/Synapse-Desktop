@@ -1,7 +1,7 @@
 """
 OPX (Overwrite Patch XML) Parser
 
-Port truc tiep tu: /home/hao/Desktop/labs/overwrite/src/utils/xml-parser.ts
+Port truc tiep tu: src/utils/xml-parser.ts
 Giu nguyen tat ca regex patterns va logic de dam bao behavior giong het.
 
 OPX-only: accepts <edit ...> (optionally wrapped in <opx>...</opx>)

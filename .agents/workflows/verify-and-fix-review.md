@@ -38,7 +38,7 @@ Workflow này giúp bạn xác minh xem các bug được báo cáo trong Review
 ```python
 import sys
 from pathlib import Path
-sys.path.append("/home/hao/Desktop/labs/Synapse-Desktop")
+sys.path.append(str(Path(__file__).resolve().parents[1])) # Points to project root
 # Import các module cần test...
 
 def test_bug_x():

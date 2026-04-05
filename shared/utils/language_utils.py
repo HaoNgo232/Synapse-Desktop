@@ -1,7 +1,7 @@
 """
 Language Utilities - Nhận diện ngôn ngữ cho syntax highlighting
 
-Port từ: /home/hao/Desktop/labs/pastemax/src/utils/languageUtils.ts
+Port từ: src/utils/languageUtils.ts
 
 Module này cung cấp khả năng nhận diện ngôn ngữ lập trình toàn diện
 dựa trên tên file và extension, tối ưu hóa cho LLM code blocks.

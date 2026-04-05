@@ -6,7 +6,7 @@ from domain.codemap.dependency_graph_generator import DependencyGraphGenerator
 
 class TestDependencyGraphGenerator(unittest.TestCase):
     def setUp(self):
-        self.workspace_root = Path("/home/hao/Desktop/labs/Synapse-Desktop")
+        self.workspace_root = Path(__file__).parent.parent.parent.parent
 
         # Patch DependencyResolver before initializing generator
         with patch(

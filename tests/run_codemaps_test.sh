@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script để chạy CodeMaps demo test trong venv
 
-cd /home/hao/Desktop/labs/Synapse-Desktop
+cd "$(dirname "$0")/.."
 
 # Activate venv (same as start.sh)
 VENV_DIR=".venv"

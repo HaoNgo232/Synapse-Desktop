@@ -128,6 +128,14 @@ def smart_parse(
         # Assemble Compressed Content
         compressed_content = f"\n{CHUNK_SEPARATOR}\n".join(chunks)
 
+        # 3.5 Build and Append Relationships Section if requested
+        if include_relationships:
+            rel_section = _build_relationships_section(
+                file_path, content, tree=tree, language=language
+            )
+            if rel_section:
+                compressed_content += f"\n\n{rel_section}"
+
         # 4. Part 1: Dependency Graph (Only if requested and multiple files context is provided)
         if workspace_root and all_files_content:
             # Inject resolver để tránh rebuild index (Full Directory Walk)

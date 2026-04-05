@@ -689,9 +689,12 @@ def generate_smart_context(
             if not is_supported(ext):
                 return (path, None, f"Smart Context not available for .{ext} files")
 
-            # Try Smart Parse voi relationships neu enabled
+            # Try Smart Parse với relationships nếu enabled
             smart_content = smart_parse(
-                path_str, raw_content, include_relationships=include_relationships
+                path_str,
+                raw_content,
+                include_relationships=include_relationships,
+                workspace_root=str(workspace_root) if workspace_root else None,
             )
 
             if smart_content:

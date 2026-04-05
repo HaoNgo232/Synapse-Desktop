@@ -16,31 +16,35 @@ echo -e "${GREEN}=== Synapse Desktop Startup Script ===${NC}\n"
 
 # Check if virtual environment exists
 if [ ! -d "$VENV_DIR" ]; then
-    echo -e "${YELLOW}Virtual environment does not exist at: $VENV_DIR${NC}"
-    read -p "Do you want to create a virtual environment? (y/n): " -n 1 -r
-    echo
+    echo -e "${YELLOW}[INFO] Virtual environment not found. Creating at: $VENV_DIR...${NC}"
+    python3 -m venv "$VENV_DIR"
     
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}Creating virtual environment...${NC}"
-        python3 -m venv "$VENV_DIR"
-        
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Error: Could not create virtual environment!${NC}"
-            echo -e "${YELLOW}Please check if python3-venv is installed.${NC}"
-            echo -e "${YELLOW}Run: sudo apt install python3-venv${NC}"
-            exit 1
-        fi
-        
-        echo -e "${GREEN}Virtual environment created successfully!${NC}\n"
-    else
-        echo -e "${RED}Cannot continue without a virtual environment.${NC}"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Could not create virtual environment!${NC}"
+        echo -e "${YELLOW}Please check if python3-venv is installed.${NC}"
+        echo -e "${YELLOW}Run: sudo apt install python3-venv${NC}"
         exit 1
     fi
+    
+    echo -e "${GREEN}[INFO] Virtual environment created successfully!${NC}"
+    
+    # Activate and install dependencies immediately for first-time setup
+    source "$VENV_DIR/bin/activate"
+    if [ -f "$REQUIREMENTS_FILE" ]; then
+        echo -e "${GREEN}[INFO] Installing dependencies...${NC}"
+        python3 -m pip install --upgrade pip
+        pip install -r "$REQUIREMENTS_FILE"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Failed to install dependencies!${NC}"
+            exit 1
+        fi
+    fi
+    echo -e "${GREEN}[INFO] Setup complete!${NC}\n"
+else
+    # Activate existing virtual environment
+    echo -e "${GREEN}Activating virtual environment...${NC}"
+    source "$VENV_DIR/bin/activate"
 fi
-
-# Activate virtual environment
-echo -e "${GREEN}Activating virtual environment...${NC}"
-source "$VENV_DIR/bin/activate"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Could not activate virtual environment!${NC}"

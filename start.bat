@@ -12,41 +12,34 @@ echo.
 
 REM Check if virtual environment exists
 if not exist "%VENV_DIR%\Scripts\activate.bat" (
-    echo Virtual environment does not exist at: %VENV_DIR%
-    set /p REPLY="Do you want to create a virtual environment? (y/n): "
-    if /i "!REPLY!"=="y" (
-        echo Creating virtual environment...
-        python -m venv "%VENV_DIR%"
+    echo [INFO] Virtual environment not found. Creating at: %VENV_DIR%...
+    python -m venv "%VENV_DIR%"
+    if errorlevel 1 (
+        echo [ERROR] Could not create virtual environment!
+        echo Make sure Python 3.12+ is installed and in PATH.
+        pause
+        exit /b 1
+    )
+    
+    echo [INFO] Activating virtual environment and installing dependencies...
+    call "%VENV_DIR%\Scripts\activate.bat"
+    
+    if exist "%REQUIREMENTS_FILE%" (
+        echo [INFO] Installing requirements...
+        python -m pip install --upgrade pip
+        pip install -r "%REQUIREMENTS_FILE%"
         if errorlevel 1 (
-            echo [ERROR] Could not create virtual environment!
-            echo Make sure Python 3.12+ is installed and in PATH.
+            echo [ERROR] Failed to install dependencies!
             pause
             exit /b 1
         )
-        echo Virtual environment created successfully!
-        echo.
-    ) else (
-        echo Cannot continue without a virtual environment.
-        pause
-        exit /b 1
     )
-)
-
-REM Activate virtual environment
-echo Activating virtual environment...
-call "%VENV_DIR%\Scripts\activate.bat"
-
-REM Install dependencies
-if exist "%REQUIREMENTS_FILE%" (
-    echo Installing dependencies from %REQUIREMENTS_FILE%...
-    pip install -r "%REQUIREMENTS_FILE%"
-    if errorlevel 1 (
-        echo [ERROR] Failed to install dependencies!
-        pause
-        exit /b 1
-    )
-    echo Dependencies installed successfully!
+    echo [INFO] Setup complete!
     echo.
+) else (
+    REM Activate existing virtual environment
+    echo [INFO] Activating virtual environment...
+    call "%VENV_DIR%\Scripts\activate.bat"
 )
 
 REM Check main_window.py

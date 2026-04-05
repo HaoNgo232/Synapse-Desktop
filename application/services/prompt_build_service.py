@@ -34,6 +34,7 @@ _FORMAT_TO_STYLE = {
     "xml": OutputStyle.XML,
     "json": OutputStyle.JSON,
     "plain": OutputStyle.PLAIN,
+    "smart": OutputStyle.XML,  # XML style for smart by default
 }
 
 # Mapping output_format string -> content generator function
@@ -239,15 +240,26 @@ class PromptBuildService:
 
         # 3. Generate file contents
         all_path_strs = {str(p) for p in all_file_paths}
-        content_gen = _FORMAT_TO_GENERATOR.get(
-            output_format, _FORMAT_TO_GENERATOR["xml"]
-        )
-        file_contents = content_gen(
-            selected_paths=all_path_strs,
-            workspace_root=workspace,
-            use_relative_paths=use_relative_paths,
-            codemap_paths=normalized_codemap,
-        )
+        
+        if output_format == "smart":
+            from domain.prompt.generator import generate_smart_context
+            file_contents = generate_smart_context(
+                selected_paths=all_path_strs,
+                workspace_root=workspace,
+                use_relative_paths=use_relative_paths,
+                # Smart context depends on the same semantic_index toggle for its internal detail level
+                include_relationships=semantic_index,
+            )
+        else:
+            content_gen = _FORMAT_TO_GENERATOR.get(
+                output_format, _FORMAT_TO_GENERATOR["xml"]
+            )
+            file_contents = content_gen(
+                selected_paths=all_path_strs,
+                workspace_root=workspace,
+                use_relative_paths=use_relative_paths,
+                codemap_paths=normalized_codemap,
+            )
 
         # 4. Assemble prompt
         # Ensure graph is built before computing semantic index (Guaranteed Semantic)
@@ -264,21 +276,34 @@ class PromptBuildService:
                 workspace, self._graph_service, output_format
             )
 
-        from domain.prompt.generator import generate_prompt
+        from domain.prompt.generator import generate_prompt, build_smart_prompt
 
-        prompt = generate_prompt(
-            file_map=file_map,
-            file_contents=file_contents,
-            user_instructions=instructions,
-            output_style=output_style,
-            include_xml_formatting=include_xml_formatting,
-            git_diffs=git_diffs,
-            git_logs=git_logs,
-            project_rules=project_rules,
-            workspace_root=workspace,
-            instructions_at_top=instructions_at_top,
-            semantic_index=semantic_index_text,
-        )
+        if output_format == "smart":
+            prompt = build_smart_prompt(
+                smart_contents=file_contents,
+                file_map=file_map,
+                user_instructions=instructions,
+                git_diffs=git_diffs,
+                git_logs=git_logs,
+                project_rules=project_rules,
+                workspace_root=workspace,
+                instructions_at_top=instructions_at_top,
+                semantic_index=semantic_index_text,
+            )
+        else:
+            prompt = generate_prompt(
+                file_map=file_map,
+                file_contents=file_contents,
+                user_instructions=instructions,
+                output_style=output_style,
+                include_xml_formatting=include_xml_formatting,
+                git_diffs=git_diffs,
+                git_logs=git_logs,
+                project_rules=project_rules,
+                workspace_root=workspace,
+                instructions_at_top=instructions_at_top,
+                semantic_index=semantic_index_text,
+            )
 
         token_count = self._tokenization_service.count_tokens(prompt)
 

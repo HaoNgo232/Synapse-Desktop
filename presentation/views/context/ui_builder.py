@@ -162,7 +162,7 @@ class UIBuilderMixin:
             }}
             QToolButton:hover {{ background: {ThemeColors.BG_HOVER}; }}
             QToolButton::menu-indicator {{
-                image: url({os.path.join(assets_dir, "arrow-down.svg")});
+                image: url({os.path.join(assets_dir, "arrow-down.svg").replace("\\", "/")});
                 subcontrol-origin: padding; subcontrol-position: center right;
                 right: 6px; width: 8px; height: 8px;
             }}
@@ -215,7 +215,7 @@ class UIBuilderMixin:
             }}
             QToolButton:hover {{ background: {ThemeColors.BG_HOVER}; }}
             QToolButton::menu-indicator {{
-                image: url({os.path.join(assets_dir, "arrow-down.svg")});
+                image: url({os.path.join(assets_dir, "arrow-down.svg").replace("\\", "/")});
                 subcontrol-origin: padding; subcontrol-position: center right;
                 right: 6px; width: 8px; height: 8px;
             }}
@@ -398,7 +398,7 @@ class UIBuilderMixin:
                 border-color: {ThemeColors.BORDER_LIGHT};
             }}
             QToolButton::menu-indicator {{
-                image: url({os.path.join(assets_dir, "arrow-down.svg")});
+                image: url({os.path.join(assets_dir, "arrow-down.svg").replace("\\", "/")});
                 subcontrol-origin: padding;
                 subcontrol-position: center right;
                 right: 8px;
@@ -482,7 +482,7 @@ class UIBuilderMixin:
                 border-color: {ThemeColors.BORDER_LIGHT};
             }}
             QToolButton::menu-indicator {{
-                image: url({os.path.join(assets_dir, "arrow-down.svg")});
+                image: url({os.path.join(assets_dir, "arrow-down.svg").replace("\\", "/")});
                 subcontrol-origin: padding;
                 subcontrol-position: center right;
                 right: 8px;

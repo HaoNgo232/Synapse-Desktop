@@ -897,7 +897,7 @@ class FileTreeModel(QAbstractItemModel):
         # Emit dataChanged for updated files + their ancestor folders (visible in tree)
         changed_nodes: Set[TreeNode] = set()
         workspace_path_str = (
-            self._workspace_path.as_posix() if self._workspace_path else ""
+            str(self._workspace_path) if self._workspace_path else ""
         )
 
         # Neu counts empty (force refresh), notify tat ca selected paths
@@ -913,8 +913,8 @@ class FileTreeModel(QAbstractItemModel):
 
             # 2. Notify all ancestors (if in tree) — important for lazy-loaded folders
             p = Path(path).parent
-            while str(p) != "/" and len(str(p)) >= len(workspace_path_str):
-                p_str = p.as_posix()
+            while p != p.parent and len(str(p)) >= len(workspace_path_str):
+                p_str = str(p)
                 parent_node = self._path_to_node.get(p_str)
                 if parent_node:
                     changed_nodes.add(parent_node)
@@ -1231,7 +1231,9 @@ class FileTreeModel(QAbstractItemModel):
 
         total = 0
         has_any = False
-        folder_prefix = node.path + "/"
+        import os
+        sep = os.path.sep
+        folder_prefix = node.path if node.path.endswith(sep) else node.path + sep
 
         # O(N) fallback nhưng được cached
         for file_path, count in self._token_cache.items():

@@ -131,48 +131,55 @@ $hiddenImports = @(
     # --- PySide6 plugins (platform-specific, not always detected) ---
     "PySide6.QtSvg",
     "PySide6.QtSvgWidgets",
-    # --- Services loaded via lazy import ---
-    "application.services.settings_manager",
-    "application.services.history_service",
-    "application.services.file_watcher",
+    # --- Persistence / Infrastructure ---
+    "infrastructure.persistence.settings_manager",
+    "infrastructure.persistence.history_service",
+    "infrastructure.adapters.cache_registry",
+    "infrastructure.adapters.clipboard_utils",
+    "infrastructure.adapters.safe_timer",
+    "infrastructure.adapters.security_check",
+    "infrastructure.adapters.token_display",
+    "infrastructure.adapters.qt_utils",
+    # --- Filesystem / Git ---
+    "infrastructure.filesystem.file_watcher.service",
+    "infrastructure.filesystem.file_actions",
+    "infrastructure.filesystem.file_scanner",
+    "infrastructure.filesystem.file_utils",
+    "infrastructure.filesystem.ignore_engine",
+    "infrastructure.git.git_utils",
+    "infrastructure.git.repo_manager",
+    # --- Application Layer ---
     "application.services.prompt_build_service",
     "application.services.ai_context_worker",
     "application.services.workspace_config",
-    "shared.utils.clipboard_utils",
     "application.services.preview_analyzer",
-    "shared.utils.error_context",
-    "infrastructure.persistence.cache_registry",
-    # --- Core/Domain modules loaded lazily ---
-    "domain.opx.parser",
-    "infrastructure.adapters.file_actions",
+    "application.services.error_context",
+    "application.services.graph_service",
+    "application.services.tokenization_service",
+    # --- Domain Layer ---
+    "domain.prompt.opx_parser",
     "domain.prompt.generator",
-    "domain.security.security_check",
-    "domain.ignore.ignore_engine",
-    "infrastructure.persistence.token_cache",
-    "shared.concurrency.cancellation",
-    "domain.smart_context.parser",
-    "infrastructure.adapters.openai_provider",
     "domain.prompt.template_manager",
     "domain.prompt.context_builder_prompts",
-    "shared.concurrency.safe_timer",
-    "infrastructure.adapters.git_utils",
-    "shared.utils.file_utils",
-    "infrastructure.adapters.repo_manager",
-    "presentation.theme_qss",
-    # --- View mixins ---
-    "presentation.views.context._ui_builder",
-    "presentation.views.context._copy_actions",
-    "presentation.views.context._related_files",
-    "presentation.views.context._tree_management",
-    # --- Components loaded lazily ---
+    "domain.prompt.assembler",
+    "domain.tokenization.cancellation",
+    "domain.smart_context.parser",
+    "domain.smart_context.config",
+    "domain.smart_context.loader",
+    # --- Presentation / UI ---
+    "presentation.config.theme_qss",
+    "presentation.config.output_format",
+    "presentation.config.model_config",
+    "presentation.views.context.ui_builder",
+    "presentation.views.context.copy_action_controller",
+    "presentation.views.context.related_files_controller",
+    "presentation.views.context.tree_management_controller",
+    "presentation.components.dialogs.custom_template_dialog",
+    "presentation.components.file_tree.file_tree_widget",
+    "presentation.components.file_tree.file_tree_model",
     "presentation.components.diff_viewer_qt",
     "presentation.components.toggle_switch",
     "presentation.components.tag_chips_widget",
-    "presentation.components.custom_template_dialog",
-    "presentation.components.file_tree_widget",
-    # --- Config ---
-    "presentation.config.output_format",
-    "presentation.config.model_config",
     # --- Optional Rust-accelerated libraries ---
     "scandir_rs",
     "rs_bpe",
@@ -188,11 +195,13 @@ $hiddenImports = @(
     "qtawesome",
     "requests",
     "tokenizers",
-    # --- Standard library modules sometimes missed ---
+    # --- Standard library ---
     "multiprocessing",
     "json",
     "threading",
-    "concurrent.futures"
+    "concurrent.futures",
+    "logging",
+    "inspect"
 )
 
 $hiddenImportArgs = @()

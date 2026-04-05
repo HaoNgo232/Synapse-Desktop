@@ -117,7 +117,7 @@ class PresetWidget(QWidget):
                 border-color: {ThemeColors.BORDER};
             }}
             QToolButton::menu-indicator {{
-                image: url({arrow_icon});
+                image: url({arrow_icon.replace("\\", "/")});
                 subcontrol-origin: padding;
                 subcontrol-position: center right;
                 right: 6px;

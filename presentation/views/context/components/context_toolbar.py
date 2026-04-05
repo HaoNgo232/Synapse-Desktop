@@ -5,10 +5,15 @@ Chứa các bộ lọc, selector model/format và thông số token.
 
 import os
 import sys
-from typing import Optional, List
+from typing import Optional
 
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QToolButton, QMenu, QSizePolicy
+    QFrame,
+    QHBoxLayout,
+    QToolButton,
+    QMenu,
+    QSizePolicy,
+    QWidget,
 )
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon
@@ -16,12 +21,17 @@ from PySide6.QtGui import QIcon
 from presentation.config.theme import ThemeColors
 from presentation.components.token_usage_bar import TokenUsageBar
 from presentation.config.output_format import (
-    OUTPUT_FORMATS, OutputStyle, DEFAULT_OUTPUT_STYLE, get_format_config, get_style_by_id
+    OUTPUT_FORMATS,
+    DEFAULT_OUTPUT_STYLE,
+    get_style_by_id,
 )
 from presentation.config.model_config import (
-    MODEL_CONFIGS, _format_context_length, get_model_by_id, DEFAULT_MODEL_ID
+    MODEL_CONFIGS,
+    _format_context_length,
+    get_model_by_id,
+    DEFAULT_MODEL_ID,
 )
-from infrastructure.persistence.settings_manager import load_app_settings
+from application.services.settings_service import load_app_settings
 
 
 class ContextToolbar(QFrame):
@@ -33,7 +43,7 @@ class ContextToolbar(QFrame):
     format_changed = Signal(str)
     model_changed = Signal(str)
 
-    def __init__(self, parent: Optional[QFrame] = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setFixedHeight(48)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -51,11 +61,11 @@ class ContextToolbar(QFrame):
     def _get_assets_dir(self) -> str:
         if hasattr(sys, "_MEIPASS"):
             return os.path.join(sys._MEIPASS, "assets")
-        
+
         # presentation/views/context/components/context_toolbar.py -> assets/
-        return os.path.abspath(os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "assets"
-        ))
+        return os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets")
+        )
 
     def _build_ui(self) -> None:
         layout = QHBoxLayout(self)
@@ -137,7 +147,9 @@ class ContextToolbar(QFrame):
             self._related_btn.setIcon(QIcon(layers_path))
         self._related_btn.setText("Related: Off")
         self._related_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self._related_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._related_btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
         self._related_btn.setIconSize(QSize(14, 14))
         self._related_btn.setFixedHeight(30)
         self._related_btn.setStyleSheet(f"""
@@ -159,11 +171,21 @@ class ContextToolbar(QFrame):
         related_menu = QMenu(self._related_btn)
         related_menu.addAction("Off", lambda: self.related_mode_changed.emit(False, 0))
         related_menu.addSeparator()
-        related_menu.addAction("Direct imports (1 hop)", lambda: self.related_mode_changed.emit(True, 1))
-        related_menu.addAction("Nearby files (2 hops)", lambda: self.related_mode_changed.emit(True, 2))
-        related_menu.addAction("Extended chain (3 hops)", lambda: self.related_mode_changed.emit(True, 3))
-        related_menu.addAction("Wide discovery (4 hops)", lambda: self.related_mode_changed.emit(True, 4))
-        related_menu.addAction("Maximum depth (5 hops)", lambda: self.related_mode_changed.emit(True, 5))
+        related_menu.addAction(
+            "Direct imports (1 hop)", lambda: self.related_mode_changed.emit(True, 1)
+        )
+        related_menu.addAction(
+            "Nearby files (2 hops)", lambda: self.related_mode_changed.emit(True, 2)
+        )
+        related_menu.addAction(
+            "Extended chain (3 hops)", lambda: self.related_mode_changed.emit(True, 3)
+        )
+        related_menu.addAction(
+            "Wide discovery (4 hops)", lambda: self.related_mode_changed.emit(True, 4)
+        )
+        related_menu.addAction(
+            "Maximum depth (5 hops)", lambda: self.related_mode_changed.emit(True, 5)
+        )
         self._related_btn.setMenu(related_menu)
         layout.addWidget(self._related_btn)
 
@@ -203,11 +225,13 @@ class ContextToolbar(QFrame):
                 right: 8px; width: 8px; height: 8px;
             }}
         """)
-        
+
         format_menu = QMenu(self._format_btn)
         for cfg in OUTPUT_FORMATS.values():
             action = format_menu.addAction(cfg.name)
-            action.triggered.connect(lambda checked=False, fid=cfg.id: self.format_changed.emit(fid))
+            action.triggered.connect(
+                lambda checked=False, fid=cfg.id: self.format_changed.emit(fid)
+            )
         self._format_btn.setMenu(format_menu)
         layout.addWidget(self._format_btn)
 
@@ -217,12 +241,14 @@ class ContextToolbar(QFrame):
         self._model_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._model_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self._model_btn.setStyleSheet(self._format_btn.styleSheet())
-        
+
         model_menu = QMenu(self._model_btn)
         for m in MODEL_CONFIGS:
             label = f"{m.name} ({_format_context_length(m.context_length)})"
             action = model_menu.addAction(label)
-            action.triggered.connect(lambda checked=False, mid=m.id: self.model_changed.emit(mid))
+            action.triggered.connect(
+                lambda checked=False, mid=m.id: self.model_changed.emit(mid)
+            )
         self._model_btn.setMenu(model_menu)
         layout.addWidget(self._model_btn)
 
@@ -232,7 +258,9 @@ class ContextToolbar(QFrame):
         layout.addWidget(self.token_usage_bar)
 
         # Initialize labels
-        self.update_format_display(load_app_settings().output_format or DEFAULT_OUTPUT_STYLE.value)
+        self.update_format_display(
+            load_app_settings().output_format or DEFAULT_OUTPUT_STYLE.value
+        )
         self.update_model_display(load_app_settings().model_id or DEFAULT_MODEL_ID)
 
     def update_format_display(self, format_id: str) -> None:
@@ -243,7 +271,9 @@ class ContextToolbar(QFrame):
     def update_model_display(self, model_id: str) -> None:
         m_cfg = get_model_by_id(model_id) or get_model_by_id(DEFAULT_MODEL_ID)
         if m_cfg:
-            self._model_btn.setText(f"{m_cfg.name} ({_format_context_length(m_cfg.context_length)})")
+            self._model_btn.setText(
+                f"{m_cfg.name} ({_format_context_length(m_cfg.context_length)})"
+            )
 
     def update_related_button_text(self, active: bool, depth: int, count: int) -> None:
         if not active:

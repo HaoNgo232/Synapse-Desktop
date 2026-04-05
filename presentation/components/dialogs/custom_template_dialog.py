@@ -6,6 +6,7 @@ Cho phep nguoi dung tao va luu cac custom markdown templates vao thu muc config.
 
 import os
 import re
+from typing import Optional, cast
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -26,7 +27,7 @@ from domain.prompt.template_manager import CUSTOM_TEMPLATES_DIR
 class CustomTemplateDialog(QDialog):
     """Dialog tao moi Custom Template."""
 
-    def __init__(self, parent=None, template_id: str = None):
+    def __init__(self, parent=None, template_id: Optional[str] = None):
         super().__init__(parent)
         self.template_id = template_id
         if self.template_id:
@@ -136,13 +137,13 @@ class CustomTemplateDialog(QDialog):
         from domain.prompt.template_manager import get_template_info, load_template
 
         try:
-            info = get_template_info(self.template_id)
-            content = load_template(self.template_id)
+            info = get_template_info(cast(str, self.template_id))
+            content = load_template(cast(str, self.template_id))
 
             self.name_input.setText(info.display_name)
             self.desc_input.setText(info.description)
             self.content_input.setPlainText(content)
-            
+
             self.btn_save.setText("Update Template")
         except Exception as e:
             QMessageBox.warning(self, "Lỗi", f"Không thể load dữ liệu template: {e}")
@@ -171,7 +172,9 @@ class CustomTemplateDialog(QDialog):
         file_path = CUSTOM_TEMPLATES_DIR / filename
 
         # Kiem tra trung lap: Neu la create moi hoac edit sang ten moi ma trung file da co
-        if file_path.exists() and (not self.template_id or self.template_id != new_template_id):
+        if file_path.exists() and (
+            not self.template_id or self.template_id != new_template_id
+        ):
             reply = QMessageBox.question(
                 self,
                 "Ghi đè",
@@ -188,11 +191,11 @@ class CustomTemplateDialog(QDialog):
         try:
             # Dam bao thu muc ton tai
             os.makedirs(CUSTOM_TEMPLATES_DIR, exist_ok=True)
-            
+
             # Ghi file moi/update truoc
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(full_content)
-                
+
             # Neu dang edit va doi ten (dan den doi filename) thanh cong -> xoa file cu
             if self.template_id and self.template_id != new_template_id:
                 old_path = CUSTOM_TEMPLATES_DIR / f"{self.template_id}.md"

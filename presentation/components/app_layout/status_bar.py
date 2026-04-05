@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtWidgets import QStatusBar, QLabel
-from PySide6.QtCore import Qt
 
 from presentation.config.theme import ThemeColors, ThemeFonts
 

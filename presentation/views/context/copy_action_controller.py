@@ -38,7 +38,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 
 from domain.codemap.tree_map_generator import generate_tree_map_only
 from infrastructure.filesystem.file_utils import scan_directory, TreeItem
-from infrastructure.persistence.settings_manager import load_app_settings
+from application.services.settings_service import load_app_settings
 from application.services.workspace_config import (
     get_excluded_patterns,
     get_use_gitignore,
@@ -536,7 +536,7 @@ class CopyActionController(QObject):
         read-modify-write duoc bao ve boi lock, tranh mat du lieu
         khi user click copy nhanh lien tiep.
         """
-        from infrastructure.persistence.settings_manager import add_instruction_history
+        from application.services.settings_service import add_instruction_history
 
         add_instruction_history(text)
 

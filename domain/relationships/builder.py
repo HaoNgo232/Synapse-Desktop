@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from tree_sitter import Parser  # type: ignore
 
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 from domain.codemap.relationship_extractor import extract_relationships
 from domain.codemap.symbol_extractor import extract_symbols
 from domain.codemap.types import RelationshipKind, SymbolKind

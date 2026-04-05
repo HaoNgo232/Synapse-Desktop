@@ -50,7 +50,7 @@ def build_hybrid_investigation_graph(
     Returns:
         List[InvestigationNode] theo thứ tự priority
     """
-    from application.services.dependency_resolver import DependencyResolver
+    from domain.codemap.dependency_resolver import DependencyResolver
     from domain.codemap.graph_builder import CodeMapBuilder
 
     max_depth = max(1, min(max_depth, 5))

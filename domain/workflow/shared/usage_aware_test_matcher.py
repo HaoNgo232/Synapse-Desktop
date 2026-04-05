@@ -92,7 +92,7 @@ def _match_by_import(
     matches: List[str] = []
 
     try:
-        from application.services.dependency_resolver import DependencyResolver
+        from domain.codemap.dependency_resolver import DependencyResolver
 
         resolver = DependencyResolver(workspace_root)
         resolver.build_file_index_from_disk(workspace_root)

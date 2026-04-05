@@ -145,7 +145,7 @@ $hiddenImports = @(
     "infrastructure.filesystem.file_actions",
     "infrastructure.filesystem.file_scanner",
     "infrastructure.filesystem.file_utils",
-    "infrastructure.filesystem.ignore_engine",
+    "domain.filesystem.ignore_engine",
     "infrastructure.git.git_utils",
     "infrastructure.git.repo_manager",
     # --- Application Layer ---

@@ -12,11 +12,11 @@ def test_main_window_initialization(qtbot):
         patch("presentation.main_window.get_memory_monitor"),
         patch("presentation.components.toast.toast_qt.init_toast_manager"),
         patch(
-            "infrastructure.persistence.session_state.load_session_state",
+            "presentation.main_window.load_session_state",
             return_value=None,
         ),
         patch(
-            "infrastructure.persistence.recent_folders.load_recent_folders",
+            "presentation.main_window.load_recent_folders",
             return_value=[],
         ),
     ):
@@ -27,11 +27,11 @@ def test_main_window_initialization(qtbot):
         assert "No project open" in window.windowTitle()
 
         # Kiểm tra số lượng tab
-        assert window.tab_widget.count() == 5
+        assert window.tab_widget.count() == 4
 
-        # Thử chuyển tab sang Settings (index 4)
-        window.tab_widget.setCurrentIndex(4)
-        assert window._current_tab_index == 4
+        # Thử chuyển tab sang Settings (index 3)
+        window.tab_widget.setCurrentIndex(3)
+        assert window._current_tab_index == 3
 
 
 def test_main_window_open_folder(qtbot, tmp_path):
@@ -40,11 +40,11 @@ def test_main_window_open_folder(qtbot, tmp_path):
         patch("presentation.main_window.get_memory_monitor"),
         patch("presentation.components.toast.toast_qt.init_toast_manager"),
         patch(
-            "infrastructure.persistence.session_state.load_session_state",
+            "presentation.main_window.load_session_state",
             return_value=None,
         ),
         patch(
-            "infrastructure.persistence.recent_folders.load_recent_folders",
+            "presentation.main_window.load_recent_folders",
             return_value=[],
         ),
     ):
@@ -63,5 +63,5 @@ def test_main_window_open_folder(qtbot, tmp_path):
             assert window.workspace_path == Path(fake_dir)
 
             # Kiểm tra text label của status bar và breadcrumb
-            assert fake_dir in window._status_workspace.text()
-            assert fake_dir in window._folder_path_label.text()
+            assert fake_dir in window.status_bar._status_workspace.text()
+            assert fake_dir in window.top_bar._folder_path_label.text()

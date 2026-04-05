@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from infrastructure.filesystem.file_utils import scan_directory_shallow
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from application.services.workspace_config import (
     add_excluded_patterns,
     remove_excluded_patterns,

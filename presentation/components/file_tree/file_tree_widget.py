@@ -43,7 +43,7 @@ from PySide6.QtGui import QIcon
 
 from presentation.config.theme import ThemeColors
 from infrastructure.adapters.qt_utils import DebouncedTimer
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from presentation.components.file_tree.file_tree_model import (
     FileTreeModel,
     TokenCountWorker,
@@ -943,7 +943,7 @@ class FileTreeWidget(QWidget):
 
             # Kiểm tra nếu thực sự khác với model state thì mới apply
             model_selected = self._model.get_all_selected_paths()
-            
+
             if is_windows:
                 norm_model = {p.lower() for p in model_selected}
                 norm_absolute = {p.lower() for p in absolute_selected}

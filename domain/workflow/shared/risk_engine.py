@@ -46,7 +46,7 @@ def analyze_blast_radius(
     Returns:
         BlastRadiusResult với structured analysis
     """
-    from application.services.dependency_resolver import DependencyResolver
+    from domain.codemap.dependency_resolver import DependencyResolver
     from application.services.workspace_index import collect_files_from_disk
 
     max_depth = max(1, min(max_depth, 5))

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set
 
 if TYPE_CHECKING:
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.filesystem.ignore_engine import IgnoreEngine
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +49,8 @@ def build_search_index(
 ) -> Dict[str, List[str]]:
     """Build flat search index sử dụng scandir-rs (nếu có) hoặc os.walk."""
     from shared.constants import DIRECTORY_QUICK_SKIP
-    from infrastructure.filesystem.file_utils import (
-        is_binary_file,
-        is_system_path_str,
-        HAS_SCANDIR_RS,
-    )
+    from shared.utils.filesystem import is_binary_file, is_system_path_str
+    from infrastructure.filesystem.file_utils import HAS_SCANDIR_RS
 
     scandir_rs = None
     if HAS_SCANDIR_RS:
@@ -64,7 +61,7 @@ def build_search_index(
 
     root_path = workspace_path.resolve()
     if ignore_engine is None:
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         ignore_engine = IgnoreEngine()
 
@@ -225,11 +222,8 @@ def collect_files_from_disk(
 ) -> List[str]:
     """Scan filesystem trực tiếp để lấy tất cả files trong folder (lazy loading fallback)."""
     from shared.constants import DIRECTORY_QUICK_SKIP
-    from infrastructure.filesystem.file_utils import (
-        is_binary_file,
-        is_system_path_str,
-        HAS_SCANDIR_RS,
-    )
+    from shared.utils.filesystem import is_binary_file, is_system_path_str
+    from infrastructure.filesystem.file_utils import HAS_SCANDIR_RS
 
     scandir_rs = None
     if HAS_SCANDIR_RS:
@@ -243,7 +237,7 @@ def collect_files_from_disk(
 
     root_path = workspace_path.resolve()
     if ignore_engine is None:
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         ignore_engine = IgnoreEngine()
 

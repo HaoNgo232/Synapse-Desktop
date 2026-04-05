@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 
 
 class DependencyGraphGenerator:

@@ -45,7 +45,7 @@ class TestBug1TopLevelImportFailure:
                 in_function = False
 
             if (
-                "from application.services.dependency_resolver import" in line
+                "from domain.codemap.dependency_resolver import" in line
                 or "from application.services.prompt_build_service import" in line
             ):
                 import_lines.append((i, line, in_function))

@@ -124,7 +124,7 @@ def _explain_architecture_impl(
     """Internal implementation cho explain_architecture, dung asyncio.to_thread."""
     try:
         from application.services.workspace_index import collect_files_from_disk
-        from application.services.dependency_resolver import DependencyResolver
+        from domain.codemap.dependency_resolver import DependencyResolver
 
         all_files = collect_files_from_disk(scan_root, workspace_path=ws)
         if not all_files:

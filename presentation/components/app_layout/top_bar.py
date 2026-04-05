@@ -18,11 +18,11 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QMenu,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize
+from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon
 
 from presentation.config.theme import ThemeColors, ThemeFonts
-from infrastructure.adapters.memory_monitor import MemoryStats, format_memory_display
+from shared.types.memory import MemoryStats, format_memory_display
 
 
 class TopBar(QFrame):
@@ -116,14 +116,14 @@ class TopBar(QFrame):
         self._recent_btn.setToolTip("Recent folders (Ctrl+R)")
         self._recent_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._recent_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
+
         # Load icon assets
         icon_path = self._get_asset_path("clock-arrow-down.svg")
         if icon_path:
             self._recent_btn.setIcon(QIcon(str(icon_path)))
         else:
             self._recent_btn.setText("🕒")
-            
+
         self._recent_btn.setIconSize(QSize(18, 18))
         self._recent_btn.setStyleSheet(
             f"""
@@ -218,7 +218,7 @@ class TopBar(QFrame):
             return
 
         from infrastructure.persistence.recent_folders import get_folder_display_name
-        
+
         for folder_path in recent_folders:
             display_name = get_folder_display_name(folder_path)
             action = self._recent_menu.addAction(f"📁 {display_name}")
@@ -233,5 +233,5 @@ class TopBar(QFrame):
         else:
             # presentation/components/app_layout/top_bar.py -> presentation/assets/
             path = Path(__file__).parent.parent.parent / "assets" / asset_name
-        
+
         return path if path.exists() else None

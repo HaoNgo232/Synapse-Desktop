@@ -23,7 +23,7 @@ import threading
 from typing import Dict, Any
 
 from presentation.config.paths import SETTINGS_FILE
-from presentation.config.app_settings import AppSettings
+from shared.types.app_settings import AppSettings
 
 # Thread-safe lock de tranh race condition khi save settings
 _settings_lock = threading.Lock()

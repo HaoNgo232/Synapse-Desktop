@@ -13,7 +13,6 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import subprocess
-import os
 import sys
 
 from infrastructure.git.git_utils import (
@@ -286,9 +285,7 @@ class TestIntegration:
     )
     def test_get_git_logs_real(self):
         """Get logs from actual git repo."""
-        result = get_git_logs(
-            REPO_ROOT, max_commits=3
-        )
+        result = get_git_logs(REPO_ROOT, max_commits=3)
 
         assert result is not None
         assert isinstance(result, GitLogResult)

@@ -6,12 +6,12 @@ Chứa nhãn "Files" và FileTreeWidget.
 from pathlib import Path
 from typing import Optional, Set
 
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
+from PySide6.QtCore import Signal
 
 from presentation.config.theme import ThemeColors
 from presentation.components.file_tree.file_tree_widget import FileTreeWidget
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from application.interfaces.tokenization_port import ITokenizationService
 
 
@@ -26,7 +26,7 @@ class FilePanel(QFrame):
         self,
         ignore_engine: IgnoreEngine,
         tokenization_service: ITokenizationService,
-        parent: Optional[QFrame] = None
+        parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self.setProperty("class", "surface")
@@ -56,12 +56,16 @@ class FilePanel(QFrame):
             ignore_engine=self._ignore_engine,
             tokenization_service=self._tokenization_service,
         )
-        
+
         # Connect internal signals to exposed signals
         self.file_tree_widget.selection_changed.connect(self.selection_changed.emit)
-        self.file_tree_widget.file_preview_requested.connect(self.file_preview_requested.emit)
+        self.file_tree_widget.file_preview_requested.connect(
+            self.file_preview_requested.emit
+        )
         self.file_tree_widget.token_counting_done.connect(self.token_counting_done.emit)
-        self.file_tree_widget.exclude_patterns_changed.connect(self.exclude_patterns_changed.emit)
+        self.file_tree_widget.exclude_patterns_changed.connect(
+            self.exclude_patterns_changed.emit
+        )
 
         layout.addWidget(self.file_tree_widget, stretch=1)
 
@@ -87,7 +91,7 @@ class FilePanel(QFrame):
         return self.file_tree_widget.get_expanded_paths()
 
     def set_expanded_paths(self, paths: list[str]) -> None:
-        self.file_tree_widget.set_expanded_paths(paths)
+        self.file_tree_widget.set_expanded_paths(set(paths))
 
     def get_total_tokens(self) -> int:
         return self.file_tree_widget.get_total_tokens()

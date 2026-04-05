@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from application.services.prompt_build_service import PromptBuildService
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from application.services.graph_service import GraphService
 from application.services.tokenization_service import TokenizationService
 

@@ -34,7 +34,7 @@ from infrastructure.filesystem.file_utils import (
     scan_directory_shallow,
     is_binary_file,
 )
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from domain.selection.manager import SelectionManager
 
 logger = logging.getLogger(__name__)
@@ -896,9 +896,7 @@ class FileTreeModel(QAbstractItemModel):
 
         # Emit dataChanged for updated files + their ancestor folders (visible in tree)
         changed_nodes: Set[TreeNode] = set()
-        workspace_path_str = (
-            str(self._workspace_path) if self._workspace_path else ""
-        )
+        workspace_path_str = str(self._workspace_path) if self._workspace_path else ""
 
         # Neu counts empty (force refresh), notify tat ca selected paths
         paths_to_notify = list(counts.keys())
@@ -1232,6 +1230,7 @@ class FileTreeModel(QAbstractItemModel):
         total = 0
         has_any = False
         import os
+
         sep = os.path.sep
         folder_prefix = node.path if node.path.endswith(sep) else node.path + sep
 

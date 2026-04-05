@@ -167,7 +167,7 @@ def run_test_builder(
     framework = test_framework or detect_test_framework(ws)
 
     # Buoc 4: Build file map
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.filesystem.ignore_engine import IgnoreEngine
 
     ignore_engine = IgnoreEngine()
     tree = scan_directory(ws, ignore_engine)

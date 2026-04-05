@@ -179,7 +179,7 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -199,7 +199,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -224,7 +224,7 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -244,7 +244,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -266,7 +266,7 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -286,7 +286,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -304,7 +304,7 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -324,7 +324,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -340,7 +340,7 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -352,7 +352,7 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -380,7 +380,7 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -400,7 +400,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -426,7 +426,7 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -446,7 +446,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -464,7 +464,7 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -484,7 +484,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):
@@ -500,7 +500,7 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -512,7 +512,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
             patch("os.walk", side_effect=PermissionError("denied")),
@@ -528,7 +528,7 @@ class TestCollectFilesFromDisk:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
+                "domain.filesystem.ignore_engine.IgnoreEngine.find_git_root",
                 return_value=tmp_path,
             ),
             patch(
@@ -540,7 +540,7 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "domain.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
                 return_value=mock_spec,
             ),
         ):

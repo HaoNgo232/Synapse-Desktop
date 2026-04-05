@@ -9,7 +9,7 @@ from infrastructure.filesystem.file_utils import (
     load_folder_children,
     scan_directory_shallow,
 )
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 
 
 def _collect_file_labels(item: TreeItem) -> list[str]:

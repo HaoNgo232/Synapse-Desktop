@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol, Set, runtime_checkable, Optional
 from PySide6.QtCore import QObject
 
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 from domain.relationships.port import IRelationshipGraphProvider
 from infrastructure.adapters.qt_utils import run_on_main_thread, schedule_background
 

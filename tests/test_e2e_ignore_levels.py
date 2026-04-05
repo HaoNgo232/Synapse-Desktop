@@ -58,10 +58,10 @@ def app_e2e(qtbot, multi_level_workspace, monkeypatch, tmp_path):
     import importlib
     import presentation.config.paths
     import infrastructure.persistence.settings_manager
-    import presentation.config.app_settings
+    import shared.types.app_settings
 
     importlib.reload(presentation.config.paths)
-    importlib.reload(presentation.config.app_settings)
+    importlib.reload(shared.types.app_settings)
     importlib.reload(infrastructure.persistence.settings_manager)
 
     clear_recent_folders()

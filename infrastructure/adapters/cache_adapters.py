@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.filesystem.ignore_engine import IgnoreEngine
     from application.interfaces.tokenization_port import ITokenizationService
 
 from infrastructure.adapters.cache_registry import cache_registry
@@ -72,7 +72,7 @@ class IgnoreCacheAdapter:
     """Adapter cho core.ignore_engine (IgnoreEngine instance tu ServiceContainer)."""
 
     def __init__(self, ignore_engine: "IgnoreEngine") -> None:
-        from infrastructure.filesystem.ignore_engine import (
+        from domain.filesystem.ignore_engine import (
             IgnoreEngine as _IgnoreEngine,
         )
 

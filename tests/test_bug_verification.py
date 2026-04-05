@@ -3,7 +3,7 @@ Test để verify các bug được report trong analysis.
 """
 
 from pathlib import Path
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 
 
 class TestBug1ShortestPathReexploration:

@@ -110,7 +110,7 @@ def run_context_builder(
         )
 
     # Step 2: Build file map
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.filesystem.ignore_engine import IgnoreEngine
 
     ignore_engine = IgnoreEngine()
     tree = scan_directory(ws, ignore_engine)

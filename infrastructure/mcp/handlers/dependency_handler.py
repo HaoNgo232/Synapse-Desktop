@@ -73,7 +73,7 @@ def register_tools(mcp_instance) -> None:
             return f"Error: {e}"
 
         try:
-            from application.services.dependency_resolver import DependencyResolver
+            from domain.codemap.dependency_resolver import DependencyResolver
             from application.services.workspace_index import collect_files_from_disk
             import json
 

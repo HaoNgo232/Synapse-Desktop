@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import pathspec
 from collections import OrderedDict
 
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from infrastructure.filesystem.file_utils import (
     TreeItem,
     is_system_path,

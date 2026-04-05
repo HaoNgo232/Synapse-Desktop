@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, Signal
 from domain.relationships.builder import GraphBuilder
 from domain.relationships.graph import RelationshipGraph
 from domain.relationships.port import IRelationshipGraphProvider
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 
 
 class GraphSignals(QObject):

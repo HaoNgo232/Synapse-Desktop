@@ -6,7 +6,13 @@ Chứa các nút Copy (Primary, Secondary, Specialized) và các nút gạt Opti
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget, QProgressBar
+    QFrame,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QWidget,
+    QProgressBar,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -21,12 +27,12 @@ class ActionsPanel(QFrame):
     compress_requested = Signal()
     git_diff_requested = Signal()
     tree_map_requested = Signal()
-    
+
     copy_as_file_toggled = Signal(bool)
     full_tree_toggled = Signal(bool)
     semantic_index_toggled = Signal(bool)
 
-    def __init__(self, parent: Optional[QFrame] = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setStyleSheet("background-color: transparent; border: none;")
         self._build_ui()
@@ -77,7 +83,9 @@ class ActionsPanel(QFrame):
         self.copy_loading_bar.setRange(0, 0)
         self.copy_loading_bar.setFixedHeight(2)
         self.copy_loading_bar.setVisible(False)
-        self.copy_loading_bar.setStyleSheet(f"QProgressBar::chunk {{ background: {ThemeColors.PRIMARY}; }}")
+        self.copy_loading_bar.setStyleSheet(
+            f"QProgressBar::chunk {{ background: {ThemeColors.PRIMARY}; }}"
+        )
         layout.addWidget(self.copy_loading_bar)
 
         # Quick Actions
@@ -85,7 +93,9 @@ class ActionsPanel(QFrame):
         row1 = QHBoxLayout()
         row1.setSpacing(10)
         self.copy_btn = self._create_pill_btn("Copy", self.copy_requested)
-        self.compress_btn = self._create_pill_btn("Compress", self.compress_requested, color="#2DD4BF", bg="#0D948810")
+        self.compress_btn = self._create_pill_btn(
+            "Compress", self.compress_requested, color="#2DD4BF", bg="#0D948810"
+        )
         row1.addWidget(self.copy_btn)
         row1.addWidget(self.compress_btn)
         layout.addLayout(row1)
@@ -103,10 +113,16 @@ class ActionsPanel(QFrame):
         # Options
         layout.addSpacing(8)
         layout.addWidget(self._create_header("OPTIONS"))
-        
-        self.copy_as_file_toggle = self._add_toggle_row(layout, "Copy as file", self.copy_as_file_toggled)
-        self.full_tree_toggle = self._add_toggle_row(layout, "Include full tree", self.full_tree_toggled)
-        self.semantic_index_toggle = self._add_toggle_row(layout, "Semantic index", self.semantic_index_toggled)
+
+        self.copy_as_file_toggle = self._add_toggle_row(
+            layout, "Copy as file", self.copy_as_file_toggled
+        )
+        self.full_tree_toggle = self._add_toggle_row(
+            layout, "Include full tree", self.full_tree_toggled
+        )
+        self.semantic_index_toggle = self._add_toggle_row(
+            layout, "Semantic index", self.semantic_index_toggled
+        )
 
         layout.addStretch()
 
@@ -118,7 +134,13 @@ class ActionsPanel(QFrame):
         """)
         return lbl
 
-    def _create_pill_btn(self, text, signal, color=ThemeColors.TEXT_PRIMARY, bg=f"{ThemeColors.BG_ELEVATED}40"):
+    def _create_pill_btn(
+        self,
+        text,
+        signal,
+        color=ThemeColors.TEXT_PRIMARY,
+        bg=f"{ThemeColors.BG_ELEVATED}40",
+    ):
         btn = QPushButton(text)
         btn.setStyleSheet(f"""
             QPushButton {{
@@ -153,7 +175,9 @@ class ActionsPanel(QFrame):
     def _add_toggle_row(self, vertical_layout, text, signal):
         row = QHBoxLayout()
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY}; padding-left: 4px;")
+        lbl.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY}; padding-left: 4px;"
+        )
         row.addWidget(lbl)
         row.addStretch()
         toggle = ToggleSwitch(checked=False)
@@ -165,7 +189,13 @@ class ActionsPanel(QFrame):
     def set_buttons_enabled(self, enabled: bool):
         self.copy_loading_bar.setVisible(not enabled)
         self.opx_btn.setText("Copy + OPX" if enabled else "Processing...")
-        for btn in (self.copy_btn, self.compress_btn, self.diff_btn, self.tree_map_btn, self.opx_btn):
+        for btn in (
+            self.copy_btn,
+            self.compress_btn,
+            self.diff_btn,
+            self.tree_map_btn,
+            self.opx_btn,
+        ):
             btn.setEnabled(enabled)
 
     def show_limit_warning(self, message: str):
@@ -174,3 +204,15 @@ class ActionsPanel(QFrame):
             self.limit_warning.show()
         else:
             self.limit_warning.hide()
+
+    def get_copy_as_file(self) -> bool:
+        """Kiểm tra xem tùy chọn Copy as file có được chọn hay không."""
+        return self.copy_as_file_toggle.isChecked()
+
+    def get_full_tree(self) -> bool:
+        """Kiểm tra xem tùy chọn Include full tree có được chọn hay không."""
+        return self.full_tree_toggle.isChecked()
+
+    def get_semantic_index(self) -> bool:
+        """Kiểm tra xem tùy chọn Semantic index có được chọn hay không."""
+        return self.semantic_index_toggle.isChecked()

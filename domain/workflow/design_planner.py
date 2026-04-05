@@ -36,7 +36,7 @@ from domain.workflow.shared.handoff_formatter import (
 )
 from domain.prompt.generator import generate_file_map
 from infrastructure.filesystem.file_utils import scan_directory
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 from domain.codemap.graph_builder import CodeMapBuilder
 from application.services.tokenization_service import TokenizationService
 from domain.errors import DomainValidationError
@@ -253,7 +253,7 @@ def run_design_planner(
         all_scope_files = [f for f in all_scope_files if not _is_test_file(f)]
 
     # Step 2: Build file map
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.filesystem.ignore_engine import IgnoreEngine
 
     ignore_engine = IgnoreEngine()
     tree = scan_directory(ws, ignore_engine)

@@ -50,7 +50,7 @@ class TestAutoCodemapFeature:
             ) as mock_profile,
             # Patch at import location (inside build_prompt function)
             patch(
-                "application.services.dependency_resolver.DependencyResolver"
+                "domain.codemap.dependency_resolver.DependencyResolver"
             ) as mock_resolver_cls,
             patch(
                 "application.services.prompt_build_service.PromptBuildService"
@@ -116,7 +116,7 @@ class TestAutoCodemapFeature:
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             patch(
-                "application.services.dependency_resolver.DependencyResolver"
+                "domain.codemap.dependency_resolver.DependencyResolver"
             ) as mock_resolver_cls,
             patch(
                 "application.services.prompt_build_service.PromptBuildService"
@@ -171,7 +171,7 @@ class TestAutoCodemapFeature:
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             patch(
-                "application.services.dependency_resolver.DependencyResolver"
+                "domain.codemap.dependency_resolver.DependencyResolver"
             ) as mock_resolver_cls,
             patch(
                 "application.services.prompt_build_service.PromptBuildService"
@@ -234,7 +234,7 @@ class TestAutoCodemapFeature:
                 "infrastructure.mcp.handlers.context_handler.resolve_profile_params"
             ) as mock_profile,
             patch(
-                "application.services.dependency_resolver.DependencyResolver"
+                "domain.codemap.dependency_resolver.DependencyResolver"
             ) as mock_resolver_cls,
             patch(
                 "application.services.prompt_build_service.PromptBuildService"

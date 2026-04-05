@@ -24,7 +24,7 @@ from domain.codemap.queries import (
     QUERY_RUST_CALLS,
     QUERY_RUST_INHERITANCE,
 )
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 
 
 def extract_relationships(
@@ -335,7 +335,7 @@ def _extract_imports(
         return []
 
     try:
-        from application.services.dependency_resolver import IMPORT_QUERIES
+        from domain.codemap.dependency_resolver import IMPORT_QUERIES
 
         query_string = IMPORT_QUERIES.get(lang_name, "")
         if not query_string:

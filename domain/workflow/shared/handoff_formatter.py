@@ -15,7 +15,7 @@ from typing import Dict, List
 import html
 
 from domain.prompt.formatters.system_prompts import AGENT_ROLE_INSTRUCTION
-from application.services.dependency_resolver import DependencyResolver
+from domain.codemap.dependency_resolver import DependencyResolver
 
 
 @dataclass

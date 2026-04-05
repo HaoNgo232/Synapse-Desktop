@@ -40,12 +40,12 @@ from infrastructure.adapters.clipboard_utils import (
     get_clipboard_text,
 )
 from infrastructure.persistence.session_state import clear_session_state
-from infrastructure.persistence.settings_manager import (
+from application.services.settings_service import (
     load_settings,
     save_settings,
     DEFAULT_SETTINGS,
 )
-from infrastructure.persistence.settings_manager import (
+from application.services.settings_service import (
     load_app_settings,
     update_app_setting,
 )
@@ -1080,7 +1080,7 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _export_settings(self) -> None:
-        from infrastructure.persistence.settings_manager import load_app_settings
+        from application.services.settings_service import load_app_settings
 
         # Save current UI state first
         self._save_settings()

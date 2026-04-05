@@ -8,14 +8,6 @@ Design System: Dark theme inspired by VS Code / JetBrains
 import sys
 import os
 
-# Suppress Hugging Face hub warnings before other imports
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-
-import logging
-# Mute huggingface_hub warnings about unauthenticated requests
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-
 import gc
 import subprocess
 from pathlib import Path
@@ -27,20 +19,12 @@ from PySide6.QtWidgets import (
     QWidget,
     QTabWidget,
     QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QToolButton,
     QFileDialog,
-    QMenu,
-    QFrame,
-    QSizePolicy,
-    QStatusBar,
 )
-from PySide6.QtCore import Qt, Slot, QTimer, QSize
+from PySide6.QtCore import Slot, QTimer
 from PySide6.QtGui import QIcon
 
-from presentation.config.theme import ThemeColors, ThemeFonts, apply_theme
+from presentation.config.theme import ThemeFonts, apply_theme
 from infrastructure.adapters.qt_utils import (
     get_signal_bridge,
 )
@@ -48,7 +32,6 @@ from infrastructure.adapters.threading_utils import shutdown_all, set_active_vie
 from infrastructure.persistence.recent_folders import (
     load_recent_folders,
     add_recent_folder,
-    get_folder_display_name,
 )
 from infrastructure.persistence.session_state import (
     SessionState,
@@ -61,6 +44,14 @@ from infrastructure.adapters.memory_monitor import (
 )
 from presentation.components.app_layout.top_bar import TopBar
 from presentation.components.app_layout.status_bar import SynapseStatusBar
+
+# Filter noise from external libs BEFORE they execute
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+
+import logging
+
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 
 # ── Tab configuration: icon (emoji) + label ───────────────────────
@@ -233,7 +224,7 @@ class SynapseMainWindow(QMainWindow):
             self._refresh_git_branch_async()
             branch = self._detect_git_branch()
             self.status_bar.set_git_branch(branch)
-        
+
         # Update token stats
         selected_count, total_tokens = self._get_token_metrics()
         self.status_bar.set_token_stats(selected_count, total_tokens)
@@ -320,7 +311,7 @@ class SynapseMainWindow(QMainWindow):
     # ── Recent folders ────────────────────────────────────────────
     def _refresh_recent_folders_menu(self) -> None:
         """Refresh the recent folders in TopBar."""
-        from infrastructure.persistence.recent_folders import load_recent_folders
+
         self.top_bar.refresh_recent_menu(load_recent_folders())
 
     # ── Folder operations ─────────────────────────────────────────
@@ -354,7 +345,7 @@ class SynapseMainWindow(QMainWindow):
         self._update_window_title()
 
         # Save to recent
-        from infrastructure.persistence.recent_folders import load_recent_folders
+
         add_recent_folder(str(path))
         self.top_bar.refresh_recent_menu(load_recent_folders())
 
@@ -428,7 +419,6 @@ class SynapseMainWindow(QMainWindow):
         CLEAN SESSION MODE: Only restore workspace path and instructions text.
         Other state (selected files, expanded folders) starts fresh.
         """
-        from infrastructure.persistence.recent_folders import load_recent_folders
 
         session = load_session_state()
 
@@ -440,7 +430,7 @@ class SynapseMainWindow(QMainWindow):
                 self.workspace_path = workspace
 
                 self._update_window_title()
-                
+
                 self.top_bar.set_workspace_path(workspace)
                 self.top_bar.refresh_recent_menu(load_recent_folders())
                 self.status_bar.set_workspace(workspace)

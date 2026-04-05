@@ -28,7 +28,7 @@ from infrastructure.adapters.cache_registry import CacheRegistry
 from application.services.tokenization_service import TokenizationService
 from application.services.service_interfaces import IPromptBuilder, IClipboardService
 from application.interfaces.tokenization_port import ITokenizationService
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 from application.services.graph_service import GraphService
 
 logger = logging.getLogger(__name__)

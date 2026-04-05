@@ -105,7 +105,7 @@ class TestBug4WorkspaceIndexIgnoreEngine:
     def test_build_search_index_accepts_ignore_engine(self, tmp_path):
         """build_search_index should accept optional ignore_engine parameter"""
         from application.services.workspace_index import build_search_index
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / "test.py").write_text("x = 1")
 
@@ -118,7 +118,7 @@ class TestBug4WorkspaceIndexIgnoreEngine:
     def test_collect_files_accepts_ignore_engine(self, tmp_path):
         """collect_files_from_disk should accept optional ignore_engine parameter"""
         from application.services.workspace_index import collect_files_from_disk
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / "test.py").write_text("x = 1")
 
@@ -133,7 +133,7 @@ class TestBug4WorkspaceIndexIgnoreEngine:
     def test_ignore_engine_cache_reused(self, tmp_path):
         """IgnoreEngine cache should be reused across multiple calls"""
         from application.services.workspace_index import build_search_index
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / ".gitignore").write_text("*.log")
         (tmp_path / "test.py").write_text("x = 1")
@@ -158,7 +158,7 @@ class TestBug5IgnoreEngineThreadSafety:
 
     def test_ignore_engine_has_lock(self):
         """IgnoreEngine should have a threading.Lock"""
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         assert hasattr(engine, "_lock")
@@ -168,7 +168,7 @@ class TestBug5IgnoreEngineThreadSafety:
 
     def test_concurrent_cache_access_no_race(self, tmp_path):
         """Concurrent cache access should not cause race conditions"""
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         (tmp_path / ".gitignore").write_text("*.log")
 
@@ -204,7 +204,7 @@ class TestBug5IgnoreEngineThreadSafety:
 
     def test_clear_cache_thread_safe(self, tmp_path):
         """clear_cache should be thread-safe"""
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
 

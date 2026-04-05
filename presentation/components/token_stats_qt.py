@@ -26,7 +26,7 @@ from presentation.config.model_config import (
     get_model_by_id,
     ModelConfig,
 )
-from infrastructure.persistence.settings_manager import (
+from application.services.settings_service import (
     load_app_settings,
     update_app_setting,
 )

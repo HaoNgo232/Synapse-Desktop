@@ -13,7 +13,7 @@ import json
 import pytest
 from unittest.mock import patch
 
-from presentation.config.app_settings import AppSettings
+from shared.types.app_settings import AppSettings
 
 
 # ============================================================

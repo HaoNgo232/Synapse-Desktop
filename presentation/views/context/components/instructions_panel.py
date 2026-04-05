@@ -3,12 +3,19 @@ Instructions Panel Component.
 Chứa vùng nhập liệu hướng dẫn và toolbar con (Templates, History, AI Suggest).
 """
 
-from typing import Optional, List
+from typing import Optional
 
 from PySide6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QToolButton, QMenu, QTextEdit
+    QFrame,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QToolButton,
+    QMenu,
+    QTextEdit,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer
+from PySide6.QtCore import Qt, Signal
 
 from presentation.config.theme import ThemeColors
 
@@ -22,7 +29,7 @@ class InstructionsPanel(QFrame):
     template_selected = Signal(object)
     history_selected = Signal(object)
 
-    def __init__(self, parent: Optional[QFrame] = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setProperty("class", "surface")
         self._build_ui()
@@ -46,11 +53,13 @@ class InstructionsPanel(QFrame):
         self.template_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._setup_btn_style(self.template_btn, ThemeColors.PRIMARY)
         self.template_btn.setToolTip("Insert a task-specific prompt template")
-        
+
         self._template_menu = QMenu(self.template_btn)
         self._template_menu.setToolTipsVisible(True)
         self._setup_menu_style(self._template_menu)
-        self._template_menu.aboutToShow.connect(lambda: self.template_menu_about_to_show.emit(self._template_menu))
+        self._template_menu.aboutToShow.connect(
+            lambda: self.template_menu_about_to_show.emit(self._template_menu)
+        )
         self._template_menu.triggered.connect(self.template_selected.emit)
         self.template_btn.setMenu(self._template_menu)
         header.addWidget(self.template_btn)
@@ -61,10 +70,12 @@ class InstructionsPanel(QFrame):
         self.history_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._setup_btn_style(self.history_btn, ThemeColors.TEXT_SECONDARY)
         self.history_btn.setToolTip("View recent instructions")
-        
+
         self._history_menu = QMenu(self.history_btn)
         self._setup_menu_style(self._history_menu)
-        self._history_menu.aboutToShow.connect(lambda: self.history_menu_about_to_show.emit(self._history_menu))
+        self._history_menu.aboutToShow.connect(
+            lambda: self.history_menu_about_to_show.emit(self._history_menu)
+        )
         self._history_menu.triggered.connect(self.history_selected.emit)
         self.history_btn.setMenu(self._history_menu)
         header.addWidget(self.history_btn)
@@ -95,7 +106,9 @@ class InstructionsPanel(QFrame):
             """
         )
         self.ai_suggest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.ai_suggest_btn.setToolTip("AI reads your instruction and auto-selects relevant files")
+        self.ai_suggest_btn.setToolTip(
+            "AI reads your instruction and auto-selects relevant files"
+        )
         self.ai_suggest_btn.clicked.connect(self.ai_suggest_requested.emit)
         header.addWidget(self.ai_suggest_btn)
 
@@ -187,3 +200,8 @@ class InstructionsPanel(QFrame):
         else:
             self.ai_suggest_btn.setEnabled(True)
             self.ai_suggest_btn.setText("AI Suggest Select")
+
+    def update_template_tier_display(self, tier: str):
+        """Cập nhật văn bản hiển thị trên nút Templates dựa trên tier được chọn."""
+        tier_display = "Lite" if tier == "lite" else "Pro"
+        self.template_btn.setText(f"Templates ({tier_display})")

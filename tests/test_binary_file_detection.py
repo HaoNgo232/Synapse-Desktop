@@ -179,7 +179,7 @@ class TestGetSelectedPathsSkipsBinary:
         text_file = tmp_path / "code.py"
         text_file.write_text("x = 1")
 
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         model = FileTreeModel(ignore_engine=IgnoreEngine())
         model._workspace_path = tmp_path  # Required for get_selected_paths()
@@ -328,7 +328,9 @@ class TestRealWorldProxypalBinaries:
     BINARIES_DIR = Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries"
 
     @pytest.mark.skipif(
-        not (Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries").exists(),
+        not (
+            Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries"
+        ).exists(),
         reason="proxypal-main binaries not found",
     )
     def test_all_proxypal_binaries_detected(self):
@@ -342,7 +344,9 @@ class TestRealWorldProxypalBinaries:
                 )
 
     @pytest.mark.skipif(
-        not (Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries").exists(),
+        not (
+            Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries"
+        ).exists(),
         reason="proxypal-main binaries not found",
     )
     def test_token_worker_skips_proxypal_binaries(self):

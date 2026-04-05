@@ -30,7 +30,7 @@ from presentation.config.output_format import (
     get_style_by_id,
     DEFAULT_OUTPUT_STYLE,
 )
-from infrastructure.persistence.settings_manager import load_app_settings
+from application.services.settings_service import load_app_settings
 from presentation.components.token_usage_bar import TokenUsageBar
 
 # Compatibility Alias for UI Tests
@@ -332,7 +332,7 @@ class UIBuilderMixin:
         toolbar_layout.addStretch()
 
         # Import sớm để dùng cho cả format combo lẫn model selector
-        from infrastructure.persistence.settings_manager import (
+        from application.services.settings_service import (
             load_app_settings as _load_settings,
         )
 
@@ -494,7 +494,7 @@ class UIBuilderMixin:
         toolbar_layout.addSpacing(8)
 
         # Cập nhật model hiện tại từ settings và đồng bộ view
-        from infrastructure.persistence.settings_manager import load_app_settings
+        from application.services.settings_service import load_app_settings
         from presentation.config.model_config import get_model_by_id, DEFAULT_MODEL_ID
 
         app_settings = load_app_settings()
@@ -545,7 +545,7 @@ class UIBuilderMixin:
         # Nhan ignore_engine tu ContextViewQt (hoac fallback sang instance moi)
         _ignore_engine = getattr(self, "_ignore_engine", None)
         if _ignore_engine is None:
-            from infrastructure.filesystem.ignore_engine import IgnoreEngine as _IE
+            from domain.filesystem.ignore_engine import IgnoreEngine as _IE
 
             _ignore_engine = _IE()
 
@@ -839,7 +839,7 @@ class UIBuilderMixin:
         """
         from PySide6.QtWidgets import QProgressBar
         from presentation.components.toggle_switch import ToggleSwitch
-        from infrastructure.persistence.settings_manager import update_app_setting
+        from application.services.settings_service import update_app_setting
 
         container = QWidget()
         container.setStyleSheet("background-color: transparent;")
@@ -1059,7 +1059,7 @@ class UIBuilderMixin:
             self._model_btn.setText(action.text())
 
             # Persist selection vào settings để survive app restart
-            from infrastructure.persistence.settings_manager import update_app_setting
+            from application.services.settings_service import update_app_setting
 
             update_app_setting(model_id=model_id)
 

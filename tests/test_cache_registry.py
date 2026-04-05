@@ -248,7 +248,7 @@ class TestIgnoreCacheAdapter:
     """Test IgnoreCacheAdapter wraps ignore engine caches."""
 
     def _make_adapter(self):
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         return IgnoreCacheAdapter(IgnoreEngine())
 
@@ -256,7 +256,7 @@ class TestIgnoreCacheAdapter:
         assert isinstance(self._make_adapter(), ICacheable)
 
     def test_invalidate_path_gitignore_triggers_clear(self):
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         adapter = IgnoreCacheAdapter(engine)
@@ -267,7 +267,7 @@ class TestIgnoreCacheAdapter:
         assert len(engine._gitignore_cache) == 0
 
     def test_invalidate_path_normal_file_no_clear(self):
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         engine._gitignore_cache["dummy"] = (0.0, [])
@@ -277,7 +277,7 @@ class TestIgnoreCacheAdapter:
         assert len(engine._gitignore_cache) == 1
 
     def test_invalidate_all(self):
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
 
         engine = IgnoreEngine()
         engine._gitignore_cache["dummy"] = (0.0, [])
@@ -308,7 +308,7 @@ class TestRegisterAllCaches:
         cache_registry._reset_for_testing()
 
     def test_registers_all_four_caches(self):
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
         from application.services.tokenization_service import TokenizationService
 
         register_all_caches(
@@ -322,7 +322,7 @@ class TestRegisterAllCaches:
         assert "relationship_cache" in names
 
     def test_idempotent(self):
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.filesystem.ignore_engine import IgnoreEngine
         from application.services.tokenization_service import TokenizationService
 
         kwargs = dict(

@@ -354,7 +354,7 @@ def register_tools(mcp_instance) -> None:
             dependency_depth = max(1, min(3, dependency_depth))
             try:
                 # Lazy import - chi load khi can thiet
-                from application.services.dependency_resolver import DependencyResolver
+                from domain.codemap.dependency_resolver import DependencyResolver
 
                 resolver = DependencyResolver(ws)
                 # Build file index tu disk (khong can TreeItem)

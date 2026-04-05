@@ -16,7 +16,7 @@ from shared.constants import (
     BINARY_EXTENSIONS,
 )
 
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.filesystem.ignore_engine import IgnoreEngine
 
 HAS_SCANDIR_RS = False
 try:

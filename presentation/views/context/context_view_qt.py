@@ -1,53 +1,58 @@
 """
 Context View (PySide6) - Tab để chọn files và copy context.
 
-Refactored to use Composition pattern (controllers thay vi Mixins) de tach biet
-logic khoi UI va tuan thu Single Responsibility Principle.
+Refactored to use Component Composition pattern instead of Mixins.
+Logic is delegated to Controllers, and UI is composed of independent Components.
+
+This version includes compatibility aliases and properties to support existing tests
+and controllers that expect certain attributes.
 """
 
 import threading
 import logging
+import gc
 from pathlib import Path
-from typing import Optional, Set, List, Callable, TYPE_CHECKING
+from typing import Optional, Set, List, Callable, TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from infrastructure.filesystem.ignore_engine import IgnoreEngine
     from application.interfaces.tokenization_port import ITokenizationService
     from domain.relationships.port import IRelationshipGraphProvider
+    from infrastructure.filesystem.file_utils import TreeItem
 
-from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Slot, QTimer
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QSplitter
+from PySide6.QtCore import Slot, QTimer, Qt
 
-
-from infrastructure.filesystem.file_utils import TreeItem
 from infrastructure.filesystem.file_watcher_facade import FileWatcher, WatcherCallbacks
-from infrastructure.persistence.settings_manager import update_app_setting
+from infrastructure.persistence import settings_manager
+from infrastructure.persistence.settings_manager import (
+    update_app_setting, load_app_settings
+)
+
+from presentation.config.theme import ThemeColors
 from presentation.config.output_format import (
-    OutputStyle,
-    get_style_by_id,
-    get_format_config,
-    DEFAULT_OUTPUT_STYLE,
+    OutputStyle, get_style_by_id, DEFAULT_OUTPUT_STYLE
 )
 
-# Import mixins
-from presentation.views.context.ui_builder import UIBuilderMixin
+# Components
+from presentation.views.context.components.context_toolbar import ContextToolbar
+from presentation.views.context.components.file_panel import FilePanel
+from presentation.views.context.components.instructions_panel import InstructionsPanel
+from presentation.views.context.components.actions_panel import ActionsPanel
+from presentation.components.preset_widget import PresetWidget
+
+# Controllers
 from presentation.views.context.copy_action_controller import CopyActionController
-
-# Import controllers (composition-based replacements)
 from presentation.views.context.related_files_controller import RelatedFilesController
-from presentation.views.context.tree_management_controller import (
-    TreeManagementController,
-)
+from presentation.views.context.tree_management_controller import TreeManagementController
+from presentation.views.context.preset_controller import PresetController
 
 
 logger = logging.getLogger(__name__)
 
 
-class ContextViewQt(
-    QWidget,
-    UIBuilderMixin,
-):
-    """View cho Context tab - PySide6 version."""
+class ContextViewQt(QWidget):
+    """View cho Context tab - Refactored version using Composition."""
 
     def __init__(
         self,
@@ -61,46 +66,29 @@ class ContextViewQt(
     ):
         super().__init__(parent)
         self.get_workspace = get_workspace
-        self.get_workspace_path = get_workspace  # Alias for protocol compatibility
+        self.get_workspace_path = get_workspace  # Alias
 
-        # IgnoreEngine duoc inject tu ServiceContainer
+        # Services Injection
         if ignore_engine is None:
             from infrastructure.filesystem.ignore_engine import IgnoreEngine as _IE
-
             ignore_engine = _IE()
-        self._ignore_engine: "IgnoreEngine" = ignore_engine
+        self._ignore_engine = ignore_engine
 
         if tokenization_service is None:
-            from infrastructure.adapters.encoder_registry import (
-                get_tokenization_service,
-            )
-
+            from infrastructure.adapters.encoder_registry import get_tokenization_service
             tokenization_service = get_tokenization_service()
-        self._tokenization_service: "ITokenizationService" = tokenization_service
-        self._graph_provider: Optional["IRelationshipGraphProvider"] = graph_provider
+        self._tokenization_service = tokenization_service
+        self._graph_provider = graph_provider
 
-        # State
-        self.tree: Optional[TreeItem] = None
-        self._selected_output_style: OutputStyle = DEFAULT_OUTPUT_STYLE
-        self._loading_lock = threading.Lock()
-        self._is_loading = False
-        self._pending_refresh = False
-        self._token_generation = 0
-        # AI Suggest Select state: worker reference + snapshot cho Undo
-        self._ai_suggest_worker = None
-        self._ai_suggest_previous_selection: Optional[List[str]] = None
-        self._ai_suggest_generation: int = 0
+        # Controllers
+        self._related_controller = RelatedFilesController(self, graph_provider=self._graph_provider)
+        self._tree_controller = TreeManagementController(self, parent=None)
+        self._copy_controller = CopyActionController(self, parent=None)
+        self._preset_controller = PresetController(self, parent=None)
 
-        # Services (with dependency injection support)
-        self._file_watcher: Optional[FileWatcher] = FileWatcher()
-
+        # External services for controllers
         if prompt_builder is None:
             from application.services.prompt_build_service import PromptBuildService
-
-            # Bug #1 Fix: Đảm bảo fallback instance cũng được inject graph_service (nếu có)
-            # để project structure metadata có thể được tính toán.
-            from typing import Any, cast
-
             prompt_builder = PromptBuildService(
                 tokenization_service=self._tokenization_service,
                 graph_service=cast(Any, self._graph_provider),
@@ -109,208 +97,230 @@ class ContextViewQt(
 
         if clipboard_service is None:
             from infrastructure.adapters.clipboard_service import QtClipboardService
-
             clipboard_service = QtClipboardService()
         self._clipboard_service = clipboard_service
 
-        # RelatedFilesController: quan ly logic auto-select related files
-        # TreeManagementController: quan ly refresh tree, ignore patterns, file watchers
-        # NOTE: parent=None de tranh QObject init phuc tap khi QWidget.__init__ bi mock trong tests
-        self._related_controller: RelatedFilesController = RelatedFilesController(
-            self,
-            graph_provider=self._graph_provider,
-        )
-        self._tree_controller: TreeManagementController = TreeManagementController(
-            self, parent=None
-        )
-        self._copy_controller: CopyActionController = CopyActionController(
-            self, parent=None
-        )
+        # State
+        self.tree = None
+        self._selected_output_style: OutputStyle = DEFAULT_OUTPUT_STYLE
+        self._token_generation = 0
+        self._ai_suggest_worker = None
+        self._ai_suggest_previous_selection: Optional[List[str]] = None
+        self._ai_suggest_generation: int = 0
+        self._file_watcher = FileWatcher()
+        self._is_loading = False # Compatibility with tests
 
-        # PresetController: quan ly context presets
-        from presentation.views.context.preset_controller import PresetController
+        # Build UI via Composition
+        self._init_ui()
 
-        self._preset_controller: PresetController = PresetController(self, parent=None)
-
-        # Build UI (from UIBuilderMixin)
-        self._build_ui()
-
-        # Setup keyboard shortcuts
+        # Connect signals
+        self._setup_connections()
         self._setup_shortcuts()
-
-        # Setup Graph signals
         self._setup_graph_signals()
 
-    # ===== Public API =====
+    def _init_ui(self) -> None:
+        """Initialize and compose UI components."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-    def _setup_graph_signals(self) -> None:
-        """Connect graph service signals to UI."""
-        if not self._graph_provider:
+        # 1. Toolbar
+        self.toolbar = ContextToolbar(self)
+        layout.addWidget(self.toolbar)
+
+        # Add PresetWidget to toolbar dynamically
+        self._preset_widget = PresetWidget(controller=self._preset_controller)
+        if hasattr(self._preset_widget, "_label"):
+            self._preset_widget._label.hide()
+        self._preset_widget.setFixedHeight(30)
+        self.toolbar.layout_for_presets.addWidget(self._preset_widget)
+
+        # 2. Main splitter
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(3)
+        splitter.setStyleSheet(f"QSplitter::handle {{ background-color: {ThemeColors.BORDER}; margin: 4px 0; }}")
+
+        # Left Panel (Files)
+        self.file_panel = FilePanel(self._ignore_engine, self._tokenization_service, self)
+        splitter.addWidget(self.file_panel)
+
+        # Center Panel (Instructions)
+        self.instructions_panel = InstructionsPanel(self)
+        splitter.addWidget(self.instructions_panel)
+
+        # Right Panel (Actions)
+        self.actions_panel = ActionsPanel(self)
+        splitter.addWidget(self.actions_panel)
+
+        splitter.setStretchFactor(0, 30)
+        splitter.setStretchFactor(1, 40)
+        splitter.setStretchFactor(2, 30)
+        splitter.setSizes([400, 550, 450])
+
+        layout.addWidget(splitter, 1)
+
+    # --- Compatibility Accessors for Tests and Controllers ---
+    @property
+    def _instructions_field(self): return self.instructions_panel.instructions_field
+    @property
+    def _word_count_label(self): return self.instructions_panel._word_count_label
+    @property
+    def _token_usage_bar(self): return self.toolbar.token_usage_bar
+    @property
+    def _opx_btn(self): return self.actions_panel.opx_btn
+    @property
+    def _copy_btn(self): return self.actions_panel.copy_btn
+    @property
+    def _smart_btn(self): return self.actions_panel.compress_btn
+    @property
+    def _diff_btn(self): return self.actions_panel.diff_btn
+    @property
+    def _tree_map_btn(self): return self.actions_panel.tree_map_btn
+    @property
+    def _format_btn(self): return self.toolbar._format_btn
+    @property
+    def _history_menu(self): return self.instructions_panel._history_menu
+    @property
+    def _template_menu(self): return self.instructions_panel._template_menu
+    
+    @property
+    def repo_manager(self):
+        if not hasattr(self, "_repo_manager"):
+            from infrastructure.git.repo_manager import RepoManager
+            self._repo_manager = RepoManager()
+        return self._repo_manager
+
+    def _setup_connections(self) -> None:
+        """Kết nối các signal từ components vào logic xử lý của view/controllers."""
+        # Toolbar actions - Các thao tác trên thanh công cụ
+        self.toolbar.refresh_requested.connect(self._tree_controller.refresh_tree)
+        self.toolbar.clone_repo_requested.connect(lambda: self._tree_controller.open_remote_repo_dialog(self))
+        self.toolbar.manage_cache_requested.connect(lambda: self._tree_controller.open_cache_management_dialog(self))
+        self.toolbar.related_mode_changed.connect(self._related_controller.set_mode)
+        self.toolbar.format_changed.connect(self._on_format_changed)
+        self.toolbar.model_changed.connect(self._on_model_changed)
+
+        # File Panel actions - Thao tác trên cây thư mục file
+        self.file_panel.selection_changed.connect(self._on_selection_changed)
+        self.file_panel.file_preview_requested.connect(self._preview_file)
+        self.file_panel.token_counting_done.connect(self._update_token_display)
+        self.file_panel.exclude_patterns_changed.connect(self._tree_controller.refresh_tree)
+
+        # Instructions actions - Thao tác trên khung nhập chỉ dẫn (prompt)
+        self.instructions_panel.text_changed.connect(self._on_instructions_changed)
+        self.instructions_panel.ai_suggest_requested.connect(self._run_ai_suggest_from_instructions)
+        self.instructions_panel.template_menu_about_to_show.connect(self._populate_template_menu)
+        self.instructions_panel.history_menu_about_to_show.connect(self._populate_history_menu)
+        self.instructions_panel.template_selected.connect(self._on_template_selected)
+        self.instructions_panel.history_selected.connect(self._on_history_selected)
+
+        # Actions Panel actions - Các nút copy và tùy chọn output
+        self.actions_panel.copy_opx_requested.connect(lambda: self._copy_controller.on_copy_context_requested(include_xml=True))
+        self.actions_panel.copy_requested.connect(lambda: self._copy_controller.on_copy_context_requested(include_xml=False))
+        self.actions_panel.compress_requested.connect(self._copy_controller.on_copy_smart_requested)
+        self.actions_panel.git_diff_requested.connect(self._copy_controller._show_diff_only_dialog)
+        self.actions_panel.tree_map_requested.connect(self._copy_controller.on_copy_tree_map_requested)
+
+        self.actions_panel.copy_as_file_toggled.connect(lambda: None) # Managed via getter
+        self.actions_panel.full_tree_toggled.connect(self._on_full_tree_toggled)
+        self.actions_panel.semantic_index_toggled.connect(self._on_semantic_index_toggled)
+
+        # Kết nối PresetWidget với sự thay đổi selection để highlight/dirty check
+        self._preset_widget.connect_selection_changed(self.file_panel.selection_changed)
+
+    # === Private Handlers ===
+
+    def _on_full_tree_toggled(self, checked: bool) -> None:
+        settings_manager.update_app_setting(include_full_tree=checked)
+        if self._copy_controller:
+            self._copy_controller._prompt_cache.invalidate_all()
+        self._update_token_display()
+
+    def _on_semantic_index_toggled(self, checked: bool) -> None:
+        settings_manager.update_app_setting(enable_semantic_index=checked)
+        if self._copy_controller:
+            self._copy_controller._prompt_cache.invalidate_all()
+        self._update_token_display()
+
+    @Slot(set)
+    def _on_selection_changed(self, selected_paths: set) -> None:
+        if not self._copy_controller or not self._related_controller:
             return
-
-        signals = getattr(self._graph_provider, "signals", None)
-        if signals:
-            signals.build_started.connect(self._on_graph_build_started)
-            signals.build_status.connect(self._on_graph_build_status)
-            signals.build_progress.connect(self._on_graph_build_progress)
-            signals.build_finished.connect(self._on_graph_build_finished)
-            signals.build_error.connect(self._on_graph_build_error)
-
-    def _get_status_bar(self):
-        from PySide6.QtWidgets import QMainWindow
-
-        window = self.window()
-        if isinstance(window, QMainWindow):
-            return window.statusBar()
-        return None
+        self._token_generation += 1
+        self._copy_controller._prompt_cache.invalidate_all()
+        self._update_token_display()
+        self._related_controller.resolve_for_current_selection()
 
     @Slot()
-    def _on_graph_build_started(self) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage("🔄 Preparing semantic graph...")
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText("🔄 Preparing semantic graph...")
+    def _on_instructions_changed(self, text: str) -> None:
+        # Word count is handled internally by InstructionsPanel
+        QTimer.singleShot(150, self._update_token_display)
 
     @Slot(str)
-    def _on_graph_build_status(self, message: str) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"🔄 {message}")
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText(f"🔄 {message}")
-
-    @Slot(int, int)
-    def _on_graph_build_progress(self, current: int, total: int) -> None:
-        sb = self._get_status_bar()
-        percent = int((current / total) * 100) if total > 0 else 0
-        status_text = f"⚡ Building semantic graph... {percent}% ({current}/{total})"
-        if sb:
-            sb.showMessage(status_text)
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText(status_text)
-
-    @Slot(float, int)
-    def _on_graph_build_finished(self, duration: float, tokens: int) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"✨ Semantic cache loaded in {duration:.2f}s", 5000)
-
-    @Slot(str)
-    def _on_graph_build_error(self, message: str) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"❌ Graph build error: {message}", 5000)
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText("❌ Error building graph")
-
-    def _setup_shortcuts(self) -> None:
-        """Setup keyboard shortcuts."""
-        from PySide6.QtGui import QShortcut, QKeySequence
-
-        # Ctrl+Shift+S: Quick save preset
-        save_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
-        save_shortcut.activated.connect(self._quick_save_preset)
-
-        # Ctrl+Shift+L: Focus preset combo
-        focus_shortcut = QShortcut(QKeySequence("Ctrl+Shift+L"), self)
-        focus_shortcut.activated.connect(self._focus_preset_combo)
-
-    def _quick_save_preset(self) -> None:
-        """Quick save with proper confirmation dialogs."""
-        if not hasattr(self, "_preset_controller") or self._preset_controller is None:
-            return
-
-        if not self.get_selected_paths():
-            from presentation.components.toast.toast_qt import ToastManager, ToastType
-
-            manager = ToastManager.instance()
-            if manager:
-                manager.show(
-                    ToastType.ERROR,
-                    "No files selected. Select files before saving preset.",
-                )
-            return
-
+    def _on_format_changed(self, format_id: str) -> None:
         try:
-            # Always delegate to widget to ensure consistent UI behavior
-            if hasattr(self, "_preset_widget") and self._preset_widget:
-                self._preset_widget.trigger_save_action()
-            else:
-                # Fallback: create new preset if widget unavailable
-                from PySide6.QtWidgets import QInputDialog
-
-                name, ok = QInputDialog.getText(self, "New Preset", "Preset name:")
-                if ok and name.strip():
-                    self._preset_controller.create_preset(name.strip())
-        except (RuntimeError, AttributeError) as e:
-            logger.error(f"Failed to save preset: {e}")
-
-    def _focus_preset_combo(self) -> None:
-        """Focus preset combo box."""
-        if not hasattr(self, "_preset_widget") or self._preset_widget is None:
-            return
-        try:
-            if self._preset_widget.isVisible():
-                self._preset_widget.focus_selector()
-        except (RuntimeError, AttributeError):
+            self._selected_output_style = get_style_by_id(format_id)
+            settings_manager.update_app_setting(output_format=format_id)
+            self.toolbar.update_format_display(format_id)
+            if self._copy_controller:
+                self._copy_controller._prompt_cache.invalidate_all()
+        except ValueError:
             pass
+
+    @Slot(str)
+    def _on_model_changed(self, model_id: str) -> None:
+        from infrastructure.adapters.encoder_registry import get_tokenizer_repo
+        repo = get_tokenizer_repo()
+        self._tokenization_service.set_model_config(tokenizer_repo=repo)
+        
+        self.toolbar.update_model_display(model_id)
+        settings_manager.update_app_setting(model_id=model_id)
+
+        if self._copy_controller:
+            self._copy_controller._prompt_cache.invalidate_all()
+
+        model = self.file_panel.file_tree_widget.get_model()
+        model._token_cache.clear()
+        self.file_panel.file_tree_widget._start_token_counting()
+        self._show_status(f"Recounting tokens with {model_id}...")
+
+    # === Public API for Controllers / MainWindow ===
 
     def on_workspace_changed(self, workspace_path: Path) -> None:
         """Handle workspace change."""
-        if (
-            not self._copy_controller
-            or not self._related_controller
-            or not self._tree_controller
-        ):
+        if not self._copy_controller or not self._related_controller or not self._tree_controller:
             return
 
-        from shared.logging_config import log_info
-
-        log_info(f"[ContextView] Workspace changing to: {workspace_path}")
-
-        # 0. Invalidate any pending copy operations by incrementing generation.
+        # 0. Invalidate operations
         self._copy_controller._begin_copy_operation()
         self.set_copy_buttons_enabled(True)
-
-        # Invalidate any in-flight AI suggest request
         self._ai_suggest_generation += 1
         self._cancel_ai_suggest_worker()
-        if hasattr(self, "_ai_suggest_btn"):
-            self._ai_suggest_btn.setEnabled(True)
-            self._ai_suggest_btn.setText("AI Suggest Select")
+        self.instructions_panel.set_ai_suggest_busy(False)
 
-        # 1. Stop file watcher for old workspace
+        # 1. Watcher
         if self._file_watcher:
             self._file_watcher.stop()
 
-        # 2. Deactivate related mode to clean up state
+        # 2. Reset state
         self._related_controller.set_mode(False, 0, silent=True)
-
-        # 3. Clear all caches for old workspace via CacheRegistry
         from infrastructure.adapters.cache_registry import cache_registry
-
         cache_registry.invalidate_for_workspace()
         self._copy_controller._prompt_cache.invalidate_all()
 
-        # 4. Reset preset controller BEFORE loading tree to avoid race condition
         if self._preset_controller:
             self._preset_controller.on_workspace_changed(workspace_path)
 
-        # 5. Load new tree (this increments generation counter, cancels old workers)
-        self.file_tree_widget.load_tree(workspace_path)
-        self.tree = self.file_tree_widget.get_model()._root_node  # type: ignore
+        # 3. Load tree
+        self.file_panel.load_tree(workspace_path)
+        self.tree = self.file_panel.file_tree_widget.get_model()._root_node
 
-        # 6. Reset token display
-        if hasattr(self, "_token_usage_bar"):
-            self._token_usage_bar.update_stats(tokens=0, limit=200000, files=0)
+        # 4. Reset display
+        self.toolbar.token_usage_bar.update_stats(tokens=0, limit=200000, files=0)
+        self.actions_panel.show_limit_warning("")
 
-        if hasattr(self, "_context_info_label"):
-            self._context_info_label.setText("")
-        if hasattr(self, "_limit_warning"):
-            self._limit_warning.hide()
-
-        # 7. Start file watcher for new workspace
+        # 5. Start watcher
         if self._file_watcher and workspace_path.exists():
             self._file_watcher.start(
                 path=workspace_path,
@@ -323,555 +333,65 @@ class ContextViewQt(
                 debounce_seconds=0.5,
             )
 
-        # 8. Trigger RelationshipGraph build cho workspace moi (background)
-        if hasattr(self, "_graph_provider") and self._graph_provider is not None:
+        if self._graph_provider:
             self._graph_provider.on_workspace_changed(workspace_path)
 
-        # 9. Sync Templates Button Text (Tier)
-        from infrastructure.persistence.settings_manager import load_app_settings
-
-        new_tier = getattr(load_app_settings(), "template_tier", "lite")
-        if hasattr(self, "_template_btn"):
-            tier_label = "Lite" if new_tier == "lite" else "Pro"
-            self._template_btn.setText(f"Templates ({tier_label})")
-
-    def restore_tree_state(
-        self, selected_files: List[str], expanded_folders: List[str]
-    ) -> None:
-        """Restore tree state từ session."""
+    def restore_tree_state(self, selected_files: List[str], expanded_folders: List[str]) -> None:
         if selected_files:
             valid = {f for f in selected_files if Path(f).exists()}
-            self.file_tree_widget.set_selected_paths(valid)
+            self.file_panel.set_selected_paths(valid)
         if expanded_folders:
             valid = {f for f in expanded_folders if Path(f).exists()}
-            self.file_tree_widget.set_expanded_paths(valid)
+            self.file_panel.set_expanded_paths(valid)
         self._update_token_display()
-
-    def set_instructions_text(self, text: str) -> None:
-        """Set instructions text (session restore)."""
-        self._instructions_field.setPlainText(text)
-
-    def get_instructions_text(self) -> str:
-        return self._instructions_field.toPlainText()
 
     def get_selected_paths(self) -> Set[str]:
-        return set(self.file_tree_widget.get_selected_paths())
-
-    def get_expanded_paths(self) -> List[str]:
-        return self.file_tree_widget.get_expanded_paths()
-
-    def set_selected_paths_from_preset(self, paths: Set[str]) -> None:
-        """Adapter: Apply preset selection (replace toàn bộ)."""
-        self.file_tree_widget.set_selected_paths(paths)
-
-    def get_output_style(self) -> OutputStyle:
-        """Adapter: Get current output style."""
-        return self._selected_output_style
-
-    def show_status(self, message: str, is_error: bool = False) -> None:
-        """Adapter: Show status message via toast."""
-        from presentation.components.toast.toast_qt import ToastManager, ToastType
-
-        manager = ToastManager.instance()
-        if manager and message:
-            toast_type = ToastType.ERROR if is_error else ToastType.SUCCESS
-            manager.show(toast_type, message)
-
-    # ===== Protocol Adapter Methods (cho Controllers) =====
-    # Cac methods nay implement Protocol interfaces can thiet boi controllers
-    # Ma khong expose chi tiet noi tai cua ContextViewQt.
+        return self.file_panel.get_selected_paths()
 
     def get_all_selected_paths(self) -> Set[str]:
-        """
-        Tra ve tat ca selected paths (ca files va folders).
+        return self.file_panel.get_all_selected_paths()
 
-        Adapter method cho RelatedFilesViewProtocol va TreeManagementViewProtocol.
-        """
-        return self.file_tree_widget.get_all_selected_paths()
+    def get_expanded_paths(self) -> List[str]:
+        return self.file_panel.get_expanded_paths()
+
+    def load_tree(self, workspace_path: Path) -> None:
+        """Alias for TreeManagementController compatibility."""
+        self.file_panel.load_tree(workspace_path)
 
     def add_paths_to_selection(self, paths: Set[str]) -> int:
-        """Adapter: them paths vao file tree selection."""
-        return self.file_tree_widget.add_paths_to_selection(paths)
+        return self.file_panel.add_paths_to_selection(paths)
 
     def remove_paths_from_selection(self, paths: Set[str]) -> int:
-        """Adapter: xoa paths khoi file tree selection."""
-        return self.file_tree_widget.remove_paths_from_selection(paths)
+        return self.file_panel.remove_paths_from_selection(paths)
 
-    def load_tree(self, workspace: Path) -> None:
-        """Adapter: reload file tree widget."""
-        self.file_tree_widget.load_tree(workspace)
+    def set_selected_paths_from_preset(self, paths: Set[str]) -> None:
+        self.file_panel.set_selected_paths(paths)
 
-    def scan_full_tree(self, workspace: Path):
-        """
-        Adapter: Scan full workspace tree de build file index day du.
+    def set_instructions_text(self, text: str) -> None:
+        self.instructions_panel.set_text(text)
 
-        Su dung cho RelatedFilesController khi resolve dependencies.
-        """
-        if not self._copy_controller:
-            return None
-        return self._copy_controller._scan_full_tree(workspace)
+    def get_instructions_text(self) -> str:
+        return self.instructions_panel.get_text()
 
-    def get_total_tokens(self) -> int:
-        return self.file_tree_widget.get_total_tokens()
-
-    def get_clipboard_service(self):
-        return self._clipboard_service
-
-    def get_prompt_builder(self):
-        return self._prompt_builder
-
-    def get_tokenization_service(self):
-        return self._tokenization_service
-
-    def get_ignore_engine(self):
-        return self._ignore_engine
-
-    def get_copy_as_file(self) -> bool:
-        """Adapter: Read copy-as-file toggle state from actions panel."""
-        toggle = getattr(self, "_copy_as_file_toggle", None)
-        return toggle.isChecked() if toggle is not None else False
-
-    def get_full_tree(self) -> bool:
-        """Adapter: Read full-tree toggle state from actions panel."""
-        toggle = getattr(self, "_full_tree_toggle", None)
-        return toggle.isChecked() if toggle is not None else False
-
-    def get_semantic_index(self) -> bool:
-        """Adapter: Read semantic-index toggle state from actions panel."""
-        toggle = getattr(self, "_semantic_index_toggle", None)
-        return toggle.isChecked() if toggle is not None else False
-
-    def is_smart_mode_active(self) -> bool:
-        """Kiểm tra xem Smart Mode có đang active không.
-        Hiện tại tính năng Smart Mode (OutputStyle.SMART) đã bị loại bỏ.
-        """
-        return False
-
-    def parent_widget(self):
-        return self
+    def get_output_style(self) -> OutputStyle:
+        return self._selected_output_style
 
     def set_copy_buttons_enabled(self, enabled: bool) -> None:
-        # Hien/an loading bar va cap nhat text button chinh
-        if hasattr(self, "_copy_loading_bar"):
-            self._copy_loading_bar.setVisible(not enabled)
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText("Copy + OPX" if enabled else "Processing...")
-        for btn in (
-            self._diff_btn,
-            self._tree_map_btn,
-            self._smart_btn,
-            self._copy_btn,
-            self._opx_btn,
-        ):
-            if btn is not None:
-                btn.setEnabled(enabled)
+        self.actions_panel.set_buttons_enabled(enabled)
 
-    def show_copy_breakdown(self, token_count: int, breakdown: dict) -> None:
-        """
-        Hiển thị chi tiết token consumption sau khi copy thành công.
-        breakdown chứa các keys: content_tokens, instruction_tokens, opx_tokens,
-        tree_tokens, diff_tokens, rule_tokens, structure_tokens (overhead).
-        """
-        from presentation.components.toast.toast_qt import toast_success
-
-        file_t = breakdown.get("content_tokens", 0)
-        instr_t = breakdown.get("instruction_tokens", 0)
-        opx_t = breakdown.get("opx_tokens", 0)
-        tree_t = breakdown.get("tree_tokens", 0)
-        diff_t = breakdown.get("diff_tokens", 0)
-        rule_t = breakdown.get("rule_tokens", 0)
-        structure_t = breakdown.get("structure_tokens", 0)
-        mode = breakdown.get("copy_mode", "Copy")
-
-        # Fallback logic cho cac mode cu hoac neu sum_parts tiep tuc lon hon token_count
-        # (thuong do overhead XML tags neu PromptBuildService chua tinh het)
-        sum_parts = file_t + instr_t + opx_t + tree_t + diff_t + rule_t
-        if sum_parts > token_count:
-            # Re-scale de khong bi am structure_tokens
-            ratio = token_count / sum_parts if sum_parts > 0 else 1.0
-            file_t = int(file_t * ratio)
-            instr_t = int(instr_t * ratio)
-            opx_t = int(opx_t * ratio)
-            tree_t = int(tree_t * ratio)
-            diff_t = int(diff_t * ratio)
-            rule_t = int(rule_t * ratio)
-            structure_t = 0
-        elif structure_t == 0 and token_count > sum_parts:
-            # Neu structure_t chua duoc tinh nhung con du, gan cho no
-            structure_t = token_count - sum_parts
-
-        parts = []
-        if file_t > 0:
-            parts.append(f"{file_t:,} content")
-        if instr_t > 0:
-            parts.append(f"{instr_t:,} instructions")
-        if tree_t > 0:
-            parts.append(f"{tree_t:,} tree map")
-        if diff_t > 0:
-            parts.append(f"{diff_t:,} diffs")
-        if rule_t > 0:
-            parts.append(f"{rule_t:,} rules")
-        if opx_t > 0:
-            parts.append(f"{opx_t:,} OPX")
-        if structure_t > 0:
-            parts.append(f"{structure_t:,} system prompt")
-
-        breakdown_text = " + ".join(parts) if parts else ""
-
-        tooltip_lines = [
-            f"Total: {token_count:,} tokens",
-            "",
-            f"File content: {file_t:,} tokens",
-            f"Instructions: {instr_t:,} tokens",
-        ]
-        if opx_t > 0:
-            tooltip_lines.append(f"OPX instructions: {opx_t:,} tokens")
-        if tree_t > 0:
-            tooltip_lines.append(f"Tree map: {tree_t:,} tokens")
-        if diff_t > 0:
-            tooltip_lines.append(f"Git diffs/logs: {diff_t:,} tokens")
-        if rule_t > 0:
-            tooltip_lines.append(f"Project rules: {rule_t:,} tokens")
-
-        tooltip_lines.extend(
-            [
-                f"Prompt structure: {structure_t:,} tokens",
-                "  (includes: XML tags, assembly overhead)",
-            ]
-        )
-
-        if len(parts) > 0:
-            # Format breakdown with line breaks for readability
-            breakdown_lines = []
-            if file_t > 0:
-                breakdown_lines.append(f"• {file_t:,} content")
-            if instr_t > 0:
-                breakdown_lines.append(f"• {instr_t:,} instructions")
-            if tree_t > 0:
-                breakdown_lines.append(f"• {tree_t:,} tree map")
-            if diff_t > 0:
-                breakdown_lines.append(f"• {diff_t:,} diffs")
-            if rule_t > 0:
-                breakdown_lines.append(f"• {rule_t:,} rules")
-            if opx_t > 0:
-                breakdown_lines.append(f"• {opx_t:,} OPX")
-            if structure_t > 0:
-                breakdown_lines.append(f"• {structure_t:,} system prompt")
-
-            breakdown_text = "\n".join(breakdown_lines)
-
-            toast_success(
-                message=f"{token_count:,} tokens\n{breakdown_text}",
-                title=f"{mode} successful!",
-                tooltip="\n".join(tooltip_lines),
-                duration=8000,
-            )
-        else:
-            toast_success(
-                message=f"{token_count:,} tokens",
-                title=f"{mode} successful!",
-                tooltip="\n".join(tooltip_lines),
-                duration=8000,
-            )
-
-        # Show success message on StatusBar
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"✅ Context copied! Processed {token_count:,} tokens", 5000)
-
-    def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
-        paths = set()
-
-        def _walk(node):
-            paths.add(node.path)
-            for child in node.children:
-                _walk(child)
-
-        _walk(root)
-        return paths
-
-    def update_related_button_text(self, active: bool, depth: int, count: int) -> None:
-        """
-        Adapter: Cap nhat text cua related mode button.
-
-        Duoc goi boi RelatedFilesController khi trang thai thay doi.
-        """
-        if not hasattr(self, "_related_menu_btn"):
-            return
-
-        if not active:
-            self._related_menu_btn.setText("Related: Off")
-            return
-
-        depth_names = {1: "Direct", 2: "Nearby", 3: "Deep", 4: "Deeper", 5: "Deepest"}
-        depth_name = depth_names.get(depth, f"Depth {depth}")
-
-        if count > 0:
-            self._related_menu_btn.setText(f"Related: {depth_name} ({count})")
-        else:
-            self._related_menu_btn.setText(f"Related: {depth_name}")
-
-    @Slot(str)
-    def _preview_file(self, file_path: str) -> None:
-        """Preview file in dialog."""
-        from presentation.components.dialogs.dialogs_qt import FilePreviewDialogQt
-
-        FilePreviewDialogQt.show_preview(self, file_path)
-
-    def invalidate_prompt_cache(self) -> None:
-        """Adapter: Invalidate prompt-level cache (duoc goi boi TreeManagementController)."""
-        if self._copy_controller:
-            self._copy_controller._prompt_cache.invalidate_all()
-
-    def cleanup(self) -> None:
-        """Cleanup resources."""
-        # Invalidate all pending workers — their callbacks will be ignored
-        if self._copy_controller:
-            self._copy_controller._begin_copy_operation()
-
-        self._ai_suggest_generation += 1
-        self._cancel_ai_suggest_worker()
-
-        # Cleanup preset widget connections to prevent leaks
-        if hasattr(self, "_preset_widget") and self._preset_widget:
-            try:
-                # Disconnect khoi signal cua file tree (dung _refresh_menu thay the)
-                if hasattr(self, "file_tree_widget") and self.file_tree_widget:
-                    try:
-                        self.file_tree_widget.selection_changed.disconnect(
-                            self._preset_widget._refresh_menu
-                        )
-                    except (RuntimeError, TypeError):
-                        pass
-            except (RuntimeError, TypeError, AttributeError):
-                pass
-            self._preset_widget.deleteLater()
-            self._preset_widget = None  # type: ignore
-
-        # Detach and destroy controllers manually since they use parent=None
-        if self._related_controller:
-            self._related_controller.deleteLater()
-            self._related_controller = None  # type: ignore
-        if self._tree_controller:
-            self._tree_controller.deleteLater()
-            self._tree_controller = None  # type: ignore
-        if self._copy_controller:
-            self._copy_controller.deleteLater()
-            self._copy_controller = None  # type: ignore
-        if self._preset_controller:
-            self._preset_controller.cleanup()
-            self._preset_controller.deleteLater()
-            self._preset_controller = None  # type: ignore
-
-        # Dismiss all toasts
-        try:
-            from presentation.components.toast.toast_qt import ToastManager
-
-            manager = ToastManager.instance()
-            if manager is not None:
-                manager.dismiss_all(force=True)
-        except Exception:
-            pass
-
-        if self._file_watcher:
-            self._file_watcher.stop()
-            self._file_watcher = None
-
-        self.file_tree_widget.cleanup()
-
-    def _cancel_ai_suggest_worker(self) -> None:
-        """
-        Huy va ngat ket noi signals cua AIContextWorker neu dang chay.
-
-        Giu nguyen generation guard trong _on_ai_suggest_finished/_on_ai_suggest_error
-        de bo qua ket qua stale, nhung van dam bao khong co signal nao
-        duoc deliver vao QWidget da bi huy.
-        """
-        worker = self._ai_suggest_worker
-        if worker is None:
-            return
-
-        try:
-            cancel = getattr(worker, "cancel", None)
-            if callable(cancel):
-                cancel()
-        except Exception:
-            # Khong de viec huy worker lam vo UI
-            logger.debug("Failed to cancel AIContextWorker", exc_info=True)
-
-        try:
-            signals = getattr(worker, "signals", None)
-            if signals is not None:
-                try:
-                    signals.finished.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
-                try:
-                    signals.error.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
-                try:
-                    signals.progress.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
-        except RuntimeError:
-            # signals co the da bi xoa boi Qt
-            pass
-
-        self._ai_suggest_worker = None
-
-    # ===== Slots =====
-
-    @Slot(set)
-    def _on_selection_changed(self, selected_paths: set) -> None:
-        """Handle selection change — update display + trigger related resolution if active."""
-        if not self._copy_controller or not self._related_controller:
-            return
-
-        self._token_generation += 1
-        self._copy_controller._prompt_cache.invalidate_all()
-        self._update_token_display()
-
-        # Update empty state hint visibility
-        has_files = bool(selected_paths)
-        if hasattr(self, "_no_files_hint"):
-            self._no_files_hint.setVisible(not has_files)
-
-        # Auto-resolve related files when mode is active
-        self._related_controller.resolve_for_current_selection()
-
-    @Slot()
-    def _on_instructions_changed(self) -> None:
-        """Handle instructions text change - cap nhat word count va token display."""
-        text = self._instructions_field.toPlainText()
-        word_count = len(text.split()) if text.strip() else 0
-        self._word_count_label.setText(f"{word_count} words")
-        QTimer.singleShot(150, self._update_token_display)
-
-    @Slot(str)
-    def _on_format_changed(self, format_id: str) -> None:
-        """Handle format change via menu action."""
-        if not format_id:
-            return
-        try:
-            self._selected_output_style = get_style_by_id(format_id)
-            update_app_setting(output_format=format_id)
-
-            # Update button text to reflect selection
-            # Update button text to reflect selection
-            if hasattr(self, "_format_btn"):
-                config = get_format_config(self._selected_output_style)
-                self._format_btn.setText(config.name)
-
-            if self._copy_controller:
-                self._copy_controller._prompt_cache.invalidate_all()
-        except ValueError:
-            pass
-
-    @Slot(str)
-    def _on_tier_changed(self, tier: str) -> None:
-        """Xu ly khi nguoi dung thay doi template tier ngay tren toolbar."""
-        from infrastructure.persistence.settings_manager import update_app_setting
-
-        try:
-            # Luu setting moi vao persistent storage
-            update_app_setting(template_tier=tier)
-
-            # Invalidate cache de dam bao template moi duoc fetch khi copy
-            if self._copy_controller:
-                self._copy_controller._prompt_cache.invalidate_all()
-
-            # Cap nhat text trên button Templates de nguoi dung luon biet tier hien tai
-            if hasattr(self, "_template_btn"):
-                tier_label = "Lite" if tier == "lite" else "Pro"
-                self._template_btn.setText(f"Templates ({tier_label})")
-
-            # Thong bao cho nguoi dung via toast
-            tier_display = "Lite (Concise)" if tier == "lite" else "Pro (Detailed)"
-            self.show_status(f"Template Tier switched to {tier_display}")
-
-        except Exception as e:
-            logger.error(f"Failed to change template tier: {e}")
-            self.show_status("Failed to change tier.", is_error=True)
+    # === Logic methods (Ported from ContextViewQt / UIBuilderMixin) ===
 
     @Slot(object)
-    def _on_template_selected(self, action) -> None:
-        """Xu ly khi chon mot prompt template hoac action xoa template."""
-        from domain.prompt.template_manager import load_template, delete_template
-        from PySide6.QtWidgets import QMessageBox
-
-        data = action.data()
-        if not data:
-            return
-
-        if isinstance(data, dict):
-            action_type = data.get("action")
-            template_id = str(data.get("id", ""))
-
-            if action_type == "edit" and template_id:
-                self._show_custom_template_dialog(template_id)
-                return
-
-            if action_type == "delete" and template_id:
-                reply = QMessageBox.question(
-                    self,
-                    "Xóa Custom Template",
-                    "Bạn có chắc chắn muốn xóa template này không?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                )
-                if reply == QMessageBox.StandardButton.Yes:
-                    if delete_template(template_id):
-                        self._show_status("Template deleted.")
-                    else:
-                        self._show_status("Failed to delete template.", is_error=True)
-                return
-            # neu la insert thi fallthrough xuong ben duoi
-        else:
-            template_id = str(data)
-
-        if not template_id:
-            return
-
-        if template_id == "__CREATE_CUSTOM__":
-            self._show_custom_template_dialog()
-            return
-
-        try:
-            content = load_template(template_id)
-            self._instructions_field.setPlainText(content)
-            self._show_status("Template loaded")
-        except Exception as e:
-            self._show_status(f"Failed to load template: {e}", is_error=True)
-
-    def _show_custom_template_dialog(self, template_id: str = None) -> None:
-        """Hien thi dialog cho phep tao/sua Custom Template."""
-        from presentation.components.dialogs.custom_template_dialog import (
-            CustomTemplateDialog,
-        )
-
-        dialog = CustomTemplateDialog(self, template_id=template_id)
-        if dialog.exec():
-            status = "Custom template saved!" if not template_id else "Template updated!"
-            self._show_status(status)
-
-    @Slot()
-    def _populate_template_menu(self) -> None:
-        """Đổ dữ liệu template vào menu (dynamic build)."""
+    def _populate_template_menu(self, menu=None) -> None:
+        if menu is None: menu = self._template_menu
         from domain.prompt.template_manager import list_templates
-
-        menu = self._template_menu
-        menu.clear()
-
-        # 1. Chèn Tier Selector (Lite/Pro) lên đầu menu dùng QWidgetAction (động)
         from PySide6.QtWidgets import QWidgetAction
-        from infrastructure.persistence.settings_manager import load_app_settings
         from presentation.components.tier_selector import TierSelector
 
-        # Luôn tạo mới menu item để tránh lỗi ownership của Qt
-        new_tier = getattr(load_app_settings(), "template_tier", "lite")
+        menu.clear()
+        new_tier = getattr(settings_manager.load_app_settings(), "template_tier", "lite")
         tier_selector = TierSelector(initial_tier=new_tier)
         tier_selector.tier_changed.connect(self._on_tier_changed)
-        # Style gọn hơn khi nằm trong menu
         tier_selector.setContentsMargins(8, 4, 8, 4)
 
         action = QWidgetAction(menu)
@@ -879,77 +399,74 @@ class ContextViewQt(
         menu.addAction(action)
         menu.addSeparator()
 
-        # 2. Đổ dữ liệu các templates
         for tmpl in list_templates():
             if getattr(tmpl, "is_custom", False):
                 sub = menu.addMenu(tmpl.display_name)
-                if tmpl.description:
-                    sub.setToolTip(tmpl.description)
-                    sub.menuAction().setToolTip(tmpl.description)
-
-                ins = sub.addAction("Insert")
-                ins.setData({"action": "insert", "id": tmpl.template_id})
-
-                edt = sub.addAction("Edit")
-                edt.setData({"action": "edit", "id": tmpl.template_id})
-
+                sub.addAction("Insert").setData({"action": "insert", "id": tmpl.template_id})
+                sub.addAction("Edit").setData({"action": "edit", "id": tmpl.template_id})
                 sub.addSeparator()
-
-                dlt = sub.addAction("Delete")
-                dlt.setData({"action": "delete", "id": tmpl.template_id})
+                sub.addAction("Delete").setData({"action": "delete", "id": tmpl.template_id})
             else:
                 action = menu.addAction(tmpl.display_name)
-                if tmpl.description:
-                    action.setToolTip(tmpl.description)
                 action.setData(tmpl.template_id)
-
+        
         menu.addSeparator()
-        add_action = menu.addAction("Manage/Add Custom Template...")
-        add_action.setData("__CREATE_CUSTOM__")
+        menu.addAction("Manage/Add Custom Template...").setData("__CREATE_CUSTOM__")
 
-    @Slot()
-    def _populate_history_menu(self) -> None:
-        """Đổ dữ liệu recent instructions vào history menu khi được click."""
-        from infrastructure.persistence.settings_manager import load_app_settings
+    @Slot(object)
+    def _on_template_selected(self, action) -> None:
+        from domain.prompt.template_manager import load_template, delete_template
+        from PySide6.QtWidgets import QMessageBox
 
-        menu = self._history_menu
+        data = action.data()
+        if not data: return
+
+        if isinstance(data, dict):
+            action_type = data.get("action")
+            template_id = str(data.get("id", ""))
+            if action_type == "edit":
+                self._show_custom_template_dialog(template_id)
+                return
+            if action_type == "delete":
+                if QMessageBox.question(self, "Delete", "Are you sure?") == QMessageBox.StandardButton.Yes:
+                    if delete_template(template_id): self._show_status("Deleted")
+                return
+            template_id = template_id
+        else:
+            template_id = str(data)
+
+        if template_id == "__CREATE_CUSTOM__":
+            self._show_custom_template_dialog()
+            return
+        
+        try:
+            self._instructions_field.setPlainText(load_template(template_id))
+            self._show_status("Template loaded")
+        except Exception as e:
+            self._show_status(f"Error: {e}", True)
+
+    @Slot(object)
+    def _populate_history_menu(self, menu=None) -> None:
+        if menu is None: menu = self._history_menu
         menu.clear()
-
-        settings = load_app_settings()
-        history = settings.instruction_history
-
+        history = settings_manager.load_app_settings().instruction_history
         if not history:
             action = menu.addAction("No history yet")
             action.setEnabled(False)
             return
-
         for text in history:
-            label = text[:50] + "..." if len(text) > 50 else text
-            label = label.replace("\n", " ").strip()
-
-            sub = menu.addMenu(label)
-            sub.setToolTip(text[:200] + ("..." if len(text) > 200 else ""))
-
-            ins = sub.addAction("Apply")
-            ins.setData({"action": "insert", "text": text})
-
+            label = (text[:50] + "...") if len(text) > 50 else text
+            sub = menu.addMenu(label.replace("\n", " "))
+            sub.addAction("Apply").setData({"action": "insert", "text": text})
             sub.addSeparator()
-
-            dlt = sub.addAction("❌ Delete")
-            dlt.setData({"action": "delete", "text": text})
-
-        # Clear All — relocated from standalone button for safety
-        if history:
-            menu.addSeparator()
-            clear_all_action = menu.addAction("Clear All History")
-            clear_all_action.setData({"action": "clear_all"})
+            sub.addAction("Delete").setData({"action": "delete", "text": text})
+        menu.addSeparator()
+        menu.addAction("Clear All History").setData({"action": "clear_all"})
 
     @Slot(object)
     def _on_history_selected(self, action) -> None:
-        """Handle history selection from dropdown."""
         data = action.data()
-        if not data:
-            return
+        if not data: return
 
         if isinstance(data, dict):
             action_type = data.get("action")
@@ -958,21 +475,14 @@ class ContextViewQt(
             if action_type == "clear_all":
                 self._clear_prompt_history()
                 return
-
             if action_type == "delete" and text:
-                from infrastructure.persistence.settings_manager import (
-                    load_app_settings,
-                    update_app_setting,
-                )
-
-                settings = load_app_settings()
-                history_list = settings.instruction_history.copy()
-                if text in history_list:
-                    history_list.remove(text)
-                    update_app_setting(instruction_history=history_list)
+                settings = settings_manager.load_app_settings()
+                h = settings.instruction_history.copy()
+                if text in h:
+                    h.remove(text)
+                    settings_manager.update_app_setting(instruction_history=h)
                     self._show_status("History item deleted.")
                 return
-            # neu la insert thi fallthrough
         else:
             text = str(data)
 
@@ -980,316 +490,183 @@ class ContextViewQt(
             self._instructions_field.setPlainText(text)
             self._show_status("History loaded")
 
-    @Slot()
     def _clear_prompt_history(self) -> None:
-        """Xoa toan bo lich su cua prompt input."""
         from PySide6.QtWidgets import QMessageBox
-        from infrastructure.persistence.settings_manager import update_app_setting
-
-        reply = QMessageBox.question(
-            self,
-            "Clear History",
-            "Bạn có chắc chắn muốn xóa toàn bộ lịch sử Prompt không?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            update_app_setting(instruction_history=[])
+        if QMessageBox.question(self, "Clear", "Clear all history?") == QMessageBox.StandardButton.Yes:
+            settings_manager.update_app_setting(instruction_history=[])
             self._show_status("All prompt history cleared.")
 
-    # ===== Token Counting =====
-
     def _update_token_display(self) -> None:
-        """Update token count display tu cached values. Khong trigger counting.
+        # Avoid crashes if internal components are missing during rapid transitions
+        if not hasattr(self, "file_panel") or not self.file_panel: return
+        
+        selected_count = self.file_panel.file_tree_widget.get_model().get_selected_file_count()
+        instructions = self.get_instructions_text()
+        instruction_tokens = self._prompt_builder.count_tokens(instructions) if instructions else 0
+        file_tokens = self.file_panel.get_total_tokens()
+        total = file_tokens + instruction_tokens
 
-        Hien thi file tokens + instruction tokens tren toolbar.
-        Tooltip phan tach ro 'instruction tokens' khi chua chon file nao
-        de tranh confusion '39 tokens khi 0 files'.
-        """
-        model = self.file_tree_widget.get_model()
-        file_count = model.get_selected_file_count()
+        from presentation.config.model_config import get_model_by_id, DEFAULT_MODEL_ID
+        m_id = getattr(self, "_selected_model_id", DEFAULT_MODEL_ID)
+        m_cfg = get_model_by_id(m_id)
+        limit = m_cfg.context_length if m_cfg else 128000
 
-        # Count instruction tokens
-        instructions = self._instructions_field.toPlainText()
-        instruction_tokens = (
-            self._prompt_builder.count_tokens(instructions) if instructions else 0
-        )
+        self.toolbar.token_usage_bar.update_stats(tokens=total, limit=limit, files=selected_count)
 
-        # Get cached tokens
-        total_file_tokens = self.file_tree_widget.get_total_tokens()
-        total = total_file_tokens + instruction_tokens
+    def scan_full_tree(self, workspace: Path) -> Any:
+        from infrastructure.filesystem.file_utils import scan_directory
+        from application.services.workspace_config import get_excluded_patterns, get_use_gitignore
+        excluded = get_excluded_patterns()
+        use_gitignore = get_use_gitignore()
+        return scan_directory(workspace, ignore_engine=self._ignore_engine, 
+                             excluded_patterns=excluded, use_gitignore=use_gitignore)
 
-        # Update Usage Bar (Toolbar) — single source of truth cho token stats
-        if hasattr(self, "_token_usage_bar"):
-            from presentation.config.model_config import (
-                get_model_by_id,
-                DEFAULT_MODEL_ID,
-            )
+    def parent_widget(self) -> QWidget: return self
+    def is_smart_mode_active(self) -> bool: return False
 
-            model_id = getattr(self, "_selected_model_id", DEFAULT_MODEL_ID)
-            model_cfg = get_model_by_id(model_id)
-            limit = model_cfg.context_length if model_cfg else 128000
+    def update_related_button_text(self, active: bool, depth: int, count: int) -> None:
+        self.toolbar.update_related_button_text(active, depth, count)
 
-            # Update Toolbar progress bar
-            self._token_usage_bar.update_stats(
-                tokens=total, limit=limit, files=file_count
-            )
+    def show_copy_breakdown(self, token_count: int, breakdown: dict) -> None:
+        from presentation.components.toast.toast_qt import toast_success
+        mode = breakdown.get("copy_mode", "Copy")
+        toast_success(message=f"Processed {token_count:,} tokens", title=f"{mode} successful!")
+        sb = self._get_status_bar()
+        if sb: sb.showMessage(f"✅ Context copied! {token_count:,} tokens", 5000)
 
-            # Tooltip chia ro nguon token: file vs instruction.
-            # Dac biet quan trong khi file_count=0 ma instruction_tokens>0
-            # de user khong bi confused 'tai sao co 39 tokens khi chua chon file'.
-            if file_count == 0 and instruction_tokens > 0:
-                tooltip_note = (
-                    f"Tip: {instruction_tokens:,} tokens are from your instructions,\n"
-                    f"not from files. Select files to see file token counts."
-                )
-            else:
-                tooltip_note = (
-                    "Actual copy may include overhead (XML tags, tree structure)."
-                )
-
-            self._token_usage_bar.setToolTip(
-                f"Token breakdown:\n"
-                f"  Files:        {total_file_tokens:,} tokens\n"
-                f"  Instructions: {instruction_tokens:,} tokens\n"
-                f"  Total:        {total:,} tokens\n\n"
-                f"Model: {model_cfg.name if model_cfg else 'Unknown'}\n"
-                f"{tooltip_note}"
-            )
-
-    @Slot(str)
-    def _on_model_changed(self, model_id: str) -> None:
-        """
-        Handler when user changes model.
-
-        Resets encoder and clears cache to trigger recount with the new tokenizer.
-        """
-        # Reset encoder va reinitialize voi model moi qua TokenizationService
-        from infrastructure.adapters.encoder_registry import get_tokenizer_repo
-
-        repo = get_tokenizer_repo()
-        self._tokenization_service.set_model_config(tokenizer_repo=repo)
-
-        # Invalidate prompt cache (token counts will differ with new tokenizer)
-        if self._copy_controller:
-            self._copy_controller._prompt_cache.invalidate_all()
-
-        # Clear token cache (since tokenizer has changed)
-        model = self.file_tree_widget.get_model()
-        model._token_cache.clear()
-
-        # Trigger recount for all selected files
-        self.file_tree_widget._start_token_counting()
-
-        self._show_status(f"Recounting tokens with {model_id}...")
-
-    # ===== AI Context Builder =====
-
-    def _on_ai_selection_applied(self, paths: list) -> None:
-        """
-        Callback khi nguoi dung nhan Apply tren AI Context Builder Dialog.
-
-        Replace toan bo selection hien tai bang danh sach files do AI goi y.
-
-        Args:
-            paths: Danh sach absolute hoac relative file paths tu LLM
-        """
-        workspace = self.get_workspace()
-
-        # Convert relative paths sang absolute paths neu can
-        resolved_paths: set[str] = set()
-        unresolved: list[str] = []
-
-        for p in paths:
-            if workspace and not Path(p).is_absolute():
-                full_path = workspace / p
-                if full_path.exists():
-                    resolved_paths.add(str(full_path))
-                else:
-                    unresolved.append(p)
-            else:
-                resolved_paths.add(p)
-
-        # Undo case: user ro rang muon clear selection
-        if not paths:
-            self.file_tree_widget.set_selected_paths(set())
-            return
-
-        # Neu khong resolve duoc bat ky path nao -> thong bao loi ro rang
-        if not resolved_paths:
-            from presentation.components.toast.toast_qt import toast_error
-
-            toast_error(
-                "AI suggested paths could not be resolved. "
-                "Please check that the files exist in the current workspace."
-            )
-            if unresolved:
-                logger.warning(
-                    "AI suggested %d unresolved paths (sample): %s",
-                    len(unresolved),
-                    unresolved[:5],
-                )
-            return
-
-        if unresolved:
-            logger.warning(
-                "AI suggested %d paths that do not exist on disk (sample): %s",
-                len(unresolved),
-                unresolved[:5],
-            )
-
-        self.file_tree_widget.set_selected_paths(resolved_paths)
-
-    # ===== AI Suggest Select (doc tu Instructions field) =====
-
-    def _run_ai_suggest_from_instructions(self) -> None:
-        """
-        Doc noi dung tu Instructions field va chay AI worker de tu dong chon files.
-
-        Luong xu ly:
-        1. Doc text tu _instructions_field
-        2. Validate settings (API key, model, tree)
-        3. Luu snapshot selection hien tai cho Undo
-        4. Tao AIContextWorker chay tren background thread
-        5. Khi worker xong -> auto-apply ket qua vao file tree
-        """
-        user_query = self._instructions_field.toPlainText().strip()
-        if not user_query:
-            from presentation.components.toast.toast_qt import toast_error
-
-            toast_error("Please write your instruction first.")
-            return
-
-        from infrastructure.persistence.settings_manager import load_app_settings
-        from application.services.ai_context_worker import AIContextWorker
-        from domain.prompt.generator import generate_file_map
-        from infrastructure.git.git_utils import get_git_diffs
-        from domain.prompt.context_builder_prompts import build_full_tree_string
-        from presentation.components.toast.toast_qt import toast_error
-
-        settings = load_app_settings()
-        if not settings.ai_api_key:
-            toast_error("Please configure AI API Key in Settings first.")
-            return
-        if not settings.ai_model_id:
-            toast_error("Please select an AI model in Settings first.")
-            return
-        if self.tree is None:
-            toast_error("No project loaded. Open a folder first.")
-            return
-
-        workspace = self.get_workspace()
-        all_paths = self._collect_all_tree_paths(self.tree)
-
-        file_tree_map = generate_file_map(
-            self.tree,
-            all_paths,
-            workspace_root=workspace,
-            use_relative_paths=True,
-        )
-
-        # Optional: Git diff
-        git_diff_str = None
-        if workspace:
-            try:
-                diff_result = get_git_diffs(workspace)
-                if diff_result is not None:
-                    _, git_diff_str = build_full_tree_string(
-                        file_tree_map, diff_result, include_git=True
-                    )
-            except Exception:
-                pass
-
-        # Luu snapshot selection hien tai de phuc vu Undo
-        self._ai_suggest_previous_selection = list(
-            self.file_tree_widget.get_selected_paths()
-        )
-
-        # Disable button khi dang chay
-        self._ai_suggest_btn.setEnabled(False)
-        self._ai_suggest_btn.setText("Analyzing...")
-
-        # Tao worker chay tren background thread
-        worker = AIContextWorker(
-            api_key=settings.ai_api_key,
-            base_url=settings.ai_base_url,
-            model_id=settings.ai_model_id,
-            file_tree=file_tree_map,
-            user_query=user_query,
-            git_diff=git_diff_str,
-            all_file_paths=list(all_paths),
-            workspace_root=workspace,
-        )
-
-        self._ai_suggest_generation += 1
-        current_gen = self._ai_suggest_generation
-
-        worker.signals.finished.connect(
-            lambda paths, reasoning, usage, g=current_gen: self._on_ai_suggest_finished(
-                paths, reasoning, usage, g
-            )
-        )
-        worker.signals.error.connect(
-            lambda msg, g=current_gen: self._on_ai_suggest_error(msg, g)
-        )
-        worker.signals.progress.connect(self._on_ai_suggest_progress)
-
-        # Giu reference tranh GC
-        self._ai_suggest_worker = worker
-        from PySide6.QtCore import QThreadPool
-
-        QThreadPool.globalInstance().start(worker)
-
-    def _on_ai_suggest_finished(
-        self, paths: list, reasoning: str, usage: dict, generation: int
-    ) -> None:
-        """Xu ly khi AI suggest worker hoan thanh thanh cong."""
-        if generation != self._ai_suggest_generation:
-            return
-
-        self._ai_suggest_worker = None
-        self._ai_suggest_btn.setEnabled(True)
-        self._ai_suggest_btn.setText("AI Suggest Select")
-
-        if paths:
-            self._on_ai_selection_applied(paths)
-
-            from presentation.components.toast.toast_qt import toast_success
-
-            toast_success(f"AI selected {len(paths)} files.")
-        else:
-            from presentation.components.toast.toast_qt import toast_error
-
-            toast_error(f"AI could not find relevant files. {reasoning}")
-
-    def _on_ai_suggest_error(self, error_msg: str, generation: int) -> None:
-        """Xu ly khi AI suggest worker gap loi."""
-        if generation != self._ai_suggest_generation:
-            return
-
-        self._ai_suggest_worker = None
-        self._ai_suggest_btn.setEnabled(True)
-        self._ai_suggest_btn.setText("AI Suggest Select")
-
-        from presentation.components.toast.toast_qt import toast_error
-
-        toast_error(error_msg)
-
-    def _on_ai_suggest_progress(self, status: str) -> None:
-        """Cap nhat text button khi worker dang chay."""
-        self._ai_suggest_btn.setText(status)
-
-    # ===== Helpers =====
+    def _get_status_bar(self):
+        from PySide6.QtWidgets import QMainWindow
+        w = self.window()
+        return w.statusBar() if isinstance(w, QMainWindow) else None
 
     def _show_status(self, message: str, is_error: bool = False) -> None:
-        """Hien thi thong bao qua Global Toast System."""
-        if not message:
+        from presentation.components.toast.toast_qt import toast_error, toast_success
+        if not message: return
+        if is_error: toast_error(message)
+        else: toast_success(message)
+
+    @Slot(str)
+    def _preview_file(self, file_path: str) -> None:
+        from presentation.components.dialogs.dialogs_qt import FilePreviewDialogQt
+        FilePreviewDialogQt.show_preview(self, file_path)
+
+    @Slot(str)
+    def _on_tier_changed(self, tier: str) -> None:
+        settings_manager.update_app_setting(template_tier=tier)
+        if self._copy_controller: self._copy_controller._prompt_cache.invalidate_all()
+        self.toolbar.update_related_button_text(False, 0, 0)
+        self._show_status(f"Tier switched to {tier}")
+
+    def _run_ai_suggest_from_instructions(self) -> None:
+        user_query = self.get_instructions_text().strip()
+        if not user_query:
+            self._show_status("Please write instruction first", True)
             return
+        settings = settings_manager.load_app_settings()
+        if not settings.ai_api_key or not settings.ai_model_id:
+            self._show_status("Configure AI settings first", True)
+            return
+        if self.tree is None:
+            self._show_status("Open folder first", True)
+            return
+        self.instructions_panel.set_ai_suggest_busy(True)
+        workspace = self.get_workspace()
+        all_paths = self._collect_all_tree_paths(self.tree)
+        from domain.prompt.generator import generate_file_map
+        file_tree_map = generate_file_map(self.tree, all_paths, workspace_root=workspace, use_relative_paths=True)
+        from application.services.ai_context_worker import AIContextWorker
+        worker = AIContextWorker(api_key=settings.ai_api_key, base_url=settings.ai_base_url, 
+                               model_id=settings.ai_model_id, file_tree=file_tree_map, 
+                               user_query=user_query, all_file_paths=list(all_paths), workspace_root=workspace)
+        self._ai_suggest_generation += 1
+        gen = self._ai_suggest_generation
+        worker.signals.finished.connect(lambda p, r, u, g=gen: self._on_ai_suggest_finished(p, r, u, g))
+        worker.signals.error.connect(lambda m, g=gen: self._on_ai_suggest_error(m, g))
+        self._ai_suggest_worker = worker
+        from PySide6.QtCore import QThreadPool
+        QThreadPool.globalInstance().start(worker)
 
-        if is_error:
-            from presentation.components.toast.toast_qt import toast_error
-
-            toast_error(message)
+    def _on_ai_suggest_finished(self, paths: list, reasoning: str, usage: dict, generation: int) -> None:
+        if generation != self._ai_suggest_generation: return
+        self._ai_suggest_worker = None
+        self.instructions_panel.set_ai_suggest_busy(False)
+        if paths:
+            self._on_ai_selection_applied(paths)
+            self._show_status(f"AI selected {len(paths)} files")
         else:
-            from presentation.components.toast.toast_qt import toast_success
+            self._show_status(f"AI found nothing. {reasoning}", True)
 
-            toast_success(message)
+    def _on_ai_suggest_error(self, error_msg: str, generation: int) -> None:
+        if generation != self._ai_suggest_generation: return
+        self._ai_suggest_worker = None
+        self.instructions_panel.set_ai_suggest_busy(False)
+        self._show_status(error_msg, True)
+
+    def _on_ai_selection_applied(self, paths: list) -> None:
+        workspace = self.get_workspace()
+        resolved = set()
+        for p in paths:
+            full = workspace / p if workspace and not Path(p).is_absolute() else Path(p)
+            if full.exists(): resolved.add(str(full))
+        self.file_panel.set_selected_paths(resolved)
+
+    def _collect_all_tree_paths(self, root) -> Set[str]:
+        paths = set()
+        def _walk(node):
+            paths.add(node.path)
+            for c in node.children: _walk(c)
+        _walk(root)
+        return paths
+
+    def _cancel_ai_suggest_worker(self) -> None:
+        if self._ai_suggest_worker:
+            try: self._ai_suggest_worker.cancel()
+            except: pass
+            self._ai_suggest_worker = None
+
+    def _setup_shortcuts(self) -> None:
+        from PySide6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("Ctrl+Shift+S"), self).activated.connect(lambda: self._preset_widget.trigger_save_action())
+        QShortcut(QKeySequence("Ctrl+Shift+L"), self).activated.connect(lambda: self._preset_widget.focus_selector())
+
+    def _setup_graph_signals(self) -> None:
+        if not self._graph_provider or not hasattr(self._graph_provider, "signals"): return
+        s = self._graph_provider.signals
+        s.build_started.connect(lambda: self._show_status("Building graph..."))
+        s.build_finished.connect(lambda d, t: self._show_status(f"Graph built in {d:.2f}s"))
+
+    def cleanup(self) -> None:
+        if self._copy_controller: self._copy_controller._begin_copy_operation()
+        self._cancel_ai_suggest_worker()
+        self.file_panel.cleanup()
+        if self._file_watcher: self._file_watcher.stop()
+        
+        # Consistent cleanup for tests
+        if self._tree_controller: self._tree_controller.cleanup()
+        if self._related_controller: self._related_controller.cleanup()
+        if self._preset_controller: self._preset_controller.cleanup()
+
+        self._related_controller = None
+        self._tree_controller = None
+        self._copy_controller = None
+        self._preset_controller = None
+        self._file_watcher = None
+        gc.collect()
+
+    def invalidate_prompt_cache(self):
+        if self._copy_controller: self._copy_controller._prompt_cache.invalidate_all()
+    
+    @property
+    def file_tree_widget(self): return self.file_panel.file_tree_widget
+
+    def get_tokenization_service(self): return self._tokenization_service
+    def get_ignore_engine(self): return self._ignore_engine
+    def get_clipboard_service(self): return self._clipboard_service
+    def get_prompt_builder(self): return self._prompt_builder
+    def get_copy_as_file(self): return self.actions_panel.get_copy_as_file()
+    def get_full_tree(self): return self.actions_panel.get_full_tree()
+    def get_semantic_index(self): return self.actions_panel.get_semantic_index()
+
+    # --- Preset support ---
+    def set_selected_paths(self, paths: Set[str]) -> None:
+        self.file_panel.set_selected_paths(paths)

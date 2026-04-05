@@ -57,9 +57,10 @@ from infrastructure.persistence.session_state import (
 )
 from infrastructure.adapters.memory_monitor import (
     get_memory_monitor,
-    format_memory_display,
     MemoryStats,
 )
+from presentation.components.app_layout.top_bar import TopBar
+from presentation.components.app_layout.status_bar import SynapseStatusBar
 
 
 # ── Tab configuration: icon (emoji) + label ───────────────────────
@@ -107,15 +108,20 @@ class SynapseMainWindow(QMainWindow):
         # Build UI
         self._build_ui()
 
+        # Connect signals from components
+        self.top_bar.open_folder_requested.connect(self._open_folder_dialog)
+        self.top_bar.recent_folder_selected.connect(self._open_recent_folder)
+        self.top_bar.clear_memory_requested.connect(self._clear_memory)
+
         # Khoi tao Global Toast Notification System
         from presentation.components.toast.toast_qt import init_toast_manager
 
         self._toast_manager = init_toast_manager(self)
 
-        # Keep status footer metrics fresh without coupling to view internals.
+        # Keep status footer metrics fresh
         self._status_timer = QTimer(self)
         self._status_timer.setInterval(1200)
-        self._status_timer.timeout.connect(self._update_status_bar)
+        self._status_timer.timeout.connect(self._refresh_ui_stats)
         self._status_timer.start()
 
         # Restore session
@@ -166,9 +172,9 @@ class SynapseMainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 1) Top bar: app branding + folder path + memory + actions
-        top_bar = self._build_top_bar()
-        main_layout.addWidget(top_bar)
+        # 1) Top bar
+        self.top_bar = TopBar(self)
+        main_layout.addWidget(self.top_bar)
 
         # 2) Tab widget with icon+text tabs
         self.tab_widget = QTabWidget()
@@ -215,228 +221,28 @@ class SynapseMainWindow(QMainWindow):
         main_layout.addWidget(self.tab_widget, stretch=1)
 
         # 3) Status bar (footer)
-        self._build_status_bar()
+        self.status_bar = SynapseStatusBar(self.APP_VERSION, self)
+        self.setStatusBar(self.status_bar)
 
-    # ── Top Bar ───────────────────────────────────────────────────
-    def _build_top_bar(self) -> QFrame:
-        """
-        Build the unified top bar (48px height):
-        [App Icon + "Synapse"] — [Breadcrumb path] — [RAM] — [Recent ▾] [Open Folder]
-        """
-        bar = QFrame()
-        bar.setFixedHeight(48)
-        bar.setStyleSheet(
-            f"background-color: {ThemeColors.BG_SURFACE};"
-            f"border-bottom: 1px solid {ThemeColors.BORDER};"
-        )
+        self._refresh_ui_stats()
 
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(12)
-
-        # ── App branding ──
-        app_icon = QLabel("💎")
-        app_icon.setStyleSheet("font-size: 18px;")
-        app_icon.setToolTip("Synapse Desktop")
-        layout.addWidget(app_icon)
-
-        app_title = QLabel("Synapse")
-        app_title.setStyleSheet(
-            f"font-size: {ThemeFonts.SIZE_SUBTITLE}px; "
-            f"font-weight: 700; "
-            f"color: {ThemeColors.TEXT_PRIMARY}; "
-            f"letter-spacing: 0.5px;"
-        )
-        layout.addWidget(app_title)
-
-        # ── Separator ──
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFixedHeight(24)
-        sep.setStyleSheet(f"background-color: {ThemeColors.BORDER}; max-width: 1px;")
-        layout.addWidget(sep)
-
-        # ── Folder breadcrumb (mono font) ──
-        folder_icon = QLabel("📁")
-        folder_icon.setStyleSheet("font-size: 14px;")
-        layout.addWidget(folder_icon)
-
-        self._folder_path_label = QLabel("No folder selected")
-        self._folder_path_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_SECONDARY}; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
-        )
-        self._folder_path_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-        )
-        self._folder_path_label.setToolTip("Current workspace folder")
-        layout.addWidget(self._folder_path_label, stretch=1)
-
-        # ── Memory indicator (compact) ──
-        self._memory_label = QLabel("🧠 --")
-        self._memory_label.setStyleSheet(
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"color: {ThemeColors.TEXT_MUTED};"
-        )
-        self._memory_label.setToolTip("Memory usage | Token cache | Files loaded")
-        layout.addWidget(self._memory_label)
-
-        # ── Clear memory button ──
-        clear_btn = QToolButton()
-        clear_btn.setText("🧹")
-        clear_btn.setToolTip("Clear cache & free memory")
-        clear_btn.setStyleSheet(
-            f"QToolButton {{ font-size: 14px; padding: 4px 6px; border-radius: 4px; }}"
-            f"QToolButton:hover {{ background-color: {ThemeColors.BG_ELEVATED}; }}"
-        )
-        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        clear_btn.clicked.connect(self._clear_memory)
-        layout.addWidget(clear_btn)
-
-        # ── Recent folders button (outline style with dropdown) ──
-        if hasattr(sys, "_MEIPASS"):
-            assets_dir = Path(sys._MEIPASS) / "assets"
-        else:
-            assets_dir = Path(__file__).parent / "assets"
-        self._recent_btn = QToolButton()
-        self._recent_btn.setIcon(QIcon(str(assets_dir / "clock-arrow-down.svg")))
-        self._recent_btn.setIconSize(QSize(18, 18))
-        self._recent_btn.setToolTip("Recent folders (Ctrl+R)")
-        self._recent_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self._recent_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._recent_btn.setStyleSheet(
-            f"""
-            QToolButton {{
-                background-color: transparent;
-                color: {ThemeColors.TEXT_SECONDARY};
-                border: 1px solid {ThemeColors.BORDER};
-                border-radius: {ThemeFonts.SIZE_BODY // 2}px;
-                padding: 6px 10px;
-                font-size: {ThemeFonts.SIZE_BODY}px;
-                font-weight: 500;
-            }}
-            QToolButton:hover {{
-                background-color: {ThemeColors.BG_ELEVATED};
-                color: {ThemeColors.TEXT_PRIMARY};
-                border-color: {ThemeColors.BORDER_LIGHT};
-            }}
-            QToolButton::menu-indicator {{ width: 0px; }}
-        """
-        )
-        self._recent_menu = QMenu(self._recent_btn)
-        self._recent_btn.setMenu(self._recent_menu)
-        self._refresh_recent_folders_menu()
-        layout.addWidget(self._recent_btn)
-
-        # ── Open Folder button (primary accent) ──
-        open_btn = QPushButton("📁 Open Folder")
-        open_btn.setToolTip("Open workspace folder (Ctrl+O)")
-        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        open_btn.setProperty("class", "primary")
-        open_btn.setStyleSheet(
-            f"""
-            QPushButton {{
-                background-color: {ThemeColors.PRIMARY};
-                color: #FFFFFF;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 18px;
-                font-size: {ThemeFonts.SIZE_BODY}px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: {ThemeColors.PRIMARY_HOVER};
-            }}
-            QPushButton:pressed {{
-                background-color: {ThemeColors.PRIMARY_PRESSED};
-            }}
-        """
-        )
-        open_btn.clicked.connect(self._open_folder_dialog)
-        layout.addWidget(open_btn)
-
-        return bar
-
-    # ── Status Bar (Footer 28-32px) ──────────────────────────────
-    def _build_status_bar(self) -> None:
-        """
-        Build the status bar footer:
-        [Workspace path] — [Git branch] — [Version]
-        """
-        status_bar = QStatusBar()
-        self.setStatusBar(status_bar)
-
-        # Workspace path
-        self._status_workspace = QLabel("No workspace")
-        self._status_workspace.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
-        )
-        status_bar.addWidget(self._status_workspace, stretch=1)
-
-        # Git branch
-        self._status_git = QLabel("")
-        self._status_git.setStyleSheet(
-            f"color: {ThemeColors.TEXT_SECONDARY}; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
-        )
-        status_bar.addWidget(self._status_git)
-        self._status_git.setVisible(False)
-
-        # Token summary (selected files + token total)
-        self._status_tokens = QLabel("0 files | 0 tokens")
-        self._status_tokens.setStyleSheet(
-            f"color: {ThemeColors.TEXT_SECONDARY}; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
-        )
-        self._status_tokens.setToolTip("Selected files and estimated token total")
-        status_bar.addWidget(self._status_tokens)
-
-        # Version
-        version_label = QLabel(f"v{self.APP_VERSION}")
-        version_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_MUTED}; font-size: {ThemeFonts.SIZE_CAPTION}px;"
-        )
-        version_label.setToolTip("Synapse Desktop version")
-        status_bar.addPermanentWidget(version_label)
-
-        self._update_status_bar()
-
-    def _update_status_bar(self) -> None:
-        """Update status bar with current workspace + git info.
-
-        Git branch is read from cache (non-blocking) and refreshed
-        asynchronously in a background thread to avoid UI freezes.
-        """
+    def _refresh_ui_stats(self) -> None:
+        """Refresh dynamic stats in top bar and status bar."""
         if self.workspace_path:
-            self._status_workspace.setText(f"📁 {self.workspace_path}")
-
-            # Trigger async refresh (result available on next cycle)
+            # Trigger async refresh for Git
             self._refresh_git_branch_async()
-
-            # Read cached value (may be from previous cycle — acceptable for status bar)
             branch = self._detect_git_branch()
-            if branch:
-                self._status_git.setText(f"⎇ {branch}")
-                self._status_git.setVisible(True)
-            else:
-                self._status_git.setVisible(False)
-        else:
-            self._status_workspace.setText("No workspace")
-            self._status_git.setVisible(False)
+            self.status_bar.set_git_branch(branch)
+        
+        # Update token stats
+        selected_count, total_tokens = self._get_token_metrics()
+        self.status_bar.set_token_stats(selected_count, total_tokens)
 
-        self._status_tokens.setText(self._build_token_status_text())
-
-    def _build_token_status_text(self) -> str:
-        """Return compact token summary for the footer."""
+    def _get_token_metrics(self) -> tuple[int, int]:
+        """Lấy thông số token từ context view."""
         try:
             if not hasattr(self, "context_view"):
-                return "0 files | 0 tokens"
+                return 0, 0
 
             selected_count = len(self.context_view.get_selected_paths())
             total_tokens = 0
@@ -444,9 +250,9 @@ class SynapseMainWindow(QMainWindow):
             if hasattr(self.context_view, "file_tree_widget"):
                 total_tokens = self.context_view.file_tree_widget.get_total_tokens()
 
-            return f"{selected_count} files | {total_tokens:,} tokens"
+            return selected_count, total_tokens
         except Exception:
-            return "0 files | 0 tokens"
+            return 0, 0
 
     def _detect_git_branch(self) -> Optional[str]:
         """Return cached git branch name. Updated asynchronously by background timer.
@@ -513,21 +319,9 @@ class SynapseMainWindow(QMainWindow):
 
     # ── Recent folders ────────────────────────────────────────────
     def _refresh_recent_folders_menu(self) -> None:
-        """Refresh the recent folders dropdown menu."""
-        self._recent_menu.clear()
-        recent = load_recent_folders()
-
-        if not recent:
-            action = self._recent_menu.addAction("No recent folders")
-            action.setEnabled(False)
-            return
-
-        for folder_path in recent:
-            display_name = get_folder_display_name(folder_path)
-            action = self._recent_menu.addAction(f"📁 {display_name}")
-            action.triggered.connect(
-                lambda checked=False, p=folder_path: self._open_recent_folder(p)
-            )
+        """Refresh the recent folders in TopBar."""
+        from infrastructure.persistence.recent_folders import load_recent_folders
+        self.top_bar.refresh_recent_menu(load_recent_folders())
 
     # ── Folder operations ─────────────────────────────────────────
     @Slot()
@@ -553,23 +347,21 @@ class SynapseMainWindow(QMainWindow):
         self._cached_git_branch = None  # Clear stale branch
         self._git_branch_pending = False  # Allow immediate re-detection
 
-        # Update top bar breadcrumb
-        self._folder_path_label.setText(str(path))
-        self._folder_path_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_PRIMARY}; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
-        )
+        # Update top bar breadcrumb is handled by TopBar component automatically
+        # which is notified via set_workspace_path below.
 
         # Update window title
         self._update_window_title()
 
         # Save to recent
+        from infrastructure.persistence.recent_folders import load_recent_folders
         add_recent_folder(str(path))
-        self._refresh_recent_folders_menu()
+        self.top_bar.refresh_recent_menu(load_recent_folders())
 
-        # Update status bar
-        self._update_status_bar()
+        # Update components
+        self.top_bar.set_workspace_path(path)
+        self.status_bar.set_workspace(path)
+        self._refresh_ui_stats()
 
         # Notify context view
         self.context_view.on_workspace_changed(path)
@@ -601,28 +393,9 @@ class SynapseMainWindow(QMainWindow):
         self.apply_view.set_opx_content(opx_content)
         self.tab_widget.setCurrentIndex(1)
 
-    # ── Memory monitor callback ───────────────────────────────────
     def _on_memory_update(self, stats: MemoryStats) -> None:
-        """Update memory display.
-
-        Called on main thread (QTimer-based MemoryMonitor) — safe to
-        update UI widgets directly without marshalling.
-        """
-        display_text = f"🧠 {format_memory_display(stats)}"
-        self._memory_label.setText(display_text)
-
-        if stats.warning and "Critical" in stats.warning:
-            color = ThemeColors.ERROR
-        elif stats.warning:
-            color = ThemeColors.WARNING
-        else:
-            color = ThemeColors.TEXT_MUTED
-
-        self._memory_label.setStyleSheet(
-            f"font-size: {ThemeFonts.SIZE_CAPTION}px; "
-            f"font-family: {ThemeFonts.FAMILY_MONO}; "
-            f"color: {color};"
-        )
+        """Cập nhật thông số memory lên UI."""
+        self.top_bar.update_memory_stats(stats)
 
     @Slot()
     def _clear_memory(self) -> None:
@@ -637,13 +410,7 @@ class SynapseMainWindow(QMainWindow):
             gc.collect()
 
             stats = self._memory_monitor.get_current_stats()
-            display_text = f"🧠 {format_memory_display(stats)}"
-            self._memory_label.setText(display_text)
-            self._memory_label.setStyleSheet(
-                f"font-size: {ThemeFonts.SIZE_CAPTION}px; "
-                f"font-family: {ThemeFonts.FAMILY_MONO}; "
-                f"color: {ThemeColors.SUCCESS};"
-            )
+            self.top_bar.update_memory_stats(stats)
 
             from shared.logging_config import log_info
 
@@ -672,15 +439,12 @@ class SynapseMainWindow(QMainWindow):
             if workspace.exists() and workspace.is_dir():
                 self.workspace_path = workspace
 
-                self._folder_path_label.setText(str(workspace))
-                self._folder_path_label.setStyleSheet(
-                    f"color: {ThemeColors.TEXT_PRIMARY}; "
-                    f"font-family: {ThemeFonts.FAMILY_MONO}; "
-                    f"font-size: {ThemeFonts.SIZE_CAPTION}px;"
-                )
-
                 self._update_window_title()
-                self._update_status_bar()
+                
+                self.top_bar.set_workspace_path(workspace)
+                self.top_bar.refresh_recent_menu(load_recent_folders())
+                self.status_bar.set_workspace(workspace)
+                self._refresh_ui_stats()
 
                 self.context_view.on_workspace_changed(workspace)
 

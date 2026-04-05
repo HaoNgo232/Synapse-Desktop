@@ -9,6 +9,7 @@ Mo rong trong tuong lai:
 - CompositeIgnoreStrategy: Ket hop nhieu strategies
 """
 
+import platform
 from pathlib import Path
 from typing import Set
 
@@ -47,6 +48,7 @@ class DefaultIgnoreStrategy(IIgnoreStrategy):
         Kiem tra path co nam trong thu muc can bo qua khong.
 
         Duyet tung phan cua path va so sanh voi IGNORED_PATTERNS.
+        Tren Windows, thuc hien so sanh khong phan biet hoa thuong.
 
         Args:
             path: Duong dan tuyet doi can kiem tra
@@ -54,8 +56,14 @@ class DefaultIgnoreStrategy(IIgnoreStrategy):
         Returns:
             True neu bat ky phan nao cua path nam trong IGNORED_PATTERNS
         """
+        is_windows = platform.system() == "Windows"
         path_parts = Path(path).parts
-        for pattern in self.IGNORED_PATTERNS:
-            if pattern in path_parts:
+
+        for part in path_parts:
+            # Tren Windows, so sanh case-insensitive
+            part_to_check = part.lower() if is_windows else part
+            
+            # Pattern trong IGNORED_PATTERNS da duoc viet thuong
+            if part_to_check in self.IGNORED_PATTERNS:
                 return True
         return False

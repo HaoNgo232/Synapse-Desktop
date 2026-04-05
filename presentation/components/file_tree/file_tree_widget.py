@@ -849,6 +849,12 @@ class FileTreeWidget(QWidget):
 
     def _expand_paths_recursive(self, parent: QModelIndex, paths: Set[str]) -> None:
         """Recursively expand folders matching paths."""
+        # FIX: Ho tro lazy loading khi restore state.
+        # Neu parent chua fetch children thi rowCount() tra ve 0.
+        # Chung ta can fetchMore() truoc khi duyet row.
+        if self._filter_proxy.canFetchMore(parent):
+            self._filter_proxy.fetchMore(parent)
+
         for row in range(self._filter_proxy.rowCount(parent)):
             index = self._filter_proxy.index(row, 0, parent)
             if not index.isValid():
@@ -916,8 +922,20 @@ class FileTreeWidget(QWidget):
                 except Exception:
                     pass
 
-            # So sánh với cache: nếu giống thì JSON chưa thay đổi -> skip
-            if absolute_selected == self._last_synced_selection:
+            # CHU Y: Tren Windows, path casing co the khong nhat quan (e: vs E:)
+            # Chung ta can filter ra nhung paths thực sự khác biệt để tránh loop refresh
+            import platform
+
+            is_windows = platform.system() == "Windows"
+            if is_windows:
+                # So sánh case-insensitively trên Windows để tránh mismatch (e: vs E:)
+                norm_absolute = {p.lower() for p in absolute_selected}
+                norm_last = {p.lower() for p in self._last_synced_selection}
+                is_changed = norm_absolute != norm_last
+            else:
+                is_changed = absolute_selected != self._last_synced_selection
+
+            if not is_changed:
                 return
 
             # JSON đã thay đổi (agent sửa từ bên ngoài)
@@ -925,7 +943,15 @@ class FileTreeWidget(QWidget):
 
             # Kiểm tra nếu thực sự khác với model state thì mới apply
             model_selected = self._model.get_all_selected_paths()
-            if absolute_selected != model_selected:
+            
+            if is_windows:
+                norm_model = {p.lower() for p in model_selected}
+                norm_absolute = {p.lower() for p in absolute_selected}
+                should_apply = norm_model != norm_absolute
+            else:
+                should_apply = model_selected != absolute_selected
+
+            if should_apply:
                 self._is_syncing_selection = True
                 try:
                     self.set_selected_paths(absolute_selected)

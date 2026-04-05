@@ -306,6 +306,25 @@ if (Test-Path $exePath) {
         Write-Host "    Compress-Archive -Path '$DIST_DIR\$APP_NAME' -DestinationPath '$BUILD_DIR\$APP_NAME-v$APP_VERSION-win64.zip'" -ForegroundColor DarkGray
     }
 
+    # ── Step 8: Move to Desktop ───────────────────────────────────
+    # Tự động di chuyển file EXE ra ngoài Desktop nếu build bản OneFile (theo yêu cầu)
+    if ($OneFile -and (Test-Path $exePath)) {
+        Write-Host ""
+        Write-Host "[8/8] Moving output to Desktop..." -ForegroundColor Green
+        $desktopPath = [Environment]::GetFolderPath("Desktop")
+        $destPath = Join-Path $desktopPath "$APP_NAME.exe"
+        
+        try {
+            # Dùng Copy-Item thay vì Move-Item để giữ lại backup trong dist
+            # Flag -Force đảm bảo sẽ ghi đè file cũ trên Desktop nếu đã tồn tại
+            Copy-Item -Path $exePath -Destination $destPath -Force
+            $exePath = $destPath  # Cập nhật đường dẫn để hiển thị trong báo cáo bên dưới
+            Write-Host "  ✨ [Copied to Desktop] $exePath" -ForegroundColor Cyan
+        } catch {
+            Write-Host "  [WARNING] Could not move to Desktop: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
     Write-Host ""
     Write-Host "  To run:" -ForegroundColor DarkGray
     Write-Host "    & '$exePath'" -ForegroundColor DarkGray

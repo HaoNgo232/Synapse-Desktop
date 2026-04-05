@@ -2,7 +2,7 @@ import pytest
 from PySide6.QtWidgets import QApplication, QFileDialog, QPushButton
 from PySide6.QtCore import Qt
 from presentation.main_window import SynapseMainWindow
-from application.services.service_container import ServiceContainer
+from infrastructure.di.service_container import ServiceContainer
 from infrastructure.persistence.recent_folders import clear_recent_folders
 
 

@@ -49,7 +49,7 @@ class TestBug2And3SingleServiceContainer:
     def test_context_view_receives_injected_services(self, qtbot):
         """ContextViewQt should receive ignore_engine and tokenization_service"""
         from presentation.views.context.context_view_qt import ContextViewQt
-        from application.services.service_container import ServiceContainer
+        from infrastructure.di.service_container import ServiceContainer
 
         container = ServiceContainer()
 
@@ -68,7 +68,7 @@ class TestBug2And3SingleServiceContainer:
 
     def test_cache_adapters_use_same_services(self):
         """Cache adapters should reference the same service instances as views"""
-        from application.services.service_container import ServiceContainer
+        from infrastructure.di.service_container import ServiceContainer
         from infrastructure.adapters.cache_adapters import (
             TokenCacheAdapter,
             IgnoreCacheAdapter,
@@ -232,7 +232,7 @@ class TestPromptBuilderUsesContainerTokenization:
 
     def test_prompt_builder_receives_tokenization_service(self):
         """PromptBuildService should receive tokenization_service from container"""
-        from application.services.service_container import ServiceContainer
+        from infrastructure.di.service_container import ServiceContainer
         from application.services.prompt_build_service import PromptBuildService
 
         container = ServiceContainer()

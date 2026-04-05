@@ -20,9 +20,8 @@ Design decisions:
 """
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
-from application.services.prompt_build_service import PromptBuildService
 from infrastructure.adapters.clipboard_service import QtClipboardService
 from infrastructure.adapters.cache_registry import CacheRegistry
 from application.services.tokenization_service import TokenizationService
@@ -37,50 +36,79 @@ logger = logging.getLogger(__name__)
 class ServiceContainer:
     """
     Composition root - single point of control cho service lifecycle.
-
-    So huu: PromptBuildService, QtClipboardService, TokenizationService, CacheRegistry, IgnoreEngine
-    Khong con dung module-level singletons (encoder_registry, cache_registry).
-
-    Thread Safety: Khoi tao PHAI thuc hien tren main thread.
-    Cac services ben trong deu thread-safe.
     """
+
+    _instance: Optional["ServiceContainer"] = None
+
+    @classmethod
+    def get_instance(cls) -> "ServiceContainer":
+        if cls._instance is None:
+            cls._instance = ServiceContainer()
+        return cls._instance
 
     def __init__(self) -> None:
         """Khoi tao tat ca services tai composition root."""
+        ServiceContainer._instance = self
+        # --- Infrastructure Adapters (Concretions) ---
+        from infrastructure.adapters.local_filesystem_adapter import (
+            LocalFileSystemAdapter,
+        )
+        from infrastructure.adapters.py_git_adapter import PyGitAdapter
+        from infrastructure.adapters.json_settings_adapter import JsonSettingsAdapter
+
+        self.file_system = LocalFileSystemAdapter()
+        self.git_repo = PyGitAdapter()
+        self.settings = JsonSettingsAdapter()
+
+        # --- Domain Services ---
         # IgnoreEngine - quan ly tat ca logic ignore/gitignore
-        # Khoi tao tai day de tranh module-level state
-        self.ignore_engine: IgnoreEngine = IgnoreEngine()
+        self.ignore_engine: IgnoreEngine = IgnoreEngine(file_system=self.file_system)
 
+        # RelationshipService - quan ly logic quan hệ file (Domain)
+        from domain.services.relationship_service import RelationshipService
+
+        self.relationship_service = RelationshipService()
+
+        # --- Application Services ---
         # GraphService - quan ly RelationshipGraph o application layer
-        # Inject IgnoreEngine de ton trong cac exclude patterns khi scan files
         self.graph_service: GraphService = GraphService(
-            ignore_engine=self.ignore_engine
+            relationship_service=self.relationship_service,
+            ignore_engine=self.ignore_engine,
         )
 
-        # TokenizationService - khoi tao noi bo thay vi dung global singleton
-        # Lay tokenizer_repo tu settings hien tai
-        from infrastructure.adapters.encoder_registry import get_tokenizer_repo
-
-        _repo = get_tokenizer_repo()
+        # TokenizationService
+        repo = self._resolve_tokenizer_repo()
         self._tokenization_service: TokenizationService = TokenizationService(
-            tokenizer_repo=_repo
+            tokenizer_repo=repo
         )
 
-        # Services do container so huu truc tiep (inject dependencies)
-        self.prompt_builder: IPromptBuilder = PromptBuildService(
+        # PromptBuilder (Use Case orchestration)
+        from application.use_cases.build_prompt import BuildPromptUseCase
+
+        self.prompt_builder: IPromptBuilder = BuildPromptUseCase(
             tokenization_service=self._tokenization_service,
             graph_service=self.graph_service,
+            git_repo=self.git_repo,
         )
         self.clipboard: IClipboardService = QtClipboardService()
 
-        # CacheRegistry - tam thoi giu lai module singleton o day cho den khi Phase 2 migration
+        # CacheRegistry
         from infrastructure.adapters.cache_registry import (
             cache_registry as _module_registry,
         )
 
         self.cache_registry: CacheRegistry = _module_registry
 
-        logger.info("ServiceContainer initialized with owned services")
+        # CacheRegistry
+        from infrastructure.adapters.cache_registry import (
+            cache_registry as _module_registry,
+        )
+
+        self.cache_registry: CacheRegistry = _module_registry
+
+        logger.info(
+            "ServiceContainer initialized using Clean Architecture / DDD patterns"
+        )
 
     @property
     def tokenization(self) -> ITokenizationService:
@@ -140,19 +168,14 @@ class ServiceContainer:
 
         return report
 
-    @staticmethod
-    def _resolve_tokenizer_repo() -> "str | None":
+    def _resolve_tokenizer_repo(self) -> Optional[str]:
         """
-        Lay Hugging Face tokenizer repo tu settings hien tai.
-
-        Tra ve None neu khong co model duoc cau hinh hoac gap loi.
+        Lay Hugging Face tokenizer repo tu settings hien tai thông qua settings provider.
         """
         try:
-            from infrastructure.persistence.settings_manager import load_app_settings
             from presentation.config.model_config import get_model_by_id
 
-            settings = load_app_settings()
-            model_id = settings.model_id
+            model_id = self.settings.get("model_id")
             model_config = get_model_by_id(model_id)
             if model_config:
                 return model_config.tokenizer_repo

@@ -48,6 +48,8 @@ class IPromptBuilder(Protocol):
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
         full_tree: bool = False,
+        semantic_index: bool = True,
+        max_tokens: Optional[int] = None,
     ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt tu danh sach file paths va settings.

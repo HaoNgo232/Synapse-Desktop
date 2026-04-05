@@ -485,7 +485,7 @@ def _assemble_plain(
 
     prompt_parts.append(f"{'=' * 48}\nDIRECTORY STRUCTURE\n{'=' * 48}\n{file_map}")
 
-    prompt_parts.append(f"{'=' * 48}\nFILE CONTEXT\n{'=' * 48}\n{file_contents}")
+    prompt_parts.append(f"{'=' * 48}\nFILE CONTENTS\n{'=' * 48}\n{file_contents}")
 
     # Them Git context voi instruction text, guard None values
     has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
@@ -580,8 +580,8 @@ def _assemble_markdown(
     if not instructions_at_top and semantic_index and semantic_index.strip():
         prompt += f"## Semantic Index\n\n{_strip_xml_simple(semantic_index)}\n\n"
 
-    prompt += f"## Directory Structure\n\n{file_map}\n\n"
-    prompt += f"## File Context\n\n{file_contents}\n"
+    prompt += f"## Directory Structure\n\n<file_map>\n{file_map}\n</file_map>\n\n"
+    prompt += f"## File Context\n\n<file_contents>\n{file_contents}\n</file_contents>\n"
 
     prompt = _append_git_changes_markdown(prompt, git_diffs, git_logs)
 

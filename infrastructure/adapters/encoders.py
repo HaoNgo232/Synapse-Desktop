@@ -26,9 +26,9 @@ from typing import Optional, Any, TYPE_CHECKING
 
 # Thu import rs-bpe truoc (nhanh hon, Rust-based)
 try:
-    from rs_bpe import openai as rs_bpe_openai
-
-    HAS_RS_BPE = True
+    #    from rs_bpe import openai as rs_bpe_openai
+    #    HAS_RS_BPE = True
+    HAS_RS_BPE = False
 except ImportError:
 
     class _RsBpeStub:

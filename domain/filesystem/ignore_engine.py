@@ -23,24 +23,28 @@ import threading
 import pathspec
 
 from shared.constants import EXTENDED_IGNORE_PATTERNS
+from domain.ports.filesystem import IFileSystem
 
 
 class IgnoreEngine:
     """
-    Ignore Engine - Single source of truth cho tat ca logic ignore/gitignore.
-
-    Cung cap:
-    - build_ignore_patterns(): Tap hop patterns tu VCS + default + user + gitignore
-    - build_pathspec(): Tao pathspec.PathSpec tu patterns (co cache)
-    - read_gitignore(): Doc .gitignore, .git/info/exclude, global gitignore (co cache)
-    - find_git_root(): Tim git root directory tu mot path bat ky
-    - clear_cache(): Xoa tat ca cache
+    Ignore Engine - Single source of truth cho tất cả logic ignore/gitignore.
+    Sử dụng IFileSystem để trừu tượng hóa các thao tác với hệ thống tập tin.
     """
 
-    # Cac VCS directories luon bi exclude
+    # Các VCS directories luôn bị exclude
     VCS_DIRS = [".git", ".hg", ".svn"]
 
-    def __init__(self):
+    def __init__(self, file_system: Optional[IFileSystem] = None):
+        if file_system is None:
+            # Fallback for easier testing/legacy, but should be injected in production
+            from infrastructure.adapters.local_filesystem_adapter import (
+                LocalFileSystemAdapter,
+            )
+
+            file_system = LocalFileSystemAdapter()
+
+        self._fs = file_system
         # Cache cho gitignore patterns: root_path -> (mtime, patterns)
         self._gitignore_cache: Dict[str, Tuple[float, list]] = {}
         # Cache cho PathSpec objects: cache_key -> (mtime, PathSpec)
@@ -144,7 +148,9 @@ class IgnoreEngine:
                 cached_mtime, cached_patterns = self._gitignore_cache[cache_key]
                 try:
                     current_mtime = (
-                        gitignore_path.stat().st_mtime if gitignore_path.exists() else 0
+                        self._fs.get_mtime(gitignore_path)
+                        if self._fs.exists(gitignore_path)
+                        else 0
                     )
                     if current_mtime == cached_mtime:
                         return cached_patterns.copy()
@@ -155,10 +161,10 @@ class IgnoreEngine:
         patterns: List[str] = []
         gitignore_mtime = 0.0
 
-        if gitignore_path.exists():
+        if self._fs.exists(gitignore_path):
             try:
-                gitignore_mtime = gitignore_path.stat().st_mtime
-                content = gitignore_path.read_text(encoding="utf-8", errors="replace")
+                gitignore_mtime = self._fs.get_mtime(gitignore_path)
+                content = self._fs.read_text(gitignore_path)
                 # Loc bo cac line rong hoac comment
                 for line in content.splitlines():
                     line = line.strip()
@@ -169,9 +175,9 @@ class IgnoreEngine:
 
         # Doc .git/info/exclude neu o root
         exclude_path = root_path / ".git" / "info" / "exclude"
-        if exclude_path.exists():
+        if self._fs.exists(exclude_path):
             try:
-                content = exclude_path.read_text(encoding="utf-8", errors="replace")
+                content = self._fs.read_text(exclude_path)
                 for line in content.splitlines():
                     line = line.strip()
                     if line and not line.startswith("#"):
@@ -203,11 +209,9 @@ class IgnoreEngine:
                 return self._global_gitignore_cache
 
             for candidate in candidates:
-                if candidate.exists():
+                if self._fs.exists(candidate):
                     try:
-                        content = candidate.read_text(
-                            encoding="utf-8", errors="replace"
-                        )
+                        content = self._fs.read_text(candidate)
                         for line in content.splitlines():
                             line = line.strip()
                             if line and not line.startswith("#"):
@@ -227,7 +231,7 @@ class IgnoreEngine:
 
         root_path = start_path
         while root_path.parent != root_path:
-            if (root_path / ".git").exists():
+            if self._fs.exists(root_path / ".git"):
                 break
             root_path = root_path.parent
 
@@ -242,6 +246,6 @@ class IgnoreEngine:
 
     def _get_gitignore_mtime(self, root_path: Path) -> float:
         gitignore_file = root_path / ".gitignore"
-        if gitignore_file.exists():
-            return gitignore_file.stat().st_mtime
+        if self._fs.exists(gitignore_file):
+            return self._fs.get_mtime(gitignore_file)
         return 0.0

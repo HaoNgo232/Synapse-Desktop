@@ -197,6 +197,7 @@ class BackgroundWorker(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
+        # Gắn parent là self để tránh bị GC xóa trước khi emit xong
         self.signals = WorkerSignals()
         self.setAutoDelete(True)
 
@@ -205,6 +206,7 @@ class BackgroundWorker(QRunnable):
         """Execute worker function."""
         try:
             result = self.fn(*self.args, **self.kwargs)
+            # Dùng try-except để bắt trường hợp object bị xóa trong lúc emit
             try:
                 self.signals.result.emit(result)
             except RuntimeError:
@@ -222,6 +224,10 @@ class BackgroundWorker(QRunnable):
                 pass
 
 
+# Global set để giữ references cho workers đang chạy
+_active_workers: set[BackgroundWorker] = set()
+
+
 def schedule_background(
     fn: Callable[..., Any],
     on_result: Optional[Callable[[Any], None]] = None,
@@ -234,25 +240,25 @@ def schedule_background(
     Schedule một function chạy trên background thread.
 
     Convenience wrapper cho BackgroundWorker + QThreadPool.
-
-    Args:
-        fn: Function sẽ được chạy trên background thread
-        on_result: Callback khi có kết quả (main thread)
-        on_error: Callback khi có lỗi (main thread)
-        on_finished: Callback khi hoàn tất (main thread)
-        *args, **kwargs: Arguments cho fn
-
-    Returns:
-        BackgroundWorker instance
     """
     worker = BackgroundWorker(fn, *args, **kwargs)
+
+    # Đăng ký và giữ reference để tránh GC xóa mất signals
+    _active_workers.add(worker)
+
+    def _cleanup():
+        if on_finished:
+            on_finished()
+        # Xóa khỏi active set sau khi tât cả signals đã được xử lý xong
+        # dùng singleShot(0) để đảm bảo các slots khác đã chạy xong
+        QTimer.singleShot(0, lambda: _active_workers.discard(worker))
 
     if on_result:
         worker.signals.result.connect(on_result)
     if on_error:
         worker.signals.error.connect(on_error)
-    if on_finished:
-        worker.signals.finished.connect(on_finished)
+
+    worker.signals.finished.connect(_cleanup)
 
     QThreadPool.globalInstance().start(worker)
     return worker

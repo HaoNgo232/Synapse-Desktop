@@ -53,7 +53,7 @@ def format_files_plain(entries: list[FileEntry]) -> str:
 
         # Ghép tất cả lại: Header ranh giới, Metadata, rồi mới đến Code
         file_elements.append(
-            f"FILE: {entry.display_path}\n{'-' * (len(entry.display_path) + 6)}\n{content_display}"
+            f"FILE: {entry.display_path}\n{'=' * (len(entry.display_path) + 6)}\n{content_display}"
         )
 
     if not file_elements:

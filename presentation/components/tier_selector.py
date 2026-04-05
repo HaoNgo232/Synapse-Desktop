@@ -108,7 +108,19 @@ class TierSelector(QWidget):
         self._update_button_states()
 
         if emit:
-            self.tier_changed.emit(tier)
+            # Sử dụng deferred call để tránh xung đột với event loop hiện tại (menu đóng/xóa)
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"[TierSelector] Emit tier_changed: {tier}")
+
+            # Phát signal ngay lập tức nếu không emit từ menu,
+            # hoặc qua timer nếu cần tránh race condition.
+            # Ở đây ta phát luôn nhưng bọc trong try-except phòng trường hợp object đang bị hủy
+            try:
+                self.tier_changed.emit(tier)
+            except RuntimeError:
+                pass  # Object already deleted
 
     def get_tier(self) -> str:
         """Lấy tier đang được chọn."""

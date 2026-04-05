@@ -38,14 +38,18 @@ def format_files_json(entries: list[FileEntry]) -> str:
             else:
                 files_dict[entry.display_path] = entry.error
         elif entry.content is not None:
-            file_obj: dict[str, object] = {"content": entry.content}
-            if entry.layer:
-                file_obj["layer"] = entry.layer
-            if entry.role:
-                file_obj["role"] = entry.role
-            if entry.dependencies:
-                file_obj["dependencies"] = entry.dependencies
+            # Backward compatibility: trả về plain string nếu không có metadata
+            if not entry.layer and not entry.role and not entry.dependencies:
+                files_dict[entry.display_path] = entry.content
+            else:
+                file_obj: dict[str, object] = {"content": entry.content}
+                if entry.layer:
+                    file_obj["layer"] = entry.layer
+                if entry.role:
+                    file_obj["role"] = entry.role
+                if entry.dependencies:
+                    file_obj["dependencies"] = entry.dependencies
 
-            files_dict[entry.display_path] = file_obj
+                files_dict[entry.display_path] = file_obj
 
     return json.dumps(files_dict, ensure_ascii=False)

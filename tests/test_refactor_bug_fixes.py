@@ -259,7 +259,7 @@ class TestDependencyInjection:
             return_value=None,
         ):
             with patch(
-                "presentation.views.context.context_view_qt.UIBuilderMixin._build_ui"
+                "presentation.views.context.context_view_qt.ContextViewQt._init_ui"
             ):
                 with patch("presentation.views.context.context_view_qt.FileWatcher"):
                     with patch("PySide6.QtGui.QShortcut"):
@@ -284,7 +284,7 @@ class TestDependencyInjection:
             return_value=None,
         ):
             with patch(
-                "presentation.views.context.context_view_qt.UIBuilderMixin._build_ui"
+                "presentation.views.context.context_view_qt.ContextViewQt._init_ui"
             ):
                 with patch("presentation.views.context.context_view_qt.FileWatcher"):
                     with patch("PySide6.QtGui.QShortcut"):

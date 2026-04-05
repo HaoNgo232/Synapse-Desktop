@@ -115,4 +115,4 @@ def extract_role_from_content(path: Path, content: str) -> Optional[str]:
     if "_" in stem:
         parts = stem.split("_")
         return "".join(p.capitalize() for p in parts)
-    return stem.capitalize()
+    return None

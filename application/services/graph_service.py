@@ -9,10 +9,10 @@ from typing import Optional, Any
 from collections import OrderedDict
 from PySide6.QtCore import QObject, Signal
 
-from domain.relationships.builder import GraphBuilder
 from domain.relationships.graph import RelationshipGraph
 from domain.relationships.port import IRelationshipGraphProvider
 from domain.filesystem.ignore_engine import IgnoreEngine
+from domain.services.relationship_service import RelationshipService
 
 
 class GraphSignals(QObject):
@@ -40,38 +40,39 @@ Lớp này implement IRelationshipGraphProvider để các layer khác
 
 class GraphService(IRelationshipGraphProvider):
     """
-    Service application-level để build và cung cấp RelationshipGraph.
-
-    Thiết kế:
-    - Thread-safe swap: build graph mới trên background thread,
-      sau đó swap reference vào `_graph` bên trong lock.
-    - READ-heavy, WRITE-rare: hầu hết callers chỉ đọc graph.
+    Application service để quản lý và trigger việc xây dựng RelationshipGraph.
+    Delegate logic phân tích sang RelationshipService (Domain).
+    Quản lý các concern về Threading, Caching, và UI Signals.
     """
 
-    def __init__(self, ignore_engine: Optional[IgnoreEngine] = None) -> None:
+    def __init__(
+        self,
+        relationship_service: Optional[RelationshipService] = None,
+        ignore_engine: Optional[IgnoreEngine] = None,
+    ) -> None:
         """
         Khởi tạo GraphService.
-
-        Args:
-            ignore_engine: Engine dùng để filter files theo ignore patterns.
         """
-
-        self._graph: Optional[RelationshipGraph] = None
+        self._relationship_service = relationship_service or RelationshipService()
         self._workspace_root: Optional[Path] = None
         self._lock = threading.Lock()
         self._generation: int = 0
         self._building: bool = False
         self._ignore_engine = ignore_engine
 
-        # AST Tree + Adjacency Cache: source_abs -> (mtime, tree, hash, targets) (Phase 5)
-        # Sử dụng OrderedDict để implement LRU eviction
+        # AST Tree + Adjacency Cache (Phase 5)
         self._tree_cache: OrderedDict[str, tuple[float, Any, str, set[str]]] = (
             OrderedDict()
         )
         self._MAX_TREE_CACHE = 500
 
-        # Signals cho UI UX Pro Max
+        # Signals cho UI
         self.signals = GraphSignals()
+
+    @property
+    def _graph(self) -> Optional[RelationshipGraph]:
+        """Proxy cho graph hiện tại trong domain service."""
+        return self._relationship_service.get_current_graph()
 
     # ===== IRelationshipGraphProvider API =====
 
@@ -179,7 +180,7 @@ class GraphService(IRelationshipGraphProvider):
         with self._lock:
             # Chỉ swap nếu generation không bị ghi đè (atomic swap)
             if current_generation == self._generation:
-                self._graph = graph
+                self._relationship_service.set_graph(graph, workspace_root)
                 self._workspace_root = workspace_root
 
             # Luôn reset flag khi xong (dù swap hay discard)
@@ -194,7 +195,7 @@ class GraphService(IRelationshipGraphProvider):
         """
 
         with self._lock:
-            self._graph = None
+            self._relationship_service.reset()
             self._generation += 1
 
     # ===== Public API bổ sung cho UI/File watcher =====
@@ -234,7 +235,7 @@ class GraphService(IRelationshipGraphProvider):
         with self._lock:
             self._workspace_root = workspace_root
             self._generation += 1
-            self._graph = None
+            self._relationship_service.reset()
             self._building = False
 
     # ===== Internal helpers =====
@@ -265,7 +266,7 @@ class GraphService(IRelationshipGraphProvider):
                 log_info("[GraphService] Build discarded (new generation)")
                 return
 
-            self._graph = graph
+            self._relationship_service.set_graph(graph, workspace_root)
             self._workspace_root = workspace_root
             duration = time.time() - start
             log_info(
@@ -289,17 +290,14 @@ class GraphService(IRelationshipGraphProvider):
 
         file_paths = [p for p in all_files if Path(p).is_file()]
 
-        builder = GraphBuilder(workspace_root=workspace_root)
-
         # Chúng ta có thể bổ sung callback vào Builder nếu muốn xem tiến trình chi tiết
-        # Hiện tại ta coi build() là một khối duy nhất cho 10k files (Nhưng tốn 1-3s)
         self.signals.build_status.emit("Connecting relationships (Adjacency)...")
-        graph = builder.build(
+
+        # Delegate sang Domain Service
+        graph = self._relationship_service.build_for_workspace(
+            workspace_root=workspace_root,
             file_paths=file_paths,
-            existing_resolver=None,
-            max_codemap_files=500,
-            imports_max_depth=2,
-            tree_cache=self._tree_cache,  # Pass cache to builder
+            tree_cache=self._tree_cache,
         )
 
         # LRU Eviction: Giới hạn bộ nhớ cho AST trees

@@ -12,11 +12,11 @@ def test_main_window_initialization(qtbot):
         patch("presentation.main_window.get_memory_monitor"),
         patch("presentation.components.toast.toast_qt.init_toast_manager"),
         patch(
-            "presentation.main_window.load_session_state",
+            "infrastructure.persistence.session_state.load_session_state",
             return_value=None,
         ),
         patch(
-            "presentation.main_window.load_recent_folders",
+            "infrastructure.persistence.recent_folders.load_recent_folders",
             return_value=[],
         ),
     ):
@@ -40,11 +40,11 @@ def test_main_window_open_folder(qtbot, tmp_path):
         patch("presentation.main_window.get_memory_monitor"),
         patch("presentation.components.toast.toast_qt.init_toast_manager"),
         patch(
-            "presentation.main_window.load_session_state",
+            "infrastructure.persistence.session_state.load_session_state",
             return_value=None,
         ),
         patch(
-            "presentation.main_window.load_recent_folders",
+            "infrastructure.persistence.recent_folders.load_recent_folders",
             return_value=[],
         ),
     ):
@@ -60,7 +60,7 @@ def test_main_window_open_folder(qtbot, tmp_path):
             window._open_folder_dialog()
 
             # Kiểm tra xem project path đã được set chưa
-            assert window.workspace_path == Path(fake_dir)
+            assert window._coordinator._workspace_path == Path(fake_dir)
 
             # Kiểm tra text label của status bar và breadcrumb
             assert fake_dir in window.status_bar._status_workspace.text()

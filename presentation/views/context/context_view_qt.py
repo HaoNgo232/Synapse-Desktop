@@ -122,14 +122,16 @@ class ContextViewQt(QWidget):
 
         # Initialize displays from settings
         settings = settings_manager.load_app_settings()
-        self.instructions_panel.update_template_tier_display(
-            getattr(settings, "template_tier", "lite")
-        )
+        if hasattr(self, "instructions_panel"):
+            self.instructions_panel.update_template_tier_display(
+                getattr(settings, "template_tier", "lite")
+            )
 
         # Connect signals
-        self._setup_connections()
-        self._setup_shortcuts()
-        self._setup_graph_signals()
+        if hasattr(self, "toolbar"):
+            self._setup_connections()
+            self._setup_shortcuts()
+            self._setup_graph_signals()
 
     def _init_ui(self) -> None:
         """Initialize and compose UI components."""
@@ -696,14 +698,36 @@ class ContextViewQt(QWidget):
 
     @Slot(str)
     def _on_tier_changed(self, tier: str) -> None:
-        settings_manager.update_app_setting(template_tier=tier)
-        if self._copy_controller:
-            self._copy_controller._prompt_cache.invalidate_all()
-        # Removed the call that resets Related Files: self.toolbar.update_related_button_text(False, 0, 0)
-        self.instructions_panel.update_template_tier_display(
-            tier
-        )  # Cập nhật nhãn Templates
-        self._show_status(f"Tier switched to {tier.capitalize()}")
+        """
+        Xử lý khi người dùng thay đổi Template Tier (Lite/Pro).
+        """
+        logger.info(f"[ContextViewQt] _on_tier_changed triggered with tier: {tier}")
+        from PySide6.QtCore import QTimer
+
+        # Sử dụng singleShot với 'self' làm context object (receiver)
+        # để Qt tự động cancel timer nếu ContextViewQt bị hủy (Object Already Deleted).
+        # capture 'tier' để dùng trong block thực thi
+        def _execute_safe():
+            try:
+                from infrastructure.persistence.settings_manager import (
+                    update_app_setting,
+                )
+
+                logger.info(f"[ContextViewQt] Finalizing tier switch to {tier}")
+                update_app_setting(template_tier=tier)
+
+                if self._copy_controller:
+                    self._copy_controller._prompt_cache.invalidate_all()
+
+                # Cập nhật UI components
+                self.instructions_panel.update_template_tier_display(tier)
+                self._show_status(f"Tier switched to {tier.capitalize()}")
+                logger.info(f"[ContextViewQt] Tier switch to {tier} completed")
+            except Exception as e:
+                logger.error(f"[ContextViewQt] Error in deferred tier change: {e}")
+
+        # Queuing với context 'self'
+        QTimer.singleShot(0, self, _execute_safe)
 
     def _run_ai_suggest_from_instructions(self) -> None:
         user_query = self.get_instructions_text().strip()

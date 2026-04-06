@@ -18,11 +18,13 @@ from typing import (
     Tuple,
     Dict,
     TYPE_CHECKING,
+    Any,
 )
 from pathlib import Path
 
 if TYPE_CHECKING:
     from infrastructure.filesystem.file_utils import TreeItem
+    from shared.types.prompt_types_extra import BuildResult
 
 
 @runtime_checkable
@@ -51,23 +53,30 @@ class IPromptBuilder(Protocol):
         semantic_index: bool = True,
         max_tokens: Optional[int] = None,
     ) -> Tuple[str, int, Dict[str, int]]:
-        """
-        Generate prompt tu danh sach file paths va settings.
+        """Legacy tuple-based prompt building."""
+        ...
 
-        Args:
-            file_paths: Danh sach file paths da resolve
-            workspace: Workspace root path
-            instructions: User instructions text
-            output_format: Output format (xml, json, plain, smart)
-            include_git_changes: Co include git changes khong
-            use_relative_paths: Co dung relative paths khong
-            tree_item: Root TreeItem cho file map (optional)
-            selected_paths: Set paths da chon cho file map (optional)
-            include_xml_formatting: Co bao gom OPX instructions khong
-
-        Returns:
-            Tuple (prompt_text, token_count, breakdown_dict)
-        """
+    def build_prompt_full(
+        self,
+        file_paths: List[Path],
+        workspace: Path,
+        instructions: str,
+        output_format: str,
+        include_git_changes: bool,
+        use_relative_paths: bool,
+        tree_item: Optional["TreeItem"] = None,
+        selected_paths: Optional[Set[str]] = None,
+        include_xml_formatting: bool = False,
+        codemap_paths: Optional[Set[str]] = None,
+        instructions_at_top: bool = False,
+        full_tree: bool = False,
+        semantic_index: bool = True,
+        max_tokens: Optional[int] = None,
+        dependency_files: Optional[List[Path]] = None,
+        profile: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "BuildResult":
+        """Full result-based prompt building."""
         ...
 
     def build_file_map(

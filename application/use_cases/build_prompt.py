@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from application.interfaces.tokenization_port import ITokenizationService
     from domain.relationships.port import IRelationshipGraphProvider
     from domain.ports.git import IGitRepository
-    from infrastructure.filesystem.file_utils import TreeItem
+    from domain.filesystem.models import TreeItem
 
 # Domain functions are imported locally inside methods to facilitate patching in legacy tests
 from shared.types.prompt_types_extra import BuildResult
@@ -103,11 +103,9 @@ class BuildPromptUseCase:
         # 0. Fetch git data
         git_diffs = None
         git_logs = None
-        if include_git_changes:
-            from infrastructure.git.git_utils import get_git_diffs, get_git_logs
-
-            git_diffs = get_git_diffs(workspace)
-            git_logs = get_git_logs(workspace, max_commits=5)
+        if include_git_changes and self._git_repo:
+            git_diffs = self._git_repo.get_diff_result(workspace)
+            git_logs = self._git_repo.get_log_result(workspace, max_commits=5)
 
         # 1. Generate file map
         from domain.prompt.generator import (

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import re
 from pathlib import Path
+from domain.git.models import GitDiffResult, GitCommit, GitLogResult
 from dataclasses import dataclass, field
 from typing import Optional, List, Any
 import logging
@@ -90,28 +91,6 @@ logger = logging.getLogger(__name__)
 _DIFF_GIT_HEADER_RE = re.compile(
     r'^diff --git (?:"a/(.*?)"|a/(\S+)) (?:"b/(.*?)"|b/(\S+))$'
 )
-
-
-@dataclass
-class GitDiffResult:
-    work_tree_diff: str = ""
-    staged_diff: str = ""
-
-
-@dataclass
-class GitCommit:
-    hash: str
-    date: str
-    message: str
-    files: List[str] = field(default_factory=list)
-
-
-@dataclass
-class GitLogResult:
-    commits: List[GitCommit] = field(default_factory=list)
-    log_content: str = ""
-    commit_count: int = 0
-    error: Optional[str] = None
 
 
 @dataclass

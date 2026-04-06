@@ -3,6 +3,9 @@ from pathlib import Path
 from typing import Optional, List
 
 
+from domain.git.models import GitDiffResult, GitLogResult
+
+
 class IGitRepository(ABC):
     """
     Interface cho các thao tác với kho lưu trữ Git.
@@ -21,6 +24,20 @@ class IGitRepository(ABC):
     @abstractmethod
     def get_diff(self, workspace: Path) -> str:
         """Lấy sự biệt biệt của mã nguồn (git diff)."""
+        pass
+
+    @abstractmethod
+    def get_diff_result(
+        self, workspace: Path, base_ref: Optional[str] = None
+    ) -> Optional[GitDiffResult]:
+        """Lấy kết quả diff dưới dạng cấu trúc GitDiffResult."""
+        pass
+
+    @abstractmethod
+    def get_log_result(
+        self, workspace: Path, max_commits: int = 10
+    ) -> Optional[GitLogResult]:
+        """Lấy kết quả git log dưới dạng cấu trúc GitLogResult."""
         pass
 
     @abstractmethod

@@ -413,10 +413,10 @@ def register_tools(mcp_instance) -> None:
             return f"Error: Invalid format '{output_format}'. Use: {', '.join(valid_formats)}"
 
         try:
-            # Lazy import - chi load khi can thiet
-            from application.services.prompt_build_service import PromptBuildService
+            # Sử dụng ServiceContainer để lấy Use Case đã cấu hình sẵn
+            from infrastructure.di.service_container import ServiceContainer
 
-            service = PromptBuildService()
+            service = ServiceContainer.get_instance().prompt_builder
 
             build_result = service.build_prompt_full(
                 file_paths=abs_paths,

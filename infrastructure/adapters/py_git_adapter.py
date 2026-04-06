@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from domain.ports.git import IGitRepository
+from domain.git.models import GitDiffResult, GitLogResult
 
 
 class PyGitAdapter(IGitRepository):
@@ -41,6 +42,20 @@ class PyGitAdapter(IGitRepository):
     def get_diff(self, workspace: Path) -> str:
         res = self._run_git(["diff", "HEAD"], workspace)
         return res if res else ""
+
+    def get_diff_result(
+        self, workspace: Path, base_ref: Optional[str] = None
+    ) -> Optional[GitDiffResult]:
+        from infrastructure.git.git_utils import get_git_diffs
+
+        return get_git_diffs(workspace, base_ref)
+
+    def get_log_result(
+        self, workspace: Path, max_commits: int = 10
+    ) -> Optional[GitLogResult]:
+        from infrastructure.git.git_utils import get_git_logs
+
+        return get_git_logs(workspace, max_commits)
 
     def get_changed_files(self, workspace: Path) -> List[str]:
         res = self._run_git(["diff", "--name-only", "HEAD"], workspace)

@@ -25,15 +25,21 @@ class PromptBuildService(IPromptBuilder):
         self,
         tokenization_service=None,
         graph_service=None,
+        git_repo=None,
     ):
-        # Fallback to global container if not provided (legacy behavior)
-        from infrastructure.di.service_container import ServiceContainer
+        # Chỉ fallback sang container khi thiếu dependency
+        if tokenization_service is None or graph_service is None or git_repo is None:
+            from infrastructure.di.service_container import ServiceContainer
 
-        container = ServiceContainer.get_instance()
+            container = ServiceContainer.get_instance()
+            tokenization_service = tokenization_service or container.tokenization
+            graph_service = graph_service or container.graph_service
+            git_repo = git_repo or container.git_repo
+
         self._use_case = BuildPromptUseCase(
-            tokenization_service=tokenization_service or container.tokenization,
-            graph_service=graph_service or container.graph_service,
-            git_repo=container.git_repo,
+            tokenization_service=tokenization_service,
+            graph_service=graph_service,
+            git_repo=git_repo,
         )
 
     @property

@@ -8,22 +8,10 @@ Tham khảo kiến trúc: Repomix (src/config/configSchema.ts)
 """
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import List, Dict
 
 
-class OutputStyle(Enum):
-    """
-    Enum các định dạng đầu ra được hỗ trợ.
-
-    Extensible: Thêm format mới bằng cách thêm value vào đây
-    và entry tương ứng vào OUTPUT_FORMATS dict.
-    """
-
-    MARKDOWN = "markdown"
-    XML = "xml"
-    JSON = "json"
-    PLAIN = "plain"
+from domain.prompt.models import OutputStyle
 
 
 @dataclass(frozen=True)

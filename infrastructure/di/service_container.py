@@ -99,13 +99,6 @@ class ServiceContainer:
 
         self.cache_registry: CacheRegistry = _module_registry
 
-        # CacheRegistry
-        from infrastructure.adapters.cache_registry import (
-            cache_registry as _module_registry,
-        )
-
-        self.cache_registry: CacheRegistry = _module_registry
-
         logger.info(
             "ServiceContainer initialized using Clean Architecture / DDD patterns"
         )

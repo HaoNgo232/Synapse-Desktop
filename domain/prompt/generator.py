@@ -15,13 +15,14 @@ import logging
 from pathlib import Path
 from typing import Optional, Set
 
-from infrastructure.filesystem.file_utils import TreeItem, is_binary_file
+from domain.filesystem.models import TreeItem
+from shared.utils.filesystem import is_binary_file
 
 # Single source of truth cho path display
 from shared.utils.path_utils import path_for_display
 
-from infrastructure.git.git_utils import GitDiffResult, GitLogResult
-from presentation.config.output_format import OutputStyle
+from domain.git.models import GitDiffResult, GitLogResult
+from domain.prompt.models import OutputStyle
 
 # === Pipeline imports ===
 from domain.prompt.file_collector import collect_files

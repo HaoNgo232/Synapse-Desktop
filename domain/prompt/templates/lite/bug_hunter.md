@@ -37,10 +37,10 @@ MANDATORY THINKING PROCESS:
 
 For each bug:
 
-- **What:** Clear bug description + exact trigger condition
-- **Where:** File path + line(s)
-- **Impact:** Real production consequence
-- **Fix:** Concrete patch (code-level suggestion preferred)
+- A description of the bug and how it can be triggered.
+- The exact file and line number (if possible).
+- A proposed code fix.
+
 
 ## NOTES
 - Ignore style, naming, or lint issues

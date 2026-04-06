@@ -9,9 +9,9 @@ import os
 import platform
 import re
 from pathlib import Path
-from dataclasses import dataclass, field
 from typing import Optional, List, Tuple
 import pathspec
+from domain.filesystem.models import TreeItem
 from shared.constants import (
     BINARY_EXTENSIONS,
 )
@@ -82,23 +82,6 @@ _TEXT_EXTENSIONS = frozenset(
         ".dockerfile",
     }
 )
-
-
-@dataclass
-class TreeItem:
-    """
-    Mot item trong file tree (file hoac folder).
-    Tuong duong VscodeTreeItem trong TypeScript.
-
-    is_loaded: True nếu children đã được scan (cho lazy loading).
-               False = folder chưa được scan, children = []
-    """
-
-    label: str  # Ten hien thi (filename/dirname)
-    path: str  # Duong dan tuyet doi
-    is_dir: bool = False
-    children: list["TreeItem"] = field(default_factory=list)
-    is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
 
 
 def is_binary_file(path_or_str: Path | str) -> bool:

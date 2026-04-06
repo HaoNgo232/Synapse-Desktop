@@ -93,11 +93,15 @@ class ContextViewQt(QWidget):
 
         # External services for controllers
         if prompt_builder is None:
-            from application.services.prompt_build_service import PromptBuildService
+            from application.use_cases.build_prompt import BuildPromptUseCase
+            from infrastructure.di.service_container import ServiceContainer
 
-            prompt_builder = PromptBuildService(
+            container = ServiceContainer.get_instance()
+            prompt_builder = BuildPromptUseCase(
                 tokenization_service=self._tokenization_service,
-                graph_service=cast(Any, self._graph_provider),
+                graph_service=cast(Any, self._graph_provider)
+                or container.graph_service,
+                git_repo=container.git_repo,
             )
         self._prompt_builder = prompt_builder
 
@@ -337,13 +341,15 @@ class ContextViewQt(QWidget):
 
     @Slot(str)
     def _on_model_changed(self, model_id: str) -> None:
+        # Persist TRƯỚC để get_tokenizer_repo đọc đúng model mới
+        settings_manager.update_app_setting(model_id=model_id)
+
         from infrastructure.adapters.encoder_registry import get_tokenizer_repo
 
         repo = get_tokenizer_repo()
         self._tokenization_service.set_model_config(tokenizer_repo=repo)
 
         self.toolbar.update_model_display(model_id)
-        settings_manager.update_app_setting(model_id=model_id)
 
         if self._copy_controller:
             self._copy_controller._prompt_cache.invalidate_all()
@@ -738,17 +744,18 @@ class ContextViewQt(QWidget):
         if not settings.ai_api_key or not settings.ai_model_id:
             self._show_status("Configure AI settings first", True)
             return
-        if self.tree is None:
+        current_tree = self.file_panel.file_tree_widget.get_root_tree_item()
+        if current_tree is None:
             self._show_status("Open folder first", True)
             return
         self.instructions_panel.set_ai_suggest_busy(True)
         workspace = self.get_workspace()
         # ... rest ...
-        all_paths = self._collect_all_tree_paths(self.tree)
+        all_paths = self._collect_all_tree_paths(current_tree)
         from domain.prompt.generator import generate_file_map
 
         file_tree_map = generate_file_map(
-            self.tree, all_paths, workspace_root=workspace, use_relative_paths=True
+            current_tree, all_paths, workspace_root=workspace, use_relative_paths=True
         )
         from application.services.ai_context_worker import AIContextWorker
 

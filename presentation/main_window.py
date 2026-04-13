@@ -20,6 +20,13 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
+# Add project root to sys.path to support 'from presentation...' imports when run directly as a script
+# Only applied in development mode (non-frozen) to avoid side effects on Windows EXE/AppImage.
+if not getattr(sys, "frozen", False):
+    _project_root = str(Path(__file__).resolve().parent.parent)
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,

@@ -103,7 +103,11 @@ def get_mcp_command() -> list[str]:
         return [sys.executable, "--run-mcp"]
 
     # Chay qua python script
-    main_script = Path(__file__).resolve().parent.parent.parent / "main_window.py"
+    main_script = (
+        Path(__file__).resolve().parent.parent.parent
+        / "presentation"
+        / "main_window.py"
+    )
     return [sys.executable, str(main_script), "--run-mcp"]
 
 

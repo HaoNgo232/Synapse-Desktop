@@ -24,7 +24,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 # Dam bao project root nam trong sys.path de import duoc cac module cua Synapse
-_project_root = Path(__file__).resolve().parent.parent
+_project_root = Path(__file__).resolve().parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 

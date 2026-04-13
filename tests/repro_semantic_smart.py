@@ -44,7 +44,7 @@ def test_compress_output_with_semantic_toggle(qtbot, context_view, workspace_pat
         view._prompt_builder,
         "build_prompt_full",
         wraps=view._prompt_builder.build_prompt_full,
-    ) as mock_build:
+    ):
         # Click Compress
         qtbot.mouseClick(view._smart_btn, Qt.MouseButton.LeftButton)
 

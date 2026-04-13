@@ -56,6 +56,12 @@ MCP_TARGETS: dict[str, dict] = {
         # OpenCode dung format khac: "type":"local", "command" la array thay vi tach command/args
         "format": "opencode",
     },
+    "VS Code": {
+        "config_path": ".vscode/mcp.json",
+        "root_key": "servers",
+        "extra_fields": {},
+        "workspace_only": True,
+    },
 }
 
 SERVER_NAME = "synapse"
@@ -97,7 +103,7 @@ def get_mcp_command() -> list[str]:
         return [sys.executable, "--run-mcp"]
 
     # Chay qua python script
-    main_script = Path(__file__).resolve().parent.parent / "main_window.py"
+    main_script = Path(__file__).resolve().parent.parent.parent / "main_window.py"
     return [sys.executable, str(main_script), "--run-mcp"]
 
 
@@ -130,6 +136,12 @@ def get_config_path(target_name: str, workspace_path: Optional[str] = None) -> P
     """Lay duong dan tuyet doi cua file config cho target.
     Neu workspace_path duoc cung cap, uu tien tao file local/workspace neu target ho tro.
     """
+    target = MCP_TARGETS[target_name]
+
+    # Neu target chi ho tro workspace-only (vd: VS Code Workspace)
+    if target.get("workspace_only") and workspace_path:
+        return Path(workspace_path) / target["config_path"]
+
     if workspace_path:
         # Phat hien custom workspace paths
         wp = Path(workspace_path)
@@ -140,7 +152,7 @@ def get_config_path(target_name: str, workspace_path: Optional[str] = None) -> P
         elif target_name == "Claude Code":
             return wp / ".claude.json"  # Claude Code luon thuoc tinh theo folder
 
-    raw = MCP_TARGETS[target_name]["config_path"]
+    raw = target["config_path"]
     if raw == "__vscode_mcp_json__":
         return _get_vscode_mcp_json_path()
     return Path(raw).expanduser()

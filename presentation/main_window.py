@@ -5,22 +5,20 @@ Phase 1 Redesign: Global Layout + Theme System + Tab Bar + Status Bar
 Design System: Dark theme inspired by VS Code / JetBrains
 """
 
-import sys
-import os
-
-# Suppress Hugging Face hub warnings before other imports
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-
-import logging
-
-# Mute huggingface_hub warnings about unauthenticated requests
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+# ruff: noqa: E402
+# Suppress Hugging Face warnings before imports
 
 import gc
+import logging
+import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional, Dict, List
+
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -201,7 +199,9 @@ class SynapseMainWindow(QMainWindow):
         )
         self.apply_view = ApplyViewQt(self._get_workspace_path)
         self.history_view = HistoryViewQt(self._on_reapply_from_history)
-        self.settings_view = SettingsViewQt(self._on_settings_changed)
+        self.settings_view = SettingsViewQt(
+            self._on_settings_changed, self._get_workspace_path
+        )
 
         # Add tabs with icon + text
         views = [

@@ -10,6 +10,7 @@ Features:
 """
 
 import json
+from pathlib import Path
 from typing import Optional, Callable
 
 from PySide6.QtWidgets import (
@@ -259,10 +260,12 @@ class SettingsViewQt(QWidget):
     def __init__(
         self,
         on_settings_changed: Optional[Callable[[], None]] = None,
+        get_workspace_path: Optional[Callable[[], Optional[Path]]] = None,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
         self.on_settings_changed = on_settings_changed
+        self._get_workspace_path = get_workspace_path
         self._has_unsaved = False
         # Luu lai cac status label MCP theo target de co the cap nhat sau khi install
         self._mcp_status_labels: dict[str, QLabel] = {}
@@ -806,22 +809,46 @@ class SettingsViewQt(QWidget):
                 f"QMenu::item:selected {{ background-color: {ThemeColors.BG_HOVER}; }}"
             )
 
-            act_global = menu.addAction("📌 Install Global (Default)")
-            act_global.triggered.connect(
-                lambda checked=False, t=target_name: self._install_mcp_for(t)
-            )
+            # Neu target chi ho tro workspace-only, chi hien option workspace
+            target_config = MCP_TARGETS[target_name]
+            if target_config.get("workspace_only"):
+                act_workspace = menu.addAction("📁 Install for Project / Workspace...")
+                act_workspace.triggered.connect(
+                    lambda checked=False, t=target_name: (
+                        self._ask_workspace_and_install(t)
+                    )
+                )
+            else:
+                act_global = menu.addAction("📌 Install Global (Default)")
+                act_global.triggered.connect(
+                    lambda checked=False, t=target_name: self._install_mcp_for(t)
+                )
 
-            act_workspace = menu.addAction(
-                "📁 Install for specific Project / Workspace..."
-            )
-            act_workspace.triggered.connect(
-                lambda checked=False, t=target_name: self._ask_workspace_and_install(t)
-            )
+                act_workspace = menu.addAction(
+                    "📁 Install for specific Project / Workspace..."
+                )
+                act_workspace.triggered.connect(
+                    lambda checked=False, t=target_name: (
+                        self._ask_workspace_and_install(t)
+                    )
+                )
 
             install_btn.setMenu(menu)
 
             # Hien thi trang thai da cai hay chua (icon + text cho accessibility)
-            if check_installed(target_name):
+            # Neu la workspace-only target, check theo workspace hien tai
+            target_config = MCP_TARGETS[target_name]
+            is_installed = False
+            if target_config.get("workspace_only"):
+                workspace = (
+                    self._get_workspace_path() if self._get_workspace_path else None
+                )
+                if workspace:
+                    is_installed = check_installed(target_name, str(workspace))
+            else:
+                is_installed = check_installed(target_name)
+
+            if is_installed:
                 status_label = QLabel("\u2713 Installed")
                 status_label.setStyleSheet(
                     f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"

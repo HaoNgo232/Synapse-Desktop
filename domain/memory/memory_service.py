@@ -4,13 +4,13 @@ Memory Service - Quản lý đọc/ghi memory store cho workspace.
 Lưu tại .synapse/memory_v2.json, tương thích với memory.xml cũ.
 """
 
-import fcntl
 import json
 import logging
 from pathlib import Path
 from typing import Optional
 
 from domain.memory.memory_types import MemoryEntry, MemoryLayer, MemoryStore
+from shared.utils.file_lock import lock_file, unlock_file
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def save_memory_store(workspace_root: Path, store: MemoryStore) -> None:
     memory_file = synapse_dir / "memory_v2.json"
 
     with open(memory_file, "a+", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+        lock_file(f)
         try:
             f.seek(0)
             f.truncate()
@@ -44,7 +44,7 @@ def save_memory_store(workspace_root: Path, store: MemoryStore) -> None:
             f.write("\n")
             f.flush()
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            unlock_file(f)
 
 
 def add_memory(
@@ -62,7 +62,7 @@ def add_memory(
     memory_file.parent.mkdir(parents=True, exist_ok=True)
 
     with open(memory_file, "a+", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+        lock_file(f)
         try:
             f.seek(0)
             raw = f.read()
@@ -100,4 +100,4 @@ def add_memory(
             f.write("\n")
             f.flush()
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            unlock_file(f)

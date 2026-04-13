@@ -5,7 +5,6 @@ Kết hợp workspace rules, past error patterns, và conventions
 để build "contract pack" mà agent phải tuân theo.
 """
 
-import fcntl
 import json
 import logging
 import os
@@ -13,6 +12,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
+
+from shared.utils.file_lock import lock_file, unlock_file
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ def locked_modify_contract_pack(
     contract_file = synapse_dir / "contract_pack.json"
 
     with open(contract_file, "a+", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+        lock_file(f)
         try:
             f.seek(0)
             raw = f.read()
@@ -175,7 +176,7 @@ def locked_modify_contract_pack(
             f.flush()
             return pack
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            unlock_file(f)
 
 
 def build_contract_pack(

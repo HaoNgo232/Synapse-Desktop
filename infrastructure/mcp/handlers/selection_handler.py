@@ -7,7 +7,6 @@ Supports v2 format with provenance tracking (backward compatible with v1 list fo
 
 import asyncio
 import json
-import fcntl
 from pathlib import Path
 from typing import Annotated, List, Optional, Callable
 
@@ -17,6 +16,7 @@ from pydantic import Field
 from domain.selection.provenance import SelectionSource, SelectionState, VALID_SOURCES
 from infrastructure.mcp.core.constants import logger
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
+from shared.utils.file_lock import lock_file, unlock_file
 
 
 def _locked_read_modify_write(
@@ -28,7 +28,7 @@ def _locked_read_modify_write(
 
     with open(session_file, "a+", encoding="utf-8") as f:
         # Cross-process exclusive lock
-        fcntl.flock(f, fcntl.LOCK_EX)
+        lock_file(f)
         try:
             f.seek(0)
             raw = f.read()
@@ -60,7 +60,7 @@ def _locked_read_modify_write(
 
             return new_state
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            unlock_file(f)
 
 
 def register_tools(mcp_instance) -> None:

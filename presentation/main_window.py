@@ -13,6 +13,7 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
 import logging
+
 # Mute huggingface_hub warnings about unauthenticated requests
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 

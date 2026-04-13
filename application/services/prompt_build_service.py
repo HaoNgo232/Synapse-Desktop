@@ -240,9 +240,10 @@ class PromptBuildService:
 
         # 3. Generate file contents
         all_path_strs = {str(p) for p in all_file_paths}
-        
+
         if output_format == "smart":
             from domain.prompt.generator import generate_smart_context
+
             file_contents = generate_smart_context(
                 selected_paths=all_path_strs,
                 workspace_root=workspace,

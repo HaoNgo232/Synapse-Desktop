@@ -727,7 +727,8 @@ class FileTreeWidget(QWidget):
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet("""
+        menu.setStyleSheet(
+            """
             QMenu {
                 background: #1E293B;
                 border: 1px solid #334155;
@@ -742,7 +743,8 @@ class FileTreeWidget(QWidget):
             }
             QMenu::item:selected { background: #2D3F55; }
             QMenu::separator { height: 1px; background: #334155; margin: 4px 8px; }
-        """)
+        """
+        )
 
         # --- Exclude Section ---
         # Lay ten hien thi (folder hoac file)

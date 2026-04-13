@@ -24,9 +24,10 @@ from PySide6.QtWidgets import (
     QLayoutItem,
 )
 from PySide6.QtCore import Qt, Signal, QRect, QSize, QPoint, QTimer
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont
 
 from presentation.config.theme import ThemeColors
+from presentation.components.qt_utils import create_colored_icon
 
 
 # Icon paths
@@ -37,37 +38,6 @@ else:
 
 ICON_ADD = str(ASSETS_DIR / "add.svg")
 ICON_REMOVE = str(ASSETS_DIR / "remove.svg")
-
-
-def create_colored_icon(svg_path: str, color: str) -> QIcon:
-    """Create a colored icon from SVG by replacing fill/stroke colors."""
-    from PySide6.QtSvg import QSvgRenderer
-    from PySide6.QtGui import QPixmap, QPainter
-
-    # Read SVG content
-    with open(svg_path, "r") as f:
-        svg_content = f.read()
-
-    # Replace colors (simple approach - replace common attributes)
-    svg_content = svg_content.replace('fill="black"', f'fill="{color}"')
-    svg_content = svg_content.replace('stroke="black"', f'stroke="{color}"')
-    svg_content = svg_content.replace('fill="#000000"', f'fill="{color}"')
-    svg_content = svg_content.replace('stroke="#000000"', f'stroke="{color}"')
-
-    # If no explicit color, add fill to path elements
-    if "fill=" not in svg_content and "<path" in svg_content:
-        svg_content = svg_content.replace("<path", f'<path fill="{color}"')
-
-    # Render to pixmap
-    renderer = QSvgRenderer(svg_content.encode())
-    pixmap = QPixmap(64, 64)
-    pixmap.fill(Qt.GlobalColor.transparent)
-
-    painter = QPainter(pixmap)
-    renderer.render(painter)
-    painter.end()
-
-    return QIcon(pixmap)
 
 
 class FlowLayout(QLayout):

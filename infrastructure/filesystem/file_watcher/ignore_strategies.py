@@ -62,7 +62,7 @@ class DefaultIgnoreStrategy(IIgnoreStrategy):
         for part in path_parts:
             # Tren Windows, so sanh case-insensitive
             part_to_check = part.lower() if is_windows else part
-            
+
             # Pattern trong IGNORED_PATTERNS da duoc viet thuong
             if part_to_check in self.IGNORED_PATTERNS:
                 return True

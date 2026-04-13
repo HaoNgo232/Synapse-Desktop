@@ -202,7 +202,7 @@ class TestLocalCustomTemplateProvider:
         test_md = tmp_path / "to_delete.md"
         test_md.write_text("Content", encoding="utf-8")
         assert custom_provider.handles("to_delete")
-        
+
         success = custom_provider.delete_template("to_delete")
         assert success is True
         assert not test_md.exists()
@@ -217,21 +217,21 @@ class TestLocalCustomTemplateProvider:
         test_md = tmp_path / "too_big.md"
         # 51KB of 'A' characters
         test_md.write_text("A" * (51 * 1024), encoding="utf-8")
-        
+
         with pytest.raises(ValueError, match="qua lon"):
             custom_provider.load_template("too_big")
 
     def test_stress_100_templates(self, custom_provider, tmp_path):
         """Stress test: list_templates voi 100 files (performance check)."""
         import time
-        
+
         for i in range(100):
             (tmp_path / f"template_{i}.md").write_text(f"Content {i}", encoding="utf-8")
-            
+
         start_time = time.perf_counter()
         results = custom_provider.list_templates()
         duration = time.perf_counter() - start_time
-        
+
         assert len(results) == 100
         # Nen xong trong < 50ms cho 100 files (local I/O)
         assert duration < 0.1, f"Stress test qua cham: {duration:.4f}s"

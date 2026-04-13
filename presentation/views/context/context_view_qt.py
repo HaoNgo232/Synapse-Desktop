@@ -843,15 +843,33 @@ class ContextViewQt(
         except Exception as e:
             self._show_status(f"Failed to load template: {e}", is_error=True)
 
-    def _show_custom_template_dialog(self, template_id: str = None) -> None:
+    @Slot()
+    def _on_save_instruction_as_template(self) -> None:
+        """Slot: Save current instruction as a template (one-click)."""
+        text = self._instructions_field.toPlainText().strip()
+        if not text:
+            self.show_status(
+                "Instructions are empty. Write something first!", is_error=True
+            )
+            return
+
+        self._show_custom_template_dialog(initial_content=text)
+
+    def _show_custom_template_dialog(
+        self, template_id: str = None, initial_content: str = None
+    ) -> None:
         """Hien thi dialog cho phep tao/sua Custom Template."""
         from presentation.components.dialogs.custom_template_dialog import (
             CustomTemplateDialog,
         )
 
-        dialog = CustomTemplateDialog(self, template_id=template_id)
+        dialog = CustomTemplateDialog(
+            self, template_id=template_id, initial_content=initial_content
+        )
         if dialog.exec():
-            status = "Custom template saved!" if not template_id else "Template updated!"
+            status = (
+                "Custom template saved!" if not template_id else "Template updated!"
+            )
             self._show_status(status)
 
     @Slot()

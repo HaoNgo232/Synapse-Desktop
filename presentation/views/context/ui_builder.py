@@ -25,6 +25,7 @@ from PySide6.QtGui import QIcon
 
 from presentation.config.theme import ThemeColors
 from presentation.components.file_tree.file_tree_widget import FileTreeWidget
+from presentation.components.qt_utils import create_colored_icon
 from presentation.config.output_format import (
     OUTPUT_FORMATS,
     get_style_by_id,
@@ -589,6 +590,7 @@ class UIBuilderMixin:
 
         # Header row: title + template selector + word count
         header = QHBoxLayout()
+        header.setSpacing(8)
         instr_label = QLabel("Instructions")
         instr_label.setStyleSheet(
             f"font-weight: 700; font-size: 13px; color: {ThemeColors.TEXT_PRIMARY};"
@@ -654,6 +656,46 @@ class UIBuilderMixin:
 
         self._template_btn.setMenu(self._template_menu)
         header.addWidget(self._template_btn)
+
+        # Find assets directory
+        import sys
+
+        if hasattr(sys, "_MEIPASS"):
+            assets_dir = os.path.join(sys._MEIPASS, "assets")
+        else:
+            assets_dir = os.path.join(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                ),
+                "assets",
+            )
+
+        # Add Save Template button (one-click)
+        self._save_template_btn = QToolButton()
+        self._save_template_btn.setIcon(
+            create_colored_icon(os.path.join(assets_dir, "add.svg"), "white")
+        )
+        self._save_template_btn.setIconSize(QSize(13, 13))
+        self._save_template_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: transparent;
+                color: {ThemeColors.TEXT_MUTED};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px;
+                padding: 1px;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.BG_HOVER};
+                color: {ThemeColors.PRIMARY};
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            """
+        )
+        self._save_template_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._save_template_btn.setToolTip("Save current instruction as a template")
+        self._save_template_btn.clicked.connect(self._on_save_instruction_as_template)
+        header.addWidget(self._save_template_btn)
 
         # Add History button
         self._history_btn = QToolButton()

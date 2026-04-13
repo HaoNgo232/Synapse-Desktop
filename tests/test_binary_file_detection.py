@@ -328,7 +328,9 @@ class TestRealWorldProxypalBinaries:
     BINARIES_DIR = Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries"
 
     @pytest.mark.skipif(
-        not (Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries").exists(),
+        not (
+            Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries"
+        ).exists(),
         reason="proxypal-main binaries not found",
     )
     def test_all_proxypal_binaries_detected(self):
@@ -342,7 +344,9 @@ class TestRealWorldProxypalBinaries:
                 )
 
     @pytest.mark.skipif(
-        not (Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries").exists(),
+        not (
+            Path.home() / "Desktop" / "proxypal-main" / "src-tauri" / "binaries"
+        ).exists(),
         reason="proxypal-main binaries not found",
     )
     def test_token_worker_skips_proxypal_binaries(self):

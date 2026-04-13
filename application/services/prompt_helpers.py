@@ -97,41 +97,6 @@ def reconstruct_file_contents(
         return "\n\n".join(parts)
 
 
-def compute_semantic_index(
-    workspace: Path,
-    graph_service: Optional[Any],
-    output_format: str = "xml",
-) -> str:
-    """
-    Computes the semantic index (relationships between files) for the prompt context.
-    Uses GraphService to retrieve dependency/inheritance information.
-    """
-    if not graph_service:
-        return ""
-
-    try:
-        # Fast path: use already built graph (non-blocking)
-        graph = graph_service.get_graph()
-        if not graph:
-            return ""
-
-        if output_format == "plain":
-            from domain.relationships.summary_generator import (
-                generate_relationship_summary_plain,
-            )
-
-            return generate_relationship_summary_plain(graph, workspace_root=workspace)
-        else:
-            from domain.relationships.summary_generator import (
-                generate_relationship_summary_xml,
-            )
-
-            return generate_relationship_summary_xml(graph, workspace_root=workspace)
-    except Exception as e:
-        logger.error(f"[PromptBuild] Failed to count semantic index: {e}")
-        return ""
-
-
 def calculate_prompt_breakdown(
     instructions: str,
     file_map: str,

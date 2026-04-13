@@ -195,7 +195,6 @@ class SynapseMainWindow(QMainWindow):
             clipboard_service=self._services.clipboard,
             ignore_engine=self._services.ignore_engine,
             tokenization_service=self._services.tokenization,
-            graph_provider=self._services.graph_service,
         )
         self.apply_view = ApplyViewQt(self._get_workspace_path)
         self.history_view = HistoryViewQt(self._on_reapply_from_history)

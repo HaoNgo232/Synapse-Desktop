@@ -13,7 +13,6 @@ from typing import Optional, Set, List, Callable, TYPE_CHECKING
 if TYPE_CHECKING:
     from infrastructure.filesystem.ignore_engine import IgnoreEngine
     from application.interfaces.tokenization_port import ITokenizationService
-    from domain.relationships.port import IRelationshipGraphProvider
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer
@@ -57,7 +56,6 @@ class ContextViewQt(
         clipboard_service=None,
         ignore_engine: Optional["IgnoreEngine"] = None,
         tokenization_service: Optional["ITokenizationService"] = None,
-        graph_provider: Optional["IRelationshipGraphProvider"] = None,
     ):
         super().__init__(parent)
         self.get_workspace = get_workspace
@@ -77,7 +75,6 @@ class ContextViewQt(
 
             tokenization_service = get_tokenization_service()
         self._tokenization_service: "ITokenizationService" = tokenization_service
-        self._graph_provider: Optional["IRelationshipGraphProvider"] = graph_provider
 
         # State
         self.tree: Optional[TreeItem] = None
@@ -97,13 +94,9 @@ class ContextViewQt(
         if prompt_builder is None:
             from application.services.prompt_build_service import PromptBuildService
 
-            # Bug #1 Fix: Đảm bảo fallback instance cũng được inject graph_service (nếu có)
-            # để project structure metadata có thể được tính toán.
-            from typing import Any, cast
-
+            # Fallback instance
             prompt_builder = PromptBuildService(
                 tokenization_service=self._tokenization_service,
-                graph_service=cast(Any, self._graph_provider),
             )
         self._prompt_builder = prompt_builder
 
@@ -118,7 +111,7 @@ class ContextViewQt(
         # NOTE: parent=None de tranh QObject init phuc tap khi QWidget.__init__ bi mock trong tests
         self._related_controller: RelatedFilesController = RelatedFilesController(
             self,
-            graph_provider=self._graph_provider,
+            # graph_provider removed
         )
         self._tree_controller: TreeManagementController = TreeManagementController(
             self, parent=None
@@ -138,71 +131,7 @@ class ContextViewQt(
         # Setup keyboard shortcuts
         self._setup_shortcuts()
 
-        # Setup Graph signals
-        self._setup_graph_signals()
-
     # ===== Public API =====
-
-    def _setup_graph_signals(self) -> None:
-        """Connect graph service signals to UI."""
-        if not self._graph_provider:
-            return
-
-        signals = getattr(self._graph_provider, "signals", None)
-        if signals:
-            signals.build_started.connect(self._on_graph_build_started)
-            signals.build_status.connect(self._on_graph_build_status)
-            signals.build_progress.connect(self._on_graph_build_progress)
-            signals.build_finished.connect(self._on_graph_build_finished)
-            signals.build_error.connect(self._on_graph_build_error)
-
-    def _get_status_bar(self):
-        from PySide6.QtWidgets import QMainWindow
-
-        window = self.window()
-        if isinstance(window, QMainWindow):
-            return window.statusBar()
-        return None
-
-    @Slot()
-    def _on_graph_build_started(self) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage("🔄 Preparing semantic graph...")
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText("🔄 Preparing semantic graph...")
-
-    @Slot(str)
-    def _on_graph_build_status(self, message: str) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"🔄 {message}")
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText(f"🔄 {message}")
-
-    @Slot(int, int)
-    def _on_graph_build_progress(self, current: int, total: int) -> None:
-        sb = self._get_status_bar()
-        percent = int((current / total) * 100) if total > 0 else 0
-        status_text = f"⚡ Building semantic graph... {percent}% ({current}/{total})"
-        if sb:
-            sb.showMessage(status_text)
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText(status_text)
-
-    @Slot(float, int)
-    def _on_graph_build_finished(self, duration: float, tokens: int) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"✨ Semantic cache loaded in {duration:.2f}s", 5000)
-
-    @Slot(str)
-    def _on_graph_build_error(self, message: str) -> None:
-        sb = self._get_status_bar()
-        if sb:
-            sb.showMessage(f"❌ Graph build error: {message}", 5000)
-        if hasattr(self, "_opx_btn"):
-            self._opx_btn.setText("❌ Error building graph")
 
     def _setup_shortcuts(self) -> None:
         """Setup keyboard shortcuts."""
@@ -323,10 +252,6 @@ class ContextViewQt(
                 debounce_seconds=0.5,
             )
 
-        # 8. Trigger RelationshipGraph build cho workspace moi (background)
-        if hasattr(self, "_graph_provider") and self._graph_provider is not None:
-            self._graph_provider.on_workspace_changed(workspace_path)
-
         # 9. Sync Templates Button Text (Tier)
         from infrastructure.persistence.settings_manager import load_app_settings
 
@@ -434,11 +359,6 @@ class ContextViewQt(
     def get_full_tree(self) -> bool:
         """Adapter: Read full-tree toggle state from actions panel."""
         toggle = getattr(self, "_full_tree_toggle", None)
-        return toggle.isChecked() if toggle is not None else False
-
-    def get_semantic_index(self) -> bool:
-        """Adapter: Read semantic-index toggle state from actions panel."""
-        toggle = getattr(self, "_semantic_index_toggle", None)
         return toggle.isChecked() if toggle is not None else False
 
     def is_smart_mode_active(self) -> bool:
@@ -578,6 +498,15 @@ class ContextViewQt(
         sb = self._get_status_bar()
         if sb:
             sb.showMessage(f"✅ Context copied! Processed {token_count:,} tokens", 5000)
+
+    def _get_status_bar(self):
+        """Lay statusBar tu QMainWindow cha."""
+        from PySide6.QtWidgets import QMainWindow
+
+        window = self.window()
+        if isinstance(window, QMainWindow):
+            return window.statusBar()
+        return None
 
     def _collect_all_tree_paths(self, root: TreeItem) -> Set[str]:
         paths = set()

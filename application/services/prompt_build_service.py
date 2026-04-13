@@ -10,7 +10,6 @@ from typing import List, Optional, Set, Tuple, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from application.interfaces.tokenization_port import ITokenizationService
-    from domain.relationships.port import IRelationshipGraphProvider
 
 from domain.prompt.generator import (
     generate_file_map,
@@ -24,7 +23,6 @@ from application.services.prompt_helpers import (
     count_per_file_tokens,
     calculate_prompt_breakdown,
     apply_context_trimming,
-    compute_semantic_index,
 )
 
 
@@ -57,7 +55,6 @@ class PromptBuildService:
     def __init__(
         self,
         tokenization_service: Optional["ITokenizationService"] = None,
-        graph_service: Optional["IRelationshipGraphProvider"] = None,
     ):
         if tokenization_service is None:
             from infrastructure.adapters.encoder_registry import (
@@ -66,8 +63,6 @@ class PromptBuildService:
 
             tokenization_service = get_tokenization_service()
         self._tokenization_service = tokenization_service
-        # GraphService de tinh project structure metadata (optional)
-        self._graph_service = graph_service
 
     def build_prompt(
         self,
@@ -83,7 +78,7 @@ class PromptBuildService:
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
         full_tree: bool = False,
-        semantic_index: bool = False,
+        semantic_index: bool = False,  # Deprecated
     ) -> Tuple[str, int, Dict[str, int]]:
         """
         Generate prompt theo output format (backward-compatible API).
@@ -141,7 +136,7 @@ class PromptBuildService:
         codemap_paths: Optional[Set[str]] = None,
         instructions_at_top: bool = False,
         full_tree: bool = False,
-        semantic_index: bool = True,
+        semantic_index: bool = False,  # Deprecated
     ) -> BuildResult:
         """
         Generate prompt va tra ve BuildResult day du voi metadata.
@@ -197,7 +192,6 @@ class PromptBuildService:
         git_diffs = None
         git_logs = None
         file_contents = ""
-        semantic_index_text = ""
         output_style = _FORMAT_TO_STYLE.get(output_format, OutputStyle.XML)
 
         # 0. Fetch git data neu can
@@ -247,7 +241,7 @@ class PromptBuildService:
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
                 # Smart context depends on the same semantic_index toggle for its internal detail level
-                include_relationships=semantic_index,
+                include_relationships=False,
             )
         else:
             content_gen = _FORMAT_TO_GENERATOR.get(
@@ -258,21 +252,6 @@ class PromptBuildService:
                 workspace_root=workspace,
                 use_relative_paths=use_relative_paths,
                 codemap_paths=normalized_codemap,
-            )
-
-        # 4. Assemble prompt
-        # Ensure graph is built before computing semantic index (Guaranteed Semantic)
-        # ONLY IF semantic_index toggle is ON to respect user preference and performance.
-        if self._graph_service and semantic_index:
-            try:
-                self._graph_service.ensure_built(workspace)
-            except Exception as e:
-                logger.warning("Failed to ensure graph built: %s", e)
-
-        semantic_index_text = ""
-        if semantic_index:
-            semantic_index_text = compute_semantic_index(
-                workspace, self._graph_service, output_format
             )
 
         from domain.prompt.generator import generate_prompt, build_smart_prompt
@@ -287,7 +266,7 @@ class PromptBuildService:
                 project_rules=project_rules,
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index_text,
+                semantic_index="",
                 output_style=output_style,
             )
         else:
@@ -302,7 +281,7 @@ class PromptBuildService:
                 project_rules=project_rules,
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
-                semantic_index=semantic_index_text,
+                semantic_index="",
             )
 
         token_count = self._tokenization_service.count_tokens(prompt)
@@ -353,7 +332,7 @@ class PromptBuildService:
                 output_format,
                 include_xml_formatting,
                 instructions_at_top,
-                semantic_index_text,
+                "",
                 output_style,
             )
             if notes:

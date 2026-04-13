@@ -22,6 +22,7 @@ WHY NOT CANCEL:
 """
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -46,6 +47,9 @@ from application.services.workspace_config import (
 )
 from presentation.config.output_format import OutputStyle  # Re-touching for index
 from presentation.config.theme import ThemeColors
+
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from infrastructure.git.git_utils import DiffOnlyResult
@@ -193,7 +197,6 @@ def _build_fingerprint(
     h.update(f"xml={include_xml}\n".encode())
     h.update(f"top={instructions_at_top}\n".encode())
     h.update(f"full_tree={load_app_settings().include_full_tree}\n".encode())
-    h.update(f"semantic_index={load_app_settings().enable_semantic_index}\n".encode())
     # Note: though full_tree comes from UI toggle, it is synced to settings.
 
     # Instructions
@@ -325,7 +328,6 @@ class CopyActionViewProtocol(Protocol):
     def get_ignore_engine(self) -> Any: ...
     def get_copy_as_file(self) -> bool: ...
     def get_full_tree(self) -> bool: ...
-    def get_semantic_index(self) -> bool: ...
     def is_smart_mode_active(self) -> bool: ...
 
 
@@ -928,61 +930,68 @@ class CopyActionController(QObject):
                 # (current generation's worker will handle that)
                 return
 
-            # Clear refs — this worker is done
-            self._current_copy_worker = None
-            self._current_copy_signals = None
+            try:
+                # Clear refs — this worker is done
+                self._current_copy_worker = None
+                self._current_copy_signals = None
 
-            # Store in prompt cache for future fast-path hits
-            if cache_key is not None:
-                try:
-                    mode, paths, instr, incl_xml = cache_key
-                    self._store_in_cache(
-                        mode,
-                        paths,
-                        instr,
-                        prompt,
-                        token_count,
-                        breakdown,
-                        incl_xml,
-                        instructions_at_top=instructions_at_top,
-                    )
-                except Exception:
-                    pass  # Cache storage failure is non-critical
+                # Store in prompt cache for future fast-path hits
+                if cache_key is not None:
+                    try:
+                        mode, paths, instr, incl_xml = cache_key
+                        self._store_in_cache(
+                            mode,
+                            paths,
+                            instr,
+                            prompt,
+                            token_count,
+                            breakdown,
+                            incl_xml,
+                            instructions_at_top=instructions_at_top,
+                        )
+                    except Exception:
+                        pass  # Cache storage failure is non-critical
 
-            if copy_destination == "file":
-                success, err_msg = copy_as_file_to_clipboard(prompt)
-            else:
-                success, err_msg = self._view.get_clipboard_service().copy_to_clipboard(
-                    prompt
-                )
-
-            if not success:
-                self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
-                self._view.set_copy_buttons_enabled(True)
-                return
-
-            # Merge pre_snapshot if still used (legacy support)
-            if pre_snapshot:
-                final_breakdown = {**pre_snapshot, **breakdown}
-            else:
-                final_breakdown = breakdown
-
-            # Ensure copy_mode is set for show_copy_breakdown
-            if "copy_mode" not in final_breakdown:
-                if "treemap" in (cache_key[0] if cache_key else ""):
-                    final_breakdown["copy_mode"] = "Copy Tree Map"
-                elif "smart" in (cache_key[0] if cache_key else ""):
-                    final_breakdown["copy_mode"] = "Copy Smart"
+                if copy_destination == "file":
+                    success, err_msg = copy_as_file_to_clipboard(prompt)
                 else:
-                    final_breakdown["copy_mode"] = "Copy"
-            if copy_destination == "file":
-                mode_label = str(final_breakdown.get("copy_mode", "Copy"))
-                if not mode_label.endswith("(File)"):
-                    final_breakdown["copy_mode"] = f"{mode_label} (File)"
+                    success, err_msg = (
+                        self._view.get_clipboard_service().copy_to_clipboard(prompt)
+                    )
 
-            self._view.show_copy_breakdown(token_count, final_breakdown)
+                if not success:
+                    self._view.show_status(f"Copy failed: {err_msg}", is_error=True)
+                    return
 
-            self._view.set_copy_buttons_enabled(True)
+                # Merge pre_snapshot if still used (legacy support)
+                if pre_snapshot:
+                    final_breakdown = {**pre_snapshot, **breakdown}
+                else:
+                    final_breakdown = breakdown
+
+                # Ensure copy_mode is set for show_copy_breakdown
+                if "copy_mode" not in final_breakdown:
+                    if "treemap" in (cache_key[0] if cache_key else ""):
+                        final_breakdown["copy_mode"] = "Copy Tree Map"
+                    elif "smart" in (cache_key[0] if cache_key else ""):
+                        final_breakdown["copy_mode"] = "Copy Smart"
+                    else:
+                        final_breakdown["copy_mode"] = "Copy"
+                if copy_destination == "file":
+                    mode_label = str(final_breakdown.get("copy_mode", "Copy"))
+                    if not mode_label.endswith("(File)"):
+                        final_breakdown["copy_mode"] = f"{mode_label} (File)"
+
+                # show_copy_breakdown handles UI feedback (toast, statusbar)
+                # Success indicates clipboard update worked, even if UI feedback crashes
+                self._view.show_copy_breakdown(token_count, final_breakdown)
+            except Exception as e:
+                logger.error("Copy success handler failed: %s", e)
+                self._view.show_status(
+                    f"Copy completed but UI update failed: {e}", is_error=True
+                )
+            finally:
+                self._view.set_copy_buttons_enabled(True)
 
         def on_error(error_msg: str) -> None:
             """Callback khi worker gap loi."""
@@ -1050,7 +1059,6 @@ class CopyActionController(QObject):
                     include_xml_formatting=include_xml,
                     instructions_at_top=instructions_at_top,
                     full_tree=self._view.get_full_tree(),
-                    semantic_index=self._view.get_semantic_index(),
                 )
 
             snapshot = {"copy_mode": "Copy + OPX" if include_xml else "Copy Context"}
@@ -1142,7 +1150,6 @@ class CopyActionController(QObject):
                 tree_item=tree_item,
                 selected_paths=selected_path_strs,
                 full_tree=self._view.get_full_tree(),
-                semantic_index=self._view.get_semantic_index(),
             )
 
         # snapshot is now passed directly as pre_snapshot argument in run_copy
@@ -1338,34 +1345,42 @@ class CopyActionController(QObject):
             if not self._is_current_generation(gen):
                 return
 
-            self._current_copy_worker = None
-            self._current_copy_signals = None
-
-            # Store in cache
             try:
-                self._store_in_cache(
-                    "copy_as_file",
-                    _cache_selected,
-                    _cache_instructions,
-                    prompt,
-                    token_count,
-                    breakdown,
-                    instructions_at_top=True,
-                )
-            except Exception:
-                pass
+                self._current_copy_worker = None
+                self._current_copy_signals = None
 
-            success, result = copy_as_file_to_clipboard(prompt)
-            if success:
-                breakdown["copy_mode"] = "Copy as File"
-                self._view.show_copy_breakdown(token_count, breakdown)
+                # Store in cache
+                try:
+                    self._store_in_cache(
+                        "copy_as_file",
+                        _cache_selected,
+                        _cache_instructions,
+                        prompt,
+                        token_count,
+                        breakdown,
+                        instructions_at_top=True,
+                    )
+                except Exception:
+                    pass
+
+                success, result = copy_as_file_to_clipboard(prompt)
+                if success:
+                    breakdown["copy_mode"] = "Copy as File"
+                    self._view.show_copy_breakdown(token_count, breakdown)
+                    self._view.show_status(
+                        f"📎 paste.txt ready ({token_count:,} tokens) — Ctrl+V in web chat to upload"
+                    )
+                else:
+                    self._view.show_status(
+                        f"Copy as File failed: {result}", is_error=True
+                    )
+            except Exception as e:
+                logger.error("Copy as File success handler failed: %s", e)
                 self._view.show_status(
-                    f"📎 paste.txt ready ({token_count:,} tokens) — Ctrl+V in web chat to upload"
+                    f"Copy completed but UI update failed: {e}", is_error=True
                 )
-            else:
-                self._view.show_status(f"Copy as File failed: {result}", is_error=True)
-
-            self._view.set_copy_buttons_enabled(True)
+            finally:
+                self._view.set_copy_buttons_enabled(True)
 
         def on_error(error_msg: str) -> None:
             self._cleanup_stale_refs(gen)

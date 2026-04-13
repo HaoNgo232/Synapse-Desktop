@@ -54,9 +54,6 @@ class AppSettings:
     # Có include full project tree map trong prompt hay không (tốn token nếu project lớn)
     include_full_tree: bool = False
 
-    # Co enable semantic index (file relationships graph) hay khong (ton tai nguyen CPU/time)
-    enable_semantic_index: bool = True
-
     # --- Security Settings ---
     # Co enable security scan truoc khi copy hay khong
     enable_security_check: bool = True
@@ -170,7 +167,6 @@ class AppSettings:
             "template_tier": self.template_tier,
             "rule_file_names": self.rule_file_names,
             "include_full_tree": self.include_full_tree,
-            "enable_semantic_index": self.enable_semantic_index,
         }
 
     def to_safe_dict(self) -> dict[str, Any]:

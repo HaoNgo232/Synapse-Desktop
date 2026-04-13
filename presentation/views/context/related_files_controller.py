@@ -13,7 +13,6 @@ from typing import Any, Protocol, Set, runtime_checkable, Optional
 from PySide6.QtCore import QObject
 
 from application.services.dependency_resolver import DependencyResolver
-from domain.relationships.port import IRelationshipGraphProvider
 from infrastructure.adapters.qt_utils import run_on_main_thread, schedule_background
 
 
@@ -73,7 +72,6 @@ class RelatedFilesController(QObject):
     def __init__(
         self,
         view: RelatedFilesViewProtocol,
-        graph_provider: Optional[IRelationshipGraphProvider] = None,
         parent: Optional[QObject] = None,
     ) -> None:
         """
@@ -84,7 +82,6 @@ class RelatedFilesController(QObject):
         """
         super().__init__(parent)
         self._view = view
-        self._graph_provider = graph_provider
 
         # State
         self._mode_active: bool = False
@@ -227,39 +224,24 @@ class RelatedFilesController(QObject):
 
         depth = self._depth
         workspace_path: Path = workspace  # type: ignore[assignment]
-        graph_provider = self._graph_provider
 
         def resolve() -> None:
             try:
                 related_strs: Set[str] = set()
 
-                # Ưu tiên dùng RelationshipGraph nếu có
-                graph = graph_provider.get_graph() if graph_provider else None
+                # Sử dụng DependencyResolver (IMPORTS)
+                full_tree = self._view.scan_full_tree(workspace_path)
+                resolver = DependencyResolver(workspace_path)
+                resolver.build_file_index(full_tree)
 
-                if graph is not None:
-                    for file_path_str in user_selected:
-                        p = Path(file_path_str)
-                        if not p.is_file():
-                            continue
-                        related = graph.get_related_files(
-                            str(p.resolve()),
-                            max_depth=depth,
-                        )
-                        related_strs.update(related)
-                else:
-                    # Fallback: DependencyResolver (behavior cũ, chỉ IMPORTS)
-                    full_tree = self._view.scan_full_tree(workspace_path)
-                    resolver = DependencyResolver(workspace_path)
-                    resolver.build_file_index(full_tree)
-
-                    for file_path_str in user_selected:
-                        p = Path(file_path_str)
-                        if not p.is_file():
-                            continue
-                        related = resolver.get_related_files(p, max_depth=depth)
-                        for target in related:
-                            if target.exists():
-                                related_strs.add(str(target.resolve()))
+                for file_path_str in user_selected:
+                    p = Path(file_path_str)
+                    if not p.is_file():
+                        continue
+                    related = resolver.get_related_files(p, max_depth=depth)
+                    for target in related:
+                        if target.exists():
+                            related_strs.add(str(target.resolve()))
 
                 # Loại bỏ những file user đã chọn trực tiếp
                 new_related = {s for s in related_strs if s not in user_selected}

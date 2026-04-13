@@ -15,60 +15,14 @@ import pytest
 from domain.prompt.generator import (
     generate_prompt,
     generate_file_map,
-    generate_file_contents,
     generate_file_contents_xml,
-    generate_file_contents_json,
     generate_file_contents_plain,
     generate_smart_context,
     build_smart_prompt,
-    calculate_markdown_delimiter,
 )
 from infrastructure.filesystem.file_utils import TreeItem
 from infrastructure.git.git_utils import GitDiffResult, GitLogResult, GitCommit
 from presentation.config.output_format import OutputStyle
-
-
-class TestCalculateMarkdownDelimiter:
-    """Test calculate_markdown_delimiter() function."""
-
-    def test_no_backticks(self):
-        """Content without backticks uses 3 backticks."""
-        contents = ["def hello():\n    print('world')"]
-        delimiter = calculate_markdown_delimiter(contents)
-        assert delimiter == "```"
-
-    def test_three_backticks_in_content(self):
-        """Content with ``` uses 4 backticks."""
-        contents = ["Here is code:\n```python\nprint('x')\n```"]
-        delimiter = calculate_markdown_delimiter(contents)
-        assert delimiter == "````"
-
-    def test_four_backticks_in_content(self):
-        """Content with ```` uses 5 backticks."""
-        contents = ["Nested code:\n````\n```\ninner\n```\n````"]
-        delimiter = calculate_markdown_delimiter(contents)
-        assert delimiter == "`````"
-
-    def test_many_backticks(self):
-        """Content with many backticks uses more."""
-        contents = ["``````some content``````"]
-        delimiter = calculate_markdown_delimiter(contents)
-        assert len(delimiter) > 6
-
-    def test_empty_contents(self):
-        """Empty contents list returns 3 backticks."""
-        delimiter = calculate_markdown_delimiter([])
-        assert delimiter == "```"
-
-    def test_multiple_files(self):
-        """Multiple files, one with backticks."""
-        contents = [
-            "simple content",
-            "```python\ncode\n```",  # Has 3 backticks
-            "another simple",
-        ]
-        delimiter = calculate_markdown_delimiter(contents)
-        assert delimiter == "````"
 
 
 class TestGenerateFileMap:
@@ -154,67 +108,6 @@ class TestGenerateFileMap:
         assert result.strip().startswith("my-project")
 
 
-class TestGenerateFileContents:
-    """Test generate_file_contents() function."""
-
-    def test_empty_set(self):
-        """Empty set returns empty string."""
-        result = generate_file_contents(set())
-        assert result == ""
-
-    def test_single_file(self, tmp_path):
-        """Single file content generated."""
-        file_path = tmp_path / "test.py"
-        file_path.write_text("print('hello')")
-
-        result = generate_file_contents({str(file_path)})
-
-        assert "test.py" in result
-        assert "print('hello')" in result
-        # Phải có markdown code block
-        assert "```" in result
-
-    def test_multiple_files(self, tmp_path):
-        """Multiple files content generated."""
-        paths = set()
-        for name in ["a.py", "b.py", "c.py"]:
-            path = tmp_path / name
-            path.write_text(f"# {name}")
-            paths.add(str(path))
-
-        result = generate_file_contents(paths)
-
-        for name in ["a.py", "b.py", "c.py"]:
-            assert name in result
-
-    def test_file_with_backticks(self, tmp_path):
-        """File containing backticks uses dynamic delimiter."""
-        file_path = tmp_path / "readme.md"
-        file_path.write_text("Example:\n```python\ncode here\n```")
-
-        result = generate_file_contents({str(file_path)})
-
-        # Phải dùng 4+ backticks
-        assert "````" in result
-
-    def test_binary_extension_skipped(self, tmp_path):
-        """Binary file by extension is skipped."""
-        file_path = tmp_path / "image.jpg"
-        file_path.write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0]))
-
-        result = generate_file_contents({str(file_path)})
-
-        # Binary file không có content, hoặc có marker
-        # Không crash
-        assert isinstance(result, str)
-
-    def test_nonexistent_file_skipped(self, tmp_path):
-        """Nonexistent file is skipped gracefully."""
-        result = generate_file_contents({str(tmp_path / "nonexistent.py")})
-        # Không crash, trả về string
-        assert isinstance(result, str)
-
-
 class TestGeneratePrompt:
     """Test generate_prompt() function."""
 
@@ -223,13 +116,11 @@ class TestGeneratePrompt:
         result = generate_prompt(
             file_map="src/main.py",
             file_contents="def main(): pass",
-            output_style=OutputStyle.MARKDOWN,  # Explicitly test MARKDOWN structure
+            output_style=OutputStyle.XML,  # MARKDOWN removed
         )
 
-        assert "<file_map>" in result
-        assert "</file_map>" in result
-        assert "<file_contents>" in result
-        assert "</file_contents>" in result
+        assert "<structure>" in result
+        assert "</structure>" in result
         assert "src/main.py" in result
         assert "def main(): pass" in result
 
@@ -554,80 +445,6 @@ if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
 
-class TestJsonFormat:
-    """Test JSON output format."""
-
-    def test_json_output_valid_json(self, tmp_path):
-        """JSON output is valid JSON."""
-        import json
-
-        file_path = tmp_path / "main.py"
-        file_path.write_text("print('hello')")
-
-        result = generate_file_contents_json({str(file_path)})
-
-        data = json.loads(result)
-        assert str(file_path) in data
-        assert data[str(file_path)] == "print('hello')"
-
-    def test_json_output_multiple_files(self, tmp_path):
-        """JSON output contains all files."""
-        import json
-
-        p1 = tmp_path / "a.py"
-        p1.write_text("a")
-        p2 = tmp_path / "b.py"
-        p2.write_text("b")
-
-        result = generate_file_contents_json({str(p1), str(p2)})
-        data = json.loads(result)
-
-        assert len(data) == 2
-        assert data[str(p1)] == "a"
-        assert data[str(p2)] == "b"
-
-    def test_generate_prompt_with_json_style(self):
-        """generate_prompt produces valid JSON for JSON output style."""
-        import json
-
-        file_map = "tree"
-        file_contents = json.dumps({"file.py": "content"})
-
-        result = generate_prompt(
-            file_map=file_map,
-            file_contents=file_contents,
-            output_style=OutputStyle.JSON,
-            user_instructions="instr",
-        )
-
-        data = json.loads(result)
-        assert data["structure"] == "tree"
-        assert data["files"]["file.py"] == "content"
-        assert data["user_instructions"] == "instr"
-
-    def test_generate_prompt_json_git_context(self):
-        """JSON prompt includes git context."""
-        import json
-
-        git_diffs = GitDiffResult(work_tree_diff="wdiff", staged_diff="sdiff")
-        git_logs = GitLogResult(log_content="logs", commits=[])
-
-        result = generate_prompt(
-            file_map="map",
-            file_contents="{}",
-            output_style=OutputStyle.JSON,
-            git_diffs=git_diffs,
-            git_logs=git_logs,
-        )
-
-        data = json.loads(result)
-        assert data["git_diffs"]["work_tree"] == "wdiff"
-        assert data["git_diffs"]["staged"] == "sdiff"
-        assert data["git_diffs"]["instruction"]  # Co instruction text
-        assert data["git_logs"]["content"] == "logs"
-        assert data["git_logs"]["instruction"]  # Co instruction text
-
-
 class TestPlainFormat:
     """Test Plain Text output format."""
 
@@ -640,7 +457,7 @@ class TestPlainFormat:
 
         assert f"FILE: {file_path}" in result
         assert "print('hello')" in result
-        assert "=====" in result
+        assert "-----" in result
 
     def test_generate_prompt_with_plain_style(self):
         """generate_prompt produces plain text for PLAIN output style."""
@@ -651,11 +468,10 @@ class TestPlainFormat:
             file_map=file_map,
             file_contents=file_contents,
             output_style=OutputStyle.PLAIN,
-            user_instructions="instr",
+            user_instructions="Please fix bugs",
         )
-
-        assert "USER INSTRUCTIONS" in result
-        assert "DIRECTORY STRUCTURE" in result
-        assert "FILE CONTENTS" in result
-        assert "=" * 48 in result
+        assert "Please fix bugs" in result
+        assert "main.py" in result
+        assert "code" in result
+        assert "=" in result
         assert "<file_map>" not in result

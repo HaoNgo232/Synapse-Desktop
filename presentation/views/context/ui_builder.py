@@ -457,9 +457,9 @@ class UIBuilderMixin:
             label = f"{m.name} ({_format_context_length(m.context_length)})"
             action = self._model_menu.addAction(label)
             action.setData(m.id)
-            # Dung lambda de truyen mid vao signal
+            # Connect to handler that updates UI and triggers recount
             action.triggered.connect(
-                lambda checked=False, mid=m.id: self._on_model_changed(mid)
+                lambda checked=False, a=action: self._on_model_action_triggered(a)
             )
 
         self._model_btn = QToolButton()
@@ -1109,7 +1109,8 @@ class UIBuilderMixin:
             self._on_model_changed(model_id)
 
     def _on_model_changed(self: Any, model_id: str) -> None:
-        """Fallback for signal connection."""
+        """Override point for model change handling - implemented in ContextViewQt."""
+        # This method is overridden in ContextViewQt with actual implementation
         pass
 
     @property

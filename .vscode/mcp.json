@@ -1,9 +1,9 @@
 {
   "servers": {
     "synapse": {
-      "type": "stdio",
-      "command": "E:\\Desktop\\Synapse-Desktop.exe",
+      "command": "/home/hao/Desktop/labs/Synapse-Desktop/.venv/bin/python3",
       "args": [
+        "/home/hao/Desktop/labs/Synapse-Desktop/main_window.py",
         "--run-mcp"
       ]
     }

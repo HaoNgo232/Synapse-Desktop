@@ -34,6 +34,8 @@ from domain.prompt.formatters.system_prompts import (
     SUMMARY_FILE_FORMAT_PLAIN,
     SUMMARY_USAGE_GUIDELINES,
     SUMMARY_NOTES,
+    SMART_SUMMARY_PURPOSE,
+    SMART_SUMMARY_FORMAT,
     GIT_DIFF_INSTRUCTION,
     GIT_LOG_INSTRUCTION,
 )
@@ -115,10 +117,23 @@ def assemble_smart_prompt(
     project_rules: str = "",
     instructions_at_top: bool = False,
     semantic_index: str = "",
+    output_style: OutputStyle = OutputStyle.XML,
 ) -> str:
     """
-    Lắp ráp prompt cho Copy Smart.
+    Lắp ráp prompt cho Copy Smart (hỗ trợ cả XML và Plaintext).
     """
+    if output_style == OutputStyle.PLAIN:
+        return _assemble_smart_plain(
+            smart_contents=smart_contents,
+            file_map=file_map,
+            user_instructions=user_instructions,
+            git_diffs=git_diffs,
+            git_logs=git_logs,
+            project_rules=project_rules,
+            instructions_at_top=instructions_at_top,
+            semantic_index=semantic_index,
+        )
+
     file_summary = generate_smart_summary_xml()
 
     prompt = ""
@@ -155,6 +170,77 @@ def assemble_smart_prompt(
     if not instructions_at_top and user_instructions and user_instructions.strip():
         prompt += f"\n<user_instructions>\n{user_instructions.strip()}\n</user_instructions>\n"
     return prompt.strip()
+
+
+def _assemble_smart_plain(
+    smart_contents: str,
+    file_map: str,
+    user_instructions: str = "",
+    git_diffs: Optional[GitDiffResult] = None,
+    git_logs: Optional[GitLogResult] = None,
+    project_rules: str = "",
+    instructions_at_top: bool = False,
+    semantic_index: str = "",
+) -> str:
+    """Lắp ráp prompt Copy Smart theo Plain Text format."""
+    prompt_parts: list[str] = []
+
+    # System/Role info
+    prompt_parts.append(
+        f"{'=' * 48}\nSYSTEM INSTRUCTION (SMART CONTEXT)\n{'=' * 48}\n{AGENT_ROLE_INSTRUCTION}"
+    )
+
+    prompt_parts.append(
+        f"{'=' * 48}\n"
+        f"CONTEXT SUMMARY\n"
+        f"{'=' * 48}\n"
+        f"Purpose: {SMART_SUMMARY_PURPOSE}\n\n"
+        f"Format: {SMART_SUMMARY_FORMAT}\n\n"
+        f"Guidelines: {SUMMARY_USAGE_GUIDELINES}"
+    )
+
+    if instructions_at_top:
+        if user_instructions and user_instructions.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nINSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
+            )
+        if project_rules and project_rules.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nPROJECT RULES\n{'=' * 48}\n{project_rules.strip()}"
+            )
+
+    if semantic_index and semantic_index.strip():
+        prompt_parts.append(
+            f"{'=' * 48}\nSEMANTIC INDEX\n{'=' * 48}\n{_strip_xml_simple(semantic_index)}"
+        )
+
+    # Structure
+    prompt_parts.append(f"{'=' * 48}\nDIRECTORY STRUCTURE\n{'=' * 48}\n{file_map}")
+
+    # Compressed Contents
+    prompt_parts.append(
+        f"{'=' * 48}\nCOMPRESSED FILE CONTEXT\n{'=' * 48}\n{smart_contents}"
+    )
+
+    # Git changes
+    has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
+    if has_diffs:
+        assert git_diffs is not None
+        prompt_parts.append(
+            f"{'=' * 48}\nGIT CHANGES\n{'=' * 48}\n{git_diffs.work_tree_diff or ''}\n{git_diffs.staged_diff or ''}"
+        )
+
+    if not instructions_at_top:
+        if project_rules and project_rules.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nPROJECT RULES\n{'=' * 48}\n{project_rules.strip()}"
+            )
+        if user_instructions and user_instructions.strip():
+            prompt_parts.append(
+                f"{'=' * 48}\nUSER INSTRUCTIONS\n{'=' * 48}\n{user_instructions.strip()}"
+            )
+
+    return "\n\n".join(prompt_parts)
 
 
 # === Private helpers ===

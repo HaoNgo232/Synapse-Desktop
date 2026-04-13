@@ -14,6 +14,7 @@ from shared.types.prompt_types import FileEntry
 
 __all__ = [
     "format_files_xml",
+    "format_files_xml_elements",
     "generate_file_summary_xml",
     "generate_smart_summary_xml",
     "generate_file_summary_xml_minimal",
@@ -32,27 +33,9 @@ from domain.prompt.formatters.system_prompts import (
 )
 
 
-def format_files_xml(entries: list[FileEntry]) -> str:
+def format_files_xml_elements(entries: list[FileEntry]) -> list[str]:
     """
-    Render List[FileEntry] thanh Repomix XML format nang cao.
-
-    Output format:
-        <files>
-          <file path="src/main.py">
-            <layer>domain</layer>
-            <role>MainClass</role>
-            <dependencies>
-                <import>shared.utils</import>
-            </dependencies>
-            <content><![CDATA[...]]></content>
-          </file>
-        </files>
-
-    Args:
-        entries: List file entries da doc tu file_collector
-
-    Returns:
-        File contents string voi XML structure
+    Render List[FileEntry] thanh cac phan tu XML (<file> nodes).
     """
     file_elements: list[str] = []
 
@@ -61,7 +44,7 @@ def format_files_xml(entries: list[FileEntry]) -> str:
 
         if entry.error:
             file_elements.append(
-                f'<file path="{escaped_path}" skipped="true">{entry.error}</file>'
+                f'  <file path="{escaped_path}" skipped="true">{entry.error}</file>'
             )
         elif entry.content is not None:
             # Metadata elements
@@ -81,8 +64,7 @@ def format_files_xml(entries: list[FileEntry]) -> str:
                     deps_xml += f"      <import>{html.escape(dep)}</import>\n"
                 deps_xml += "    </dependencies>\n"
 
-            # Content using CDATA to avoid excessive escaping and keep code readable
-            # Note: CDATA cannot contain ']]>', but it's rare in code.
+            # Content using CDATA
             safe_content = entry.content.replace("]]>", "]]]]><![CDATA[>")
             content_xml = f"    <content><![CDATA[\n{safe_content}\n]]></content>"
 
@@ -90,6 +72,14 @@ def format_files_xml(entries: list[FileEntry]) -> str:
                 f'  <file path="{escaped_path}">\n{layer_xml}{role_xml}{deps_xml}{content_xml}\n  </file>'
             )
 
+    return file_elements
+
+
+def format_files_xml(entries: list[FileEntry]) -> str:
+    """
+    Render List[FileEntry] thanh Repomix XML format nang cao.
+    """
+    file_elements = format_files_xml_elements(entries)
     if not file_elements:
         return "<files></files>"
 

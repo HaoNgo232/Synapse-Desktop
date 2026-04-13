@@ -32,7 +32,8 @@ from application.services.prompt_helpers import (
 _FORMAT_TO_STYLE = {
     "xml": OutputStyle.XML,
     "plain": OutputStyle.PLAIN,
-    "compress": OutputStyle.XML,  # XML style for compress by default
+    "compress": OutputStyle.XML,
+    "compress_plain": OutputStyle.PLAIN,
 }
 
 # Mapping output_format string -> content generator function
@@ -209,7 +210,7 @@ class PromptBuildService:
         # 1. Generate file map
         if tree_item:
             _sel = selected_paths if selected_paths is not None else set()
-            if output_format in ("xml", "json"):
+            if output_format in ("xml", "json", "compress", "compress_plain"):
                 from domain.prompt.generator import generate_file_structure_xml
 
                 file_map = generate_file_structure_xml(
@@ -238,7 +239,7 @@ class PromptBuildService:
         # 3. Generate file contents
         all_path_strs = {str(p) for p in all_file_paths}
 
-        if output_format == "compress":
+        if output_format in ("compress", "compress_plain"):
             from domain.prompt.generator import generate_smart_context
 
             file_contents = generate_smart_context(
@@ -276,7 +277,7 @@ class PromptBuildService:
 
         from domain.prompt.generator import generate_prompt, build_smart_prompt
 
-        if output_format == "compress":
+        if output_format in ("compress", "compress_plain"):
             prompt = build_smart_prompt(
                 smart_contents=file_contents,
                 file_map=file_map,
@@ -287,6 +288,7 @@ class PromptBuildService:
                 workspace_root=workspace,
                 instructions_at_top=instructions_at_top,
                 semantic_index=semantic_index_text,
+                output_style=output_style,
             )
         else:
             prompt = generate_prompt(

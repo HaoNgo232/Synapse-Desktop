@@ -83,11 +83,10 @@ def generate_file_structure_xml(
             return f'{indent}<file path="{html.escape(path)}"/>\n'
 
     if not show_all and not _has_selected_descendant(tree, selected_paths):
-        return "<structure/>"
+        return ""
 
     # Bat dau tu root
-    xml_content = _build_xml(tree)
-    return f"<structure>\n{xml_content}</structure>"
+    return _build_xml(tree)
 
 
 def generate_file_map(
@@ -248,26 +247,34 @@ def generate_file_contents_xml(
             norm_to_orig[n] for n in codemap_only_normalized if n in norm_to_orig
         }
 
-        parts: list[str] = []
-
-        # Generate full content cho non-codemap files
+        full_entries = []
         if full_paths:
-            entries = collect_files(
+            full_entries = collect_files(
                 full_paths, max_file_size, workspace_root, use_relative_paths
             )
-            full_xml = format_files_xml(entries)
-            if full_xml.strip():
-                parts.append(full_xml)
 
-        # Generate codemap cho codemap-only files
+        # Generate codemap cho codemap-only files (dang XML strings lẻ)
+        codemap_xml_elements = []
         if codemap_only:
-            codemap_xml = _generate_codemap_xml(
+            codemap_xml_elements = _generate_codemap_xml_elements(
                 codemap_only, max_file_size, workspace_root, use_relative_paths
             )
-            if codemap_xml.strip():
-                parts.append(codemap_xml)
 
-        return "\n\n".join(parts)
+        # Build final XML structure
+        file_elements: list[str] = []
+
+        # 1. Add full content nodes
+        from domain.prompt.formatters.xml import format_files_xml_elements
+
+        file_elements.extend(format_files_xml_elements(full_entries))
+
+        # 2. Add codemap nodes
+        file_elements.extend(codemap_xml_elements)
+
+        if not file_elements:
+            return "<files></files>"
+
+        return "<files>\n" + "\n".join(file_elements) + "\n</files>"
     else:
         entries = collect_files(
             selected_paths, max_file_size, workspace_root, use_relative_paths
@@ -275,26 +282,14 @@ def generate_file_contents_xml(
         return format_files_xml(entries)
 
 
-def _generate_codemap_xml(
+def _generate_codemap_xml_elements(
     paths: set[str],
     max_file_size: int,
     workspace_root: Optional[Path],
     use_relative_paths: bool,
-) -> str:
+) -> list[str]:
     """
-    Generate XML output cho codemap-only files.
-
-    Su dung Tree-sitter smart_parse de extract AST signatures,
-    roi wrap trong XML tags voi attribute context="codemap".
-
-    Args:
-        paths: Set file paths can codemap
-        max_file_size: Max file size
-        workspace_root: Workspace root
-        use_relative_paths: Co dung relative paths khong
-
-    Returns:
-        XML string voi codemap content
+    Generate XML elements (<file> tags) cho codemap-only files.
     """
     from domain.smart_context import smart_parse, is_supported
     from xml.sax.saxutils import escape as xml_escape
@@ -303,7 +298,7 @@ def _generate_codemap_xml(
         """Escape string for XML attribute value."""
         return xml_escape(s, {'"': "&quot;"})
 
-    parts: list[str] = []
+    elements: list[str] = []
 
     for path_str in sorted(paths):
         path = Path(path_str)
@@ -334,24 +329,24 @@ def _generate_codemap_xml(
                     path_str, raw_content, include_relationships=False
                 )
                 if smart_content:
-                    parts.append(
-                        f'<file path="{_xml_attr_escape(display_path)}" context="codemap">\n'
-                        f"{smart_content}\n"
-                        f"</file>"
+                    elements.append(
+                        f'  <file path="{_xml_attr_escape(display_path)}" context="codemap">\n'
+                        f"    <content><![CDATA[\n{smart_content}\n]]></content>\n"
+                        f"  </file>"
                     )
                     continue
 
-            # Fallback: neu smart_parse khong ho tro, su dung raw_content da doc
-            parts.append(
-                f'<file path="{_xml_attr_escape(display_path)}" context="codemap-fallback">\n'
-                f"{raw_content}\n"
-                f"</file>"
+            # Fallback
+            elements.append(
+                f'  <file path="{_xml_attr_escape(display_path)}" context="codemap-fallback">\n'
+                f"    <content><![CDATA[\n{raw_content}\n]]></content>\n"
+                f"  </file>"
             )
 
         except (OSError, IOError):
             continue
 
-    return "\n\n".join(parts)
+    return elements
 
 
 def generate_file_contents_plain(
@@ -440,17 +435,18 @@ def generate_file_contents_plain(
                             path_str, raw_content, include_relationships=False
                         )
                         if smart_content:
+                            # Standardize plaintext header to match format_files_plain (FILE: path)
                             parts.append(
-                                f"{display_path} [codemap]\n"
-                                f"{'-' * len(display_path)}\n"
+                                f"FILE: {display_path} [codemap]\n"
+                                f"{'-' * (len(display_path) + 16)}\n"
                                 f"{smart_content}"
                             )
                             continue
 
                     # Fallback
                     parts.append(
-                        f"{display_path} [codemap-fallback]\n"
-                        f"{'-' * len(display_path)}\n"
+                        f"FILE: {display_path} [codemap-fallback]\n"
+                        f"{'-' * (len(display_path) + 25)}\n"
                         f"{raw_content}"
                     )
 
@@ -601,6 +597,7 @@ def build_smart_prompt(
     workspace_root: Optional[Path] = None,
     instructions_at_top: bool = False,
     semantic_index: str = "",
+    output_style: OutputStyle = OutputStyle.XML,
 ) -> str:
     """
     Tạo prompt đầy đủ cho Copy Smart.
@@ -614,6 +611,7 @@ def build_smart_prompt(
         project_rules=project_rules,
         instructions_at_top=instructions_at_top,
         semantic_index=semantic_index,
+        output_style=output_style,
     )
 
 

@@ -1127,11 +1127,16 @@ class CopyActionController(QObject):
             """Heavy work - chay tren background thread."""
             assert workspace is not None
             tree_item = self._view.scan_full_tree(workspace)
+            format_str = (
+                "compress_plain"
+                if self._view.get_output_style() == OutputStyle.PLAIN
+                else "compress"
+            )
             return self._view.get_prompt_builder().build_prompt(
                 file_paths=[Path(p) for p in selected_path_strs],
                 workspace=workspace,
                 instructions=instructions,
-                output_format="compress",
+                output_format=format_str,
                 include_git_changes=include_git,
                 use_relative_paths=use_rel,
                 tree_item=tree_item,

@@ -1,6 +1,17 @@
 ; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
 ; 
 
+(line_comment) @comment
+(block_comment) @comment
+
+(import_declaration
+  .
+  (identifier) @name.reference.module) @definition.import
+
+(package_declaration
+  .
+  (identifier) @name.reference.module) @definition.import
+
 (class_declaration
   name: (identifier) @name.definition.class) @definition.class
 

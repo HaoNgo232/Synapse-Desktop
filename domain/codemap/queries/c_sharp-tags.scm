@@ -1,49 +1,54 @@
 ; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
 ; 
 
-(class_declaration
- name: (identifier) @name.definition.class
- ) @definition.class
+(comment) @comment
 
 (class_declaration
-   bases: (base_list (_) @name.reference.class)
- ) @reference.class
+  name: (identifier) @name.definition.class
+) @definition.class
+
+; Note: The 'bases:' field specifier was removed in tree-sitter-c_sharp 0.25+
+; The base_list node now directly contains base types without a named field
+(class_declaration
+  (base_list (_) @name.reference.class)
+) @reference.class
 
 (interface_declaration
- name: (identifier) @name.definition.interface
- ) @definition.interface
+  name: (identifier) @name.definition.interface
+) @definition.interface
 
+; Captures base interfaces implemented by an interface
 (interface_declaration
- bases: (base_list (_) @name.reference.interface)
- ) @reference.interface
+  (base_list (_) @name.reference.interface)
+) @reference.interface
 
 (method_declaration
- name: (identifier) @name.definition.method
- ) @definition.method
+  name: (identifier) @name.definition.method
+) @definition.method
 
 (object_creation_expression
- type: (identifier) @name.reference.class
- ) @reference.class
+  type: (identifier) @name.reference.class
+) @reference.class
 
 (type_parameter_constraints_clause
- target: (identifier) @name.reference.class
- ) @reference.class
+  (identifier) @name.reference.class
+) @reference.class
 
-(type_constraint
- type: (identifier) @name.reference.class
- ) @reference.class
+(type_parameter_constraint
+  type: (identifier) @name.reference.class
+) @reference.class
 
 (variable_declaration
- type: (identifier) @name.reference.class
- ) @reference.class
+  type: (identifier) @name.reference.class
+) @reference.class
 
 (invocation_expression
- function:
-  (member_access_expression
-    name: (identifier) @name.reference.send
- )
+  function:
+    (member_access_expression
+      name: (identifier) @name.reference.send
+    )
 ) @reference.send
 
 (namespace_declaration
- name: (identifier) @name.definition.module
+  name: (identifier) @name.definition.module
 ) @definition.module

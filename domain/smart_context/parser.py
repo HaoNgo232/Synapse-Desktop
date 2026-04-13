@@ -9,7 +9,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from typing import Optional, List, Any
+from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -106,27 +106,51 @@ def smart_parse(
                 import_lines.append(lines[row].strip())
                 seen_import_rows.add(row)
 
-        chunks: List[str] = []
+        # Assemble Compressed Content with Intelligent Separator
+        compressed_content = ""
+        last_line = -1
 
-        # Add imports to the beginning (if any)
+        # 3. Add Symbol Signatures (Imports first)
         if import_lines:
-            chunks.append("\n".join(import_lines))
+            compressed_content += "\n".join(import_lines)
+            last_line = max(seen_import_rows) if seen_import_rows else -1
 
-        # 3. Add Symbol Signatures
         if symbols:
             for s in symbols:
                 if s.name == "[ENTRY POINT]":
-                    chunks.append(f"// {s.signature}")
+                    if compressed_content:
+                        compressed_content += f"\n{CHUNK_SEPARATOR}\n"
+                    compressed_content += f"// {s.signature}"
+                    last_line = s.line_end
                     continue
-                # Signature extraction (already contains decorators/docstrings from SymbolExtractor)
-                chunk = s.signature if s.signature else s.name
-                chunks.append(chunk)
-        elif not import_lines:
-            # If both symbols and imports are missing, the file is either empty or structure parsing failed
-            return f"// FILE: {file_path} (Empty or unextractable)"
 
-        # Assemble Compressed Content
-        compressed_content = f"\n{CHUNK_SEPARATOR}\n".join(chunks)
+                # Check for gap between symbols to insert separator
+                # Nếu có khoảng trống giữa symbol trước và symbol này -> chèn ⋮----
+                if last_line != -1 and s.line_start > last_line + 1:
+                    # Nếu là nested symbol (có parent), có thể không muốn chèn separator to?
+                    # Nhưng để đơn giản và giống Repomix:
+                    if not compressed_content.endswith(f"{CHUNK_SEPARATOR}\n"):
+                        compressed_content += f"\n{CHUNK_SEPARATOR}\n"
+                elif compressed_content and not compressed_content.endswith("\n"):
+                    compressed_content += "\n"
+
+                # Indentation based on nesting
+                indent = ""
+                if s.parent:
+                    indent = "  "  # Một cấp độ indent đơn giản
+
+                # Signature extraction (already contains decorators/docstrings from SymbolExtractor)
+                sig = s.signature if s.signature else s.name
+
+                # Thêm indent cho từng dòng của signature (nếu đa dòng)
+                indented_sig = "\n".join(
+                    [indent + line_text for line_text in sig.split("\n")]
+                )
+                compressed_content += indented_sig
+                last_line = s.line_end
+
+        # Cuối cùng, nếu symbol cuối cùng chưa kết thúc file, bạn có thể muốn chèn separator
+        # Nhưng thường Repomix không làm vậy ở cuối file trừ khi có yêu cầu.
 
         # 3.5 Build and Append Relationships Section if requested
         if include_relationships:

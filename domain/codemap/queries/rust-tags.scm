@@ -1,6 +1,19 @@
 ; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
 ; 
 
+(line_comment) @comment
+(block_comment) @comment
+
+; Import statements
+(use_declaration
+  (scoped_identifier) @name.reference.module) @definition.import
+
+(use_declaration
+  (identifier) @name.reference.module) @definition.import
+
+(extern_crate_declaration
+  (identifier) @name.reference.module) @definition.import
+
 ; ADT definitions
 
 (struct_item

@@ -204,28 +204,18 @@ def _is_likely_entry_point(file_path: str, content: str) -> bool:
 
 
 def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
-    """Extracts signature including Docstring/Decorators."""
+    """Extracts signature including Docstring/Decorators, mimicking Repomix style."""
     def_node = node
+    # Di chuyển lên node cha chứa toàn bộ khai báo (ví dụ function_declaration thay vì chỉ identifier)
     while def_node.parent and (
         "identifier" in def_node.type
         or "name" in def_node.type
         or "declarator" in def_node.type
+        or "variable_declarator" in def_node.type
     ):
         def_node = def_node.parent
-    if def_node.parent and def_node.parent.type in [
-        "type_spec",
-        "method_declaration",
-        "function_declaration",
-    ]:
-        def_node = def_node.parent
-        if def_node.parent and def_node.parent.type == "type_declaration":
-            def_node = def_node.parent
 
-    start_row = def_node.start_point[0]
-    if start_row >= len(lines):
-        return node.text.decode("utf-8") if node.text else None
-    main_line = lines[start_row].strip()
-
+    # Capture decorators/attributes
     decorators: List[str] = []
     curr = def_node.prev_sibling
     while curr and curr.type in ["decorator", "attribute"]:
@@ -234,6 +224,7 @@ def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
             decorators.insert(0, deco_text)
         curr = curr.prev_sibling
 
+    # Capture docstring/comments above
     description = ""
     comment_node = def_node.prev_sibling
     if decorators:
@@ -247,10 +238,11 @@ def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
         "line_comment",
         "block_comment",
     ]:
-        description = _parse_doc_text(
-            comment_node.text.decode("utf-8") if comment_node.text else ""
+        description = (
+            comment_node.text.decode("utf-8").strip() if comment_node.text else ""
         )
 
+    # Nếu không thấy comment ở trên, thử tìm docstring bên trong body (Python style)
     if not description:
         body_node = None
         for child in def_node.children:
@@ -268,24 +260,60 @@ def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
                 if child.type == "expression_statement":
                     target = child.children[0]
                 if target.type == "string":
-                    description = _parse_doc_text(
-                        target.text.decode("utf-8") if target.text else ""
+                    description = (
+                        target.text.decode("utf-8").strip() if target.text else ""
                     )
                     break
 
-    if main_line.endswith(":"):
-        main_line = main_line[:-1]
-    if main_line.endswith("{"):
-        main_line = main_line[:-1].strip()
+    # Extract the full signature text (from start of def_node to the start of the body block)
+    # This allows capturing multi-line signatures
+    start_point = def_node.start_point
+    end_point = def_node.end_point
 
-    final_sig = " ".join(decorators) + " " + main_line if decorators else main_line
+    # Try to find where the body starts to truncate there
+    body_found = False
+    for child in def_node.children:
+        if child.type in ["block", "statement_block", "function_body", "class_body"]:
+            end_point = child.start_point
+            body_found = True
+            break
+
+    # Lấy text thô từ các dòng tương ứng
+    sig_lines = []
+    for r in range(start_point[0], end_point[0] + 1):
+        if r >= len(lines):
+            break
+        line = lines[r]
+        if r == start_point[0] and r == end_point[0]:
+            sig_lines.append(line[start_point[1] : end_point[1]])
+        elif r == start_point[0]:
+            sig_lines.append(line[start_point[1] :])
+        elif r == end_point[0]:
+            sig_lines.append(line[: end_point[1]])
+        else:
+            sig_lines.append(line)
+
+    main_sig = "".join(sig_lines).strip()
+
+    # Repomix style: Docstring ABOVE signature
+    final_output = ""
     if description:
-        limit = 500
-        short_desc = (
-            description[:limit] + "..." if len(description) > limit else description
-        )
-        final_sig += f"\n    /*\n     {short_desc}\n     */"
-    return final_sig
+        final_output += description + "\n"
+
+    if decorators:
+        final_output += " ".join(decorators) + " "
+
+    final_output += main_sig
+
+    # Nếu có body, thường signature kết thúc bằng { hoặc :
+    # Đảm bảo kết thúc đẹp mắt
+    if body_found and not (final_output.endswith("{") or final_output.endswith(":")):
+        if "python" in str(node.tree if hasattr(node, "tree") else ""):  # Heuristic
+            final_output += ":"
+        else:
+            final_output += " {"
+
+    return final_output
 
 
 def _parse_doc_text(raw_text: str) -> str:

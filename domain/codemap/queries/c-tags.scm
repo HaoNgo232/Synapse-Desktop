@@ -1,6 +1,8 @@
 ; Derived from Aider (based on nvim-treesitter tags) with Synapse Semantic customisations
 ; 
 
+(comment) @comment
+
 (struct_specifier name: (type_identifier) @name.definition.class body:(_)) @definition.class
 
 (declaration type: (union_specifier name: (type_identifier) @name.definition.class)) @definition.class

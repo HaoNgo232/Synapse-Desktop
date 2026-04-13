@@ -34,11 +34,21 @@
 (class_declaration
   name: (type_identifier) @name.definition.class) @definition.class
 
-(interface_declaration
-  name: (type_identifier) @name.definition.class) @definition.class
-
 (type_alias_declaration
   name: (type_identifier) @name.definition.type) @definition.type
 
 (enum_declaration
   name: (identifier) @name.definition.enum) @definition.enum
+
+; Capture const/let function assignments
+(lexical_declaration
+  (variable_declarator
+    name: (identifier) @name.definition.function
+    value: [(arrow_function) (function_expression)])) @definition.function
+
+; Capture interface/class members for structural compression
+(property_signature
+  name: (property_identifier) @name.definition.variable) @definition.variable
+
+(public_field_definition
+  name: (property_identifier) @name.definition.variable) @definition.variable

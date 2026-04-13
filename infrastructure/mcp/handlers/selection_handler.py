@@ -2,7 +2,7 @@
 Selection Handler - Xu ly manage_selection tool.
 
 Quan ly danh sach file duoc chon (ticked) trong Synapse session.
-Supports v2 format with provenance tracking (backward compatible with v1 list format).
+Uses v2 format with provenance tracking.
 """
 
 import asyncio
@@ -17,6 +17,15 @@ from domain.selection.provenance import SelectionSource, SelectionState, VALID_S
 from infrastructure.mcp.core.constants import logger
 from infrastructure.mcp.core.workspace_manager import WorkspaceManager
 from shared.utils.file_lock import lock_file, unlock_file
+
+
+def _parse_v2_selection(raw: str) -> SelectionState:
+    """Parse selection state from v2 JSON payload."""
+    try:
+        data = json.loads(raw)
+        return SelectionState.from_dict(data)
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return SelectionState()
 
 
 def _locked_read_modify_write(
@@ -35,19 +44,7 @@ def _locked_read_modify_write(
             if not raw.strip():
                 state = SelectionState()
             else:
-                try:
-                    data = json.loads(raw)
-                    # Backward compat: v1 format wraps list in {"selected_files": [...]}
-                    if (
-                        isinstance(data, dict)
-                        and "selected_files" in data
-                        and "version" not in data
-                    ):
-                        state = SelectionState.from_dict(data["selected_files"])
-                    else:
-                        state = SelectionState.from_dict(data)
-                except (json.JSONDecodeError, OSError):
-                    state = SelectionState()
+                state = _parse_v2_selection(raw)
 
             new_state = modifier_fn(state)
 
@@ -98,7 +95,7 @@ def register_tools(mcp_instance) -> None:
 
         Use this to track files across multiple exploration steps, then pass them to build_prompt with use_selection=True.
         Thread-safe with cross-process file locking.
-        Supports provenance tracking (v2 format) with backward compatibility for v1 format.
+        Uses provenance tracking in v2 format.
         """
         effective_source: SelectionSource = "agent"
         if source is not None:
@@ -121,16 +118,7 @@ def register_tools(mcp_instance) -> None:
                     raw_text = await asyncio.to_thread(
                         session_file.read_text, encoding="utf-8"
                     )
-                    data = json.loads(raw_text)
-                    # Backward compat: v1 format wraps list in {"selected_files": [...]}
-                    if (
-                        isinstance(data, dict)
-                        and "selected_files" in data
-                        and "version" not in data
-                    ):
-                        state = SelectionState.from_dict(data["selected_files"])
-                    else:
-                        state = SelectionState.from_dict(data)
+                    state = _parse_v2_selection(raw_text)
                 except (OSError, json.JSONDecodeError) as e:
                     logger.warning("Failed to load selection: %s", e)
 
@@ -147,15 +135,7 @@ def register_tools(mcp_instance) -> None:
                     raw_text = await asyncio.to_thread(
                         session_file.read_text, encoding="utf-8"
                     )
-                    data = json.loads(raw_text)
-                    if (
-                        isinstance(data, dict)
-                        and "selected_files" in data
-                        and "version" not in data
-                    ):
-                        state = SelectionState.from_dict(data["selected_files"])
-                    else:
-                        state = SelectionState.from_dict(data)
+                    state = _parse_v2_selection(raw_text)
                 except (OSError, json.JSONDecodeError) as e:
                     logger.warning("Failed to load selection provenance: %s", e)
 

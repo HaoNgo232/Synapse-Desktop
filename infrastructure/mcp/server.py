@@ -32,25 +32,13 @@ if str(_project_root) not in sys.path:
 mcp = FastMCP(
     "Synapse Desktop",
     instructions=(
-        "Synapse Desktop provides codebase analysis capabilities that go beyond "
-        "standard file reading and text search.\n"
+        "Synapse MCP is running in selection-only mode.\n"
         "\n"
-        "What Synapse adds to your native tools:\n"
-        "  - AST-level code understanding: get_codemap, batch_codemap, get_symbols "
-        "extract function/class signatures via Tree-sitter parsing, saving 70-80% tokens "
-        "vs reading full files.\n"
-        "  - Dependency & impact analysis: get_imports_graph resolves cross-file imports, "
-        "get_related_tests maps source files to their test files, blast_radius analyzes change impact.\n"
-        "  - Token-aware context packaging: estimate_tokens counts tokens accurately, "
-        "build_prompt packages files into structured prompts with optional dependency "
-        "expansion and token budget management.\n"
-        "  - Project intelligence: explain_architecture generates architecture summaries, "
-        "start_session auto-discovers project structure and technical debt.\n"
-        "  - Workflow tools: rp_build, rp_design, rp_review, rp_refactor, rp_investigate, rp_test "
-        "automate multi-step analysis workflows with scope detection and token optimization.\n"
+        "Available tool:\n"
+        "  - manage_selection: manage selected file paths in the current session "
+        "(get, set, add, clear, get_provenance).\n"
         "\n"
-        "For basic file reading, directory listing, text search, and command execution, "
-        "prefer your native tools — they have lower overhead."
+        "Other tools are intentionally disabled at aggregate registration level."
     ),
 )
 

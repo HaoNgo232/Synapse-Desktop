@@ -1,7 +1,7 @@
-"""Selection provenance tracking - phân biệt nguồn gốc của file selection."""
+"""Selection provenance tracking - phan biet nguon goc cua file selection."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, cast
 
 
 SelectionSource = Literal["user", "agent", "dependency", "review"]
@@ -41,14 +41,28 @@ class SelectionState:
 
     @classmethod
     def from_dict(cls, data: object) -> "SelectionState":
-        """Parse from dict or list (backward compatible)."""
-        if isinstance(data, list):
-            # v1 format - just a list of paths
-            return cls(paths=data, provenance={p: "user" for p in data})
+        """Parse from v2 dict format only."""
         if isinstance(data, dict):
-            return cls(
-                paths=data.get("paths", []),
-                provenance=data.get("provenance", {}),
-                version=data.get("version", 2),
+            raw_paths = data.get("paths", [])
+            paths: List[str] = (
+                [p for p in raw_paths if isinstance(p, str)]
+                if isinstance(raw_paths, list)
+                else []
             )
+
+            raw_provenance = data.get("provenance", {})
+            provenance: Dict[str, SelectionSource] = {}
+            if isinstance(raw_provenance, dict):
+                for key, value in raw_provenance.items():
+                    if (
+                        isinstance(key, str)
+                        and isinstance(value, str)
+                        and value in VALID_SOURCES
+                    ):
+                        provenance[key] = cast(SelectionSource, value)
+
+            raw_version = data.get("version", 2)
+            version = raw_version if isinstance(raw_version, int) else 2
+
+            return cls(paths=paths, provenance=provenance, version=version)
         return cls()

@@ -2,8 +2,10 @@
   "servers": {
     "synapse": {
       "type": "stdio",
-      "command": "E:\\Desktop\\Synapse-Desktop\\build\\dist\\Synapse-Desktop.exe",
-      "args": ["--run-mcp"]
+      "command": "E:\\Desktop\\Synapse-Desktop.exe",
+      "args": [
+        "--run-mcp"
+      ]
     }
   }
 }

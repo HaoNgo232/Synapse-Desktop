@@ -871,26 +871,26 @@ class FileTreeWidget(QWidget):
 
     # ===== Agent Syncing =====
     #
-    # Luồng đồng bộ 2 chiều giữa UI <-> .synapse/selection.json:
+    # Luong dong bo 2 chieu giua UI <-> .synapse/selection.json (v2 format):
     #
     # UI -> JSON (write): Khi user click checkbox, _write_agent_selection()
     #   ghi SYNCHRONOUS vào JSON và update _last_synced_selection ngay lập tức.
     #   Không dùng debounce để tránh race condition với poll timer.
     #
-    # JSON -> UI (poll): Timer 2s đọc JSON, so sánh với _last_synced_selection.
-    #   Nếu khác (agent đã sửa từ bên ngoài) thì apply vào UI.
-    #   Nếu giống (do chính UI vừa ghi) thì skip.
+    # JSON -> UI (poll): Timer 2s doc JSON v2, so sanh voi _last_synced_selection.
+    #   Neu khac (agent da sua tu ben ngoai) thi apply vao UI.
+    #   Neu giong (do chinh UI vua ghi) thi skip.
     #
-    # Race condition đã fix: Vì write là synchronous, _last_synced_selection
-    # luôn khớp với nội dung JSON. Poll timer đọc JSON sẽ thấy data giống
-    # _last_synced_selection -> skip. Không bao giờ ghi đè selection mới.
+    # Race condition da fix: Vi write la synchronous, _last_synced_selection
+    # luon khop voi noi dung JSON. Poll timer doc JSON se thay data giong
+    # _last_synced_selection -> skip. Khong bao gio ghi de selection moi.
 
     @Slot()
     def _poll_agent_selection(self) -> None:
-        """Poll .synapse/selection.json mỗi 2 giây để đồng bộ từ agent.
+        """Poll .synapse/selection.json moi 2 giay de dong bo tu agent.
 
-        Chỉ apply khi phát hiện agent thay đổi JSON từ bên ngoài.
-        Skip nếu data trong JSON trùng với _last_synced_selection (do UI vừa ghi).
+        Chi apply khi phat hien agent thay doi JSON tu ben ngoai.
+        Skip neu data trong JSON trung voi _last_synced_selection (do UI vua ghi).
         """
         if self._is_syncing_selection:
             return
@@ -909,13 +909,18 @@ class FileTreeWidget(QWidget):
         try:
             with open(session_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                selected_list = data.get("selected_files", [])
+                selected_list = data.get("paths", []) if isinstance(data, dict) else []
 
-            # Convert relative paths (trong JSON) sang absolute (cho UI)
-            # Dùng .absolute() thay vì .resolve() để tránh symlink mismatch
+            if not isinstance(selected_list, list):
+                selected_list = []
+
+            # Convert relative paths (trong JSON v2) sang absolute (cho UI)
+            # Dung .absolute() thay vi .resolve() de tranh symlink mismatch
             workspace_path = Path(workspace)
             absolute_selected = set()
             for rel_path in selected_list:
+                if not isinstance(rel_path, str):
+                    continue
                 try:
                     fp = (workspace_path / rel_path).absolute()
                     absolute_selected.add(str(fp))
@@ -923,7 +928,7 @@ class FileTreeWidget(QWidget):
                     pass
 
             # CHU Y: Tren Windows, path casing co the khong nhat quan (e: vs E:)
-            # Chung ta can filter ra nhung paths thực sự khác biệt để tránh loop refresh
+            # Chung ta can filter ra nhung paths thuc su khac biet de tranh loop refresh
             import platform
 
             is_windows = platform.system() == "Windows"
@@ -938,12 +943,12 @@ class FileTreeWidget(QWidget):
             if not is_changed:
                 return
 
-            # JSON đã thay đổi (agent sửa từ bên ngoài)
+            # JSON da thay doi (agent sua tu ben ngoai)
             self._last_synced_selection = absolute_selected
 
-            # Kiểm tra nếu thực sự khác với model state thì mới apply
+            # Kiem tra neu thuc su khac voi model state thi moi apply
             model_selected = self._model.get_all_selected_paths()
-            
+
             if is_windows:
                 norm_model = {p.lower() for p in model_selected}
                 norm_absolute = {p.lower() for p in absolute_selected}
@@ -963,11 +968,11 @@ class FileTreeWidget(QWidget):
             logger.debug(f"Failed to poll selection: {e}")
 
     def _write_agent_selection(self, selected: Set[str]) -> None:
-        """Ghi selection hiện tại vào .synapse/selection.json (synchronous).
+        """Ghi selection hien tai vao .synapse/selection.json v2 (synchronous).
 
-        Ghi ĐỒNG BỘ để đảm bảo _last_synced_selection luôn khớp với JSON.
-        Nếu dùng debounce, poll timer có thể đọc JSON cũ trong khoảng delay
-        và ghi đè selection mới của user -> mất checkbox.
+        Ghi DONG BO de dam bao _last_synced_selection luon khop voi JSON.
+        Neu dung debounce, poll timer co the doc JSON cu trong khoang delay
+        va ghi de selection moi cua user -> mat checkbox.
         """
         # Bỏ qua nếu đang sync từ poll (tránh vòng lặp)
         if self._is_syncing_selection:
@@ -977,12 +982,12 @@ class FileTreeWidget(QWidget):
         if not workspace:
             return
 
-        # Fast path: nếu selection không đổi thì skip IO
+        # Fast path: neu selection khong doi thi skip IO
         if selected == self._last_synced_selection:
             return
 
-        # Update cache TRƯỚC khi ghi file
-        # Đảm bảo poll timer luôn thấy data mới nhất
+        # Update cache TRUOC khi ghi file
+        # Dam bao poll timer luon thay data moi nhat
         self._last_synced_selection = set(selected)
 
         from infrastructure.mcp.core.workspace_manager import WorkspaceManager
@@ -1000,10 +1005,17 @@ class FileTreeWidget(QWidget):
             except ValueError:
                 pass
 
+        relative_selected_sorted = sorted(relative_selected)
+        payload = {
+            "version": 2,
+            "paths": relative_selected_sorted,
+            "provenance": {p: "user" for p in relative_selected_sorted},
+        }
+
         try:
             session_file.parent.mkdir(parents=True, exist_ok=True)
             with open(session_file, "w", encoding="utf-8") as f:
-                json.dump({"selected_files": sorted(relative_selected)}, f, indent=2)
+                json.dump(payload, f, indent=2)
                 f.write("\n")
         except Exception as e:
             logger.debug(f"Failed to write selection.json: {e}")

@@ -112,14 +112,14 @@ class TestIndividualHandlerRegistration:
 
 
 class TestRegisterAllTools:
-    """Kiem tra register_all_tools dang ky TAT CA tools tu moi handler."""
+    """Kiem tra register_all_tools dang ky mode selection-only."""
 
     def test_total_tool_count(self):
-        """Tong so tools phai la 22 (tools thuc te dang ky)."""
+        """Tong so tools aggregate chi con 1 (manage_selection)."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 22
+        assert len(tools) == 1
 
     def test_no_duplicate_tool_names(self):
         """Khong co tool nao bi trung ten."""
@@ -130,42 +130,14 @@ class TestRegisterAllTools:
         assert len(names) == len(set(names)), f"Duplicate tools: {names}"
 
     def test_all_expected_tools_present(self):
-        """Tat ca 20 tools duoc dang ky dung ten."""
+        """Chi tool selection duoc dang ky o aggregate entrypoint."""
         mcp = FastMCP("test_all")
         register_all_tools(mcp)
         names = {t.name for t in mcp._tool_manager.list_tools()}
 
         expected_tools = {
-            # workspace_handler
-            "start_session",
             # selection_handler
             "manage_selection",
-            # token_handler
-            "estimate_tokens",
-            # analysis_handler
-            "get_symbols",
-            # structure_handler
-            "explain_architecture",
-            # dependency_handler
-            "get_imports_graph",
-            "get_related_tests",
-            "blast_radius",
-            # context_handler
-            "get_codemap",
-            "batch_codemap",
-            "build_prompt",
-            # workflow_handler
-            "rp_build",
-            "rp_review",
-            "rp_refactor",
-            "rp_investigate",
-            "rp_test",
-            "rp_design",
-            "manage_memory",
-            "get_contract_pack",
-            "detect_design_drift",
-            "list_workflow_plugins",
-            "run_workflow_plugin",
         }
 
         missing = expected_tools - names

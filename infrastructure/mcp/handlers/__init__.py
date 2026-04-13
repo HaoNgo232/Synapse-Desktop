@@ -1,52 +1,18 @@
-"""
-Handlers package - Chua cac handler modules cho MCP tools.
+"""Handlers package - Selection-only registration entrypoint.
 
-Moi handler module chiu trach nhiem cho mot nhom tools lien quan,
-va expose function register_tools(mcp) de dang ky tools voi MCP server.
+Core logic cua cac handler khac van duoc giu nguyen trong codebase,
+nhung MCP aggregate registration hien tai chi expose tool selection.
 """
 
-from infrastructure.mcp.handlers.workspace_handler import (
-    register_tools as register_workspace,
-)
-from infrastructure.mcp.handlers.file_handler import register_tools as register_file
 from infrastructure.mcp.handlers.selection_handler import (
     register_tools as register_selection,
-)
-from infrastructure.mcp.handlers.token_handler import register_tools as register_token
-from infrastructure.mcp.handlers.analysis_handler import (
-    register_tools as register_analysis,
-)
-from infrastructure.mcp.handlers.structure_handler import (
-    register_tools as register_structure,
-)
-from infrastructure.mcp.handlers.dependency_handler import (
-    register_tools as register_dependency,
-)
-from infrastructure.mcp.handlers.git_handler import register_tools as register_git
-from infrastructure.mcp.handlers.context_handler import (
-    register_tools as register_context,
-)
-from infrastructure.mcp.handlers.workflow_handler import (
-    register_tools as register_workflow,
 )
 
 
 def register_all_tools(mcp_instance: object) -> None:
-    """Dang ky tat ca tools tu cac handler modules vao MCP server.
-
-    Goi tung register_tools() tu moi handler module de dang ky
-    cac @mcp.tool() functions.
+    """Dang ky tools vao MCP server (hien tai: chi selection tool).
 
     Args:
         mcp_instance: FastMCP server instance.
     """
-    register_workspace(mcp_instance)
-    register_file(mcp_instance)
     register_selection(mcp_instance)
-    register_token(mcp_instance)
-    register_analysis(mcp_instance)
-    register_structure(mcp_instance)
-    register_dependency(mcp_instance)
-    register_git(mcp_instance)
-    register_context(mcp_instance)
-    register_workflow(mcp_instance)

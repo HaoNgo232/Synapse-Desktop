@@ -17,14 +17,6 @@ from infrastructure.filesystem.file_utils import is_binary_file
 from shared.types.prompt_types import FileEntry
 from shared.utils.import_parser import extract_local_imports
 from shared.utils.language_utils import get_language_from_path
-from shared.utils.metadata_utils import (
-    extract_layer_from_path,
-    extract_role_from_content,
-)
-
-
-# Logics metadata (layer, role) da duoc move sang shared/utils/metadata_utils.py
-# de de dang quan ly heuristics cho nhieu loai project (Web, Python, DDD).
 
 
 def _path_to_dotted(path_str: str) -> str:
@@ -123,8 +115,6 @@ def collect_files(
             content = path.read_text(encoding="utf-8", errors="replace")
 
             # Trich xuat metadata tu shared utility
-            layer = extract_layer_from_path(display, workspace_root)
-            role = extract_role_from_content(path, content)
             deps: list[str] = []
             if workspace_root:
                 raw_deps = extract_local_imports(path, workspace_root)
@@ -141,8 +131,6 @@ def collect_files(
                 content=content,
                 error=None,
                 language=language,
-                layer=layer,
-                role=role,
                 dependencies=deps,
             )
 

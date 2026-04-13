@@ -47,16 +47,6 @@ def format_files_xml_elements(entries: list[FileEntry]) -> list[str]:
                 f'  <file path="{escaped_path}" skipped="true">{entry.error}</file>'
             )
         elif entry.content is not None:
-            # Metadata elements
-            layer_xml = (
-                f"    <layer>{html.escape(entry.layer)}</layer>\n"
-                if entry.layer
-                else ""
-            )
-            role_xml = (
-                f"    <role>{html.escape(entry.role)}</role>\n" if entry.role else ""
-            )
-
             deps_xml = ""
             if entry.dependencies:
                 deps_xml = "    <dependencies>\n"
@@ -69,7 +59,7 @@ def format_files_xml_elements(entries: list[FileEntry]) -> list[str]:
             content_xml = f"    <content><![CDATA[\n{safe_content}\n]]></content>"
 
             file_elements.append(
-                f'  <file path="{escaped_path}">\n{layer_xml}{role_xml}{deps_xml}{content_xml}\n  </file>'
+                f'  <file path="{escaped_path}">\n{deps_xml}{content_xml}\n  </file>'
             )
 
     return file_elements

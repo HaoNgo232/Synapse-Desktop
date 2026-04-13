@@ -31,6 +31,4 @@ class FileEntry:
     content: Optional[str]
     error: Optional[str]
     language: str
-    layer: Optional[str] = None
-    role: Optional[str] = None
     dependencies: Optional[list[str]] = None

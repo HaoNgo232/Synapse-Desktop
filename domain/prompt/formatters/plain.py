@@ -39,10 +39,6 @@ def format_files_plain(entries: list[FileEntry]) -> str:
         elif entry.content is not None:
             # Metadata header
             meta_lines = []
-            if entry.layer:
-                meta_lines.append(f"LAYER: {entry.layer}")
-            if entry.role:
-                meta_lines.append(f"ROLE: {entry.role}")
             if entry.dependencies:
                 meta_lines.append(f"DEPENDS ON: {', '.join(entry.dependencies)}")
 

@@ -49,7 +49,7 @@ class BuildResult:
         prompt_text: Noi dung prompt da assemble
         total_tokens: Tong so token cua prompt
         file_count: So luong file trong prompt
-        format: Output format da su dung (xml, json, plain, smart)
+        format: Output format da su dung (xml, plain, compress)
         profile: Ten profile da ap dung (None neu khong dung profile)
         trimmed: True neu ContextTrimmer da cat giam context (Feature 2)
         trimmed_notes: Danh sach ghi chu ve nhung phan bi cat

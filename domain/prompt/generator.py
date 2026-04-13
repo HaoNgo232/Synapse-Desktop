@@ -25,12 +25,9 @@ from presentation.config.output_format import OutputStyle
 
 # === Pipeline imports ===
 from domain.prompt.file_collector import collect_files
-from domain.prompt.formatters.markdown import format_files_markdown
-from shared.utils.delimiter_utils import calculate_markdown_delimiter
 from domain.prompt.formatters.xml import (
     format_files_xml,
 )
-from domain.prompt.formatters.json_fmt import format_files_json
 from domain.prompt.formatters.plain import format_files_plain
 from domain.prompt.assembler import (
     assemble_prompt,
@@ -38,14 +35,6 @@ from domain.prompt.assembler import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-# ===========================================================================
-# Re-export calculate_markdown_delimiter for backward compatibility
-# ===========================================================================
-# Moved to core.prompting.delimiter_utils to avoid circular imports
-# Re-exported here for backward compatibility with existing code
-__all__ = ["calculate_markdown_delimiter"]
 
 
 # ===========================================================================
@@ -198,32 +187,6 @@ def _build_tree_string(items: list[TreeItem], prefix: str, lines: list[str]) -> 
 # ===========================================================================
 # File Contents - Cac adapter delegate sang collect + format
 # ===========================================================================
-
-
-def generate_file_contents(
-    selected_paths: set[str],
-    max_file_size: int = 1024 * 1024,
-    workspace_root: Optional[Path] = None,
-    use_relative_paths: bool = False,
-) -> str:
-    """
-    Tao file contents string cho cac files duoc chon (Markdown format).
-
-    Delegate sang file_collector + markdown formatter.
-
-    Args:
-        selected_paths: Set cac duong dan file duoc tick
-        max_file_size: Maximum file size to include (default 1MB)
-        workspace_root: Workspace root cho relative paths
-        use_relative_paths: Su dung relative paths
-
-    Returns:
-        File contents string voi markdown code blocks
-    """
-    entries = collect_files(
-        selected_paths, max_file_size, workspace_root, use_relative_paths
-    )
-    return format_files_markdown(entries)
 
 
 def generate_file_contents_xml(
@@ -389,128 +352,6 @@ def _generate_codemap_xml(
             continue
 
     return "\n\n".join(parts)
-
-
-def generate_file_contents_json(
-    selected_paths: set[str],
-    max_file_size: int = 1024 * 1024,
-    workspace_root: Optional[Path] = None,
-    use_relative_paths: bool = False,
-    codemap_paths: Optional[Set[str]] = None,
-) -> str:
-    """
-    Tao file contents theo JSON format.
-
-    Args:
-        selected_paths: Set cac duong dan file duoc tick
-        max_file_size: Maximum file size to include (default 1MB)
-        workspace_root: Workspace root
-        use_relative_paths: Su dung relative paths
-        codemap_paths: Optional set cac file paths chi lay codemap
-
-    Returns:
-        JSON string chua file paths va contents
-    """
-    if codemap_paths:
-        import json as _json
-
-        # Normalize ca hai set ve cung format
-        def _normalize(p: str) -> str:
-            pp = Path(p)
-            if not pp.is_absolute() and workspace_root:
-                return str((workspace_root / pp).resolve())
-            return str(pp.resolve())
-
-        normalized_selected = {_normalize(p) for p in selected_paths}
-        normalized_codemap = {_normalize(p) for p in codemap_paths}
-
-        full_paths_normalized = normalized_selected - normalized_codemap
-        codemap_only_normalized = normalized_selected & normalized_codemap
-
-        # Map nguoc ve original paths
-        # Fix BUG #2: Detect collision
-        norm_to_orig: dict[str, str] = {}
-        for p in selected_paths:
-            key = _normalize(p)
-            if key in norm_to_orig and norm_to_orig[key] != p:
-                raise ValueError(
-                    f"Path collision: '{norm_to_orig[key]}' and '{p}' resolve to the same file. "
-                    "Please remove the duplicate from your selection."
-                )
-            else:
-                norm_to_orig[key] = p
-
-        full_paths = {
-            norm_to_orig[n] for n in full_paths_normalized if n in norm_to_orig
-        }
-        codemap_only = {
-            norm_to_orig[n] for n in codemap_only_normalized if n in norm_to_orig
-        }
-
-        all_entries: list[dict] = []
-
-        # Full content files
-        if full_paths:
-            entries = collect_files(
-                full_paths, max_file_size, workspace_root, use_relative_paths
-            )
-            for entry in entries:
-                all_entries.append(
-                    {
-                        "path": entry.display_path,
-                        "content": entry.content or "",
-                        "context": "full",
-                    }
-                )
-
-        # Codemap files
-        if codemap_only:
-            from domain.smart_context import smart_parse, is_supported
-
-            for path_str in sorted(codemap_only):
-                path = Path(path_str)
-                try:
-                    if not path.is_file() or is_binary_file(path):
-                        continue
-
-                    display_path = path_for_display(
-                        path, workspace_root, use_relative_paths
-                    )
-                    ext = path.suffix.lstrip(".")
-                    raw_content = path.read_text(encoding="utf-8", errors="replace")
-
-                    if is_supported(ext):
-                        smart_content = smart_parse(
-                            path_str, raw_content, include_relationships=False
-                        )
-                        if smart_content:
-                            all_entries.append(
-                                {
-                                    "path": display_path,
-                                    "content": smart_content,
-                                    "context": "codemap",
-                                }
-                            )
-                            continue
-
-                    # Fallback to full content
-                    all_entries.append(
-                        {
-                            "path": display_path,
-                            "content": raw_content,
-                            "context": "codemap-fallback",
-                        }
-                    )
-
-                except (OSError, IOError):
-                    continue
-
-        return _json.dumps(all_entries, indent=2)
-    else:
-        entries = collect_files(
-            selected_paths, max_file_size, workspace_root, use_relative_paths
-        )
-        return format_files_json(entries)
 
 
 def generate_file_contents_plain(
@@ -723,10 +564,7 @@ def generate_smart_context(
             if result[1]:
                 all_contents.append(result[1])
 
-    # Phase 2: Tinh Smart Markdown Delimiter
-    calculate_markdown_delimiter(all_contents)
-
-    # Phase 3: Generate output
+    # Phase 2: Generate output
     contents: list[str] = []
 
     # Border 36 chars

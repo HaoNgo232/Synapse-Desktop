@@ -25,7 +25,7 @@ class PromptProfile:
 
     Attributes:
         name: Ten dinh danh cua profile (unique key)
-        output_format: Dinh dang output (xml, json, plain, smart)
+        output_format: Dinh dang output (xml, plain, compress)
         include_git_changes: Co bao gom git diffs/logs khong
         instruction_prefix: Text tu dong prepend vao user instructions
         max_tokens: Gioi han token cho prompt output (Feature 2)
@@ -76,7 +76,7 @@ BUILTIN_PROFILES: Dict[str, PromptProfile] = {
     ),
     "refactor": PromptProfile(
         name="refactor",
-        output_format="smart",
+        output_format="compress",
         include_git_changes=False,
         instruction_prefix=(
             "You are refactoring this code. Focus on:\n"
@@ -90,7 +90,7 @@ BUILTIN_PROFILES: Dict[str, PromptProfile] = {
     ),
     "doc": PromptProfile(
         name="doc",
-        output_format="smart",
+        output_format="compress",
         include_git_changes=False,
         instruction_prefix=(
             "You are writing documentation for this code. Focus on:\n"

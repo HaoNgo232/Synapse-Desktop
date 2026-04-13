@@ -1,8 +1,6 @@
-# Context Presets Feature
+# Context Presets
 
-## Overview
-
-Context Presets allow you to save and quickly restore file selections along with instructions and output format settings. This is useful for recurring tasks where you work with the same set of files repeatedly.
+Save selected files + instructions + output format as a preset. When you need to repeat the same task, select the preset instead of re-ticking each file.
 
 ## Features
 
@@ -140,9 +138,4 @@ Presets are saved using atomic write pattern (temp file + rename) to prevent cor
 - Synapse automatically backs up corrupt files to `.synapse_presets.json.bak`
 - Delete corrupt file and restart
 
-## Future Enhancements
 
-- Export/import presets to share between projects
-- Preset templates for common workflows
-- Preset groups/categories
-- Search/filter presets

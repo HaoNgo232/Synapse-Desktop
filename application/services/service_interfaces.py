@@ -56,7 +56,7 @@ class IPromptBuilder(Protocol):
             file_paths: Danh sach file paths da resolve
             workspace: Workspace root path
             instructions: User instructions text
-            output_format: Output format (xml, json, plain, smart)
+            output_format: Output format (xml, plain, compress)
             include_git_changes: Co include git changes khong
             use_relative_paths: Co dung relative paths khong
             tree_item: Root TreeItem cho file map (optional)

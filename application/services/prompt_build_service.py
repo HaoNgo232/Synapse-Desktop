@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 from domain.prompt.generator import (
     generate_file_map,
     generate_file_contents_xml,
-    generate_file_contents_json,
     generate_file_contents_plain,
     OutputStyle,
 )
@@ -32,15 +31,13 @@ from application.services.prompt_helpers import (
 # Mapping output_format string -> OutputStyle enum
 _FORMAT_TO_STYLE = {
     "xml": OutputStyle.XML,
-    "json": OutputStyle.JSON,
     "plain": OutputStyle.PLAIN,
-    "smart": OutputStyle.XML,  # XML style for smart by default
+    "compress": OutputStyle.XML,  # XML style for compress by default
 }
 
 # Mapping output_format string -> content generator function
 _FORMAT_TO_GENERATOR = {
     "xml": generate_file_contents_xml,
-    "json": generate_file_contents_json,
     "plain": generate_file_contents_plain,
 }
 
@@ -241,7 +238,7 @@ class PromptBuildService:
         # 3. Generate file contents
         all_path_strs = {str(p) for p in all_file_paths}
 
-        if output_format == "smart":
+        if output_format == "compress":
             from domain.prompt.generator import generate_smart_context
 
             file_contents = generate_smart_context(
@@ -279,7 +276,7 @@ class PromptBuildService:
 
         from domain.prompt.generator import generate_prompt, build_smart_prompt
 
-        if output_format == "smart":
+        if output_format == "compress":
             prompt = build_smart_prompt(
                 smart_contents=file_contents,
                 file_map=file_map,

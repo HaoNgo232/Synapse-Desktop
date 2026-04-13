@@ -20,9 +20,7 @@ class OutputStyle(Enum):
     và entry tương ứng vào OUTPUT_FORMATS dict.
     """
 
-    MARKDOWN = "markdown"
     XML = "xml"
-    JSON = "json"
     PLAIN = "plain"
 
 
@@ -73,28 +71,6 @@ OUTPUT_FORMATS: Dict[OutputStyle, OutputFormatConfig] = {
             "Dành cho model context nhỏ",
         ],
         file_extension=".txt",
-    ),
-    OutputStyle.MARKDOWN: OutputFormatConfig(
-        id="markdown",
-        name="Markdown",
-        description="Code blocks với syntax highlighting",
-        benefits=[
-            "Dễ đọc cho người dùng",
-            "Tương thích mọi LLM",
-            "Hiển thị đẹp trong chat",
-        ],
-        file_extension=".md",
-    ),
-    OutputStyle.JSON: OutputFormatConfig(
-        id="json",
-        name="JSON",
-        description="Dữ liệu dạng JSON thuần túy",
-        benefits=[
-            "Dễ dàng xử lý bằng code (Automation)",
-            "Tối ưu cho các model có JSON Mode",
-            "Cấu trúc chặt chẽ nhất",
-        ],
-        file_extension=".json",
     ),
 }
 

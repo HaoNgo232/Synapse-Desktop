@@ -14,7 +14,6 @@ Tat ca format deu bao gom:
 - Git Diff / Git Log instructions (neu co)
 """
 
-import json
 import re
 from pathlib import Path
 from typing import Optional
@@ -32,8 +31,6 @@ from domain.prompt.formatters.system_prompts import (
     AGENT_ROLE_INSTRUCTION,
     GENERATION_HEADER,
     SUMMARY_PURPOSE,
-    SUMMARY_FILE_FORMAT_MARKDOWN,
-    SUMMARY_FILE_FORMAT_JSON,
     SUMMARY_FILE_FORMAT_PLAIN,
     SUMMARY_USAGE_GUIDELINES,
     SUMMARY_NOTES,
@@ -81,18 +78,6 @@ def assemble_prompt(
             workspace_root=workspace_root,
             semantic_index=semantic_index,
         )
-    elif output_style == OutputStyle.JSON:
-        return _assemble_json(
-            file_map,
-            file_contents,
-            user_instructions,
-            include_xml_formatting,
-            git_diffs,
-            git_logs,
-            project_rules,
-            instructions_at_top,
-            semantic_index=semantic_index,
-        )
     elif output_style == OutputStyle.PLAIN:
         return _assemble_plain(
             file_map,
@@ -106,15 +91,17 @@ def assemble_prompt(
             semantic_index=semantic_index,
         )
     else:
-        return _assemble_markdown(
-            file_map,
-            file_contents,
-            user_instructions,
-            include_xml_formatting,
-            git_diffs,
-            git_logs,
-            project_rules,
-            instructions_at_top,
+        # Fallback to XML for unknown formats
+        return _assemble_xml(
+            file_map=file_map,
+            file_contents=file_contents,
+            user_instructions=user_instructions,
+            include_xml_formatting=include_xml_formatting,
+            git_diffs=git_diffs,
+            git_logs=git_logs,
+            project_rules=project_rules,
+            instructions_at_top=instructions_at_top,
+            workspace_root=workspace_root,
             semantic_index=semantic_index,
         )
 
@@ -199,35 +186,6 @@ def _append_git_changes_xml(
             prompt += f"<git_log_instruction>\n{GIT_LOG_INSTRUCTION}\n</git_log_instruction>\n"
             prompt += f"<git_log>\n{git_logs.log_content}\n</git_log>\n"
         prompt += "</git_changes>\n"
-    return prompt
-
-
-def _append_git_changes_markdown(
-    prompt: str,
-    git_diffs: Optional[GitDiffResult],
-    git_logs: Optional[GitLogResult],
-) -> str:
-    """
-    Thêm section git_changes vào prompt dạng Markdown thuần.
-    """
-    has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
-    has_logs = git_logs and git_logs.log_content
-
-    if has_diffs or has_logs:
-        prompt += "\n## Git Changes\n"
-        if has_diffs:
-            assert git_diffs is not None
-            prompt += f"> {GIT_DIFF_INSTRUCTION}\n\n"
-            if git_diffs.work_tree_diff:
-                prompt += f"### Git Diff (Work Tree)\n```diff\n{git_diffs.work_tree_diff}\n```\n\n"
-            if git_diffs.staged_diff:
-                prompt += (
-                    f"### Git Diff (Staged)\n```diff\n{git_diffs.staged_diff}\n```\n\n"
-                )
-        if has_logs:
-            assert git_logs is not None
-            prompt += f"> {GIT_LOG_INSTRUCTION}\n\n"
-            prompt += f"### Git Log\n```\n{git_logs.log_content}\n```\n\n"
     return prompt
 
 
@@ -322,109 +280,6 @@ def _assemble_xml(
 
     prompt += "\n</project>"
     return prompt
-
-
-def _assemble_json(
-    file_map: str,
-    file_contents: str,
-    user_instructions: str,
-    include_xml_formatting: bool,
-    git_diffs: Optional[GitDiffResult],
-    git_logs: Optional[GitLogResult],
-    project_rules: str = "",
-    instructions_at_top: bool = False,
-    semantic_index: str = "",
-) -> str:
-    """Lắp ráp prompt theo JSON format với system_instruction và file_summary."""
-    try:
-        files_data = json.loads(file_contents)
-    except json.JSONDecodeError:
-        files_data = {}
-
-    # Minimizing Agent Role in OPX mode
-    role = (
-        AGENT_ROLE_INSTRUCTION
-        if not include_xml_formatting
-        else "Analyze the provided codebase."
-    )
-
-    # Thêm system instruction và file summary vào JSON output
-    prompt_data: dict[str, object] = {
-        "system_instruction": role,
-        "file_summary": {
-            "generated_by": "Synapse Desktop",
-            "purpose": SUMMARY_PURPOSE,
-            "file_format": SUMMARY_FILE_FORMAT_JSON,
-            "usage_guidelines": SUMMARY_USAGE_GUIDELINES,
-            "notes": SUMMARY_NOTES,
-        },
-        "semantic_index": _strip_xml_simple(semantic_index) if semantic_index else "",
-        "structure": file_map,
-        "files": files_data,
-    }
-
-    # Nếu instructions_at_top=True, đưa vào đầu object data (sau system_instruction)
-    if instructions_at_top:
-        new_data: dict[str, object] = {
-            "system_instruction": prompt_data["system_instruction"],
-        }
-        if user_instructions and user_instructions.strip():
-            new_data["user_instructions"] = user_instructions.strip()
-        if project_rules and project_rules.strip():
-            new_data["project_rules"] = project_rules.strip()
-
-        if semantic_index and semantic_index.strip():
-            new_data["semantic_index"] = _strip_xml_simple(semantic_index)
-
-        new_data.update(
-            {
-                "file_summary": prompt_data["file_summary"],
-                "structure": prompt_data["structure"],
-                "files": prompt_data["files"],
-            }
-        )
-        prompt_data = new_data
-
-    # Them git context voi instruction text (truoc project_rules va instructions)
-    has_diffs = git_diffs and (git_diffs.work_tree_diff or git_diffs.staged_diff)
-    if has_diffs:
-        assert git_diffs is not None
-        prompt_data["git_diffs"] = {
-            "instruction": GIT_DIFF_INSTRUCTION,
-            "work_tree": git_diffs.work_tree_diff,
-            "staged": git_diffs.staged_diff,
-        }
-
-    has_logs = git_logs and git_logs.log_content
-    if has_logs:
-        assert git_logs is not None
-        prompt_data["git_logs"] = {
-            "instruction": GIT_LOG_INSTRUCTION,
-            "content": git_logs.log_content,
-        }
-
-    if include_xml_formatting:
-        prompt_data["formatting_instructions"] = XML_FORMATTING_INSTRUCTIONS
-    else:
-        # Normal mode output format
-        from domain.prompt.template_manager import _get_output_format_only
-
-        fmt = _get_output_format_only()
-        if fmt:
-            prompt_data["output_format"] = fmt
-
-    if not instructions_at_top and project_rules and project_rules.strip():
-        prompt_data["project_rules"] = project_rules.strip()
-
-    if user_instructions and user_instructions.strip():
-        if instructions_at_top:
-            prompt_data["reminder"] = (
-                "REITERATION: Please follow the user_instructions provided at the beginning of this prompt."
-            )
-        else:
-            prompt_data["user_instructions"] = user_instructions.strip()
-
-    return json.dumps(prompt_data, ensure_ascii=False, indent=2)
 
 
 def _assemble_plain(
@@ -533,77 +388,6 @@ def _assemble_plain(
             )
 
     return "\n\n".join(prompt_parts)
-
-
-def _assemble_markdown(
-    file_map: str,
-    file_contents: str,
-    user_instructions: str,
-    include_xml_formatting: bool,
-    git_diffs: Optional[GitDiffResult],
-    git_logs: Optional[GitLogResult],
-    project_rules: str = "",
-    instructions_at_top: bool = False,
-    semantic_index: str = "",
-) -> str:
-    """Lắp ráp prompt theo Markdown format với File Summary và Agent Role.
-
-    Sử dụng hybrid format: Markdown content được bọc trong XML semantic tags
-    để AI dễ dàng nhận diện ranh giới các section.
-    """
-    prompt = ""
-    # Nếu instructions_at_top=True, đưa lên đầu cùng (trước file_summary)
-    if instructions_at_top:
-        if user_instructions and user_instructions.strip():
-            prompt += f"## User Instructions\n\n{user_instructions.strip()}\n\n"
-        if project_rules and project_rules.strip():
-            prompt += f"## Project Rules\n\n{project_rules.strip()}\n\n"
-        if semantic_index and semantic_index.strip():
-            prompt += f"## Semantic Index\n\n{_strip_xml_simple(semantic_index)}\n\n"
-
-    # Minimizing Agent Role logic (unified logic for all formats)
-    role = (
-        AGENT_ROLE_INSTRUCTION
-        if not include_xml_formatting
-        else "Analyze the provided codebase."
-    )
-
-    # Header với Agent Role và File Summary (Markdown thuần)
-    prompt += f"## File Summary\n\n{GENERATION_HEADER}\n\n"
-    prompt += f"### Agent Role\n{role}\n\n"
-    prompt += f"### Purpose\n{SUMMARY_PURPOSE}\n\n"
-    prompt += f"### File Format\n{SUMMARY_FILE_FORMAT_MARKDOWN}\n\n"
-    prompt += f"### Usage Guidelines\n{SUMMARY_USAGE_GUIDELINES}\n\n"
-    prompt += f"### Notes\n{SUMMARY_NOTES}\n\n"
-
-    # 3. Semantic Index (if not at top)
-    if not instructions_at_top and semantic_index and semantic_index.strip():
-        prompt += f"## Semantic Index\n\n{_strip_xml_simple(semantic_index)}\n\n"
-
-    prompt += f"## Directory Structure\n\n{file_map}\n\n"
-    prompt += f"## File Context\n\n{file_contents}\n"
-
-    prompt = _append_git_changes_markdown(prompt, git_diffs, git_logs)
-
-    if not instructions_at_top and project_rules and project_rules.strip():
-        prompt += f"\n## Project Rules\n\n{project_rules.strip()}\n"
-
-    if include_xml_formatting:
-        prompt += f"\n## Formatting Instructions\n\n{XML_FORMATTING_INSTRUCTIONS}\n"
-    else:
-        from domain.prompt.template_manager import _get_output_format_only
-
-        fmt = _get_output_format_only()
-        if fmt:
-            prompt += f"\n## Output Format\n\n{fmt}\n"
-
-    if user_instructions and user_instructions.strip():
-        if instructions_at_top:
-            prompt += "\n## Reminder\n\nREITERATION: Please follow the user_instructions provided at the beginning of this prompt.\n"
-        else:
-            prompt += f"\n## User Instructions\n\n{user_instructions.strip()}\n"
-
-    return prompt
 
 
 def _strip_xml_simple(text: str) -> str:

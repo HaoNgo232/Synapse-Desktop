@@ -8,7 +8,7 @@ import sys
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, List, Any
+from typing import Optional, Any, Protocol
 import logging
 
 # Single source of truth cho path display - thay the ban sao inline cu
@@ -87,6 +87,20 @@ Notes:
 logger = logging.getLogger(__name__)
 
 
+def _new_str_list() -> list[str]:
+    """Factory typed list[str] cho dataclass fields."""
+    return []
+
+
+def _new_git_commit_list() -> list["GitCommit"]:
+    """Factory typed list[GitCommit] cho dataclass fields."""
+    return []
+
+
+class _OutputFormatLike(Protocol):
+    value: str
+
+
 _DIFF_GIT_HEADER_RE = re.compile(
     r'^diff --git (?:"a/(.*?)"|a/(\S+)) (?:"b/(.*?)"|b/(\S+))$'
 )
@@ -103,12 +117,12 @@ class GitCommit:
     hash: str
     date: str
     message: str
-    files: List[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=_new_str_list)
 
 
 @dataclass
 class GitLogResult:
-    commits: List[GitCommit] = field(default_factory=list)
+    commits: list[GitCommit] = field(default_factory=_new_git_commit_list)
     log_content: str = ""
     commit_count: int = 0
     error: Optional[str] = None
@@ -123,7 +137,9 @@ class DiffOnlyResult:
     insertions: int
     deletions: int
     commits_included: int
-    changed_files: List[str] = field(default_factory=list)  # List of changed file paths
+    changed_files: list[str] = field(
+        default_factory=_new_str_list
+    )  # List of changed file paths
     error: Optional[str] = None
 
 
@@ -274,7 +290,7 @@ def get_git_logs(root_path: Path, max_commits: int = 10) -> Optional[GitLogResul
         return None
 
 
-def _parse_git_log(raw_output: str, separator: str) -> List[GitCommit]:
+def _parse_git_log(raw_output: str, separator: str) -> list[GitCommit]:
     """
     Parse raw git log output into structured GitCommit objects.
     Logic ported from Repomix gitLogHandle.ts parseGitLog
@@ -282,7 +298,7 @@ def _parse_git_log(raw_output: str, separator: str) -> List[GitCommit]:
     if not raw_output.strip():
         return []
 
-    commits: List[GitCommit] = []
+    commits: list[GitCommit] = []
 
     # Split by NULL separator -> list of commit blocks
     # Filter empty strings (first element might be empty due to leading separator)
@@ -418,6 +434,8 @@ def get_diff_only(
                 cwd=workspace_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
             result_stdout = result.stdout or ""
@@ -427,13 +445,30 @@ def get_diff_only(
 
                 # Get combined diff
                 diff_result = subprocess.run(
-                    ["git", "diff", f"HEAD~{num_commits}..HEAD"],
+                    ["git", "diff", "--no-color", f"HEAD~{num_commits}..HEAD"],
                     cwd=workspace_path,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=60,
                 )
                 diff_stdout = diff_result.stdout or ""
+
+                # Fallback cho repo nông/ít history (ví dụ clone depth=1, initial commit)
+                # nơi HEAD~N không resolve được trên một số máy Windows.
+                if diff_result.returncode != 0:
+                    diff_result = subprocess.run(
+                        ["git", "diff", "--no-color", "--root", "HEAD"],
+                        cwd=workspace_path,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=60,
+                    )
+                    diff_stdout = diff_result.stdout or ""
+
                 if diff_result.returncode == 0 and diff_stdout.strip():
                     diff_parts.append(
                         f"\n# Recent Commits ({commits_included} commits)\n"
@@ -450,8 +485,20 @@ def get_diff_only(
                         cwd=workspace_path,
                         capture_output=True,
                         text=True,
+                        encoding="utf-8",
+                        errors="replace",
                         timeout=30,
                     )
+                    if stat_result.returncode != 0:
+                        stat_result = subprocess.run(
+                            ["git", "diff", "--stat", "--root", "HEAD"],
+                            cwd=workspace_path,
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            timeout=30,
+                        )
                     if stat_result.returncode == 0:
                         stats = _parse_diff_stats(stat_result.stdout or "")
                         total_files += stats[0]
@@ -463,8 +510,8 @@ def get_diff_only(
         diff_content = "".join(diff_parts)
 
         # Deduplicate changed files while preserving order
-        seen = set()
-        unique_files = []
+        seen: set[str] = set()
+        unique_files: list[str] = []
         for f in changed_files:
             if f not in seen:
                 seen.add(f)
@@ -643,7 +690,7 @@ def _extract_changed_files(stat_output: str) -> list[str]:
     Returns:
         List các file paths đã thay đổi
     """
-    files = []
+    files: list[str] = []
     lines = stat_output.strip().split("\n")
 
     for line in lines:
@@ -680,7 +727,7 @@ def build_diff_only_prompt(
     include_related_files: bool = False,
     related_depth: int = 1,
     related_max_files: int = 20,
-    output_format: str = "xml",
+    output_format: str | _OutputFormatLike = "xml",
 ) -> str:
     """
     Build prompt from diff result for Copy Diff Only feature.
@@ -700,13 +747,15 @@ def build_diff_only_prompt(
     Returns:
         Formatted prompt string
     """
-    if hasattr(output_format, "value"):
-        output_format = str(output_format.value)
+    if isinstance(output_format, str):
+        normalized_output_format = output_format
+    else:
+        normalized_output_format = str(output_format.value)
 
-    is_xml = output_format.lower() == "xml"
-    is_json = output_format.lower() == "json"
-    is_markdown = output_format.lower() == "markdown"
-    is_plain = output_format.lower() in ("plain", "text")
+    is_xml = normalized_output_format.lower() == "xml"
+    is_json = normalized_output_format.lower() == "json"
+    is_markdown = normalized_output_format.lower() == "markdown"
+    is_plain = normalized_output_format.lower() in ("plain", "text")
 
     if is_xml:
         parts = [_generate_diff_summary_xml(), ""]
@@ -835,7 +884,7 @@ def build_diff_only_prompt(
             )
 
         if include_changed_content and diff_result.changed_files:
-            contents = []
+            contents: list[dict[str, str]] = []
             for file_path in diff_result.changed_files[:20]:
                 full_path = (
                     (workspace_root / file_path) if workspace_root else Path(file_path)
@@ -986,12 +1035,12 @@ def build_diff_only_prompt(
     return "\n".join(parts)
 
 
-def _build_tree_from_paths(file_paths: List[str]) -> str:
+def _build_tree_from_paths(file_paths: list[str]) -> str:
     """Build tree hierarchy string from a list of file paths."""
-    tree_dict: dict = {}
+    tree_dict: dict[str, Any] = {}
     for file_path in file_paths:
         path_parts = file_path.replace("\\", "/").split("/")
-        current = tree_dict
+        current: dict[str, Any] = tree_dict
         for i, part in enumerate(path_parts):
             if i == len(path_parts) - 1:
                 current[part] = None  # file
@@ -1000,17 +1049,17 @@ def _build_tree_from_paths(file_paths: List[str]) -> str:
                     current[part] = {}
                 current = current[part]
 
-    lines: list = []
+    lines: list[str] = []
     _render_tree_dict(tree_dict, lines, prefix="")
     return "\n".join(lines)
 
 
-def _build_tree_xml_from_paths(file_paths: List[str]) -> str:
+def _build_tree_xml_from_paths(file_paths: list[str]) -> str:
     """Xây dựng cấu trúc cây XML từ danh sách file paths."""
-    tree_dict: dict = {}
+    tree_dict: dict[str, Any] = {}
     for file_path in file_paths:
         path_parts = file_path.replace("\\", "/").split("/")
-        current = tree_dict
+        current: dict[str, Any] = tree_dict
         for i, part in enumerate(path_parts):
             if i == len(path_parts) - 1:
                 current[part] = None  # file
@@ -1019,15 +1068,19 @@ def _build_tree_xml_from_paths(file_paths: List[str]) -> str:
                     current[part] = {}
                 current = current[part]
 
-    lines: list = []
+    lines: list[str] = []
     _render_tree_xml_dict(tree_dict, lines, indent_level=1)
     return "\n".join(lines)
 
 
-def _render_tree_dict(tree_dict: dict, lines: list, prefix: str = "") -> None:
+def _render_tree_dict(
+    tree_dict: dict[str, Any], lines: list[str], prefix: str = ""
+) -> None:
     """Render tree dict dùng ├──/└──/│ giống _build_tree_string trong prompt_generator."""
     # Sắp xếp: folders trước, files sau (giống scan_directory)
-    items = sorted(tree_dict.items(), key=lambda x: (x[1] is None, x[0]))
+    items: list[tuple[str, Any]] = sorted(
+        tree_dict.items(), key=lambda x: (x[1] is None, x[0])
+    )
     for i, (name, children) in enumerate(items):
         is_last = i == len(items) - 1
         connector = "└── " if is_last else "├── "
@@ -1042,11 +1095,15 @@ def _render_tree_dict(tree_dict: dict, lines: list, prefix: str = "") -> None:
             _render_tree_dict(children, lines, new_prefix)
 
 
-def _render_tree_xml_dict(tree_dict: dict, lines: list, indent_level: int = 1) -> None:
+def _render_tree_xml_dict(
+    tree_dict: dict[str, Any], lines: list[str], indent_level: int = 1
+) -> None:
     """Render tree dict thành XML tags."""
     indent = "  " * indent_level
     # Sắp xếp: folders trước, files sau
-    items = sorted(tree_dict.items(), key=lambda x: (x[1] is None, x[0]))
+    items: list[tuple[str, Any]] = sorted(
+        tree_dict.items(), key=lambda x: (x[1] is None, x[0])
+    )
 
     for name, children in items:
         if children is None:

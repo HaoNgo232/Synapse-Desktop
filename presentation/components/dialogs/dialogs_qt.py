@@ -283,9 +283,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self.output_format = output_format
         self._file_checkboxes: dict[str, QCheckBox] = {}
         self._refresh_generation = 0  # Generation counter để tránh race condition
-        self._active_workers: list[
-            Any
-        ] = []  # Giữ strong reference để tránh GC gây SEGV khi worker đang chạy
+        self._active_workers: list[Any] = (
+            []
+        )  # Giữ strong reference để tránh GC gây SEGV khi worker đang chạy
 
         # Khởi tạo timer cho cơ chế debounce khi refresh danh sách file
         # Điều này giúp tránh việc quét git liên tục khi người dùng thay đổi settings nhanh
@@ -316,7 +316,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         commits_row = QHBoxLayout()
         commits_row.setSpacing(6)
 
-        self._num_commits = QLineEdit("0")
+        self._num_commits = QLineEdit("1")
         self._num_commits.setFixedWidth(80)
         self._num_commits.setPlaceholderText("0 = uncommitted only")
 
@@ -554,7 +554,6 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         success, message = copy_to_clipboard(prompt)
         if success:
-            self.accept()
             token_count = self._tokenization_service.count_tokens(prompt)
 
             related_count = 0
@@ -587,11 +586,15 @@ class DiffOnlyDialogQt(BaseDialogQt):
                 if related_count > 0:
                     files_str += f" + {related_count} liên quan"
 
-                self.on_success(
+                success_msg = (
                     f"Đã sao chép diff! ({token_count:,} tokens, "
                     f"+{result.insertions}/-{result.deletions} lines, "
                     f"{files_str})"
                 )
+                self._status.setText(success_msg)
+                self._status.setStyleSheet(f"color: {ThemeColors.SUCCESS};")
+                self.on_success(success_msg)
+                self.accept()
         else:
             self._status.setText(f"Sao chép thất bại: {message}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
@@ -1100,7 +1103,9 @@ class DirtyRepoDialogQt(BaseDialogQt):
         def work():
             try:
                 self.repo_manager.stash_changes(self.repo_path)
-                self.repo_manager._update_repo(self.repo_path, None, None)  # pyright: ignore[reportPrivateUsage]
+                self.repo_manager._update_repo(
+                    self.repo_path, None, None
+                )  # pyright: ignore[reportPrivateUsage]
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (stashed)")
                 )
@@ -1128,7 +1133,9 @@ class DirtyRepoDialogQt(BaseDialogQt):
         def work():
             try:
                 self.repo_manager.discard_changes(self.repo_path)
-                self.repo_manager._update_repo(self.repo_path, None, None)  # pyright: ignore[reportPrivateUsage]
+                self.repo_manager._update_repo(
+                    self.repo_path, None, None
+                )  # pyright: ignore[reportPrivateUsage]
                 run_on_main_thread(
                     lambda: self.on_done(f"Updated {self.repo_name} (discarded)")
                 )

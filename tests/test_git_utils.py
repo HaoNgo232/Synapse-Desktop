@@ -19,6 +19,7 @@ from infrastructure.git.git_utils import (
     is_git_repo,
     get_git_diffs,
     get_git_logs,
+    get_diff_only,
     GitDiffResult,
     GitLogResult,
     GitCommit,
@@ -363,6 +364,52 @@ rename to new_name.py
 """
         files = extract_changed_files_from_diff(diff)
         assert "new_name.py" in files
+
+
+class TestGetDiffOnlyFallback:
+    """Regression tests for get_diff_only() fallback behavior."""
+
+    def test_fallback_to_root_when_head_range_unavailable(self, tmp_path):
+        """Khi HEAD~N fail (repo nông/ít history), should fallback to --root HEAD."""
+        fallback_diff = """diff --git a/src/app.py b/src/app.py
+index 111..222 100644
+--- a/src/app.py
++++ b/src/app.py
+@@ -1 +1,2 @@
++print('ok')
+"""
+        fallback_stat = """ src/app.py | 1 +
+ 1 file changed, 1 insertion(+)
+"""
+
+        with patch("infrastructure.git.git_utils.is_git_repo", return_value=True):
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = [
+                    # include_unstaged=False, include_staged=False -> skip 2 calls
+                    MagicMock(stdout="abc1234 test commit\n", returncode=0),
+                    # HEAD~N range fails
+                    MagicMock(stdout="", returncode=128),
+                    # Fallback diff succeeds
+                    MagicMock(stdout=fallback_diff, returncode=0),
+                    # HEAD~N stat fails
+                    MagicMock(stdout="", returncode=128),
+                    # Fallback stat succeeds
+                    MagicMock(stdout=fallback_stat, returncode=0),
+                ]
+
+                result = get_diff_only(
+                    tmp_path,
+                    num_commits=1,
+                    include_staged=False,
+                    include_unstaged=False,
+                )
+
+        assert result.error is None
+        assert "diff --git a/src/app.py b/src/app.py" in result.diff_content
+        assert result.commits_included == 1
+        assert result.files_changed == 1
+        assert result.insertions == 1
+        assert result.deletions == 0
 
 
 if __name__ == "__main__":

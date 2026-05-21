@@ -22,3 +22,6 @@ tools/validation/usecase_simulation_report.json
 tests/snapshots/plain_format.txt
 tests/snapshots/xml_format.txt
 tmp/
+.pip_wheels/
+pytest.ini
+.antigravitycli/2cddb850-27e5-48ee-9a14-47f354be0c13.json

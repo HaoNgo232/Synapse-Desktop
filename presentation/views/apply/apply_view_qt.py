@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot
 
 from presentation.config.theme import ThemeColors
-from domain.prompt.opx_parser import parse_opx_response
+from domain.prompt.opx_parser import parse_any_response
 from infrastructure.filesystem.file_actions import apply_file_actions, ActionResult
 from infrastructure.adapters.clipboard_utils import (
     copy_to_clipboard,
@@ -361,10 +361,10 @@ class ApplyViewQt(QWidget):
 
     @Slot()
     def _preview_changes(self) -> None:
-        """Parse OPX and show preview."""
+        """Parse edits (OPX/Search-Replace) and show preview."""
         opx_text = self._opx_input.toPlainText().strip()
         if not opx_text:
-            self._show_status("No OPX content to preview", is_error=True)
+            self._show_status("No changes to preview", is_error=True)
             return
 
         workspace = self.get_workspace()
@@ -373,10 +373,10 @@ class ApplyViewQt(QWidget):
             return
 
         try:
-            parse_result = parse_opx_response(opx_text)
+            parse_result = parse_any_response(opx_text)
             file_actions = parse_result.file_actions
             if not file_actions:
-                self._show_status("No valid OPX actions found", is_error=True)
+                self._show_status("No valid changes found", is_error=True)
                 return
 
             self._cached_file_actions = file_actions
@@ -408,7 +408,7 @@ class ApplyViewQt(QWidget):
         """
         opx_text = self._opx_input.toPlainText().strip()
         if not opx_text:
-            self._show_status("No OPX content to apply", is_error=True)
+            self._show_status("No changes to apply", is_error=True)
             return
 
         workspace = self.get_workspace()
@@ -432,11 +432,11 @@ class ApplyViewQt(QWidget):
                 file_actions = self._cached_file_actions
                 memory_block = self._cached_memory_block
             else:
-                parse_result = parse_opx_response(opx_text)
+                parse_result = parse_any_response(opx_text)
                 file_actions = parse_result.file_actions
                 memory_block = parse_result.memory_block
             if not file_actions:
-                self._show_status("No valid OPX actions found", is_error=True)
+                self._show_status("No valid changes found", is_error=True)
                 return
 
             # Auto-generate preview data neu chua co (user nhan Apply ma khong Preview truoc)

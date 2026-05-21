@@ -78,7 +78,7 @@ def test_preview_no_content(apply_view):
     view._opx_input.clear()
     with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._preview_changes()
-        mock_error.assert_called_with("No OPX content to preview")
+        mock_error.assert_called_with("No changes to preview")
 
 
 def test_preview_no_workspace(apply_view):
@@ -101,13 +101,13 @@ def test_preview_no_valid_actions(apply_view):
 
     with (
         patch(
-            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            "presentation.views.apply.apply_view_qt.parse_any_response",
             return_value=mock_result,
         ),
         patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
     ):
         view._preview_changes()
-        mock_error.assert_called_with("No valid OPX actions found")
+        mock_error.assert_called_with("No valid changes found")
 
 
 def test_preview_success(apply_view):
@@ -126,7 +126,7 @@ def test_preview_success(apply_view):
 
     with (
         patch(
-            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            "presentation.views.apply.apply_view_qt.parse_any_response",
             return_value=mock_parse,
         ),
         patch(
@@ -151,7 +151,7 @@ def test_preview_parse_error(apply_view):
 
     with (
         patch(
-            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            "presentation.views.apply.apply_view_qt.parse_any_response",
             side_effect=Exception("Bad XML"),
         ),
         patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
@@ -166,7 +166,7 @@ def test_apply_no_content(apply_view):
     view._opx_input.clear()
     with patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error:
         view._apply_changes()
-        mock_error.assert_called_with("No OPX content to apply")
+        mock_error.assert_called_with("No changes to apply")
 
 
 def test_apply_no_workspace(apply_view):
@@ -205,13 +205,13 @@ def test_apply_no_valid_actions(apply_view):
             return_value=QMessageBox.StandardButton.Yes,
         ),
         patch(
-            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            "presentation.views.apply.apply_view_qt.parse_any_response",
             return_value=mock_result,
         ),
         patch("presentation.views.apply.apply_view_qt.toast_error") as mock_error,
     ):
         view._apply_changes()
-        mock_error.assert_called_with("No valid OPX actions found")
+        mock_error.assert_called_with("No valid changes found")
 
 
 def test_apply_success(apply_view):
@@ -281,7 +281,7 @@ def test_apply_with_fresh_parse(apply_view):
             return_value=QMessageBox.StandardButton.Yes,
         ),
         patch(
-            "presentation.views.apply.apply_view_qt.parse_opx_response",
+            "presentation.views.apply.apply_view_qt.parse_any_response",
             return_value=mock_parse,
         ),
         patch(

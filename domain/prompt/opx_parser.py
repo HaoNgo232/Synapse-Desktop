@@ -460,3 +460,121 @@ def _map_op_to_action(
         "move": "rename",
     }
     return mapping.get(op)  # type: ignore
+
+
+# ============================================================================
+# SEARCH/REPLACE (AIDER-STYLE) PARSER IMPLEMENTATION
+# ============================================================================
+
+# SR block regex: <<<<<<< SEARCH filename\n...\n=======\n...\n>>>>>>> REPLACE
+# Group 1: File path
+# Group 2: Search block content
+# Group 3: Replace block content
+_SR_BLOCK_RE = re.compile(
+    r"^<{7}\s+SEARCH\s+(\S+)[^\n]*\n(.*?)^={7}\s*\n(.*?)^>{7}\s+REPLACE[^\n]*$",
+    re.MULTILINE | re.DOTALL,
+)
+
+
+def parse_search_replace_response(text: str) -> ParseResult:
+    """
+    Phân tích phản hồi chứa các khối Search/Replace (Aider-style).
+
+    Hàm này duyệt qua văn bản, trích xuất tất cả các khối được phân cách bởi
+    <<<<<<< SEARCH và >>>>>>> REPLACE, gom nhóm chúng theo đường dẫn file
+    và tạo ra danh sách FileAction tương thích với hệ thống.
+    """
+    result = ParseResult()
+
+    try:
+        if text is None:
+            return ParseResult(errors=["Input is None"])
+
+        # Chuẩn hóa dòng xuống để tránh lỗi do carriage return (\r\n) trên Windows
+        cleaned = text.replace("\r\n", "\n")
+
+        actions_by_path: dict[str, FileAction] = {}
+        found_any = False
+
+        for match in _SR_BLOCK_RE.finditer(cleaned):
+            found_any = True
+            path = match.group(1).strip()
+
+            # Bỏ tiền tố file:// nếu có
+            if path.startswith("file://"):
+                path = path[7:]
+
+            search_text = match.group(2)
+            replace_text = match.group(3)
+
+            # Theo chuẩn định dạng: SEARCH block trống nghĩa là tạo file mới
+            is_create = search_text.strip() == ""
+            action_type = "create" if is_create else "modify"
+
+            if path not in actions_by_path:
+                actions_by_path[path] = FileAction(
+                    path=path, action=action_type, changes=[]
+                )
+
+            block = ChangeBlock(
+                description="Search/Replace patch" if not is_create else "Create file",
+                content=replace_text.rstrip("\n"),
+                search=None if is_create else search_text.rstrip("\n"),
+            )
+            actions_by_path[path].changes.append(block)
+
+        if not found_any:
+            result.errors.append("Không tìm thấy khối Search/Replace hợp lệ nào.")
+        else:
+            result.file_actions = list(actions_by_path.values())
+
+    except Exception as e:
+        result.errors.append(f"Lỗi khi parse Search/Replace: {e}")
+
+    return result
+
+
+def _looks_like_opx(text: str) -> bool:
+    """Kiểm tra nhanh xem văn bản có chứa cấu trúc thẻ OPX/XML hay không"""
+    return bool(re.search(r"<\s*edit\b|<\s*opx\b", text, re.IGNORECASE))
+
+
+def _looks_like_search_replace(text: str) -> bool:
+    """Kiểm tra nhanh xem văn bản có chứa cấu trúc SEARCH của Search/Replace hay không"""
+    return bool(re.search(r"^<{7}\s+SEARCH\b", text, re.MULTILINE))
+
+
+def parse_any_response(text: str) -> ParseResult:
+    """
+    Điểm nhận diện và phân tích cú pháp chung (Unified entry point).
+    Tự động phát hiện xem chuỗi phản hồi dùng định dạng OPX hay Search/Replace.
+    """
+    if text is None:
+        return ParseResult(errors=["Input is None"])
+    if not isinstance(text, str):
+        return ParseResult(errors=[f"Invalid input type: {type(text).__name__}"])
+
+    cleaned = text.strip()
+
+    is_opx = _looks_like_opx(cleaned)
+    is_sr = _looks_like_search_replace(cleaned)
+
+    if is_opx:
+        result = parse_opx_response(cleaned)
+        if result.file_actions:
+            return result
+
+    if is_sr:
+        result = parse_search_replace_response(cleaned)
+        if result.file_actions:
+            return result
+
+    # Fallback: Nếu không parse được gì thành công, trả về kết quả lỗi của định dạng khớp nhất
+    if is_opx:
+        return parse_opx_response(cleaned)
+    if is_sr:
+        return parse_search_replace_response(cleaned)
+
+    return ParseResult(
+        errors=["Không nhận dạng được định dạng OPX hoặc Search/Replace hợp lệ"]
+    )

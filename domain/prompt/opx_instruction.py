@@ -151,4 +151,18 @@ export const config: AppConfig = {
 # Output format
 - Emit OPX inside a fenced ```xml ... ``` block for reliable copy-paste.
 
+# Alternative: Search/Replace format (Aider-style)
+For patch or create operations, you may optionally use the simpler Search/Replace format:
+
+<<<<<<< SEARCH path/to/file.py
+[exact code to find]
+=======
+[replacement code]
+>>>>>>> REPLACE
+
+- Filename required on the SEARCH line.
+- Empty SEARCH block = create new file.
+- Multiple blocks per response OK.
+- For delete/move/rename operations, you should still use OPX.
+
 </opx_instructions>"""

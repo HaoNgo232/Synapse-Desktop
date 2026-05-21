@@ -82,35 +82,45 @@ class TokenCache:
 
     def put(self, path: str, mtime: float, count: int) -> None:
         """
-        Luu token count vao cache voi LRU eviction.
+        Lưu token count vào cache với LRU eviction.
 
-        Thread-safe. Tu dong evict entries cu khi dat max_size.
+        Thread-safe. Tự động loại biên (evict) các phần tử cũ nhất khi đạt max_size.
 
         Args:
-            path: File path string
-            mtime: Modification time cua file
-            count: So luong tokens
+            path: Đường dẫn file dạng string
+            mtime: Thời gian sửa đổi của file
+            count: Số lượng tokens
         """
         with self._lock:
-            # Evict oldest entries neu can
-            while len(self._store) >= self._max_size:
-                self._store.popitem(last=False)
-            self._store[path] = (mtime, count)
+            # Nếu key đã tồn tại trong cache, chỉ cập nhật và đưa lên MRU
+            if path in self._store:
+                self._store[path] = (mtime, count)
+                self._store.move_to_end(path)
+            else:
+                # Loại bỏ phần tử cũ nhất nếu cache đầy
+                while len(self._store) >= self._max_size:
+                    self._store.popitem(last=False)
+                self._store[path] = (mtime, count)
 
     def put_batch(self, entries: dict[str, Tuple[float, int]]) -> None:
         """
-        Luu nhieu entries cung luc (cho batch processing).
+        Lưu nhiều entries cùng lúc (cho xử lý batch).
 
-        Thread-safe. Giam lock contention so voi put() tung entry.
+        Thread-safe. Giảm lock contention so với put() từng entry.
 
         Args:
             entries: Dict mapping path -> (mtime, count)
         """
         with self._lock:
             for path, (mtime, count) in entries.items():
-                while len(self._store) >= self._max_size:
-                    self._store.popitem(last=False)
-                self._store[path] = (mtime, count)
+                # Cập nhật thứ tự LRU cho phần tử có sẵn hoặc thêm mới
+                if path in self._store:
+                    self._store[path] = (mtime, count)
+                    self._store.move_to_end(path)
+                else:
+                    while len(self._store) >= self._max_size:
+                        self._store.popitem(last=False)
+                    self._store[path] = (mtime, count)
 
     def clear(self) -> None:
         """Xoa toan bo cache. Thread-safe."""

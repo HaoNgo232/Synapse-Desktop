@@ -124,6 +124,15 @@ class SessionManager:
             String ket qua.
         """
         with _cross_process_lock(session_file):
+            # Kiem tra xem file co bi hong JSON khong de tranh ghi de lam mat du lieu
+            if session_file.exists():
+                try:
+                    content = session_file.read_text(encoding="utf-8")
+                    if content.strip():
+                        json.loads(content)
+                except json.JSONDecodeError as e:
+                    return f"Error: Selection file is corrupted (invalid JSON). To prevent data loss, operation aborted: {e}"
+
             state = read_selection_state(session_file)
 
             added = 0

@@ -115,9 +115,10 @@ def detect_drift(
                 report.public_api_changes.append(f"- {fp}::{s}")
 
     # 4. Cảnh báo coupling tăng
-    if post_edit_deps:
+    # Chỉ so sánh khi có đầy đủ dữ liệu baseline (pre_edit_deps)
+    if post_edit_deps and pre_edit_deps:
         for file_path, deps in post_edit_deps.items():
-            old_deps = pre_edit_deps.get(file_path, []) if pre_edit_deps else []
+            old_deps = pre_edit_deps.get(file_path, [])
             new_count = len(deps)
             old_count = len(old_deps)
             if new_count > old_count + COUPLING_INCREASE_THRESHOLD:

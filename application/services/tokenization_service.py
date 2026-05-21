@@ -263,13 +263,18 @@ class TokenizationService(ITokenizationService):
             if self._encoder is not None:
                 return self._encoder
 
-            self._encoder = _get_encoder(tokenizer_repo=self._tokenizer_repo)
-            if self._encoder is not None:
+            # Khoi tao vao bien cuc bo truoc de tranh double-checked locking race
+            encoder = _get_encoder(tokenizer_repo=self._tokenizer_repo)
+            if encoder is not None:
                 # Xac dinh loai encoder
                 import infrastructure.adapters.encoders as _enc
 
                 self._encoder_type = _enc._encoder_type
                 self._using_estimation = False
+            
+            # Gan self._encoder o cuoi cung de cac thread khac chi thay no
+            # khi cac truong thiet lap di kem da hoan tat
+            self._encoder = encoder
             return self._encoder
 
     def _read_file_mmap(self, file_path: Path) -> Optional[str]:

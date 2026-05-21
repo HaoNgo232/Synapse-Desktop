@@ -222,6 +222,16 @@ class BackgroundWorker(QRunnable):
                 pass
 
 
+# Tap hop luu tru cac active background workers dang chay de tranh bi Garbage Collector thu don som (GC silent failure)
+_active_workers: set[BackgroundWorker] = set()
+
+
+def _cleanup_worker(worker: BackgroundWorker) -> None:
+    """Xoa worker khoi danh sach active de GC co the thu don sau khi hoan thanh."""
+    if worker in _active_workers:
+        _active_workers.remove(worker)
+
+
 def schedule_background(
     fn: Callable[..., Any],
     on_result: Optional[Callable[[Any], None]] = None,
@@ -246,6 +256,12 @@ def schedule_background(
         BackgroundWorker instance
     """
     worker = BackgroundWorker(fn, *args, **kwargs)
+
+    # Giu strong reference cua worker trong tap hop de tranh GC silent failure
+    _active_workers.add(worker)
+
+    # Tu dong xoa worker khoi tap hop khi chay xong (finished)
+    worker.signals.finished.connect(lambda: _cleanup_worker(worker))
 
     if on_result:
         worker.signals.result.connect(on_result)

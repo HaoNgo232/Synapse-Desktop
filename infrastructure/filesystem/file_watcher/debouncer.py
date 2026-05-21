@@ -51,6 +51,7 @@ class TimerEventDebouncer(IEventDebouncer):
         self._debounce_seconds = debounce_seconds
         self._timer: Optional[Timer] = None
         self._pending_events: list[FileChangeEvent] = []
+        self._is_active = True  # Co hieu luc nhan su kien va phat callback
 
     def add_event(self, event: FileChangeEvent) -> None:
         """
@@ -62,6 +63,9 @@ class TimerEventDebouncer(IEventDebouncer):
         Args:
             event: Su kien file change can xu ly
         """
+        if not self._is_active:
+            return
+
         self._pending_events.append(event)
 
         # Cancel timer cu neu co
@@ -75,6 +79,7 @@ class TimerEventDebouncer(IEventDebouncer):
 
     def cleanup(self) -> None:
         """Don dep timer va pending events khi shutdown."""
+        self._is_active = False  # Huy kich hoat vinh vien debouncer
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None
@@ -89,6 +94,9 @@ class TimerEventDebouncer(IEventDebouncer):
         2. Neu co incremental callbacks, xu ly tung event rieng
         3. Luon goi batch callback (de refresh tree)
         """
+        if not self._is_active:
+            return
+
         if not self._pending_events:
             return
 

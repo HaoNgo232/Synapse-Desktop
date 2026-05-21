@@ -162,11 +162,10 @@ def get_config_path(target_name: str, workspace_path: Optional[str] = None) -> P
     return Path(raw).expanduser()
 
 
-# Ham read_existing_config doc file cau hinh JSON hien tai cua AI client
 def read_existing_config(
     target_name: str, workspace_path: Optional[str] = None
 ) -> dict:
-    """Doc file config hien tai. Tra ve dict rong neu file chua ton tai."""
+    """Doc file config hien tai. Tra ve dict rong neu file chua ton tai hoac bi loi JSON."""
     config_path = get_config_path(target_name, workspace_path)
     if not config_path.exists():
         return {}
@@ -213,8 +212,11 @@ def merge_config(target_name: str, workspace_path: Optional[str] = None) -> dict
 # Ham preview_json tao chuoi JSON da merge de hien thi cho nguoi dung kiem tra truoc khi cai dat
 def preview_json(target_name: str, workspace_path: Optional[str] = None) -> str:
     """Tra ve JSON da merge de hien thi preview cho nguoi dung."""
-    merged = merge_config(target_name, workspace_path)
-    return json.dumps(merged, indent=2, ensure_ascii=False)
+    try:
+        merged = merge_config(target_name, workspace_path)
+        return json.dumps(merged, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Error reading existing config: {e}"
 
 
 # Ham install_config thuc hien ghi de file cau hinh sau khi da merge
@@ -223,7 +225,22 @@ def install_config(
 ) -> tuple[bool, str]:
     """Ghi config da merge vao file. Tra ve (success, message)."""
     config_path = get_config_path(target_name, workspace_path)
-    merged = merge_config(target_name, workspace_path)
+
+    # Kiem tra xem file hien tai co bi hong JSON khong de tranh ghi de lam mat du lieu
+    if config_path.exists():
+        try:
+            content = config_path.read_text(encoding="utf-8")
+            if content.strip():
+                json.loads(content)
+        except json.JSONDecodeError as e:
+            return False, f"Existing config file is corrupted (invalid JSON). To prevent data loss, install aborted: {e}"
+        except OSError as e:
+            return False, f"Failed to read existing config: {e}"
+
+    try:
+        merged = merge_config(target_name, workspace_path)
+    except Exception as e:
+        return False, f"Failed to merge config: {e}"
 
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)

@@ -280,10 +280,10 @@ def _resolve_path(
 
     path = Path(path_str)
 
-    # Neu khong co workspace roots, coi nhu relative to cwd
-    # (fallback cho CLI usage hoac testing)
+    # Chặn hoàn toàn nếu không có workspace roots để đảm bảo an toàn bảo mật, tránh path traversal bypass
     if not workspace_roots:
-        return Path.cwd() / path
+        log_error("Security Alert: Blocked access as workspace_roots list is empty or None")
+        raise ValueError("Access denied: No workspace roots configured")
 
     # --- Resolve path thanh absolute ---
     final_path = workspace_roots[0] / path

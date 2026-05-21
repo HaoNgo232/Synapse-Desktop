@@ -73,23 +73,15 @@ class IgnoreEngine:
         if excluded_patterns:
             patterns.extend(excluded_patterns)
 
-        # 4. Gitignore patterns
+        # 4. Các pattern từ gitignore
         if use_gitignore:
-            git_root = self.find_git_root(root_path)
             gitignore_pats = self.read_gitignore(root_path)
 
-            if git_root != root_path:
-                parent_pats = self.read_gitignore(git_root)
-                for pat in parent_pats:
-                    if pat not in gitignore_pats:
-                        gitignore_pats.append(pat)
-
-            # ========= FIX: Thêm lại global gitignore =========
+            # Thêm các pattern từ global gitignore
             global_pats = self.read_global_gitignore()
             for pat in global_pats:
                 if pat not in gitignore_pats:
                     gitignore_pats.append(pat)
-            # ===================================================
 
             patterns.extend(gitignore_pats)
 

@@ -127,9 +127,15 @@ def is_binary_file(path_or_str: Path | str) -> bool:
 
     # 2. Fallback to magic bytes check
     try:
+        # Kiểm tra loại file bằng lstat trước khi mở để tránh bị treo (blocking) khi gặp Named Pipe (FIFO)
+        import stat
+        stat_result = os.lstat(path_str)
+        if not stat.S_ISREG(stat_result.st_mode):
+            return False
+
         # Kiểm tra file size trước, file cực lớn (>5MB) mà không có extension
         # text thì khả năng cao là binary (ví dụ dump file).
-        if os.path.getsize(path_str) > 5 * 1024 * 1024:
+        if stat_result.st_size > 5 * 1024 * 1024:
             return True
 
         with open(path_str, "rb") as f:
@@ -196,26 +202,37 @@ def scan_directory(
     use_default_ignores: bool = True,
 ) -> TreeItem:
     """
-    Scan mot directory va tra ve tree structure.
+    Quét toàn bộ thư mục một cách đệ quy và xây dựng cấu trúc TreeItem.
 
-    Chuc nang:
-    - Duyet tat ca files/folders trong thu muc goc
-    - Tu dong ignore cac patterns mac dinh (node_modules, __pycache__, etc.)
-    - Ho tro .gitignore va user-defined patterns
+    Chức năng:
+    - Duyệt tất cả files/folders trong thư mục gốc
+    - Tự động ignore các patterns mặc định (node_modules, __pycache__, etc.)
+    - Hỗ trợ .gitignore và user-defined patterns
 
     Args:
-        root_path: Thu muc goc can scan
-        excluded_patterns: Danh sach patterns de exclude (giong gitignore format)
-        use_gitignore: Co doc .gitignore khong (default: True)
-        use_default_ignores: Co su dung EXTENDED_IGNORE_PATTERNS khong (default: True)
-                            Tat tinh nang nay neu muon scan TAT CA files
+        root_path: Thư mục gốc cần scan
+        excluded_patterns: Danh sách patterns để exclude (giống gitignore format)
+        use_gitignore: Có đọc .gitignore không (default: True)
+        use_default_ignores: Có sử dụng EXTENDED_IGNORE_PATTERNS không (default: True)
 
     Returns:
-        TreeItem root chua toan bo cay thu muc
+        TreeItem root chứa toàn bộ cây thư mục
     """
     root_path = root_path.resolve()
 
-    # Delegate cho ignore_engine (single source of truth)
+    spec_stack = []
+    # Nếu dùng gitignore và workspace nằm sâu trong một repository cha, kế thừa gitignore cha
+    if use_gitignore:
+        git_root = ignore_engine.find_git_root(root_path)
+        if git_root and git_root != root_path:
+            parent_spec = ignore_engine.build_pathspec(
+                git_root,
+                use_default_ignores=False,
+                use_gitignore=True,
+            )
+            spec_stack.append((parent_spec, git_root))
+
+    # Xây dựng pathspec cho bản thân workspace root
     spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=use_default_ignores,
@@ -223,8 +240,7 @@ def scan_directory(
         use_gitignore=use_gitignore,
     )
 
-    # Initial spec stack
-    spec_stack = [(spec, root_path)]
+    spec_stack.append((spec, root_path))
 
     # Build tree recursively
     return _build_tree(root_path, root_path, spec_stack, ignore_engine)
@@ -239,25 +255,23 @@ def scan_directory_shallow(
     use_default_ignores: bool = True,
 ) -> TreeItem:
     """
-    Scan directory CHI den depth cap (cho lazy loading).
+    Quét thư mục chỉ đến depth cấp (cho lazy loading).
 
-    depth=1: Chi scan immediate children, khong de quy vao folders.
-              Folders se co is_loaded=False.
-    depth=2: Scan 2 levels, etc.
-
-    Args:
-        root_path: Thu muc goc can scan
-        depth: So cap can scan (1 = chi immediate children)
-        excluded_patterns: Patterns de exclude
-        use_gitignore: Co doc .gitignore khong
-        use_default_ignores: Co dung EXTENDED_IGNORE_PATTERNS khong
-
-    Returns:
-        TreeItem root voi children chi scan den depth cap
+    depth=1: Chỉ quét immediate children, không đệ quy vào folders.
     """
     root_path = root_path.resolve()
 
-    # Delegate cho ignore_engine (single source of truth)
+    spec_stack = []
+    if use_gitignore:
+        git_root = ignore_engine.find_git_root(root_path)
+        if git_root and git_root != root_path:
+            parent_spec = ignore_engine.build_pathspec(
+                git_root,
+                use_default_ignores=False,
+                use_gitignore=True,
+            )
+            spec_stack.append((parent_spec, git_root))
+
     spec = ignore_engine.build_pathspec(
         root_path,
         use_default_ignores=use_default_ignores,
@@ -265,11 +279,9 @@ def scan_directory_shallow(
         use_gitignore=use_gitignore,
     )
 
-    # Initial spec stack
-    spec_stack = [(spec, root_path)]
+    spec_stack.append((spec, root_path))
 
-    # Build tree voi depth limit
-    # current_depth=1 vi root la level 1, children la level 2
+    # Build tree với depth limit
     return _build_tree_shallow(
         root_path,
         root_path,
@@ -329,17 +341,18 @@ def _build_tree_shallow(
         if is_system_path_str(entry_path_str):
             continue
 
-        # Check against spec stack using string operations
+        # Kiểm tra với spec stack (duyệt ngược từ con lên cha để đảm bảo độ ưu tiên của luật phủ định)
         is_ignored = False
-        for s, base_str in spec_stack_with_strs:
+        for s, base_str in reversed(spec_stack_with_strs):
             if entry_path_str.startswith(base_str):
-                # Extract relative path
+                # Trích xuất đường dẫn tương đối
                 rel_path = entry_path_str[len(base_str) :]
                 if is_dir and not rel_path.endswith("/"):
                     rel_path += "/"
 
-                if s.match_file(rel_path):
-                    is_ignored = True
+                res = s.check_file(rel_path)
+                if res is not None:
+                    is_ignored = res.include
                     break
 
         if is_ignored:
@@ -430,16 +443,18 @@ def _build_tree(
         if is_system_path(entry):
             continue
 
-        # Check check against spec stack
+        # Kiểm tra với spec stack (duyệt ngược từ con lên cha để đảm bảo độ ưu tiên của luật phủ định)
         is_ignored = False
-        for s, base in spec_stack:
+        for s, base in reversed(spec_stack):
             try:
                 rel_to_base = entry.relative_to(base)
                 rel_to_base_str = str(rel_to_base)
-                if entry.is_dir():
+                if entry.is_dir() and not rel_to_base_str.endswith("/"):
                     rel_to_base_str += "/"
-                if s.match_file(rel_to_base_str):
-                    is_ignored = True
+                
+                res = s.check_file(rel_to_base_str)
+                if res is not None:
+                    is_ignored = res.include
                     break
             except ValueError:
                 continue

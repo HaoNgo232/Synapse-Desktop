@@ -745,6 +745,11 @@ class SynapseMainWindow(QMainWindow):
         # 3. Shutdown thread pools
         try:
             shutdown_all()
+            # Don dep va cho doi cac thread trong global QThreadPool de tranh bi treo ung dung khi close
+            from PySide6.QtCore import QThreadPool
+            pool = QThreadPool.globalInstance()
+            pool.clear()
+            pool.waitForDone(1000)  # Timeout 1s tranh treo vo han
         except Exception as e:
             log_error("closeEvent: shutdown_all failed", e)
 

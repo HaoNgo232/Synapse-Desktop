@@ -89,6 +89,23 @@ def _no_qt_exception_capture(request):
         request.node.add_marker(marker)
 
 
+@pytest.fixture(autouse=True)
+def reset_toast_manager():
+    """Tự động reset singleton ToastManager trước và sau mỗi test để tránh rò rỉ C++ parent widget đã bị giải phóng."""
+    try:
+        from presentation.components.toast.toast_qt import ToastManager
+        ToastManager._instance = None
+    except ImportError:
+        pass
+    yield
+    try:
+        from presentation.components.toast.toast_qt import ToastManager
+        ToastManager._instance = None
+    except ImportError:
+        pass
+
+
+
 @pytest.fixture
 def context_view(qtbot):
     """Fixture tao ContextViewQt voi dependencies da mock."""

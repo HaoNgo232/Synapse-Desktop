@@ -21,9 +21,17 @@ def load_memory_store(workspace_root: Path) -> MemoryStore:
     if not memory_file.exists():
         return MemoryStore()
     try:
-        content = memory_file.read_text(encoding="utf-8")
-        data = json.loads(content)
-        return MemoryStore.from_dict(data)
+        # Su dung open va lock_file de tranh race condition voi thread ghi (truncate)
+        with open(memory_file, "r", encoding="utf-8") as f:
+            lock_file(f)
+            try:
+                content = f.read()
+                if not content.strip():
+                    return MemoryStore()
+                data = json.loads(content)
+                return MemoryStore.from_dict(data)
+            finally:
+                unlock_file(f)
     except (OSError, json.JSONDecodeError, KeyError) as e:
         logger.warning("Failed to load memory store: %s", e)
         return MemoryStore()

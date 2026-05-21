@@ -176,6 +176,10 @@ class AIContextWorker(QRunnable):
                 temperature=0.0,  # Deterministic cho selection task
             )
 
+            # Kiem tra cancellation sau khi goi LLM API lau dai
+            if self._cancelled:
+                return
+
             self.signals.progress.emit("Parsing response...")
 
             # Parse JSON response
@@ -196,6 +200,10 @@ class AIContextWorker(QRunnable):
 
             # Extract usage info
             usage: Dict[str, Any] = response.usage or {}
+
+            # Kiem tra cancellation truoc khi phat tin hieu finished
+            if self._cancelled:
+                return
 
             self.signals.finished.emit(selected_paths, reasoning, usage)
 

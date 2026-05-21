@@ -547,8 +547,29 @@ def get_diff_only(
         )
 
 
+def _unescape_git_path(path: str) -> str:
+    """
+    Giai ma cac ky tu escaped (nhu unicode octal, dau nhay kep, gach cheo nguoc) trong duong dan do git in ra.
+    """
+    path = path.strip()
+    # Neu path bat dau va ket thuc bang dau ngoac kep, boc dau ngoac kep ra truoc
+    if path.startswith('"') and path.endswith('"'):
+        path = path[1:-1]
+
+    if "\\" in path:
+        try:
+            bytes_path = path.encode('utf-8')
+            import codecs
+            unescaped_bytes, _ = codecs.escape_decode(bytes_path)
+            path = unescaped_bytes.decode('utf-8')
+        except Exception:
+            pass
+    return path
+
+
 def _normalize_diff_path(path: str) -> str:
     """Normalize path separators de compare path on all platforms."""
+    path = _unescape_git_path(path)
     return path.replace("\\", "/").strip()
 
 
@@ -700,17 +721,20 @@ def _extract_changed_files(stat_output: str) -> list[str]:
 
         # Format: " path/to/file | stats"
         if "|" in line:
-            file_part = line.split("|")[0].strip()
+            parts = line.rsplit("|", 1)
+            file_part = parts[0].strip()
             if file_part:
+                # Giai ma ky tu dac biet
+                file_part = _unescape_git_path(file_part)
                 # Handle renamed files: "old_name => new_name"
                 if "=>" in file_part:
                     # Lấy new name
-                    parts = file_part.split("=>")
-                    if len(parts) == 2:
-                        file_part = parts[1].strip()
+                    parts_rename = file_part.split("=>")
+                    if len(parts_rename) == 2:
+                        file_part = parts_rename[1].strip()
                         # Handle path prefix: "{dir/}old => new"
-                        if "{" in parts[0]:
-                            prefix = parts[0].split("{")[0]
+                        if "{" in parts_rename[0]:
+                            prefix = parts_rename[0].split("{")[0]
                             file_part = prefix + file_part.rstrip("}")
                 files.append(file_part)
 

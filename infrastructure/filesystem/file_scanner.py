@@ -218,10 +218,20 @@ class FileScanner:
 
         # Build initial ignore patterns (root + default + user)
         ignore_patterns = self._build_ignore_patterns(root_path, config)
-        # Spec stack: list of (PathSpec, base_path)
-        # base_path is the directory where the .gitignore was found
         root_spec = pathspec.PathSpec.from_lines("gitignore", tuple(ignore_patterns))  # type: ignore[arg-type]
-        spec_stack = [(root_spec, root_path)]
+        
+        spec_stack = []
+        if config.use_gitignore:
+            git_root = self.ignore_engine.find_git_root(root_path)
+            if git_root and git_root != root_path:
+                parent_spec = self.ignore_engine.build_pathspec(
+                    git_root,
+                    use_default_ignores=False,
+                    use_gitignore=True,
+                )
+                spec_stack.append((parent_spec, git_root))
+                
+        spec_stack.append((root_spec, root_path))
 
         try:
             # Ưu tiên dùng Rust scanner nếu có
@@ -321,14 +331,17 @@ class FileScanner:
                     if is_system_path(dir_obj):
                         continue
 
-                    # Check ignore patterns against the stack
+                    # Check ignore patterns against the stack (duyệt ngược từ con lên cha để đảm bảo độ ưu tiên của luật phủ định)
                     is_ignored = False
-                    for s, base in active_stack:
+                    for s, base in reversed(active_stack):
                         try:
                             rel_to_base = dir_obj.relative_to(base)
-                            rel_path_str = str(rel_to_base) + "/"
-                            if s.match_file(rel_path_str):
-                                is_ignored = True
+                            rel_path_str = str(rel_to_base)
+                            if not rel_path_str.endswith("/"):
+                                rel_path_str += "/"
+                            res = s.check_file(rel_path_str)
+                            if res is not None:
+                                is_ignored = res.include
                                 break
                         except ValueError:
                             continue
@@ -350,14 +363,15 @@ class FileScanner:
                     if is_system_path(file_obj) or is_binary_file(file_obj):
                         continue
 
-                    # Check ignore patterns against the stack
+                    # Check ignore patterns against the stack (duyệt ngược từ con lên cha để đảm bảo độ ưu tiên của luật phủ định)
                     is_ignored = False
-                    for s, base in active_stack:
+                    for s, base in reversed(active_stack):
                         try:
                             rel_to_base = file_obj.relative_to(base)
                             rel_path_str = str(rel_to_base)
-                            if s.match_file(rel_path_str):
-                                is_ignored = True
+                            res = s.check_file(rel_path_str)
+                            if res is not None:
+                                is_ignored = res.include
                                 break
                         except ValueError:
                             continue
@@ -466,14 +480,17 @@ class FileScanner:
 
             rel_path_str = str(rel_path) + "/"
 
-            # ========= FIX: Kiểm tra directory có bị ignore không =========
+            # ========= FIX: Kiểm tra directory có bị ignore không (duyệt ngược từ con lên cha) =========
             is_ignored = False
-            for s, base in spec_stack:
+            for s, base in reversed(spec_stack):
                 try:
                     rel_to_base = entry_path.relative_to(base)
-                    rel_to_base_str = str(rel_to_base) + "/"
-                    if s.match_file(rel_to_base_str):
-                        is_ignored = True
+                    rel_to_base_str = str(rel_to_base)
+                    if not rel_to_base_str.endswith("/"):
+                        rel_to_base_str += "/"
+                    res = s.check_file(rel_to_base_str)
+                    if res is not None:
+                        is_ignored = res.include
                         break
                 except ValueError:
                     continue
@@ -520,14 +537,15 @@ class FileScanner:
             except ValueError:
                 continue
 
-            # Check ignore patterns against the stack
+            # Check ignore patterns against the stack (duyệt ngược từ con lên cha để đảm bảo độ ưu tiên của luật phủ định)
             is_ignored = False
-            for s, base in spec_stack:
+            for s, base in reversed(spec_stack):
                 try:
                     rel_to_base = entry_path.relative_to(base)
                     rel_path_str = str(rel_to_base)
-                    if s.match_file(rel_path_str):
-                        is_ignored = True
+                    res = s.check_file(rel_path_str)
+                    if res is not None:
+                        is_ignored = res.include
                         break
                 except ValueError:
                     continue

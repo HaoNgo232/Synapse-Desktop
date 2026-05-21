@@ -22,6 +22,7 @@ Su dung thu vien `requests` (lightweight) thay vi cai dat full openai SDK.
 
 import json
 import logging
+import time
 from typing import Any, Dict, Generator, List, Optional
 
 import requests
@@ -77,6 +78,54 @@ def _is_format_unsupported_error(error_msg: str) -> bool:
     return any(unsupported_patterns)
 
 
+def _execute_with_retry(
+    request_func, max_retries: int = 3, initial_delay: float = 1.0
+) -> Any:
+    """
+    Thực hiện gọi API với cơ chế Retry khi gặp lỗi tạm thời (429, 5xx, timeout, connection error).
+    Sử dụng exponential backoff để giãn cách các lần gọi lại.
+    """
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            return request_func()
+        except PermissionError:
+            # Lỗi xác thực hoặc quyền truy cập -> Không retry
+            raise
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            ConnectionError,
+        ) as e:
+            err_msg = str(e)
+            is_transient = True
+
+            # Nếu là built-in ConnectionError, chỉ retry nếu là rate limit hoặc 5xx server error
+            if isinstance(e, ConnectionError):
+                is_transient = any(
+                    kw in err_msg.lower()
+                    for kw in [
+                        "429",
+                        "rate limit",
+                        "500",
+                        "502",
+                        "503",
+                        "504",
+                        "api error (5",
+                    ]
+                )
+
+            if is_transient and attempt < max_retries - 1:
+                logger.warning(
+                    f"Gặp lỗi tạm thời từ API ({err_msg}) (lần thử {attempt + 1}/{max_retries}). "
+                    f"Thử lại sau {delay}s..."
+                )
+                time.sleep(delay)
+                delay *= 2.0
+            else:
+                raise
+
+
 class OpenAICompatibleProvider(BaseLLMProvider):
     """
     Provider cho tat ca API tuong thich voi OpenAI Chat Completions.
@@ -125,12 +174,13 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def fetch_available_models(self) -> List[str]:
         """
         Goi GET /v1/models de lay danh sach model tu server.
+        Tự động retry tối đa 3 lần khi gặp lỗi kết nối tạm thời.
 
         Returns:
             List model IDs, sap xep theo alphabet
 
         Raises:
-            ConnectionError: Khi khong ket noi duoc
+            ConnectionError: Khi khong ket noi duoc sau tat ca lan thu
             PermissionError: Khi API key khong hop le
         """
         if not self.is_configured():
@@ -139,23 +189,25 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         url = f"{self._base_url}/models"
         headers = self._build_headers()
 
-        try:
-            response = requests.get(url, headers=headers, timeout=15)
-            self._check_response_error(response)
+        def _call() -> List[str]:
+            try:
+                response = requests.get(url, headers=headers, timeout=15)
+                self._check_response_error(response)
+                data = response.json()
+                models = data.get("data", [])
+                model_ids = [m.get("id", "") for m in models if m.get("id")]
+                return sorted(model_ids)
+            except requests.exceptions.ConnectionError as e:
+                raise ConnectionError(
+                    f"Khong the ket noi toi {self._base_url}. "
+                    f"Kiem tra lai URL va ket noi mang. Chi tiet: {e}"
+                ) from e
+            except requests.exceptions.Timeout:
+                raise ConnectionError(
+                    f"Request timeout khi ket noi toi {self._base_url}."
+                )
 
-            data = response.json()
-            # Format cua OpenAI: {"data": [{"id": "gpt-4o", ...}, ...]}
-            models = data.get("data", [])
-            model_ids = [m.get("id", "") for m in models if m.get("id")]
-            return sorted(model_ids)
-
-        except requests.exceptions.ConnectionError as e:
-            raise ConnectionError(
-                f"Khong the ket noi toi {self._base_url}. "
-                f"Kiem tra lai URL va ket noi mang. Chi tiet: {e}"
-            ) from e
-        except requests.exceptions.Timeout:
-            raise ConnectionError(f"Request timeout khi ket noi toi {self._base_url}.")
+        return _execute_with_retry(_call)
 
     # === Structured Output (JSON mode) — 3-Tier Fallback ===
 
@@ -211,13 +263,23 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     json_schema=json_schema,
                 )
 
-                response = requests.post(
-                    url, headers=headers, json=payload, timeout=_DEFAULT_TIMEOUT
-                )
-                self._check_response_error(response)
+                def _call_structured() -> LLMResponse:
+                    try:
+                        resp = requests.post(
+                            url, headers=headers, json=payload, timeout=_DEFAULT_TIMEOUT
+                        )
+                        self._check_response_error(resp)
+                        return self._parse_chat_response(resp.json())
+                    except requests.exceptions.ConnectionError as e:
+                        raise ConnectionError(
+                            f"Khong the ket noi toi {self._base_url}. Chi tiet: {e}"
+                        ) from e
+                    except requests.exceptions.Timeout:
+                        raise ConnectionError(
+                            f"Request timeout ({_DEFAULT_TIMEOUT}s) khi goi model {model_id}."
+                        )
 
-                data = response.json()
-                llm_response = self._parse_chat_response(data)
+                llm_response = _execute_with_retry(_call_structured)
 
                 tier_name = strategy.get("tier_name", "unknown")
                 logger.info(
@@ -242,17 +304,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     last_error = e
                     continue  # Thu strategy tiep theo
 
-                # Loi khac (auth, network, rate limit) -> raise ngay
+                # Loi khac (auth, network, rate limit) -> da duoc retry trong _execute_with_retry
                 raise
-
-            except requests.exceptions.ConnectionError as e:
-                raise ConnectionError(
-                    f"Khong the ket noi toi {self._base_url}. Chi tiet: {e}"
-                ) from e
-            except requests.exceptions.Timeout:
-                raise ConnectionError(
-                    f"Request timeout ({_DEFAULT_TIMEOUT}s) khi goi model {model_id}."
-                )
 
         # Tat ca strategies deu that bai
         if last_error:
@@ -472,6 +525,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     continue
 
         except requests.exceptions.ConnectionError as e:
+            # Stream chưa bắt đầu -> có thể retry ở layer caller
             raise ConnectionError(
                 f"Khong the ket noi toi {self._base_url}. Chi tiet: {e}"
             ) from e

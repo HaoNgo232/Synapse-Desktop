@@ -19,6 +19,25 @@ from domain.codemap.types import Symbol, SymbolKind
 
 logger = logging.getLogger(__name__)
 
+
+def _xml_escape(text: str) -> str:
+    """
+    Escape các ký tự đặc biệt trong XML attribute/text:
+    & -> &amp;  < -> &lt;  > -> &gt;  " -> &quot;  ' -> &apos;
+    Ngăn chặn việc sinh ra XML malformed khi signature hoặc tên symbol
+    chứa các ký tự này (ví dụ: hàm có kiểu trả về Dict[str, Any]).
+    """
+    if not text:
+        return ""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
 # Cac naming convention de tim test files
 _PYTHON_TEST_PATTERNS = ["test_{name}.py", "{name}_test.py"]
 _JS_TS_TEST_PATTERNS = [
@@ -486,11 +505,11 @@ def format_test_analysis_xml(analysis: AnalysisResult) -> str:
     for cov in analysis.file_coverages:
         for sym in cov.untested_symbols:
             priority = _classify_priority(sym)
-            sig = f' signature="{sym.signature}"' if sym.signature else ""
-            parent = f' parent="{sym.parent}"' if sym.parent else ""
+            sig = f' signature="{_xml_escape(sym.signature)}"' if sym.signature else ""
+            parent = f' parent="{_xml_escape(sym.parent)}"' if sym.parent else ""
             lines.append(
-                f'  <symbol name="{sym.name}" kind="{sym.kind.value}" '
-                f'file="{cov.source_file}" line="{sym.line_start}" '
+                f'  <symbol name="{_xml_escape(sym.name)}" kind="{sym.kind.value}" '
+                f'file="{_xml_escape(cov.source_file)}" line="{sym.line_start}" '
                 f'priority="{priority}"{sig}{parent}/>'
             )
     lines.append("</untested_symbols>")

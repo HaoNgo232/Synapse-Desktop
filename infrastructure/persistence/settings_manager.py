@@ -69,13 +69,14 @@ def _load_app_settings_unlocked() -> AppSettings:
 def _save_app_settings_unlocked(settings: AppSettings) -> bool:
     """
     Save AppSettings ra file KHONG co lock.
-
-    Chi duoc goi tu ben trong code da acquire _settings_lock.
-    Merge voi existing data de bao toan extra keys.
+    Sử dụng atomic write (ghi file .tmp rồi os.replace) để
+    đảm bảo không mất cấu hình khi crash hay power loss.
 
     Returns:
         True neu save thanh cong
     """
+    import os
+
     try:
         existing_data: dict[str, Any] = {}
         try:
@@ -87,7 +88,20 @@ def _save_app_settings_unlocked(settings: AppSettings) -> bool:
 
         updated = {**existing_data, **settings.to_dict()}
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+
+        # Atomic write: ghi ra file .tmp trước, rồi đổi tên bằng os.replace
+        tmp_file = SETTINGS_FILE.with_suffix(".tmp")
+        try:
+            tmp_file.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+            os.replace(str(tmp_file), str(SETTINGS_FILE))
+        except Exception:
+            # Dọn tmp file nếu có lỗi
+            try:
+                if tmp_file.exists():
+                    tmp_file.unlink()
+            except OSError:
+                pass
+            raise
         return True
     except (OSError, IOError):
         return False
@@ -219,7 +233,7 @@ def load_settings() -> Dict[str, Any]:
 
 def save_settings(settings: Dict[str, Any]) -> bool:
     """
-    [DEPRECATED] Save settings ra file (thread-safe).
+    [DEPRECATED] Save settings ra file (thread-safe, atomic write).
 
     Su dung save_app_settings() thay the.
 
@@ -229,13 +243,27 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     Returns:
         True neu save thanh cong.
     """
+    import os
+
     with _settings_lock:
         try:
             current = load_settings()
             updated = {**current, **settings}
 
             SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            SETTINGS_FILE.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+
+            # Atomic write: tránh mất file khi có crash giữa chừng
+            tmp_file = SETTINGS_FILE.with_suffix(".tmp")
+            try:
+                tmp_file.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+                os.replace(str(tmp_file), str(SETTINGS_FILE))
+            except Exception:
+                try:
+                    if tmp_file.exists():
+                        tmp_file.unlink()
+                except OSError:
+                    pass
+                raise
             return True
         except (OSError, IOError):
             return False

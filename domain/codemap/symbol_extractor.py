@@ -279,17 +279,29 @@ def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
             break
 
     # Lấy text thô từ các dòng tương ứng
+    # QUAN TRỌNG: Tree-sitter trả về byte offset (column), không phải char offset.
+    # Cần encode dòng sang bytes, slice theo byte offset, rồi decode lại.
+    # Điều này tránh lỗi cắt sai vị trí với ký tự tiếng Việt/emoji (multi-byte UTF-8).
     sig_lines = []
     for r in range(start_point[0], end_point[0] + 1):
         if r >= len(lines):
             break
         line = lines[r]
+        line_bytes = line.encode("utf-8")
         if r == start_point[0] and r == end_point[0]:
-            sig_lines.append(line[start_point[1] : end_point[1]])
+            sig_lines.append(
+                line_bytes[start_point[1] : end_point[1]].decode(
+                    "utf-8", errors="replace"
+                )
+            )
         elif r == start_point[0]:
-            sig_lines.append(line[start_point[1] :])
+            sig_lines.append(
+                line_bytes[start_point[1] :].decode("utf-8", errors="replace")
+            )
         elif r == end_point[0]:
-            sig_lines.append(line[: end_point[1]])
+            sig_lines.append(
+                line_bytes[: end_point[1]].decode("utf-8", errors="replace")
+            )
         else:
             sig_lines.append(line)
 

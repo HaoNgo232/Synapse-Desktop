@@ -69,9 +69,11 @@ class ParsedEdit:
 SELF_CLOSING_REGEX = re.compile(r"<\s*edit\b([^>]*)/>", re.IGNORECASE)
 
 # Paired edit: <edit ...>...</edit>
-# Su dung (?:[^/>]|/[^>])* de tranh match self-closing tag "/>" nhu la ">" cua paired tag.
+# Sử dụng negative lookahead (?:(?!<\s*edit\b)[\s\S])*? trong thân tag
+# để ngăn regex nhảy qua thẻ <edit> kế tiếp khi block trước thiếu thẻ đóng </edit>.
 PAIRED_REGEX = re.compile(
-    r"<\s*edit\b((?:[^/>]|/[^>])*)>([\s\S]*?)<\s*/\s*edit\s*>", re.IGNORECASE
+    r"<\s*edit\b((?:[^/>]|/[^>])*?)>\s*((?:(?!<\s*edit\b)[\s\S])*?)<\s*/\s*edit\s*>",
+    re.IGNORECASE,
 )
 
 # Attribute parser: key="value" or key='value'

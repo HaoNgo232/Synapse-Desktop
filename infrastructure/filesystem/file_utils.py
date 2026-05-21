@@ -129,6 +129,7 @@ def is_binary_file(path_or_str: Path | str) -> bool:
     try:
         # Kiểm tra loại file bằng lstat trước khi mở để tránh bị treo (blocking) khi gặp Named Pipe (FIFO)
         import stat
+
         stat_result = os.lstat(path_str)
         if not stat.S_ISREG(stat_result.st_mode):
             return False
@@ -243,7 +244,7 @@ def scan_directory(
     spec_stack.append((spec, root_path))
 
     # Build tree recursively
-    return _build_tree(root_path, root_path, spec_stack, ignore_engine)
+    return _build_tree(root_path, root_path, spec_stack, ignore_engine, visited=set())
 
 
 def scan_directory_shallow(
@@ -289,6 +290,7 @@ def scan_directory_shallow(
         current_depth=1,
         max_depth=depth,
         engine=ignore_engine,
+        visited=set(),
     )
 
 
@@ -299,8 +301,25 @@ def _build_tree_shallow(
     current_depth: int,
     max_depth: int,
     engine: IgnoreEngine,
+    visited: Optional[set[str]] = None,
 ) -> TreeItem:
-    """Build tree structure với depth limit (cho lazy loading)"""
+    """Build tree structure với depth limit (cho lazy loading). Bảo vệ chống circular symlink bằng visited set."""
+    if visited is None:
+        visited = set()
+
+    # Kiểm tra vòng lặp symlink: resolve thực sự rồi so sánh
+    try:
+        resolved = str(current_path.resolve())
+    except OSError:
+        resolved = str(current_path)
+    if resolved in visited:
+        return TreeItem(
+            label=current_path.name or str(current_path),
+            path=str(current_path),
+            is_dir=True,
+            is_loaded=True,
+        )
+    visited.add(resolved)
     item = TreeItem(
         label=current_path.name or str(current_path),
         path=str(current_path),
@@ -389,6 +408,7 @@ def _build_tree_shallow(
                 current_depth + 1,
                 max_depth,
                 engine,
+                visited,  # Truyền visited set xuống đệ quy
             )
             item.children.append(child)
         elif is_dir:
@@ -419,8 +439,25 @@ def _build_tree(
     root_path: Path,
     spec_stack: List[Tuple[pathspec.PathSpec, Path]],
     engine: IgnoreEngine,
+    visited: Optional[set[str]] = None,
 ) -> TreeItem:
-    """Build tree structure recursively"""
+    """Build tree structure recursively. Bảo vệ chống circular symlink bằng visited set."""
+    if visited is None:
+        visited = set()
+
+    # Kiểm tra vòng lặp symlink: resolve thực sự rồi so sánh
+    try:
+        resolved = str(current_path.resolve())
+    except OSError:
+        resolved = str(current_path)
+    if resolved in visited:
+        return TreeItem(
+            label=current_path.name or str(current_path),
+            path=str(current_path),
+            is_dir=True,
+            is_loaded=True,
+        )
+    visited.add(resolved)
     item = TreeItem(
         label=current_path.name or str(current_path),
         path=str(current_path),
@@ -451,7 +488,7 @@ def _build_tree(
                 rel_to_base_str = str(rel_to_base)
                 if entry.is_dir() and not rel_to_base_str.endswith("/"):
                     rel_to_base_str += "/"
-                
+
                 res = s.check_file(rel_to_base_str)
                 if res is not None:
                     is_ignored = res.include
@@ -477,7 +514,9 @@ def _build_tree(
                     )
                     new_spec_stack.append((new_spec, entry))
 
-            child = _build_tree(entry, root_path, new_spec_stack, engine)
+            child = _build_tree(
+                entry, root_path, new_spec_stack, engine, visited
+            )  # Truyền visited set
             item.children.append(child)
         else:
             item.children.append(

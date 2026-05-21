@@ -5,6 +5,7 @@ Lưu tối đa 10 thư mục gần nhất vào settings file.
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -14,6 +15,9 @@ from presentation.config.paths import RECENT_FOLDERS_FILE
 
 # Số lượng tối đa folders lưu trữ
 MAX_RECENT_FOLDERS = 10
+
+# Lock bảo vệ đọc/ghi file recent folders - tránh race condition khi mở nhiều workspace
+_recent_folders_lock = threading.RLock()
 
 
 def load_recent_folders() -> List[str]:
@@ -43,7 +47,7 @@ def load_recent_folders() -> List[str]:
 
 def add_recent_folder(folder_path: str) -> bool:
     """
-    Thêm folder vào đầu danh sách recent.
+    Thêm folder vào đầu danh sách recent (thread-safe).
     Nếu folder đã tồn tại, di chuyển lên đầu.
 
     Args:
@@ -52,56 +56,57 @@ def add_recent_folder(folder_path: str) -> bool:
     Returns:
         True nếu lưu thành công
     """
-    try:
-        # Normalize path
-        folder_path = str(Path(folder_path).resolve())
-
-        # Load existing
-        folders = load_recent_folders()
-
-        # Remove if already exists (sẽ add lại ở đầu)
-        if folder_path in folders:
-            folders.remove(folder_path)
-
-        # Add to beginning
-        folders.insert(0, folder_path)
-
-        # Trim to max size
-        folders = folders[:MAX_RECENT_FOLDERS]
-
-        # Save
-        RECENT_FOLDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-        data = {"folders": folders, "updated_at": datetime.now().isoformat()}
-
-        # Atomic write: temp file + rename
-        tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
-        tmp_file.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-
-        import os
-
-        os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
-
-        log_debug(f"Added recent folder: {folder_path}")
-        return True
-
-    except (OSError, IOError) as e:
-        log_error(f"Failed to save recent folder: {e}")
-        # Clean up temp file
+    with _recent_folders_lock:
         try:
+            # Normalize path
+            folder_path = str(Path(folder_path).resolve())
+
+            # Load existing
+            folders = load_recent_folders()
+
+            # Remove if already exists (sẽ add lại ở đầu)
+            if folder_path in folders:
+                folders.remove(folder_path)
+
+            # Add to beginning
+            folders.insert(0, folder_path)
+
+            # Trim to max size
+            folders = folders[:MAX_RECENT_FOLDERS]
+
+            # Save
+            RECENT_FOLDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+            data = {"folders": folders, "updated_at": datetime.now().isoformat()}
+
+            # Atomic write: temp file + rename
+            import os
+
             tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
-            if tmp_file.exists():
-                tmp_file.unlink()
-        except OSError:
-            pass
-        return False
+            tmp_file.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+            os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
+
+            log_debug(f"Added recent folder: {folder_path}")
+            return True
+
+        except (OSError, IOError) as e:
+            log_error(f"Failed to save recent folder: {e}")
+            # Clean up temp file
+            try:
+                tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+                if tmp_file.exists():
+                    tmp_file.unlink()
+            except OSError:
+                pass
+            return False
 
 
 def remove_recent_folder(folder_path: str) -> bool:
     """
-    Xóa folder khỏi danh sách recent.
+    Xóa folder khỏi danh sách recent (thread-safe).
 
     Args:
         folder_path: Đường dẫn thư mục cần xóa
@@ -109,33 +114,34 @@ def remove_recent_folder(folder_path: str) -> bool:
     Returns:
         True nếu xóa thành công
     """
-    try:
-        folder_path = str(Path(folder_path).resolve())
-        folders = load_recent_folders()
-
-        if folder_path in folders:
-            folders.remove(folder_path)
-
-            data = {"folders": folders, "updated_at": datetime.now().isoformat()}
-
-            # Atomic write using temp file
-            import os
-
-            tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
-            tmp_file.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-            os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
-            return True
-
-    except (OSError, IOError) as e:
-        log_error(f"Failed to remove recent folder: {e}")
+    with _recent_folders_lock:
         try:
-            tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
-            if tmp_file.exists():
-                tmp_file.unlink()
-        except OSError:
-            pass
+            folder_path = str(Path(folder_path).resolve())
+            folders = load_recent_folders()
+
+            if folder_path in folders:
+                folders.remove(folder_path)
+
+                data = {"folders": folders, "updated_at": datetime.now().isoformat()}
+
+                # Atomic write using temp file
+                import os
+
+                tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+                tmp_file.write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+                os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
+                return True
+
+        except (OSError, IOError) as e:
+            log_error(f"Failed to remove recent folder: {e}")
+            try:
+                tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+                if tmp_file.exists():
+                    tmp_file.unlink()
+            except OSError:
+                pass
 
     return False
 

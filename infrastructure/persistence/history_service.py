@@ -9,6 +9,7 @@ Lưu lại:
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import List, Optional
 from dataclasses import dataclass, asdict, field
@@ -19,6 +20,9 @@ from presentation.config.paths import HISTORY_FILE
 
 # Số lượng tối đa entries lưu trữ
 MAX_HISTORY_ENTRIES = 100
+
+# Lock bảo vệ đọc/ghi file lịch sử - tránh race condition đa luồng
+_history_lock = threading.RLock()
 
 
 @dataclass
@@ -84,23 +88,37 @@ def load_history() -> HistoryData:
 
 
 def save_history(history: HistoryData) -> bool:
-    """Lưu lịch sử ra file"""
-    try:
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    """Lưu lịch sử ra file (thread-safe, atomic write)."""
+    import os
 
-        data = {
-            "version": history.version,
-            "entries": [asdict(entry) for entry in history.entries],
-        }
+    with _history_lock:
+        try:
+            HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-        HISTORY_FILE.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        return True
+            data = {
+                "version": history.version,
+                "entries": [asdict(entry) for entry in history.entries],
+            }
 
-    except (OSError, IOError) as e:
-        log_error(f"Failed to save history: {e}")
-        return False
+            # Atomic write: ghi ra .tmp rồi os.replace để tránh mất dữ liệu khi crash
+            tmp_file = HISTORY_FILE.with_suffix(".tmp")
+            try:
+                tmp_file.write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+                os.replace(str(tmp_file), str(HISTORY_FILE))
+            except Exception:
+                try:
+                    if tmp_file.exists():
+                        tmp_file.unlink()
+                except OSError:
+                    pass
+                raise
+            return True
+
+        except (OSError, IOError) as e:
+            log_error(f"Failed to save history: {e}")
+            return False
 
 
 def add_history_entry(
@@ -111,7 +129,8 @@ def add_history_entry(
     ],  # [{"action": "CREATE", "path": "...", "success": True, "message": "..."}]
 ) -> Optional[HistoryEntry]:
     """
-    Thêm entry mới vào lịch sử.
+    Thêm entry mới vào lịch sử (thread-safe).
+    Toàn bộ read-modify-write bảo vệ bởi _history_lock.
 
     Args:
         workspace_path: Đường dẫn workspace
@@ -121,48 +140,49 @@ def add_history_entry(
     Returns:
         HistoryEntry nếu thành công
     """
-    try:
-        history = load_history()
+    with _history_lock:
+        try:
+            history = load_history()
 
-        # Tính toán thống kê
-        success_count = sum(1 for r in action_results if r.get("success", False))
-        fail_count = len(action_results) - success_count
+            # Tính toán thống kê
+            success_count = sum(1 for r in action_results if r.get("success", False))
+            fail_count = len(action_results) - success_count
 
-        action_summary = [
-            f"{r.get('action', 'UNKNOWN').upper()} {Path(r.get('path', '')).name}"
-            for r in action_results
-        ]
+            action_summary = [
+                f"{r.get('action', 'UNKNOWN').upper()} {Path(r.get('path', '')).name}"
+                for r in action_results
+            ]
 
-        error_messages = [
-            r.get("message", "")
-            for r in action_results
-            if not r.get("success", False) and r.get("message")
-        ]
+            error_messages = [
+                r.get("message", "")
+                for r in action_results
+                if not r.get("success", False) and r.get("message")
+            ]
 
-        entry = HistoryEntry(
-            id=_generate_id(),
-            timestamp=datetime.now().isoformat(),
-            workspace_path=workspace_path,
-            opx_content=opx_content,
-            file_count=len(action_results),
-            success_count=success_count,
-            fail_count=fail_count,
-            action_summary=action_summary,
-            error_messages=error_messages,
-        )
+            entry = HistoryEntry(
+                id=_generate_id(),
+                timestamp=datetime.now().isoformat(),
+                workspace_path=workspace_path,
+                opx_content=opx_content,
+                file_count=len(action_results),
+                success_count=success_count,
+                fail_count=fail_count,
+                action_summary=action_summary,
+                error_messages=error_messages,
+            )
 
-        # Thêm vào đầu list (mới nhất trước)
-        history.entries.insert(0, entry)
+            # Thêm vào đầu list (mới nhất trước)
+            history.entries.insert(0, entry)
 
-        # Giới hạn số lượng
-        history.entries = history.entries[:MAX_HISTORY_ENTRIES]
+            # Giới hạn số lượng
+            history.entries = history.entries[:MAX_HISTORY_ENTRIES]
 
-        if save_history(history):
-            log_info(f"Added history entry: {entry.id}")
-            return entry
+            if save_history(history):
+                log_info(f"Added history entry: {entry.id}")
+                return entry
 
-    except Exception as e:
-        log_error(f"Failed to add history entry: {e}")
+        except Exception as e:
+            log_error(f"Failed to add history entry: {e}")
 
     return None
 

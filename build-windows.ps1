@@ -1,5 +1,5 @@
 # build-windows.ps1
-# Build Synapse Desktop thành EXE cho Windows
+# Build Code to Prompt thành EXE cho Windows
 #
 # Usage:
 #   .\build-windows.ps1              # Build bản onedir (nhanh, dễ debug)
@@ -25,7 +25,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ── Configuration ──────────────────────────────────────────────
-$APP_NAME = "Synapse-Desktop"
+$APP_NAME = "Code-to-Prompt"
 $APP_VERSION = "1.0.0"
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = Join-Path $SCRIPT_DIR "build"

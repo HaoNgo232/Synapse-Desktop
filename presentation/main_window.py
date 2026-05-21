@@ -157,11 +157,11 @@ class SynapseMainWindow(QMainWindow):
 
     # ── Window title (dynamic) ────────────────────────────────────
     def _update_window_title(self) -> None:
-        """Set window title: 'Synapse Desktop — [Folder Name]'."""
+        """Đặt window title hiển thị: 'Code to Prompt — [Folder Name]'."""
         if self.workspace_path:
-            self.setWindowTitle(f"Synapse Desktop — {self.workspace_path.name}")
+            self.setWindowTitle(f"Code to Prompt — {self.workspace_path.name}")
         else:
-            self.setWindowTitle("Synapse Desktop — No project open")
+            self.setWindowTitle("Code to Prompt — No project open")
 
     # ── Build UI ──────────────────────────────────────────────────
     def _build_ui(self) -> None:
@@ -244,10 +244,10 @@ class SynapseMainWindow(QMainWindow):
         # ── App branding ──
         app_icon = QLabel("💎")
         app_icon.setStyleSheet("font-size: 18px;")
-        app_icon.setToolTip("Synapse Desktop")
+        app_icon.setToolTip("Code to Prompt")
         layout.addWidget(app_icon)
 
-        app_title = QLabel("Synapse")
+        app_title = QLabel("Code to Prompt")
         app_title.setStyleSheet(
             f"font-size: {ThemeFonts.SIZE_SUBTITLE}px; "
             f"font-weight: 700; "
@@ -409,7 +409,7 @@ class SynapseMainWindow(QMainWindow):
         version_label.setStyleSheet(
             f"color: {ThemeColors.TEXT_MUTED}; font-size: {ThemeFonts.SIZE_CAPTION}px;"
         )
-        version_label.setToolTip("Synapse Desktop version")
+        version_label.setToolTip("Code to Prompt version")
         status_bar.addPermanentWidget(version_label)
 
         self._update_status_bar()
@@ -860,8 +860,8 @@ def main() -> None:
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Synapse Desktop")
-    app.setOrganizationName("Synapse")
+    app.setApplicationName("Code to Prompt")
+    app.setOrganizationName("Code to Prompt")
 
     # Store boot container on app instance for reuse
     app._service_container = _boot_container  # type: ignore[attr-defined]

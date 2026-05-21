@@ -56,25 +56,6 @@ class TestAssemblePrompt:
         assert "Please fix bugs." in prompt
         assert XML_FORMATTING_INSTRUCTIONS not in prompt
 
-    def test_assemble_json_format(self, sample_file_map, sample_file_contents_json):
-        """Verify the exact structure of JSON output mode."""
-        prompt = assemble_prompt(
-            file_map=sample_file_map,
-            file_contents=sample_file_contents_json,
-            user_instructions="Refactor code.",
-            output_style=OutputStyle.JSON,
-            include_xml_formatting=False,
-        )
-
-        # Parse output to verify it's valid JSON
-        data = json.loads(prompt)
-        assert "system_instruction" in data
-        assert "file_summary" in data
-        assert data["structure"] == sample_file_map
-        assert "src/main.py" in data["files"]
-        assert data["user_instructions"] == "Refactor code."
-        assert "formatting_instructions" not in data
-
     def test_assemble_plain_format(self, sample_file_map, sample_file_contents_plain):
         """Verify the exact structure of Plain Text output mode."""
         prompt = assemble_prompt(
@@ -89,33 +70,11 @@ class TestAssemblePrompt:
         assert "FILE SUMMARY" in prompt
         assert "DIRECTORY STRUCTURE" in prompt
         assert sample_file_map in prompt
-        assert "FILE CONTENTS" in prompt
+        assert "FILE CONTEXT" in prompt
         assert sample_file_contents_plain in prompt
         assert "USER INSTRUCTIONS" in prompt
         assert "Explain this." in prompt
         assert "<system_instruction>" not in prompt  # No XML tags in plain text
-
-    def test_assemble_markdown_format(
-        self, sample_file_map, sample_file_contents_plain
-    ):
-        """Verify the exact structure of Markdown output mode."""
-        # Note: In practice Markdown uses similar content payload as Plain but wrapped in XML semantic tags for the AI
-        prompt = assemble_prompt(
-            file_map=sample_file_map,
-            file_contents=sample_file_contents_plain,
-            user_instructions="Document code.",
-            output_style=OutputStyle.MARKDOWN,
-            include_xml_formatting=False,
-        )
-
-        assert "<agent_role>" in prompt
-        assert "<file_map>" in prompt
-        assert sample_file_map in prompt
-        assert "</file_map>" in prompt
-        assert "<file_contents>" in prompt
-        assert sample_file_contents_plain in prompt
-        assert "</file_contents>" in prompt
-        assert "<user_instructions>" in prompt
 
     def test_assemble_opx_injection(self, sample_file_map, sample_file_contents_xml):
         """Verify that XML formatting instructions (OPX) are included when include_xml_formatting is True."""

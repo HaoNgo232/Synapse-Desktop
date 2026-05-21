@@ -75,13 +75,31 @@ def extract_symbols(
 
                     name = node.text.decode("utf-8") if node.text else None
                     if name:
-                        parent = _find_parent_name(node, symbols)
+                        # Tìm definition node tương ứng (ví dụ: class_definition, function_definition)
+                        def_node = node
+                        while def_node.parent and (
+                            "identifier" in def_node.type
+                            or "name" in def_node.type
+                            or "declarator" in def_node.type
+                            or "variable_declarator" in def_node.type
+                            or "export" in def_node.parent.type
+                        ):
+                            def_node = def_node.parent
+
+                        parent = _find_parent_name(def_node, symbols)
+                        symbol_kind = kind
+                        if symbol_kind == SymbolKind.FUNCTION and parent is not None:
+                            # Nếu parent là class/interface/struct, chuyển FUNCTION thành METHOD
+                            parent_symbol = next((s for s in symbols if s.name == parent), None)
+                            if parent_symbol and parent_symbol.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.STRUCT):
+                                symbol_kind = SymbolKind.METHOD
+
                         symbol = Symbol(
                             name=name,
-                            kind=kind,
+                            kind=symbol_kind,
                             file_path=file_path,
-                            line_start=node.start_point[0] + 1,
-                            line_end=node.end_point[0] + 1,
+                            line_start=def_node.start_point[0] + 1,
+                            line_end=def_node.end_point[0] + 1,
                             signature=_extract_signature(node, lines),
                             parent=parent,
                         )
@@ -206,12 +224,14 @@ def _is_likely_entry_point(file_path: str, content: str) -> bool:
 def _extract_signature(node: Node, lines: List[str]) -> Optional[str]:
     """Extracts signature including Docstring/Decorators, mimicking Repomix style."""
     def_node = node
-    # Di chuyển lên node cha chứa toàn bộ khai báo (ví dụ function_declaration thay vì chỉ identifier)
+    # Di chuyển lên node cha chứa toàn bộ khai báo (ví dụ: function_declaration thay vì chỉ identifier)
+    # hoặc di chuyển lên node export_statement để bắt được từ khóa export
     while def_node.parent and (
         "identifier" in def_node.type
         or "name" in def_node.type
         or "declarator" in def_node.type
         or "variable_declarator" in def_node.type
+        or "export" in def_node.parent.type
     ):
         def_node = def_node.parent
 

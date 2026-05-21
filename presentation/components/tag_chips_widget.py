@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QLayoutItem,
 )
-from PySide6.QtCore import Qt, Signal, QRect, QSize, QPoint, QTimer
+from PySide6.QtCore import Qt, Signal, QRect, QSize, QPoint, QTimer, Slot
 from PySide6.QtGui import QFont
 
 from presentation.config.theme import ThemeColors
@@ -392,8 +392,9 @@ class TagChipsWidget(QWidget):
             }}
         """)
         self._input.setToolTip(message)
-        QTimer.singleShot(1500, self._reset_input_style)
+        QTimer.singleShot(1500, self, self._reset_input_style)
 
+    @Slot()
     def _reset_input_style(self) -> None:
         self._input.setStyleSheet(f"""
             QLineEdit {{

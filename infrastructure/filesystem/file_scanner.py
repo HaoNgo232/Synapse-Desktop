@@ -504,9 +504,9 @@ class FileScanner:
             if (entry_path / ".gitignore").exists():
                 nested_patterns = self.ignore_engine.read_gitignore(entry_path)
                 if nested_patterns:
-                    nested_spec = pathspec.PathSpec.from_lines(
+                    nested_spec = pathspec.PathSpec.from_lines(  # type: ignore
                         "gitignore",
-                        nested_patterns,  # type: ignore
+                        nested_patterns,
                     )
                     new_spec_stack.append((nested_spec, entry_path))
 

@@ -267,7 +267,7 @@ class HistoryViewQt(QWidget):
         self._footer_label.setText(message)
 
         # Auto-clear sau 4s
-        QTimer.singleShot(4000, self._clear_footer_message)
+        QTimer.singleShot(4000, self, self._clear_footer_message)
 
     @Slot()
     def _clear_footer_message(self) -> None:

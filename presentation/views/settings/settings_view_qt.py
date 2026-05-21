@@ -1001,14 +1001,7 @@ class SettingsViewQt(QWidget):
             )
 
             # Hide indicator after 3s
-            QTimer.singleShot(
-                3000,
-                lambda: (
-                    self._auto_save_indicator.setText("")
-                    if not self._has_unsaved
-                    else None
-                ),
-            )
+            QTimer.singleShot(3000, self, self._clear_auto_save_indicator)
 
             if self.on_settings_changed:
                 self.on_settings_changed()
@@ -1018,6 +1011,20 @@ class SettingsViewQt(QWidget):
                 f"font-size: 11px; font-weight: 600; color: {ThemeColors.ERROR};"
             )
             self._show_status("Error saving settings", is_error=True)
+
+    @Slot()
+    def _clear_auto_save_indicator(self) -> None:
+        """
+        Xóa thông báo trạng thái lưu tự động nếu không có thay đổi mới chưa lưu.
+        Hàm này được gọi bởi QTimer.singleShot với ngữ cảnh là self để tránh lỗi
+        khi widget bị hủy trước khi timer kích hoạt.
+        """
+        try:
+            if not self._has_unsaved:
+                self._auto_save_indicator.setText("")
+        except RuntimeError:
+            # Bỏ qua nếu widget đã bị hủy ở phía C++
+            pass
 
     def _trigger_auto_save(self) -> None:
         """Helper to trigger the timer."""
@@ -1362,18 +1369,6 @@ class SettingsViewQt(QWidget):
         success, msg = install_config(target_name, workspace_path)
 
         if success:
-            # Tu dong cai dat Agent Skills (SKILL.md) vao thu muc skills cua IDE
-            try:
-                from infrastructure.mcp.skill_installer import install_skills_for_target
-
-                skill_ok, skill_msg = install_skills_for_target(
-                    target_name, workspace_path
-                )
-                if skill_ok and skill_msg:
-                    msg = f"{msg}\\n{skill_msg}"
-            except Exception:
-                # Loi install skills khong chan luong chinh
-                pass
 
             # Cap nhat trang thai label ngay lap tuc, khong can restart app
             try:

@@ -27,11 +27,11 @@ def test_main_window_initialization(qtbot):
         assert "No project open" in window.windowTitle()
 
         # Kiểm tra số lượng tab
-        assert window.tab_widget.count() == 5
+        assert window.tab_widget.count() == 4
 
-        # Thử chuyển tab sang Settings (index 4)
-        window.tab_widget.setCurrentIndex(4)
-        assert window._current_tab_index == 4
+        # Thử chuyển tab sang Settings (index 3)
+        window.tab_widget.setCurrentIndex(3)
+        assert window._current_tab_index == 3
 
 
 def test_main_window_open_folder(qtbot, tmp_path):

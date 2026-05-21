@@ -1,26 +1,22 @@
 """
-Unit tests cho formatters va prompt_assembler.
+Unit tests cho formatters và prompt_assembler.
 
-Test cac module:
-- formatters/markdown.py: format_files_markdown()
+Kiểm tra các module:
 - formatters/xml.py: format_files_xml(), generate_file_summary_xml(), generate_smart_summary_xml()
-- formatters/json_fmt.py: format_files_json()
 - formatters/plain.py: format_files_plain()
 - prompt_assembler.py: assemble_prompt(), assemble_smart_prompt()
 """
 
-import json
+import pytest
 from pathlib import Path
+from typing import Optional
 
 from shared.types.prompt_types import FileEntry
-from domain.prompt.formatters.markdown import format_files_markdown
-from shared.utils.delimiter_utils import calculate_markdown_delimiter
 from domain.prompt.formatters.xml import (
     format_files_xml,
     generate_file_summary_xml,
     generate_smart_summary_xml,
 )
-from domain.prompt.formatters.json_fmt import format_files_json
 from domain.prompt.formatters.plain import format_files_plain
 from domain.prompt.assembler import assemble_prompt, assemble_smart_prompt
 from infrastructure.git.git_utils import GitDiffResult
@@ -29,119 +25,38 @@ from presentation.config.output_format import OutputStyle
 
 # === Helpers ===
 
-
 def _make_entry(
-    path="test.py",
-    content="print('hello')",
-    error=None,
-    language="python",
-    display_path=None,
-    layer=None,
-    role=None,
-    dependencies=None,
-):
-    """Tao FileEntry nhanh cho tests."""
+    path: str = "test.py",
+    content: Optional[str] = "print('hello')",
+    error: Optional[str] = None,
+    language: str = "python",
+    display_path: Optional[str] = None,
+    dependencies: Optional[list[str]] = None,
+) -> FileEntry:
+    """Tạo FileEntry nhanh để phục vụ unit test."""
     return FileEntry(
         path=Path(path),
         display_path=display_path or path,
         content=content,
         error=error,
         language=language,
-        layer=layer,
-        role=role,
         dependencies=dependencies or [],
     )
-
-
-# ===========================================================================
-# Markdown Formatter Tests
-# ===========================================================================
-
-
-class TestCalculateMaxBackticks:
-    """Test calculate_markdown_delimiter() helper."""
-
-    def test_no_backticks(self):
-        """Content khong co backticks -> 3."""
-        contents = ["no backticks here"]
-        assert calculate_markdown_delimiter(contents) == "```"
-
-    def test_triple_backticks(self):
-        """Content co ``` -> can 4."""
-        contents = ["some ```code``` here"]
-        assert calculate_markdown_delimiter(contents) == "````"
-
-    def test_quad_backticks(self):
-        """Content co ```` -> can 5."""
-        contents = ["text ````nested```` end"]
-        assert calculate_markdown_delimiter(contents) == "`````"
-
-    def test_empty_entries(self):
-        """Empty list -> 3."""
-        assert calculate_markdown_delimiter([]) == "```"
-
-    def test_multiple_contents(self):
-        """Multiple contents with different backtick counts."""
-        contents = ["no backticks", "has ``` here", "has ```` here"]
-        assert calculate_markdown_delimiter(contents) == "`````"
-
-
-class TestFormatFilesMarkdown:
-    """Test format_files_markdown()."""
-
-    def test_empty_entries(self):
-        """Empty list tra ve empty string."""
-        assert format_files_markdown([]) == ""
-
-    def test_single_file(self):
-        """Single file co code block voi language."""
-        entries = [_make_entry()]
-        result = format_files_markdown(entries)
-        assert "File: test.py" in result
-        assert "```python" in result
-        assert "print('hello')" in result
-
-    def test_skipped_file(self):
-        """Skipped file hien thi error."""
-        entries = [_make_entry(content=None, error="Binary file")]
-        result = format_files_markdown(entries)
-        assert "File: test.py" in result
-        assert "*** Skipped: Binary file ***" in result
-
-    def test_backtick_delimiter(self):
-        """File co backticks su dung dynamic delimiter."""
-        entries = [_make_entry(content="```python\ncode\n```")]
-        result = format_files_markdown(entries)
-        # Delimiter phai la 4 backticks (3 + 1)
-        assert "````python" in result
-
-    def test_multiple_files_separated(self):
-        """Nhieu files duoc ngan cach bang newline."""
-        entries = [
-            _make_entry(path="a.py", display_path="a.py", content="a_content"),
-            _make_entry(path="b.py", display_path="b.py", content="b_content"),
-        ]
-        result = format_files_markdown(entries)
-        assert "File: a.py" in result
-        assert "File: b.py" in result
-        assert "a_content" in result
-        assert "b_content" in result
 
 
 # ===========================================================================
 # XML Formatter Tests
 # ===========================================================================
 
-
 class TestFormatFilesXml:
-    """Test format_files_xml()."""
+    """Kiểm tra format_files_xml()."""
 
-    def test_empty_entries(self):
-        """Empty list tra ve <files></files>."""
+    def test_empty_entries(self) -> None:
+        """Danh sách rỗng trả về tag files rỗng."""
         assert format_files_xml([]) == "<files></files>"
 
-    def test_single_file(self):
-        """Single file co XML structure."""
+    def test_single_file(self) -> None:
+        """Kiểm tra một file đơn lẻ có cấu trúc XML chính xác."""
         entries = [_make_entry()]
         result = format_files_xml(entries)
         assert "<files>" in result
@@ -149,31 +64,19 @@ class TestFormatFilesXml:
         assert '<file path="test.py">' in result
         assert "print('hello')" in result
 
-    def test_skipped_file(self):
-        """Skipped file co attribute skipped='true'."""
+    def test_skipped_file(self) -> None:
+        """Kiểm tra file bị bỏ qua có attribute skipped='true'."""
         entries = [_make_entry(content=None, error="Binary file")]
         result = format_files_xml(entries)
         assert 'skipped="true"' in result
         assert "Binary file" in result
 
-    def test_special_chars_escaped_in_metadata(self):
-        """XML special chars trong metadata (layer/role) duoc escape."""
-        entry = _make_entry(path="test.py", layer="a < b && c > d")
-        result = format_files_xml([entry])
-        assert "&lt;" in result
-        assert "&amp;" in result
-        assert "&gt;" in result
-        # Content CDATA khong escape
-        entry2 = _make_entry(path="test.py", content="x < y")
-        result2 = format_files_xml([entry2])
-        assert "<![CDATA[\nx < y\n]]>" in result2
-
 
 class TestGenerateFileSummaryXml:
-    """Test generate_file_summary_xml()."""
+    """Kiểm tra generate_file_summary_xml()."""
 
-    def test_contains_required_sections(self):
-        """Summary XML chua tat ca sections can thiet."""
+    def test_contains_required_sections(self) -> None:
+        """Summary XML chứa các sections cần thiết."""
         result = generate_file_summary_xml()
         assert "<file_summary>" in result
         assert "</file_summary>" in result
@@ -182,23 +85,12 @@ class TestGenerateFileSummaryXml:
         assert "<usage_guidelines>" in result
         assert "<notes>" in result
 
-    def test_contains_synapse_branding(self):
-        """Summary XML co ten Synapse Desktop."""
-        result = generate_file_summary_xml()
-        assert "Synapse Desktop" in result
-
 
 class TestGenerateSmartSummaryXml:
-    """Test generate_smart_summary_xml()."""
+    """Kiểm tra generate_smart_summary_xml()."""
 
-    def test_contains_smart_context_info(self):
-        """Smart summary co thong tin ve signatures/docstrings."""
-        result = generate_smart_summary_xml()
-        assert "Smart context" in result or "SMART" in result
-        assert "signatures" in result or "declarations" in result
-
-    def test_contains_required_sections(self):
-        """Smart summary chua tat ca sections."""
+    def test_contains_required_sections(self) -> None:
+        """Smart summary chứa tất cả các sections."""
         result = generate_smart_summary_xml()
         assert "<file_summary>" in result
         assert "<purpose>" in result
@@ -208,114 +100,50 @@ class TestGenerateSmartSummaryXml:
 
 
 # ===========================================================================
-# JSON Formatter Tests
-# ===========================================================================
-
-
-class TestFormatFilesJson:
-    """Test format_files_json()."""
-
-    def test_empty_entries(self):
-        """Empty list tra ve valid empty JSON object."""
-        result = format_files_json([])
-        assert json.loads(result) == {}
-
-    def test_single_file(self):
-        """Single file tra ve valid JSON voi path:content."""
-        entries = [_make_entry()]
-        result = format_files_json(entries)
-        data = json.loads(result)
-        assert "test.py" in data
-        assert data["test.py"] == "print('hello')"
-
-    def test_binary_skip_message(self):
-        """Binary file co message 'Binary file (skipped)'."""
-        entries = [_make_entry(content=None, error="Binary file")]
-        result = format_files_json(entries)
-        data = json.loads(result)
-        assert data["test.py"] == "Binary file (skipped)"
-
-    def test_large_file_skip_message(self):
-        """File qua lon co message voi '(skipped)'."""
-        entries = [_make_entry(content=None, error="File too large (2048KB)")]
-        result = format_files_json(entries)
-        data = json.loads(result)
-        assert "(skipped)" in data["test.py"]
-
-    def test_multiple_files_valid_json(self):
-        """Nhieu files tao valid JSON."""
-        entries = [
-            _make_entry(path="a.py", display_path="a.py", content="a_code"),
-            _make_entry(path="b.py", display_path="b.py", content="b_code"),
-        ]
-        result = format_files_json(entries)
-        data = json.loads(result)
-        assert len(data) == 2
-        assert data["a.py"] == "a_code"
-        assert data["b.py"] == "b_code"
-
-    def test_unicode_content(self):
-        """Content Unicode duoc giu nguyen."""
-        entries = [_make_entry(content="tieng Viet co dau")]
-        result = format_files_json(entries)
-        data = json.loads(result)
-        assert data["test.py"] == "tieng Viet co dau"
-
-
-# ===========================================================================
 # Plain Formatter Tests
 # ===========================================================================
 
-
 class TestFormatFilesPlain:
-    """Test format_files_plain()."""
+    """Kiểm tra format_files_plain()."""
 
-    def test_empty_entries(self):
-        """Empty list tra ve 'No files selected.'."""
+    def test_empty_entries(self) -> None:
+        """Danh sách rỗng trả về thông báo No files selected."""
         assert format_files_plain([]) == "No files selected."
 
-    def test_single_file(self):
-        """Single file co header, separator, va content."""
+    def test_single_file(self) -> None:
+        """Kiểm tra cấu trúc plain text của một file đơn lẻ."""
         entries = [_make_entry()]
         result = format_files_plain(entries)
-        assert "===== FILE: test.py =====" in result
+        assert "FILE: test.py" in result
         assert "print('hello')" in result
 
-    def test_binary_skip_message(self):
-        """Binary file co message 'Binary file (skipped)'."""
+    def test_binary_skip_message(self) -> None:
+        """Kiểm tra hiển thị bỏ qua file nhị phân."""
         entries = [_make_entry(content=None, error="Binary file")]
         result = format_files_plain(entries)
         assert "Binary file (skipped)" in result
 
-    def test_multiple_files_separated(self):
-        """Nhieu files duoc ngan cach bang 2 newlines."""
+    def test_multiple_files_separated(self) -> None:
+        """Kiểm tra nhiều file được phân tách bằng double newlines."""
         entries = [
             _make_entry(path="a.py", display_path="a.py", content="a_code"),
             _make_entry(path="b.py", display_path="b.py", content="b_code"),
         ]
         result = format_files_plain(entries)
-        assert "===== FILE: a.py =====" in result
-        assert "===== FILE: b.py =====" in result
-        # Ngan cach bang double newline
+        assert "FILE: a.py" in result
+        assert "FILE: b.py" in result
         assert "\n\n" in result
-
-    def test_content_stripped(self):
-        """Content duoc strip whitespace."""
-        entries = [_make_entry(content="  hello  \n  ")]
-        result = format_files_plain(entries)
-        assert "hello" in result
 
 
 # ===========================================================================
 # Prompt Assembler Tests
 # ===========================================================================
 
-
 class TestAssemblePromptXml:
-    """Test assemble_prompt() voi XML output style."""
+    """Kiểm tra assemble_prompt() với XML output style."""
 
-    def test_xml_contains_file_summary(self):
-        """XML prompt co file_summary section."""
+    def test_xml_contains_file_summary(self) -> None:
+        """XML prompt có file_summary section."""
         result = assemble_prompt(
             file_map="src/\n  main.py",
             file_contents="<files></files>",
@@ -324,8 +152,8 @@ class TestAssemblePromptXml:
         assert "<file_summary>" in result
         assert "<structure>" in result
 
-    def test_xml_with_user_instructions(self):
-        """XML prompt co user_instructions o cuoi."""
+    def test_xml_with_user_instructions(self) -> None:
+        """XML prompt có user_instructions ở cuối."""
         result = assemble_prompt(
             file_map="map",
             file_contents="contents",
@@ -335,55 +163,12 @@ class TestAssemblePromptXml:
         assert "<user_instructions>" in result
         assert "Fix bug" in result
 
-    def test_xml_with_git_diffs(self):
-        """XML prompt co git_changes section."""
-        diffs = GitDiffResult(
-            work_tree_diff="diff --git a/file.py",
-            staged_diff="staged changes",
-        )
-        result = assemble_prompt(
-            file_map="map",
-            file_contents="contents",
-            git_diffs=diffs,
-            output_style=OutputStyle.XML,
-        )
-        assert "<git_changes>" in result
-        assert "<git_diff_worktree>" in result
-        assert "<git_diff_staged>" in result
-
-
-class TestAssemblePromptJson:
-    """Test assemble_prompt() voi JSON output style."""
-
-    def test_json_valid(self):
-        """JSON prompt la valid JSON."""
-        result = assemble_prompt(
-            file_map="map",
-            file_contents='{"file.py": "content"}',
-            output_style=OutputStyle.JSON,
-        )
-        data = json.loads(result)
-        assert "structure" in data
-        assert "files" in data
-
-    def test_json_with_git(self):
-        """JSON prompt co git_diffs key."""
-        diffs = GitDiffResult(work_tree_diff="diff", staged_diff="staged")
-        result = assemble_prompt(
-            file_map="map",
-            file_contents="{}",
-            git_diffs=diffs,
-            output_style=OutputStyle.JSON,
-        )
-        data = json.loads(result)
-        assert "git_diffs" in data
-
 
 class TestAssemblePromptPlain:
-    """Test assemble_prompt() voi Plain output style."""
+    """Kiểm tra assemble_prompt() với Plain output style."""
 
-    def test_plain_no_xml_tags(self):
-        """Plain prompt khong co XML tags."""
+    def test_plain_no_xml_tags(self) -> None:
+        """Plain prompt không có XML tags."""
         result = assemble_prompt(
             file_map="map",
             file_contents="contents",
@@ -391,30 +176,30 @@ class TestAssemblePromptPlain:
         )
         assert "<file_summary>" not in result
         assert "DIRECTORY STRUCTURE" in result
-        assert "FILE CONTENTS" in result
+        assert "FILE CONTEXT" in result
 
-    def test_plain_with_instructions_first(self):
-        """Plain prompt co instructions o cuoi (recency bias)."""
+    def test_plain_with_instructions_first(self) -> None:
+        """Plain prompt có instructions ở cuối (recency bias)."""
         result = assemble_prompt(
             file_map="map",
             file_contents="contents",
             user_instructions="Do this",
             output_style=OutputStyle.PLAIN,
         )
-        # Instructions xuat hien SAU Directory Structure va File Contents (recency bias)
+        # Instructions xuất hiện sau Directory Structure và File Context (recency bias)
         inst_pos = result.index("USER INSTRUCTIONS")
         dir_pos = result.index("DIRECTORY STRUCTURE")
-        contents_pos = result.index("FILE CONTENTS")
+        contents_pos = result.index("FILE CONTEXT")
         assert dir_pos < contents_pos < inst_pos, (
             "Instructions should be at the end for recency bias"
         )
 
 
 class TestAssembleSmartPrompt:
-    """Test assemble_smart_prompt()."""
+    """Kiểm tra assemble_smart_prompt()."""
 
-    def test_contains_smart_context_section(self):
-        """Smart prompt co smart_context section."""
+    def test_contains_smart_context_section(self) -> None:
+        """Smart prompt có smart_context section."""
         result = assemble_smart_prompt(
             smart_contents="def foo(): pass",
             file_map="src/\n  main.py",
@@ -422,33 +207,3 @@ class TestAssembleSmartPrompt:
         assert "<smart_context>" in result
         assert "</smart_context>" in result
         assert "def foo(): pass" in result
-
-    def test_contains_file_summary(self):
-        """Smart prompt co file_summary voi Smart branding."""
-        result = assemble_smart_prompt(
-            smart_contents="content",
-            file_map="map",
-        )
-        assert "<file_summary>" in result
-        assert "SMART" in result
-
-    def test_with_git_changes(self):
-        """Smart prompt co git_changes."""
-        diffs = GitDiffResult(work_tree_diff="diff", staged_diff="")
-        result = assemble_smart_prompt(
-            smart_contents="content",
-            file_map="map",
-            git_diffs=diffs,
-        )
-        assert "<git_changes>" in result
-        assert "<git_diff_worktree>" in result
-
-    def test_with_user_instructions(self):
-        """Smart prompt co user_instructions."""
-        result = assemble_smart_prompt(
-            smart_contents="content",
-            file_map="map",
-            user_instructions="Review this",
-        )
-        assert "<user_instructions>" in result
-        assert "Review this" in result

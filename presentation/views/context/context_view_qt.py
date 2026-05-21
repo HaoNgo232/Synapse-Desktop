@@ -675,7 +675,7 @@ class ContextViewQt(
         text = self._instructions_field.toPlainText()
         word_count = len(text.split()) if text.strip() else 0
         self._word_count_label.setText(f"{word_count} words")
-        QTimer.singleShot(150, self._update_token_display)
+        QTimer.singleShot(150, self, self._update_token_display)
 
     @Slot(str)
     def _on_format_changed(self, format_id: str) -> None:
@@ -785,7 +785,7 @@ class ContextViewQt(
         self._show_custom_template_dialog(initial_content=text)
 
     def _show_custom_template_dialog(
-        self, template_id: str = None, initial_content: str = None
+        self, template_id: Optional[str] = None, initial_content: Optional[str] = None
     ) -> None:
         """Hien thi dialog cho phep tao/sua Custom Template."""
         from presentation.components.dialogs.custom_template_dialog import (

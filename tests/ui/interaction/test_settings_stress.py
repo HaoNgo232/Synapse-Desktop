@@ -94,7 +94,13 @@ def test_settings_invalid_input_resilience_100(qtbot):
     with patch("presentation.views.settings.settings_view_qt.save_settings"):
         for char in bad_inputs * 15:  # Lặp lại để đủ 100+ items
             view._ai_base_url_input.clear()
-            qtbot.keyClicks(view._ai_base_url_input, char)
+            if char == "\n\n":
+                qtbot.keyClick(view._ai_base_url_input, Qt.Key.Key_Return)
+                qtbot.keyClick(view._ai_base_url_input, Qt.Key.Key_Return)
+            elif char == "\t":
+                qtbot.keyClick(view._ai_base_url_input, Qt.Key.Key_Tab)
+            else:
+                qtbot.keyClicks(view._ai_base_url_input, char)
 
         qtbot.wait(1000)
         assert view.isVisible() or view is not None

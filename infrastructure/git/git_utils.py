@@ -562,7 +562,8 @@ def _unescape_git_path(path: str) -> str:
             import codecs
 
             unescaped_bytes, _ = codecs.escape_decode(bytes_path)
-            path = unescaped_bytes.decode("utf-8")
+            if isinstance(unescaped_bytes, bytes):
+                path = unescaped_bytes.decode("utf-8")
         except Exception:
             pass
     return path

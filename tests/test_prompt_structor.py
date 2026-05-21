@@ -17,32 +17,27 @@ from presentation.config.output_format import OutputStyle
 def _make_entry(
     path="application/services/test.py",
     content="print('hello')",
-    layer="application",
-    role="Service",
     deps=["domain.test"],
 ):
+    # FileEntry không còn hỗ trợ các thuộc tính layer và role cũ
     return FileEntry(
         path=Path(path),
         display_path=path,
         content=content,
         error=None,
         language="python",
-        layer=layer,
-        role=role,
         dependencies=deps,
     )
 
 
 class TestPromptStructorXml:
     def test_xml_project_structure(self):
-        """XML format phai co <file> voi metadata (layer, role, deps) va CDATA content."""
+        """XML format phải có <file> với metadata (deps) và CDATA content."""
         entries = [_make_entry()]
 
         result = format_files_xml(entries)
 
         assert '<file path="application/services/test.py">' in result
-        assert "<layer>application</layer>" in result
-        assert "<role>Service</role>" in result
         assert "<dependencies>" in result
         assert "<import>domain.test</import>" in result
         assert "<content><![CDATA[" in result
@@ -70,29 +65,25 @@ class TestPromptStructorXml:
 
 class TestPromptStructorPlain:
     def test_plain_structured_format(self):
-        """Plain format phai co delimiter consistent va metadata o dau."""
+        """Plain format phải có delimiter và metadata ở đầu."""
         entries = [
             _make_entry(
                 path="application/services/prompt_build_service.py",
-                role="ApplicationService",
             )
         ]
 
         result = format_files_plain(entries)
 
-        # 1. Delimiter consistency
+        # 1. Kiểm tra delimiter của file
         assert (
-            "===== FILE: application/services/prompt_build_service.py =====" in result
+            "FILE: application/services/prompt_build_service.py" in result
         )
 
-        # 2. Metadata before code
+        # 2. Metadata xuất hiện trước code
         lines = result.splitlines()
-        # Header o lines[0]
         assert (
-            lines[0] == "===== FILE: application/services/prompt_build_service.py ====="
+            lines[0] == "FILE: application/services/prompt_build_service.py"
         )
-        assert "LAYER: application" in result
-        assert "ROLE: ApplicationService" in result
         assert "DEPENDS ON: domain.test" in result
         assert "print('hello')" in result
 

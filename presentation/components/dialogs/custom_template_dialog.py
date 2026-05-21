@@ -7,6 +7,8 @@ Cho phep nguoi dung tao va luu cac custom markdown templates vao thu muc config.
 import os
 import re
 
+from typing import Optional
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -27,7 +29,7 @@ class CustomTemplateDialog(QDialog):
     """Dialog tao moi Custom Template."""
 
     def __init__(
-        self, parent=None, template_id: str = None, initial_content: str = None
+        self, parent=None, template_id: Optional[str] = None, initial_content: Optional[str] = None
     ):
         super().__init__(parent)
         self.template_id = template_id
@@ -136,13 +138,16 @@ class CustomTemplateDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-    def _load_existing_data(self):
+    def _load_existing_data(self) -> None:
         """Load dữ liệu template cũ vào fields."""
+        if not self.template_id:
+            return
+        template_id = self.template_id
         from domain.prompt.template_manager import get_template_info, load_template
 
         try:
-            info = get_template_info(self.template_id)
-            content = load_template(self.template_id)
+            info = get_template_info(template_id)
+            content = load_template(template_id)
 
             self.name_input.setText(info.display_name)
             self.desc_input.setText(info.description)

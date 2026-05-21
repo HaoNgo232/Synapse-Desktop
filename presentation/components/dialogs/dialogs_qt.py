@@ -295,7 +295,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
 
         self.setMinimumWidth(650)
         self._build_ui()
-        QTimer.singleShot(0, self._refresh_changed_files)
+        QTimer.singleShot(0, self, self._refresh_changed_files)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -1322,7 +1322,22 @@ class FilePreviewDialogQt(BaseDialogQt):
             success, _ = copy_to_clipboard(self._content)
             if success:
                 self._copy_btn.setText("Copied! ✅")
-                QTimer.singleShot(2000, lambda: self._copy_btn.setText("Copy"))
+                QTimer.singleShot(2000, self, self._reset_copy_btn)
+
+    @Slot()
+    def _reset_copy_btn(self) -> None:
+        """
+        Khôi phục hiển thị của nút Copy về trạng thái ban đầu.
+        Sử dụng try-except để phòng tránh lỗi khi dialog đóng trước khi timer kích hoạt.
+        """
+        try:
+            if hasattr(self, "_copy_btn") and self._copy_btn is not None:
+                from shiboken6 import isValid
+
+                if isValid(self._copy_btn):
+                    self._copy_btn.setText("Copy")
+        except RuntimeError:
+            pass
 
     @staticmethod
     def _highlight_code(content: str, language: str) -> Optional[str]:

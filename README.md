@@ -20,7 +20,7 @@ When using AI (ChatGPT, Claude, Gemini) for coding assistance, you often encount
 Synapse Desktop solves all three problems in a single app:
 - Select files from a tree → bundle them into a structured prompt → 1-click copy.
 - Accurate token counting per model, with warnings when limits are exceeded.
-- AI returns patches in OPX format → visual diff preview → automatic application to the codebase.
+- AI returns patches in Search/Replace (Aider-style) format → visual diff preview → automatic application to the codebase.
 
 ---
 
@@ -35,7 +35,7 @@ Open a project folder → the file tree displays the entire structure → tick t
 | Mode | Copied Content | When to Use |
 |--------|-------------------|--------------|
 | **Copy Context** | Full content of selected files | When the AI needs to read and edit specific code |
-| **Copy + OPX** | Like Copy Context, plus instructions for the AI to return patches in OPX format | When you want the AI to return code that can be applied automatically |
+| **Copy + OPX** | Like Copy Context, plus instructions for the AI to return patches in Search/Replace format | When you want the AI to return code that can be applied automatically |
 | **Compress** | Only signatures (function names, classes, parameters) — no body | When the AI needs to understand project structure while saving 70-80% of tokens |
 | **Git Diff** | Only changed lines in git | Code review, debugging, checking recent changes |
 
@@ -49,9 +49,9 @@ Additionally, there is **Copy Tree Map**, which only copies the directory struct
 
 ### Applying Code from AI
 
-When using Copy + OPX mode, the AI will return code in OPX (Overwrite Patch XML) format. How to use:
+When using Copy + OPX mode, the AI will return code in Search/Replace (Aider-style) format. How to use:
 
-1. Copy the XML response from the AI.
+1. Copy the response from the AI.
 2. Switch to the **Apply** tab in Synapse.
 3. Paste it in → click **Preview** → view visual diffs for each file.
 4. Confirm → Synapse applies the changes and automatically backs up the original files.
@@ -91,7 +91,7 @@ Configuration: Settings → MCP Server Integration → Install to [IDE].
 **Context tab** — Select files, write instructions, copy context:
 ![Context tab](assets/image.png)
 
-**Apply tab** — Paste OPX from AI, view diff, apply changes:
+**Apply tab** — Paste Search/Replace blocks from AI, view diff, apply changes:
 ![Apply tab](assets/image-1.png)
 
 **History tab** — History of copy/apply actions:
@@ -143,21 +143,44 @@ All data is stored at `~/.config/synapse-desktop/` (Linux) or `~/.synapse-deskto
 
 ---
 
-## OPX Format
+## Search/Replace (Aider-style) Format
 
-Synapse uses OPX (Overwrite Patch XML) as the format for AI code changes. Example:
+Synapse uses Search/Replace blocks (Aider-style) as the format for AI code changes. Example:
 
-```xml
-<edit file="src/app.py" op="patch">
-  <find occurrence="first">
-<<<
+```text
+<<<<<<< SEARCH src/app.py
 print("hello")
->>>
-  </find>
-  <put>
-<<<
+=======
 print("hello world")
->>>
-  </put>
-</edit>
+>>>>>>> REPLACE
 ```
+
+### Supported Operations:
+
+- **Modify File (Patch):**
+  ```text
+  <<<<<<< SEARCH path/to/file.ext
+  [original code block to replace]
+  =======
+  [replacement code block]
+  >>>>>>> REPLACE
+  ```
+- **Create File (Empty SEARCH block):**
+  ```text
+  <<<<<<< SEARCH path/to/file.ext
+  =======
+  [file content]
+  >>>>>>> REPLACE
+  ```
+- **Delete File:**
+  ```text
+  <<<<<<< DELETE path/to/file.ext
+  >>>>>>> DELETE
+  ```
+- **Rename/Move File:**
+  ```text
+  <<<<<<< RENAME path/to/old_file.ext
+  =======
+  path/to/new_file.ext
+  >>>>>>> RENAME
+  ```

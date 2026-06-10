@@ -490,8 +490,10 @@ class FileTreeDelegate(QStyledItemDelegate):
                 int(y + CHECKBOX_SIZE // 2),
             )
         else:
-            # Empty checkbox — dùng màu sáng hơn để dễ nhìn trên dark bg
-            painter.setPen(QPen(QColor("#64748B"), 1.5))
+            # Empty checkbox — slate-400 (#94A3B8) cho contrast ratio an toan hon
+            # tren dark bg (~4.5:1 thay vi ~3:1 voi slate-500 truoc day).
+            # Checkbox chua tick la thanh phan quan trong nhat phai nhin ro.
+            painter.setPen(QPen(QColor("#94A3B8"), 1.5))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(cb_rect, 3, 3)
 

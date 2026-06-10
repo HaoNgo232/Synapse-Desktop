@@ -145,6 +145,16 @@ class ContextViewQt(
         focus_shortcut = QShortcut(QKeySequence("Ctrl+Shift+L"), self)
         focus_shortcut.activated.connect(self._focus_preset_combo)
 
+        # F5: Refresh file tree (khop voi tooltip cua nut Reload)
+        refresh_shortcut = QShortcut(QKeySequence("F5"), self)
+        refresh_shortcut.activated.connect(
+            lambda: (
+                self._tree_controller.refresh_tree()
+                if self._tree_controller
+                else None
+            )
+        )
+
     def _quick_save_preset(self) -> None:
         """Quick save with proper confirmation dialogs."""
         if not hasattr(self, "_preset_controller") or self._preset_controller is None:

@@ -1001,14 +1001,58 @@ class UIBuilderMixin:
             }}
         """
 
-        # Row chứa checkbox "Include Git Diff" và nút Advanced ⚙️
+        # Row chứa checkbox "Include Git Diff", Commit SpinBox, và nút Advanced ⚙️
         git_diff_row = QHBoxLayout()
+        git_diff_row.setSpacing(8)
+        git_diff_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
         self._git_diff_cb = QCheckBox("Include Git Diff")
         self._git_diff_cb.setStyleSheet(cb_style)
         self._git_diff_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self._git_diff_cb.setChecked(saved_settings.include_git_changes)
+        self._git_diff_cb.setToolTip("Include git diff changes of recent commits into the context")
         git_diff_row.addWidget(self._git_diff_cb)
-        
+
+        git_diff_row.addSpacing(2)
+
+        commit_depth_label = QLabel("Commits:")
+        commit_depth_label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_MUTED};")
+        commit_depth_label.setToolTip("Number of recent commits to analyze for git diff")
+        git_diff_row.addWidget(commit_depth_label)
+
+        from PySide6.QtWidgets import QSpinBox
+        self._commit_depth_spin = QSpinBox()
+        self._commit_depth_spin.setRange(0, 100)
+        self._commit_depth_spin.setValue(saved_settings.git_commit_depth)
+        self._commit_depth_spin.setFixedWidth(50)
+        self._commit_depth_spin.setToolTip("Select number of recent commits (0 means working tree diff only)")
+        self._commit_depth_spin.setStyleSheet(f"""
+            QSpinBox {{
+                background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER};
+                border-radius: 4px;
+                padding: 2px 4px;
+                font-size: 11px;
+            }}
+            QSpinBox:hover {{
+                border-color: {ThemeColors.PRIMARY}80;
+            }}
+            QSpinBox:focus {{
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                width: 14px;
+                border-left: 1px solid {ThemeColors.BORDER}40;
+                background: {ThemeColors.BG_ELEVATED};
+            }}
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+                background: {ThemeColors.BG_HOVER};
+            }}
+        """)
+        self._commit_depth_spin.setEnabled(saved_settings.include_git_changes)
+        git_diff_row.addWidget(self._commit_depth_spin)
+
         git_diff_row.addStretch()
 
         self._mode_diff_config_btn = QToolButton()
@@ -1021,44 +1065,17 @@ class UIBuilderMixin:
                 border: none;
                 font-size: 14px;
                 color: {ThemeColors.TEXT_SECONDARY};
-                padding: 2px;
+                padding: 2px 6px;
+                border-radius: 4px;
             }}
             QToolButton:hover {{
                 color: {ThemeColors.PRIMARY};
+                background: {ThemeColors.BG_HOVER};
             }}
         """)
         self._mode_diff_config_btn.clicked.connect(self._on_configure_diff_clicked)
         git_diff_row.addWidget(self._mode_diff_config_btn)
         cb_layout.addLayout(git_diff_row)
-
-        # Bộ chọn commit depth nhanh (chỉ hiển thị / enable khi Include Git Diff checked)
-        from PySide6.QtWidgets import QSpinBox
-        commit_depth_row = QHBoxLayout()
-        commit_depth_row.setContentsMargins(20, 0, 0, 0) # Thụt đầu dòng một chút
-        
-        commit_depth_label = QLabel("Commits:")
-        commit_depth_label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};")
-        commit_depth_row.addWidget(commit_depth_label)
-        
-        self._commit_depth_spin = QSpinBox()
-        self._commit_depth_spin.setRange(0, 100)
-        self._commit_depth_spin.setValue(saved_settings.git_commit_depth)
-        self._commit_depth_spin.setFixedWidth(60)
-        self._commit_depth_spin.setStyleSheet(f"""
-            QSpinBox {{
-                background-color: {ThemeColors.BG_ELEVATED}40;
-                color: {ThemeColors.TEXT_PRIMARY};
-                border: 1px solid {ThemeColors.BORDER}40;
-                border-radius: 4px;
-                padding: 2px 4px;
-                font-size: 11px;
-            }}
-        """)
-        self._commit_depth_spin.setEnabled(saved_settings.include_git_changes)
-        commit_depth_row.addWidget(self._commit_depth_spin)
-        commit_depth_row.addStretch()
-        
-        cb_layout.addLayout(commit_depth_row)
 
         def on_git_diff_toggled(checked):
             update_app_setting(include_git_changes=checked)

@@ -28,9 +28,9 @@ class TestTemplateUI:
             view._populate_template_menu()
 
         menu = view._template_menu
-        # Tim action co text "My Custom Template" (no la mot menu)
+        # Tim action co text "My Custom Template (Custom)" (no la mot menu)
         custom_menu_action = next(
-            (a for a in menu.actions() if a.text() == "My Custom Template"), None
+            (a for a in menu.actions() if a.text() == "My Custom Template (Custom)"), None
         )
         assert custom_menu_action is not None
         assert custom_menu_action.menu() is not None

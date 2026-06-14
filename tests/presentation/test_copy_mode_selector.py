@@ -262,10 +262,11 @@ def test_copy_logic_receives_git_commit_depth(qtbot, context_view):
             view.scan_full_tree = MagicMock()
             
             with patch.object(view._prompt_builder, "build_prompt") as mock_build:
-                try:
-                    task_fn()
-                except Exception:
-                    pass
+                print("VIEW_PB_TYPE:", type(view._prompt_builder))
+                print("VIEW_PB_ID:", id(view._prompt_builder))
+                print("VIEW_GET_PB_ID:", id(view.get_prompt_builder()))
+                res = task_fn()
+                print("DEBUG_RES:", res)
                 
                 mock_build.assert_called_once()
                 _, build_kwargs = mock_build.call_args

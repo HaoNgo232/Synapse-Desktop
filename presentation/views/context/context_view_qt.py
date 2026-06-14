@@ -864,31 +864,38 @@ class ContextViewQt(
         menu = self._template_menu
         menu.clear()
 
+        templates = list_templates()
+        builtin_templates = [t for t in templates if not getattr(t, "is_custom", False)]
+        custom_templates = [t for t in templates if getattr(t, "is_custom", False)]
 
+        # 1. Đổ dữ liệu các builtin templates
+        for tmpl in builtin_templates:
+            action = menu.addAction(tmpl.display_name)
+            if tmpl.description:
+                action.setToolTip(tmpl.description)
+            action.setData(tmpl.template_id)
 
-        # 2. Đổ dữ liệu các templates
-        for tmpl in list_templates():
-            if getattr(tmpl, "is_custom", False):
-                sub = menu.addMenu(tmpl.display_name)
-                if tmpl.description:
-                    sub.setToolTip(tmpl.description)
-                    sub.menuAction().setToolTip(tmpl.description)
+        # Thêm separator nếu có cả builtin và custom templates
+        if builtin_templates and custom_templates:
+            menu.addSeparator()
 
-                ins = sub.addAction("Insert")
-                ins.setData({"action": "insert", "id": tmpl.template_id})
+        # 2. Đổ dữ liệu các custom templates
+        for tmpl in custom_templates:
+            sub = menu.addMenu(f"{tmpl.display_name} (Custom)")
+            if tmpl.description:
+                sub.setToolTip(tmpl.description)
+                sub.menuAction().setToolTip(tmpl.description)
 
-                edt = sub.addAction("Edit")
-                edt.setData({"action": "edit", "id": tmpl.template_id})
+            ins = sub.addAction("Insert")
+            ins.setData({"action": "insert", "id": tmpl.template_id})
 
-                sub.addSeparator()
+            edt = sub.addAction("Edit")
+            edt.setData({"action": "edit", "id": tmpl.template_id})
 
-                dlt = sub.addAction("Delete")
-                dlt.setData({"action": "delete", "id": tmpl.template_id})
-            else:
-                action = menu.addAction(tmpl.display_name)
-                if tmpl.description:
-                    action.setToolTip(tmpl.description)
-                action.setData(tmpl.template_id)
+            sub.addSeparator()
+
+            dlt = sub.addAction("Delete")
+            dlt.setData({"action": "delete", "id": tmpl.template_id})
 
         menu.addSeparator()
         add_action = menu.addAction("Manage/Add Custom Template...")

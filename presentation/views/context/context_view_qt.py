@@ -389,25 +389,80 @@ class ContextViewQt(
         return toggle.isChecked() if toggle is not None else False
 
     def is_smart_mode_active(self) -> bool:
-        """Kiểm tra xem Smart Mode có đang active không.
-        Hiện tại tính năng Smart Mode (OutputStyle.SMART) đã bị loại bỏ.
-        """
-        return False
+        """Kiểm tra xem Smart Mode có đang active không."""
+        return self._mode_smart_btn.isChecked() if hasattr(self, "_mode_smart_btn") else False
 
     def parent_widget(self):
         return self
+
+    def get_copy_config(self) -> "CopyConfig":
+        from domain.prompt.copy_mode import CopyConfig, CopyMode
+        mode = CopyMode.FULL
+        if hasattr(self, "_mode_smart_btn") and self._mode_smart_btn.isChecked():
+            mode = CopyMode.SMART
+        elif hasattr(self, "_mode_apply_btn") and self._mode_apply_btn.isChecked():
+            mode = CopyMode.APPLY
+
+        include_git = self._git_diff_cb.isChecked() if hasattr(self, "_git_diff_cb") else False
+        tree_map_only = self._tree_map_only_cb.isChecked() if hasattr(self, "_tree_map_only_cb") else False
+        commit_depth = self._commit_depth_spin.value() if hasattr(self, "_commit_depth_spin") else 0
+
+        return CopyConfig(
+            mode=mode,
+            include_git_diff=include_git,
+            tree_map_only=tree_map_only,
+            output_style=self.get_output_style(),
+            git_commit_depth=commit_depth
+        )
+
+    def _on_copy_clicked(self) -> None:
+        if self._copy_controller:
+            self._copy_controller.on_copy_requested()
+
+    def _on_configure_diff_clicked(self) -> None:
+        if self._copy_controller:
+            self._copy_controller._show_diff_only_dialog()
 
     def set_copy_buttons_enabled(self, enabled: bool) -> None:
         # Hien/an loading bar va cap nhat text button chinh
         if hasattr(self, "_copy_loading_bar"):
             self._copy_loading_bar.setVisible(not enabled)
+        if hasattr(self, "_copy_btn"):
+            self._copy_btn.setText("Copy" if enabled else "Processing...")
+            self._copy_btn.setEnabled(enabled)
+
+        # Enable/disable 3 mode buttons
+        tree_map_only = self._tree_map_only_cb.isChecked() if hasattr(self, "_tree_map_only_cb") else False
+        for btn in (
+            getattr(self, "_mode_full_btn", None),
+            getattr(self, "_mode_smart_btn", None),
+            getattr(self, "_mode_apply_btn", None),
+        ):
+            if btn is not None:
+                btn.setEnabled(enabled and not tree_map_only)
+
+        for cb in (
+            getattr(self, "_git_diff_cb", None),
+            getattr(self, "_tree_map_only_cb", None),
+        ):
+            if cb is not None:
+                cb.setEnabled(enabled)
+
+        # Enable/disable commit depth spinbox và advanced config button
+        include_git = self._git_diff_cb.isChecked() if hasattr(self, "_git_diff_cb") else False
+        if hasattr(self, "_commit_depth_spin") and self._commit_depth_spin is not None:
+            self._commit_depth_spin.setEnabled(enabled and include_git)
+        if hasattr(self, "_mode_diff_config_btn") and self._mode_diff_config_btn is not None:
+            self._mode_diff_config_btn.setEnabled(enabled)
+
+        # Cập nhật text của _opx_btn cũ cho test tương thích ngược
         if hasattr(self, "_opx_btn"):
             self._opx_btn.setText("Copy + Search/Replace" if enabled else "Processing...")
+
         for btn in (
             self._diff_btn,
             self._tree_map_btn,
             self._smart_btn,
-            self._copy_btn,
             self._opx_btn,
         ):
             if btn is not None:

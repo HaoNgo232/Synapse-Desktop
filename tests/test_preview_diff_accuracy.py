@@ -4,12 +4,10 @@ Verifies that preview diff simulator matches 100% with actual applied results on
 """
 
 from pathlib import Path
-import pytest
 
 from domain.prompt.opx_parser import ChangeBlock, FileAction
 from application.services.preview_analyzer import generate_preview_diff_lines
 from infrastructure.filesystem.file_actions import apply_file_actions
-from shared.types.diff_types import DiffLineType
 
 
 def test_preview_diff_exact_match(tmp_path: Path) -> None:

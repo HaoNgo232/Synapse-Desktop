@@ -234,7 +234,7 @@ class PromptBuildService:
             from infrastructure.git.git_utils import get_git_diffs, get_git_logs
 
             git_diffs = get_git_diffs(workspace)
-            git_logs = get_git_logs(workspace, max_commits=5)
+            git_logs = get_git_logs(workspace, max_commits=config.git_commit_depth)
 
         # 1. Generate file map
         if tree_item:

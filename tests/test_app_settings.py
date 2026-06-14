@@ -35,6 +35,7 @@ class TestAppSettings:
         assert settings.use_relative_paths is True
         assert settings.template_tier == "lite"
         assert "node_modules" in settings.excluded_folders
+        assert settings.git_commit_depth == 0
 
     def test_from_dict_full(self):
         """Test from_dict voi tat ca fields."""
@@ -115,6 +116,9 @@ class TestAppSettings:
             "template_tier",
             "rule_file_names",
             "include_full_tree",
+            "copy_mode",
+            "tree_map_only",
+            "git_commit_depth",
         }
         assert set(d.keys()) == expected_keys
 

@@ -1,7 +1,5 @@
 import pytest
-import warnings
 from domain.prompt.copy_mode import CopyMode, CopyConfig
-from presentation.config.output_format import OutputStyle
 
 def test_copy_config_serializes_to_dict():
     config = CopyConfig(mode=CopyMode.FULL, include_git_diff=True, tree_map_only=False)
@@ -9,7 +7,8 @@ def test_copy_config_serializes_to_dict():
         "mode": "full",
         "include_git_diff": True,
         "tree_map_only": False,
-        "output_style": "xml"
+        "output_style": "xml",
+        "git_commit_depth": 0
     }
 
 def test_legacy_compress_string_loads_as_smart():

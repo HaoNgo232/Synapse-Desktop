@@ -35,13 +35,15 @@ class CopyConfig:
     include_git_diff: bool = False
     tree_map_only: bool = False
     output_style: OutputStyle = OutputStyle.XML
+    git_commit_depth: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "mode": self.mode.value,
             "include_git_diff": self.include_git_diff,
             "tree_map_only": self.tree_map_only,
-            "output_style": self.output_style.value
+            "output_style": self.output_style.value,
+            "git_commit_depth": self.git_commit_depth
         }
 
     @classmethod
@@ -74,5 +76,6 @@ class CopyConfig:
             mode=mode,
             include_git_diff=data.get("include_git_diff", False),
             tree_map_only=data.get("tree_map_only", False),
-            output_style=output_style
+            output_style=output_style,
+            git_commit_depth=data.get("git_commit_depth", 0)
         )

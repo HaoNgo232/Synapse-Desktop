@@ -883,24 +883,220 @@ class UIBuilderMixin:
 
     def _build_action_buttons(self: Any) -> QWidget:
         """Build copy buttons với phong cách Soft Modern UI:
-        - Loại bỏ khung vuông (boxy look).
-        - Sử dụng bo góc lớn (Pill shape) tạo sự thân thiện.
-        - Phân tách bằng không gian thay vì đường kẻ cứng.
+        - Sử dụng QButtonGroup exclusive cho 3 chế độ (Full, Smart, Apply).
+        - 2 checkboxes cho Git Diff và Tree Map only.
+        - 1 nút Copy Context chính (Primary CTA).
         """
-        from PySide6.QtWidgets import QProgressBar
+        from PySide6.QtWidgets import QProgressBar, QCheckBox, QButtonGroup
         from presentation.components.toggle_switch import ToggleSwitch
-        from infrastructure.persistence.settings_manager import update_app_setting
+        from infrastructure.persistence.settings_manager import update_app_setting, load_app_settings
 
         container = QWidget()
         container.setStyleSheet("background-color: transparent;")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(18)  # Tăng khoảng cách để tạo sự thoáng đãng
+        layout.setSpacing(16)
 
-        # ── PHẦN 1: PRIMARY CTA ──
-        # Nút OPX được bo góc lớn (12px) và gradient mượt mà
-        self._opx_btn = QPushButton("Copy + Search/Replace")
-        self._opx_btn.setStyleSheet(f"""
+        # ── PHẦN 1: MODE SELECTOR (3 buttons exclusive) ──
+        mode_section_label = QLabel("COPY MODE")
+        quick_header_style = f"""
+            font-size: 11px; font-weight: 700; color: {ThemeColors.TEXT_MUTED};
+            letter-spacing: 1.2px; padding-left: 4px;
+        """
+        mode_section_label.setStyleSheet(quick_header_style)
+        layout.addWidget(mode_section_label)
+
+        mode_layout = QHBoxLayout()
+        mode_layout.setSpacing(6)
+
+        self._mode_full_btn = QPushButton("Full")
+        self._mode_smart_btn = QPushButton("Smart")
+        self._mode_apply_btn = QPushButton("Apply")
+
+        tab_style = f"""
+            QPushButton {{
+                background-color: {ThemeColors.BG_ELEVATED}40;
+                color: {ThemeColors.TEXT_SECONDARY};
+                border: 1px solid {ThemeColors.BORDER}40;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.BG_HOVER};
+                color: {ThemeColors.TEXT_PRIMARY};
+            }}
+            QPushButton:checked {{
+                background-color: {ThemeColors.PRIMARY};
+                color: #FFFFFF;
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            QPushButton:disabled {{
+                background-color: {ThemeColors.BG_ELEVATED}10;
+                color: {ThemeColors.TEXT_MUTED};
+                border-color: {ThemeColors.BORDER}20;
+            }}
+        """
+
+        self._mode_group = QButtonGroup(container)
+        self._mode_group.setExclusive(True)
+
+        for i, btn in enumerate((self._mode_full_btn, self._mode_smart_btn, self._mode_apply_btn)):
+            btn.setCheckable(True)
+            btn.setStyleSheet(tab_style)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            mode_layout.addWidget(btn)
+            self._mode_group.addButton(btn, i)
+
+        layout.addLayout(mode_layout)
+
+        # Load saved mode
+        saved_settings = load_app_settings()
+        saved_mode = saved_settings.copy_mode
+        if saved_mode == "smart":
+            self._mode_smart_btn.setChecked(True)
+        elif saved_mode == "apply":
+            self._mode_apply_btn.setChecked(True)
+        else:
+            self._mode_full_btn.setChecked(True)
+
+        def on_mode_changed(button):
+            mode_str = "full"
+            if button == self._mode_smart_btn:
+                mode_str = "smart"
+            elif button == self._mode_apply_btn:
+                mode_str = "apply"
+            update_app_setting(copy_mode=mode_str)
+            if self._copy_controller:
+                self._copy_controller._prompt_cache.invalidate_all()
+            self._update_token_display()
+
+        self._mode_group.buttonClicked.connect(on_mode_changed)
+
+        # ── PHẦN 2: SUB-OPTIONS (Checkboxes) ──
+        options_header = QLabel("SUB-OPTIONS")
+        options_header.setStyleSheet(quick_header_style)
+        layout.addWidget(options_header)
+
+        cb_layout = QVBoxLayout()
+        cb_layout.setSpacing(10)
+
+        cb_style = f"""
+            QCheckBox {{
+                color: {ThemeColors.TEXT_SECONDARY};
+                font-size: 12px;
+                padding-left: 4px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+            }}
+            QCheckBox:disabled {{
+                color: {ThemeColors.TEXT_MUTED};
+            }}
+        """
+
+        # Row chứa checkbox "Include Git Diff" và nút Advanced ⚙️
+        git_diff_row = QHBoxLayout()
+        self._git_diff_cb = QCheckBox("Include Git Diff")
+        self._git_diff_cb.setStyleSheet(cb_style)
+        self._git_diff_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._git_diff_cb.setChecked(saved_settings.include_git_changes)
+        git_diff_row.addWidget(self._git_diff_cb)
+        
+        git_diff_row.addStretch()
+
+        self._mode_diff_config_btn = QToolButton()
+        self._mode_diff_config_btn.setText("⚙️")
+        self._mode_diff_config_btn.setToolTip("Advanced configuration & copy diff only")
+        self._mode_diff_config_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mode_diff_config_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                color: {ThemeColors.TEXT_SECONDARY};
+                padding: 2px;
+            }}
+            QToolButton:hover {{
+                color: {ThemeColors.PRIMARY};
+            }}
+        """)
+        self._mode_diff_config_btn.clicked.connect(self._on_configure_diff_clicked)
+        git_diff_row.addWidget(self._mode_diff_config_btn)
+        cb_layout.addLayout(git_diff_row)
+
+        # Bộ chọn commit depth nhanh (chỉ hiển thị / enable khi Include Git Diff checked)
+        from PySide6.QtWidgets import QSpinBox
+        commit_depth_row = QHBoxLayout()
+        commit_depth_row.setContentsMargins(20, 0, 0, 0) # Thụt đầu dòng một chút
+        
+        commit_depth_label = QLabel("Commits:")
+        commit_depth_label.setStyleSheet(f"font-size: 11px; color: {ThemeColors.TEXT_SECONDARY};")
+        commit_depth_row.addWidget(commit_depth_label)
+        
+        self._commit_depth_spin = QSpinBox()
+        self._commit_depth_spin.setRange(0, 100)
+        self._commit_depth_spin.setValue(saved_settings.git_commit_depth)
+        self._commit_depth_spin.setFixedWidth(60)
+        self._commit_depth_spin.setStyleSheet(f"""
+            QSpinBox {{
+                background-color: {ThemeColors.BG_ELEVATED}40;
+                color: {ThemeColors.TEXT_PRIMARY};
+                border: 1px solid {ThemeColors.BORDER}40;
+                border-radius: 4px;
+                padding: 2px 4px;
+                font-size: 11px;
+            }}
+        """)
+        self._commit_depth_spin.setEnabled(saved_settings.include_git_changes)
+        commit_depth_row.addWidget(self._commit_depth_spin)
+        commit_depth_row.addStretch()
+        
+        cb_layout.addLayout(commit_depth_row)
+
+        def on_git_diff_toggled(checked):
+            update_app_setting(include_git_changes=checked)
+            self._commit_depth_spin.setEnabled(checked)
+            if self._copy_controller:
+                self._copy_controller._prompt_cache.invalidate_all()
+            self._update_token_display()
+        self._git_diff_cb.toggled.connect(on_git_diff_toggled)
+
+        def on_commit_depth_changed(val):
+            update_app_setting(git_commit_depth=val)
+            if self._copy_controller:
+                self._copy_controller._prompt_cache.invalidate_all()
+            self._update_token_display()
+        self._commit_depth_spin.valueChanged.connect(on_commit_depth_changed)
+
+        self._tree_map_only_cb = QCheckBox("Tree Map only")
+        self._tree_map_only_cb.setStyleSheet(cb_style)
+        self._tree_map_only_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tree_map_only_cb.setChecked(saved_settings.tree_map_only)
+
+        def apply_tree_map_only_state(checked):
+            self._mode_full_btn.setEnabled(not checked)
+            self._mode_smart_btn.setEnabled(not checked)
+            self._mode_apply_btn.setEnabled(not checked)
+
+        apply_tree_map_only_state(saved_settings.tree_map_only)
+
+        def on_tree_map_only_toggled(checked):
+            update_app_setting(tree_map_only=checked)
+            apply_tree_map_only_state(checked)
+            if self._copy_controller:
+                self._copy_controller._prompt_cache.invalidate_all()
+            self._update_token_display()
+        self._tree_map_only_cb.toggled.connect(on_tree_map_only_toggled)
+        cb_layout.addWidget(self._tree_map_only_cb)
+
+        layout.addLayout(cb_layout)
+
+        # ── PHẦN 3: PRIMARY COPY ACTION ──
+        self._copy_btn = QPushButton("Copy")
+        self._copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 {ThemeColors.PRIMARY}, stop:1 #9F7AEA);
@@ -915,16 +1111,12 @@ class UIBuilderMixin:
             QPushButton:pressed {{ background: {ThemeColors.PRIMARY_PRESSED}; }}
             QPushButton:disabled {{ background: {ThemeColors.BG_ELEVATED}; color: {ThemeColors.TEXT_MUTED}; }}
         """)
-        self._opx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._opx_btn.setToolTip(
-            "Sao chép context kèm bộ hướng dẫn (Instruction) giúp AI tạo các bản vá code (Patch) theo định dạng OPX."
-        )
-        self._opx_btn.clicked.connect(
-            lambda: self._copy_controller.on_copy_context_requested(include_xml=True)
-        )
-        layout.addWidget(self._opx_btn)
+        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.setToolTip("Sao chép context theo cấu hình hiện tại.")
+        self._copy_btn.clicked.connect(self._on_copy_clicked)
+        layout.addWidget(self._copy_btn)
 
-        # Loading bar mỏng bên dưới nút chính
+        # Loading bar mỏng
         self._copy_loading_bar = QProgressBar()
         self._copy_loading_bar.setRange(0, 0)
         self._copy_loading_bar.setFixedHeight(2)
@@ -934,116 +1126,13 @@ class UIBuilderMixin:
         )
         layout.addWidget(self._copy_loading_bar)
 
-        # ── PHẦN 2: QUICK ACTIONS (Bỏ khung, dùng header nhẹ) ──
-        quick_wrap = QVBoxLayout()
-        quick_wrap.setSpacing(10)
-
-        quick_header = QLabel("QUICK COPY")
-        quick_header.setStyleSheet(f"""
-            font-size: 11px; font-weight: 700; color: {ThemeColors.TEXT_MUTED};
-            letter-spacing: 1.2px; padding-left: 4px;
-        """)
-        quick_wrap.addWidget(quick_header)
-
-        secondary_row = QHBoxLayout()
-        secondary_row.setSpacing(10)
-
-        btn_style_base = f"""
-            QPushButton {{
-                background-color: {ThemeColors.BG_ELEVATED}40;
-                color: {ThemeColors.TEXT_PRIMARY};
-                border: 1px solid {ThemeColors.BORDER}40;
-                border-radius: 20px; /* Pill shape */
-                padding: 10px; font-weight: 600; font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: {ThemeColors.BG_HOVER};
-                border-color: {ThemeColors.BORDER};
-            }}
-        """
-
-        self._copy_btn = QPushButton("Copy")
-        self._copy_btn.setStyleSheet(btn_style_base)
-        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._copy_btn.setToolTip(
-            "Sao chép context theo định dạng đang chọn trên toolbar."
-        )
-        self._copy_btn.clicked.connect(
-            lambda: self._copy_controller.on_copy_context_requested(include_xml=False)
-        )
-        secondary_row.addWidget(self._copy_btn)
-
-        self._smart_btn = QPushButton("Compress")
-        self._smart_btn.setStyleSheet(
-            btn_style_base.replace(f"{ThemeColors.TEXT_PRIMARY}", "#2DD4BF").replace(
-                f"{ThemeColors.BG_ELEVATED}40", "#0D948810"
-            )
-        )
-        self._smart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._smart_btn.setToolTip(
-            "Sao chép cấu trúc code rút gọn (Smart Context) giúp tiết kiệm token đáng kể."
-        )
-        self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
-        secondary_row.addWidget(self._smart_btn)
-
-        quick_wrap.addLayout(secondary_row)
-        layout.addLayout(quick_wrap)
-
-        # ── PHẦN 3: SPECIALIZED ──
-        spec_wrap = QVBoxLayout()
-        spec_wrap.setSpacing(10)
-
-        spec_header = QLabel("SPECIALIZED")
-        spec_header.setStyleSheet(quick_header.styleSheet())
-        spec_wrap.addWidget(spec_header)
-
-        tertiary_row = QHBoxLayout()
-        tertiary_row.setSpacing(10)
-
-        sub_btn_style = f"""
-            QPushButton {{
-                background-color: transparent;
-                color: {ThemeColors.TEXT_PRIMARY};
-                border: 1px solid {ThemeColors.BORDER}80;
-                border-radius: 18px;
-                padding: 8px; font-size: 11px; font-weight: 500;
-            }}
-            QPushButton:hover {{
-                background-color: {ThemeColors.BG_ELEVATED}40;
-                color: {ThemeColors.TEXT_PRIMARY};
-                border-color: {ThemeColors.BORDER};
-            }}
-        """
-
-        self._diff_btn = QPushButton("Git Diff")
-        self._diff_btn.setStyleSheet(sub_btn_style)
-        self._diff_btn.setToolTip(
-            "Sao chép các thay đổi code dựa trên Git (Commits hoặc file chưa commit) của project."
-        )
-        self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
-        tertiary_row.addWidget(self._diff_btn)
-
-        self._tree_map_btn = QPushButton("Tree Map")
-        self._tree_map_btn.setStyleSheet(sub_btn_style)
-        self._tree_map_btn.setToolTip(
-            "Sao chép nhanh toàn bộ sơ đồ cấu trúc thư mục của project."
-        )
-        self._tree_map_btn.clicked.connect(
-            self._copy_controller.on_copy_tree_map_requested
-        )
-        tertiary_row.addWidget(self._tree_map_btn)
-
-        spec_wrap.addLayout(tertiary_row)
-        layout.addLayout(spec_wrap)
-
-        # ── PHẦN 4: OPTIONS (Sử dụng padding thay cho đường kẻ) ──
+        # ── PHẦN 4: SETTINGS OPTIONS (Copy as file, full tree) ──
         layout.addSpacing(8)
-
         opt_wrap = QVBoxLayout()
         opt_wrap.setSpacing(12)
 
-        opt_header = QLabel("OPTIONS")
-        opt_header.setStyleSheet(quick_header.styleSheet())
+        opt_header = QLabel("SYSTEM OPTIONS")
+        opt_header.setStyleSheet(quick_header_style)
         opt_wrap.addWidget(opt_header)
 
         def create_toggle_row(label_text: str, tooltip: str = "") -> tuple:
@@ -1072,8 +1161,7 @@ class UIBuilderMixin:
             "Include full tree",
             "Đính kèm toàn bộ cấu trúc thư mục project vào prompt để AI nắm bắt được rõ hơn bức tranh tổng thể.",
         )
-        saved_full_tree = load_app_settings().include_full_tree
-        self._full_tree_toggle.setChecked(saved_full_tree)
+        self._full_tree_toggle.setChecked(saved_settings.include_full_tree)
         self._full_tree_toggle.toggled.connect(
             lambda checked: (
                 update_app_setting(include_full_tree=checked),
@@ -1082,8 +1170,24 @@ class UIBuilderMixin:
             )
         )
         opt_wrap.addLayout(_tree_row)
-
         layout.addLayout(opt_wrap)
+
+        # ── PHẦN 5: ALIASES ẨN CHO TESTS CŨ ──
+        self._smart_btn = QPushButton()
+        self._smart_btn.setVisible(False)
+        self._smart_btn.clicked.connect(self._copy_controller.on_copy_smart_requested)
+
+        self._opx_btn = QPushButton()
+        self._opx_btn.setVisible(False)
+        self._opx_btn.clicked.connect(lambda: self._copy_controller.on_copy_context_requested(include_xml=True))
+
+        self._diff_btn = QPushButton()
+        self._diff_btn.setVisible(False)
+        self._diff_btn.clicked.connect(self._copy_controller._show_diff_only_dialog)
+
+        self._tree_map_btn = QPushButton()
+        self._tree_map_btn.setVisible(False)
+        self._tree_map_btn.clicked.connect(self._copy_controller.on_copy_tree_map_requested)
 
         return container
 

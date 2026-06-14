@@ -83,6 +83,11 @@ class AppSettings:
     # Tier cua built-in prompt templates: "lite" (mac dinh) hoac "pro"
     template_tier: str = "lite"
 
+    # --- Copy Mode Selector Settings ---
+    copy_mode: str = "full"
+    tree_map_only: bool = False
+    git_commit_depth: int = 0
+
     # --- Rule Settings ---
     # Danh sach cac ten file project rules de tu dong boc tach (VD: .cursorrules)
     rule_file_names: list[str] = field(
@@ -167,6 +172,9 @@ class AppSettings:
             "template_tier": self.template_tier,
             "rule_file_names": self.rule_file_names,
             "include_full_tree": self.include_full_tree,
+            "copy_mode": self.copy_mode,
+            "tree_map_only": self.tree_map_only,
+            "git_commit_depth": self.git_commit_depth,
         }
 
     def to_safe_dict(self) -> dict[str, Any]:

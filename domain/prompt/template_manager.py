@@ -52,7 +52,7 @@ class TemplateProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def load_template(self, template_id: str) -> str:
+    def load_template(self, template_id: str, *args, **kwargs) -> str:
         """Load nội dung của template. Ném FileNotFoundError nếu không tìm thấy."""
         pass
 
@@ -92,13 +92,6 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
-            "refactoring_expert": TemplateInfo(
-                template_id="refactoring_expert",
-                display_name="Refactoring Expert",
-                description="Đề xuất cải thiện code theo SOLID, DRY, Clean Code và giảm độ phức tạp",
-                is_custom=False,
-                has_lite=True,
-            ),
             "doc_generator": TemplateInfo(
                 template_id="doc_generator",
                 display_name="Documentation Generator",
@@ -110,13 +103,6 @@ class BuiltInTemplateProvider(TemplateProvider):
                 template_id="performance_optimizer",
                 display_name="Performance Optimizer",
                 description="Phân tích Big O, memory leaks, blocking operations và đề xuất tối ưu hóa",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "ui_ux_reviewer": TemplateInfo(
-                template_id="ui_ux_reviewer",
-                display_name="UI/UX Reviewer",
-                description="Review giao diện, accessibility, tính nhất quán, màu sắc, animations và trải nghiệm người dùng",
                 is_custom=False,
                 has_lite=True,
             ),
@@ -134,59 +120,10 @@ class BuiltInTemplateProvider(TemplateProvider):
                 is_custom=False,
                 has_lite=True,
             ),
-            "tech_debt_analyzer": TemplateInfo(
-                template_id="tech_debt_analyzer",
-                display_name="Tech Debt Analyzer",
-                description="Phát hiện, đo lường và prioritize technical debt với debt scoring và repayment roadmap",
-                is_custom=False,
-                has_lite=True,
-            ),
             "code_explainer": TemplateInfo(
                 template_id="code_explainer",
                 display_name="Code Explainer",
                 description="Giải thích kiến trúc, components và execution flows để onboard nhanh vào codebase mới",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "pull_request_generator": TemplateInfo(
-                template_id="pull_request_generator",
-                display_name="PR Generator",
-                description="Tạo tiêu đề và mô tả Pull Request chuẩn Conventional Commits từ git diff",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "database_optimizer": TemplateInfo(
-                template_id="database_optimizer",
-                display_name="Database Optimizer",
-                description="Tối ưu database queries, indexes, schema design và caching strategy",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "logic_portability": TemplateInfo(
-                template_id="logic_portability",
-                display_name="Logic Portability Extractor",
-                description="Trích xuất và đóng gói logic đã hoàn thiện thành module tái sử dụng được cho các project khác",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "malware_forensics": TemplateInfo(
-                template_id="malware_forensics",
-                display_name="Malware Forensics Analyzer",
-                description="Phân tích pháp y mã độc theo Zero-Trust: phát hiện backdoor, exfiltration, obfuscation, và supply-chain poisoning",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "feature_roi_evaluator": TemplateInfo(
-                template_id="feature_roi_evaluator",
-                display_name="Feature ROI Evaluator",
-                description="Đánh giá tính hữu ích, rào cản adoption, và ROI của các tính năng từ góc nhìn người dùng — so sánh với thị trường",
-                is_custom=False,
-                has_lite=True,
-            ),
-            "think_first": TemplateInfo(
-                template_id="think_first",
-                display_name="Think-first",
-                description="Kích hoạt mô hình suy luận Chain-of-Thought (CoT). Phù hợp cho các model không hỗ trợ native Reasoning tự nhiên.",
                 is_custom=False,
                 has_lite=True,
             ),
@@ -200,17 +137,11 @@ class BuiltInTemplateProvider(TemplateProvider):
                 available.append(info)
         return available
 
-    def load_template(self, template_id: str) -> str:
+    def load_template(self, template_id: str, *args, **kwargs) -> str:
         if not self.handles(template_id):
             raise FileNotFoundError(
                 f"Template '{template_id}' khong thuoc BuiltIn provider."
             )
-
-        tier = _get_template_tier()
-        if tier == "lite":
-            lite_path = _TEMPLATES_DIR / "lite" / f"{template_id}.md"
-            if lite_path.exists():
-                return lite_path.read_text(encoding="utf-8").strip()
 
         pro_path = _TEMPLATES_DIR / f"{template_id}.md"
         if not pro_path.exists():
@@ -292,7 +223,7 @@ class LocalCustomTemplateProvider(TemplateProvider):
     _MAX_TEMPLATE_SIZE = 50 * 1024  # 50KB
     _FORBIDDEN_TEMPLATE_KEYWORDS = ["IGNORE ALL PREVIOUS", "SYSTEM:", "ADMIN MODE"]
 
-    def load_template(self, template_id: str) -> str:
+    def load_template(self, template_id: str, *args, **kwargs) -> str:
         self._ensure_dir()
         template_path = self.directory / f"{template_id}.md"
         if not template_path.exists() or not template_path.is_file():
@@ -359,7 +290,6 @@ _PROVIDERS: list[TemplateProvider] = [
 ]
 
 _OUTPUT_FORMAT_PATH = _TEMPLATES_DIR / "_output_format.md"
-_LITE_OUTPUT_FORMAT_PATH = _TEMPLATES_DIR / "lite" / "_output_format.md"
 
 
 def _get_output_language() -> str:
@@ -372,31 +302,12 @@ def _get_output_language() -> str:
         return "Vietnamese (tiếng Việt có dấu)"
 
 
-def _get_template_tier() -> str:
-    """Doc template tier tu settings, fallback ve 'lite'."""
-    try:
-        from infrastructure.persistence.settings_manager import load_app_settings
-
-        tier = str(load_app_settings().template_tier).strip().lower()
-        if tier in {"lite", "pro"}:
-            return tier
-    except Exception:
-        pass
-    return "lite"
-
-
 def _get_output_format_only() -> str:
     """
-    Doc shared output format (lite/pro) va inject output_language.
+    Doc shared output format va inject output_language.
     Dung cho assembler de dam bao tinh nhat quan.
     """
-    tier = _get_template_tier()
     fmt_path = _OUTPUT_FORMAT_PATH
-    if tier == "lite":
-        fmt_path = _LITE_OUTPUT_FORMAT_PATH
-        if not fmt_path.exists():
-            fmt_path = _OUTPUT_FORMAT_PATH
-
     try:
         fmt = fmt_path.read_text(encoding="utf-8")
         language = _get_output_language()
@@ -413,7 +324,7 @@ def list_templates() -> list[TemplateInfo]:
     return available
 
 
-def load_template(template_id: str, opx_mode: bool = False) -> str:
+def load_template(template_id: str, opx_mode: bool = False, *args, **kwargs) -> str:
     """
     Doc noi dung cua mot template theo ID (analytical framework).
     Shared output format se duoc Assembler tu dong them vao khi build prompt
@@ -423,7 +334,7 @@ def load_template(template_id: str, opx_mode: bool = False) -> str:
     # Giup loai bo tinh trang trung lap directive khi copy
     for provider in _PROVIDERS:
         if provider.handles(template_id):
-            content = provider.load_template(template_id)
+            content = provider.load_template(template_id, *args, **kwargs)
             # Neu opx_mode=True, chac chan khong append
             # Neu opx_mode=False (mac dinh), cung khong append vao UI de Assembler can thiep
             return content.strip()

@@ -17,7 +17,6 @@ from domain.prompt.template_manager import (
     get_template_info,
     TemplateInfo,
     LocalCustomTemplateProvider,
-    BuiltInTemplateProvider,
 )
 import domain.prompt.template_manager as tm
 

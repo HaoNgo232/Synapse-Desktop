@@ -503,7 +503,6 @@ class UIBuilderMixin:
         toolbar_layout.addSpacing(8)
 
         # Cập nhật model hiện tại từ settings và đồng bộ view
-        from infrastructure.persistence.settings_manager import load_app_settings
         from presentation.config.model_config import get_model_by_id, DEFAULT_MODEL_ID
 
         app_settings = load_app_settings()
@@ -886,7 +885,7 @@ class UIBuilderMixin:
         """
         from PySide6.QtWidgets import QProgressBar, QCheckBox, QButtonGroup
         from presentation.components.toggle_switch import ToggleSwitch
-        from infrastructure.persistence.settings_manager import update_app_setting, load_app_settings
+        from infrastructure.persistence.settings_manager import update_app_setting
 
         container = QWidget()
         container.setStyleSheet("background-color: transparent;")

@@ -1,12 +1,9 @@
 # tests/domain/prompt/test_template_registry.py
 
 import pytest
-from pathlib import Path
 from domain.prompt.template_manager import (
     list_templates,
     load_template,
-    get_template_info,
-    CUSTOM_TEMPLATES_DIR,
 )
 
 def test_list_returns_exactly_7_builtin():

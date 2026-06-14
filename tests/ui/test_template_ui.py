@@ -4,7 +4,6 @@ UI Tests cho tính năng Template - Kiểm tra menu và dialog chỉnh sửa.
 
 import pytest
 from unittest.mock import patch, MagicMock
-from PySide6.QtWidgets import QWidgetAction
 from domain.prompt.template_manager import TemplateInfo
 
 

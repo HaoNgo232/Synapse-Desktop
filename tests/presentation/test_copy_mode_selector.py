@@ -315,3 +315,13 @@ def test_copy_allowed_with_no_files_selected_if_git_diff_checked(qtbot, context_
 
             # Đảm bảo task copy trong background được kích hoạt mặc dù danh sách files trống
             mock_run.assert_called_once()
+
+def test_mode_buttons_have_correct_tooltips(qtbot, context_view):
+    """Xác nhận các nút Full, Smart, Apply có đúng tooltip mô tả tương ứng."""
+    view = context_view
+    view.show()
+
+    from domain.prompt.copy_mode import CopyMode
+    assert view._mode_full_btn.toolTip() == CopyMode.FULL.description
+    assert view._mode_smart_btn.toolTip() == CopyMode.SMART.description
+    assert view._mode_apply_btn.toolTip() == CopyMode.APPLY.description

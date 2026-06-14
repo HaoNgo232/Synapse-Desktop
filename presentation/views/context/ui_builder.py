@@ -939,6 +939,10 @@ class UIBuilderMixin:
             }}
         """
 
+        self._mode_full_btn.setToolTip("Sao chép toàn bộ nội dung file đã chọn")
+        self._mode_smart_btn.setToolTip("Chỉ sao chép cấu trúc code (AST signatures & docstrings)")
+        self._mode_apply_btn.setToolTip("Sao chép kèm theo chỉ dẫn Search/Replace (Aider-style)")
+
         self._mode_group = QButtonGroup(container)
         self._mode_group.setExclusive(True)
 

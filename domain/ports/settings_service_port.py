@@ -1,6 +1,7 @@
-from typing import Protocol, Any
+from typing import Protocol, Any, runtime_checkable
 from domain.config.app_settings import AppSettings
 
+@runtime_checkable
 class ISettingsService(Protocol):
     def load_settings(self) -> AppSettings:
         ...

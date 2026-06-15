@@ -1,7 +1,8 @@
-from typing import Protocol, Optional, List
+from typing import Protocol, Optional, List, runtime_checkable
 from pathlib import Path
 import pathspec
 
+@runtime_checkable
 class IIgnoreEngine(Protocol):
     def build_pathspec(
         self,

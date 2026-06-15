@@ -1,6 +1,7 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
+@runtime_checkable
 class IClipboardService(Protocol):
     """Interface cho clipboard operations."""
 

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List, Callable, Protocol
+from typing import Optional, List, Callable, Protocol, runtime_checkable
 from pathlib import Path
 from datetime import datetime
 
@@ -25,6 +25,7 @@ class CachedRepo:
 
 ProgressCallback = Callable[[CloneProgress], None]
 
+@runtime_checkable
 class IRepoManager(Protocol):
     def clone_repo(
         self,

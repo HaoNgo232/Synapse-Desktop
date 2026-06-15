@@ -1,5 +1,6 @@
-from typing import Protocol, Dict, Any
+from typing import Protocol, Dict, Any, runtime_checkable
 
+@runtime_checkable
 class ISessionStateService(Protocol):
     def load_session_state(self) -> Dict[str, Any]:
         ...

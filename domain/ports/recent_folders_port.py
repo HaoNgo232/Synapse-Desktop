@@ -1,5 +1,6 @@
-from typing import Protocol, List
+from typing import Protocol, List, runtime_checkable
 
+@runtime_checkable
 class IRecentFoldersService(Protocol):
     def load_recent_folders(self) -> List[str]:
         ...

@@ -1,8 +1,9 @@
-from typing import Protocol, Optional, List
+from typing import Protocol, Optional, List, runtime_checkable
 from pathlib import Path
 from domain.prompt.opx_parser import FileAction
 from domain.ports.action_result import ActionResult
 
+@runtime_checkable
 class IFileActionsService(Protocol):
     def apply_file_actions(
         self,

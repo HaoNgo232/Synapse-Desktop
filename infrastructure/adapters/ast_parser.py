@@ -26,7 +26,8 @@ import ast
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any, Dict
+from domain.workflow.interfaces.ast_parser_port import IAstParser
 
 logger = logging.getLogger(__name__)
 
@@ -397,3 +398,10 @@ def _extract_regex_outline(source: str, ext: str) -> list[str]:
                 items.append(line)
 
     return items
+
+
+class AstParser(IAstParser):
+    def parse_file(self, file_path: Path) -> Dict[str, Any]:
+        """Parse file source code va tra ve thong tin AST (symbols, imports, classes, functions, v.v.)."""
+        outline = extract_file_outline(file_path)
+        return {"symbols": outline}

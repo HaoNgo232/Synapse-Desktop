@@ -9,7 +9,7 @@ Từ task description của user, xác định:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 
 from application.services.dependency_resolver import DependencyResolver
 from domain.codemap.symbol_extractor import extract_symbols
@@ -90,9 +90,12 @@ def detect_scope_from_file_paths(
     )
 
 
+from domain.workflow.interfaces.git_port import IGitService
+
 def detect_scope_from_git_diff(
     workspace_path: Path,
     max_depth: int = 1,
+    git_service: Optional[IGitService] = None,
 ) -> ScopeResult:
     """
     Xác định scope từ git diff (files đã thay đổi).
@@ -103,15 +106,20 @@ def detect_scope_from_git_diff(
     Args:
         workspace_path: Workspace root
         max_depth: Độ sâu trace dependency
+        git_service: Optional IGitService port
 
     Returns:
         ScopeResult với changed files làm primary
     """
-    from infrastructure.git.git_utils import get_git_diffs
     import re
 
     try:
-        diff_result = get_git_diffs(workspace_path)
+        if git_service is not None:
+            diff_result = git_service.get_diffs(workspace_path)
+        else:
+            from infrastructure.git.git_utils import get_git_diffs
+            diff_result = get_git_diffs(workspace_path)
+
         if not diff_result:
             return ScopeResult(confidence=0.0)
 

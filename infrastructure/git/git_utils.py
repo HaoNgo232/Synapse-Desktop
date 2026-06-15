@@ -106,26 +106,15 @@ _DIFF_GIT_HEADER_RE = re.compile(
 )
 
 
-@dataclass
-class GitDiffResult:
-    work_tree_diff: str = ""
-    staged_diff: str = ""
+from shared.types.git_types import GitDiffResult, GitCommit, GitLogResult
+from domain.workflow.interfaces.git_port import IGitService
 
+class GitService(IGitService):
+    def get_diffs(self, root_path: Path, base_ref: Optional[str] = None) -> Optional[GitDiffResult]:
+        return get_git_diffs(root_path, base_ref)
 
-@dataclass
-class GitCommit:
-    hash: str
-    date: str
-    message: str
-    files: list[str] = field(default_factory=_new_str_list)
-
-
-@dataclass
-class GitLogResult:
-    commits: list[GitCommit] = field(default_factory=_new_git_commit_list)
-    log_content: str = ""
-    commit_count: int = 0
-    error: Optional[str] = None
+    def get_logs(self, root_path: Path, max_commits: int = 10) -> Optional[GitLogResult]:
+        return get_git_logs(root_path, max_commits)
 
 
 @dataclass

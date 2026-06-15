@@ -124,6 +124,9 @@ class BuildContextUseCase:
             payload={"task_description": command.task_description},
         )
 
+        from infrastructure.git.git_utils import GitService
+        git_service = GitService()
+
         def _run(context: WorkflowContext) -> None:
             context.result = run_context_builder(
                 workspace_path=str(command.workspace_path),
@@ -133,6 +136,7 @@ class BuildContextUseCase:
                 include_codemap=command.include_codemap,
                 include_git_changes=command.include_git_changes,
                 output_file=command.output_file,
+                git_service=git_service,
             )
 
         try:
@@ -173,6 +177,9 @@ class CodeReviewUseCase:
             payload={"review_focus": command.review_focus},
         )
 
+        from infrastructure.git.git_utils import GitService
+        git_service = GitService()
+
         def _run(context: WorkflowContext) -> None:
             context.result = run_code_review(
                 workspace_path=str(command.workspace_path),
@@ -181,6 +188,7 @@ class CodeReviewUseCase:
                 include_callers=command.include_callers,
                 max_tokens=command.max_tokens,
                 base_ref=command.base_ref,
+                git_service=git_service,
             )
 
         try:

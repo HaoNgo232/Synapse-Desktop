@@ -19,9 +19,9 @@ from typing import Optional
 
 from domain.prompt.context_builder_prompts import build_full_tree_string
 from domain.prompt.generator import generate_file_map
-from infrastructure.adapters.ast_parser import generate_repo_map
+from shared.types.git_types import GitDiffResult
+from domain.workflow.interfaces.ast_parser_port import IAstParser
 from infrastructure.filesystem.file_utils import TreeItem
-from infrastructure.git.git_utils import GitDiffResult
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,43 @@ class WorkspaceSummary:
     format: str = "tree"
 
 
+def _generate_repo_map_with_parser(
+    ast_parser: IAstParser,
+    file_paths: list[str],
+    workspace_root: Optional[Path] = None,
+    max_files: int = 500,
+) -> str:
+    lines: list[str] = []
+    parsed_count = 0
+
+    for file_path_str in sorted(file_paths):
+        if parsed_count >= max_files:
+            lines.append(f"\n... and {len(file_paths) - max_files} more files")
+            break
+
+        file_path = Path(file_path_str)
+        outline_res = ast_parser.parse_file(file_path)
+        outline = outline_res.get("symbols", [])
+        if not outline:
+            continue
+
+        if workspace_root:
+            try:
+                display_path = file_path.relative_to(workspace_root)
+            except ValueError:
+                display_path = file_path
+        else:
+            display_path = file_path
+
+        lines.append(f"{display_path}:")
+        for item in outline:
+            lines.append(f"  {item}")
+        lines.append("")
+        parsed_count += 1
+
+    return "\n".join(lines)
+
+
 def build_canonical_summary(
     tree: TreeItem,
     selected_paths: set[str],
@@ -58,6 +95,7 @@ def build_canonical_summary(
     git_diffs: Optional[GitDiffResult] = None,
     use_relative_paths: bool = False,
     max_repo_map_files: int = 500,
+    ast_parser: Optional[IAstParser] = None,
 ) -> WorkspaceSummary:
     """
     THE canonical entry point de tao workspace summary.
@@ -75,6 +113,7 @@ def build_canonical_summary(
         git_diffs: Ket qua git diff, bat buoc neu include_git_changes=True
         use_relative_paths: True de su dung relative paths thay vi absolute
         max_repo_map_files: Gioi han so file cho repo map (tranh OOM)
+        ast_parser: Optional IAstParser port for generating repo map
 
     Returns:
         WorkspaceSummary chua tat ca thong tin workspace structure
@@ -98,11 +137,20 @@ def build_canonical_summary(
     if include_repo_map:
         source_files = _filter_file_paths(selected_paths, is_dir_map)
         if source_files:
-            repo_map = generate_repo_map(
-                source_files,
-                workspace_root=workspace_root,
-                max_files=max_repo_map_files,
-            )
+            if ast_parser is not None:
+                repo_map = _generate_repo_map_with_parser(
+                    ast_parser,
+                    source_files,
+                    workspace_root=workspace_root,
+                    max_files=max_repo_map_files,
+                )
+            else:
+                from infrastructure.adapters.ast_parser import generate_repo_map
+                repo_map = generate_repo_map(
+                    source_files,
+                    workspace_root=workspace_root,
+                    max_files=max_repo_map_files,
+                )
 
     # 3. Tao git changes neu duoc yeu cau
     git_changes: Optional[str] = None

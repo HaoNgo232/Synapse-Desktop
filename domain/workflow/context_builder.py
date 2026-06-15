@@ -26,6 +26,7 @@ from domain.codemap.graph_builder import CodeMapBuilder
 from infrastructure.filesystem.file_utils import scan_directory
 from application.services.tokenization_service import TokenizationService
 from domain.errors import DomainValidationError
+from domain.workflow.interfaces.git_port import IGitService
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ def run_context_builder(
     include_relationships: bool = True,
     output_file: Optional[str] = None,
     tokenization_service: Optional[TokenizationService] = None,
+    git_service: Optional[IGitService] = None,
 ) -> BuildResult:
     """
     Chạy Context Builder workflow.
@@ -78,6 +80,7 @@ def run_context_builder(
         include_relationships: Có bao gồm dependency relationships không
         output_file: Optional path để ghi prompt ra file (cho cross-agent handoff)
         tokenization_service: Optional TokenizationService (inject)
+        git_service: Optional IGitService port
 
     Returns:
         BuildResult với prompt và metadata
@@ -121,7 +124,6 @@ def run_context_builder(
 
     # Step 3: Optimize content to fit budget
     from domain.workflow.shared.contract_injector import load_and_format_contract_pack
-    from infrastructure.git.git_utils import get_git_diffs
 
     contract_text = load_and_format_contract_pack(ws)
     contract_tokens = tok_service.count_tokens(contract_text) if contract_text else 0
@@ -129,7 +131,12 @@ def run_context_builder(
     git_tokens = 0
     git_diff_result = None
     if include_git_changes:
-        git_diff_result = get_git_diffs(ws)
+        if git_service is not None:
+            git_diff_result = git_service.get_diffs(ws)
+        else:
+            from infrastructure.git.git_utils import get_git_diffs
+            git_diff_result = get_git_diffs(ws)
+
         if git_diff_result and (
             git_diff_result.work_tree_diff or git_diff_result.staged_diff
         ):

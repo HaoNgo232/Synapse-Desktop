@@ -17,7 +17,8 @@ from domain.workflow.shared.scope_detector import detect_scope_from_git_diff
 from domain.workflow.shared.token_budget_manager import TokenBudgetManager
 from domain.codemap.graph_builder import CodeMapBuilder
 from domain.workflow.shared.handoff_formatter import HandoffContext, format_handoff_xml
-from infrastructure.git.git_utils import get_git_diffs, GitDiffResult
+from shared.types.git_types import GitDiffResult
+from domain.workflow.interfaces.git_port import IGitService
 from application.services.tokenization_service import TokenizationService
 from application.services.workspace_index import collect_files_from_disk
 from domain.errors import DomainValidationError
@@ -86,6 +87,7 @@ def run_code_review(
     max_tokens: int = 120_000,
     base_ref: Optional[str] = None,
     tokenization_service: Optional[TokenizationService] = None,
+    git_service: Optional[IGitService] = None,
 ) -> ReviewResult:
     """
     Chạy Code Review workflow.
@@ -98,6 +100,7 @@ def run_code_review(
         max_tokens: Token budget (default 120k)
         base_ref: Optional git ref để diff against (default: HEAD/working tree)
         tokenization_service: Optional TokenizationService
+        git_service: Optional IGitService port
 
     Returns:
         ReviewResult với review prompt và metadata
@@ -110,7 +113,12 @@ def run_code_review(
 
     # Step 1: Pull git diff (với base_ref nếu có)
     try:
-        diff_result = get_git_diffs(ws, base_ref=base_ref)
+        if git_service is not None:
+            diff_result = git_service.get_diffs(ws, base_ref=base_ref)
+        else:
+            from infrastructure.git.git_utils import get_git_diffs
+            diff_result = get_git_diffs(ws, base_ref=base_ref)
+
         if not diff_result:
             return ReviewResult(
                 prompt="[No changes detected in git diff]",
@@ -142,7 +150,7 @@ def run_code_review(
         )
 
     # Step 2: Detect scope from diff
-    scope = detect_scope_from_git_diff(ws, max_depth=1)
+    scope = detect_scope_from_git_diff(ws, max_depth=1, git_service=git_service)
 
     if not scope.primary_files:
         return ReviewResult(

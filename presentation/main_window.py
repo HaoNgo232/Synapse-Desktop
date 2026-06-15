@@ -889,7 +889,7 @@ def main() -> None:
 
     set_app_user_model_id(get_default_app_user_model_id())
 
-    from presentation.config.paths import ensure_app_directories
+    from shared.config.paths import ensure_app_directories
     from infrastructure.adapters.encoder_registry import initialize_encoder
 
     ensure_app_directories()

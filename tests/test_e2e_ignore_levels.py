@@ -56,11 +56,11 @@ def app_e2e(qtbot, multi_level_workspace, monkeypatch, tmp_path):
 
     # Reload paths module to pick up new XDG_CONFIG_HOME
     import importlib
-    import presentation.config.paths
+    import shared.config.paths
     import infrastructure.persistence.settings_manager
     import presentation.config.app_settings
 
-    importlib.reload(presentation.config.paths)
+    importlib.reload(shared.config.paths)
     importlib.reload(presentation.config.app_settings)
     importlib.reload(infrastructure.persistence.settings_manager)
 

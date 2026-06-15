@@ -81,21 +81,7 @@ _TEXT_EXTENSIONS = frozenset(
 )
 
 
-@dataclass
-class TreeItem:
-    """
-    Mot item trong file tree (file hoac folder).
-    Tuong duong VscodeTreeItem trong TypeScript.
-
-    is_loaded: True nếu children đã được scan (cho lazy loading).
-               False = folder chưa được scan, children = []
-    """
-
-    label: str  # Ten hien thi (filename/dirname)
-    path: str  # Duong dan tuyet doi
-    is_dir: bool = False
-    children: list["TreeItem"] = field(default_factory=list)
-    is_loaded: bool = True  # True = đã scan, False = chưa scan (lazy)
+from domain.smart_context.tree_item import TreeItem
 
 
 from shared.utils.file_utils import is_binary_file, is_binary_by_extension  # noqa: F401

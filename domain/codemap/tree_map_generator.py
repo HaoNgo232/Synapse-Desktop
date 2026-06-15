@@ -11,7 +11,7 @@ can noi dung files. Huu ich khi:
 from pathlib import Path
 from typing import Optional
 
-from infrastructure.filesystem.file_utils import TreeItem
+from domain.smart_context.tree_item import TreeItem
 from domain.prompt.generator import generate_file_map
 
 

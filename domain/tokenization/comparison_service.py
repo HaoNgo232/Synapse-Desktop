@@ -13,7 +13,8 @@ from typing import Iterable, Optional
 from domain.prompt.generator import generate_file_map
 from domain.smart_context.parser import smart_parse
 from domain.tokenization.counter import count_tokens
-from infrastructure.filesystem.file_utils import TreeItem, is_binary_file
+from domain.smart_context.tree_item import TreeItem
+from shared.utils.file_utils import is_binary_file
 
 
 @dataclass(frozen=True)

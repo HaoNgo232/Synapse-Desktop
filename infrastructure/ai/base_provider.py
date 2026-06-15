@@ -21,18 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional
 
 
-@dataclass
-class LLMMessage:
-    """
-    Mot message trong chuoi hoi thoai (conversation history).
-
-    Attributes:
-        role: Vai tro cua nguoi gui ("system", "user", "assistant")
-        content: Noi dung tin nhan
-    """
-
-    role: str  # "system" | "user" | "assistant"
-    content: str
+from shared.types.llm_types import LLMMessage
 
 
 @dataclass

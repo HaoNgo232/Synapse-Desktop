@@ -18,8 +18,8 @@ LLM phai tra ve:
 
 from typing import List, Optional
 
-from infrastructure.ai.base_provider import LLMMessage
-from infrastructure.git.git_utils import GitDiffResult
+from shared.types.llm_types import LLMMessage
+from shared.types.git_types import GitDiffResult
 
 
 # ===========================================================================

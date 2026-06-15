@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Any
+from typing import Callable, Optional
 from domain.ports.tokenization_port import ITokenizationService
 from domain.ports.workspace_scanner import IWorkspaceScanner
 from domain.ports.directory_scanner import IDirectoryScanner
@@ -6,8 +6,6 @@ from domain.workflow.interfaces.git_port import IGitService
 from domain.workflow.interfaces.ast_parser_port import IAstParser
 from domain.config.app_settings import AppSettings
 
-from domain.ports.action_result import ActionResult
-from domain.ports.ai_port import IAIProvider
 from domain.ports.repo_manager_port import IRepoManager
 from domain.ports.settings_service_port import ISettingsService
 from domain.ports.ignore_engine_port import IIgnoreEngine
@@ -16,8 +14,8 @@ from domain.ports.file_actions_port import IFileActionsService
 from domain.ports.recent_folders_port import IRecentFoldersService
 from domain.ports.session_state_port import ISessionStateService
 from domain.ports.security_scanner_port import ISecurityScanner
-from application.interfaces.file_watcher_port import IFileWatcherService
-from application.services.service_interfaces import IClipboardService
+from domain.ports.file_watcher_port import IFileWatcherService
+from domain.ports.clipboard_port import IClipboardService
 
 
 class DomainRegistry:

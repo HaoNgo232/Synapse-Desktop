@@ -23,9 +23,10 @@ import threading
 import pathspec
 
 from shared.constants import EXTENDED_IGNORE_PATTERNS
+from domain.ports.ignore_engine_port import IIgnoreEngine
 
 
-class IgnoreEngine:
+class IgnoreEngine(IIgnoreEngine):
     """
     Ignore Engine - Single source of truth cho tat ca logic ignore/gitignore.
 

@@ -12,15 +12,19 @@ import subprocess
 import shutil
 import logging
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Optional, List, Callable
 from datetime import datetime
 
+from domain.ports.repo_manager_port import (
+    RemoteRepoInfo,
+    CloneProgress,
+    CachedRepo,
+    IRepoManager,
+)
 from infrastructure.git.git_remote_parse import (
     parse_github_url,
     build_clone_url,
     get_repo_cache_name,
-    RemoteRepoInfo,
 )
 
 # Configure logger
@@ -62,45 +66,6 @@ class InvalidUrlError(RepoError):
     pass
 
 
-# ============================================
-# Data Classes
-# ============================================
-
-
-@dataclass
-class CloneProgress:
-    """
-    Progress info cho clone operation.
-
-    Attributes:
-        status: Mô tả trạng thái hiện tại
-        percentage: Phần trăm hoàn thành (0-100), None nếu không xác định
-    """
-
-    status: str
-    percentage: Optional[int] = None
-
-
-@dataclass
-class CachedRepo:
-    """
-    Thông tin về một repo đã cache.
-
-    Attributes:
-        name: Tên folder trong cache
-        path: Full path đến folder
-        size_bytes: Kích thước folder (bytes)
-        last_modified: Thời gian sửa đổi cuối
-        repo_info: Parsed repo info (nếu có)
-    """
-
-    name: str
-    path: Path
-    size_bytes: int = 0
-    last_modified: Optional[datetime] = None
-    repo_info: Optional[RemoteRepoInfo] = None
-
-
 # Type alias cho progress callback
 ProgressCallback = Callable[[CloneProgress], None]
 
@@ -110,7 +75,7 @@ ProgressCallback = Callable[[CloneProgress], None]
 # ============================================
 
 
-class RepoManager:
+class RepoManager(IRepoManager):
     """
     Quản lý remote repositories và cache.
 

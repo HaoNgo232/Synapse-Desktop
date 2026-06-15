@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 from typing import List
 from datetime import datetime
+from domain.ports.recent_folders_port import IRecentFoldersService
 
 from shared.logging_config import log_error, log_debug
 from shared.config.paths import RECENT_FOLDERS_FILE
@@ -177,3 +178,34 @@ def get_folder_display_name(folder_path: str) -> str:
     if path.parent.name:
         return f"{path.name} ({path.parent.name})"
     return path.name
+
+
+class RecentFoldersService(IRecentFoldersService):
+    """Concrete implementation of IRecentFoldersService."""
+
+    def load_recent_folders(self) -> List[str]:
+        return load_recent_folders()
+
+    def save_recent_folders(self, folders: List[str]) -> None:
+        with _recent_folders_lock:
+            try:
+                RECENT_FOLDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                data = {
+                    "folders": folders[:MAX_RECENT_FOLDERS],
+                    "updated_at": datetime.now().isoformat(),
+                }
+                import os
+
+                tmp_file = RECENT_FOLDERS_FILE.with_suffix(".tmp")
+                tmp_file.write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                os.replace(str(tmp_file), str(RECENT_FOLDERS_FILE))
+                log_debug(f"Saved recent folders: {len(folders)} items")
+            except Exception as e:
+                log_error(f"Failed to save recent folders: {e}")
+
+    def clear_recent_folders(self) -> None:
+        clear_recent_folders()
+

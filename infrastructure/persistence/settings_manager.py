@@ -24,6 +24,7 @@ from typing import Dict, Any
 
 from shared.config.paths import SETTINGS_FILE
 from domain.config.app_settings import AppSettings
+from domain.ports.settings_service_port import ISettingsService
 
 # Thread-safe lock de tranh race condition khi save settings
 _settings_lock = threading.Lock()
@@ -278,3 +279,17 @@ def get_setting(key: str, default: Any = None) -> Any:
 def set_setting(key: str, value: Any) -> bool:
     """[DEPRECATED] Helper de luu 1 setting specific. Su dung update_app_setting() thay the."""
     return save_settings({key: value})
+
+
+class SettingsService(ISettingsService):
+    """Concrete settings service implementing ISettingsService."""
+
+    def load_settings(self) -> AppSettings:
+        return load_app_settings()
+
+    def update_setting(self, key: str, value: Any) -> None:
+        update_app_setting(**{key: value})
+
+    def add_instruction_history(self, instruction: str) -> None:
+        add_instruction_history(instruction)
+

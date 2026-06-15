@@ -19,9 +19,10 @@ Lưu lại khi đóng app:
 
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
+from domain.ports.session_state_port import ISessionStateService
 
 from shared.logging_config import log_error, log_debug, log_info, log_warning
 from shared.config.paths import SESSION_FILE
@@ -187,3 +188,30 @@ def get_session_age_hours() -> Optional[float]:
         return age.total_seconds() / 3600
     except (ValueError, TypeError):
         return None
+
+
+class SessionStateService(ISessionStateService):
+    """Concrete session state service implementing ISessionStateService."""
+
+    def load_session_state(self) -> Dict[str, Any]:
+        state = load_session_state()
+        if state is None:
+            return {}
+        return asdict(state)
+
+    def save_session_state(self, state: Dict[str, Any]) -> None:
+        state_obj = SessionState(
+            workspace_path=state.get("workspace_path"),
+            selected_files=state.get("selected_files", []),
+            expanded_folders=state.get("expanded_folders", []),
+            instructions_text=state.get("instructions_text", ""),
+            active_tab_index=state.get("active_tab_index", 0),
+            window_width=state.get("window_width"),
+            window_height=state.get("window_height"),
+            saved_at=state.get("saved_at"),
+        )
+        save_session_state(state_obj)
+
+    def clear_session_state(self) -> None:
+        clear_session_state()
+

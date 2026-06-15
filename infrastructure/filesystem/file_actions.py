@@ -11,11 +11,12 @@ Cac operations:
 
 import shutil
 from pathlib import Path
-from dataclasses import dataclass
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, List
 from datetime import datetime
 
 from domain.prompt.opx_parser import FileAction
+from domain.ports.action_result import ActionResult
+from domain.ports.file_actions_port import IFileActionsService
 from shared.logging_config import log_error, log_info, log_debug, log_warning
 from shared.config.paths import BACKUP_DIR
 
@@ -159,15 +160,6 @@ def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
     return deleted_count
 
 
-@dataclass
-class ActionResult:
-    """Ket qua thuc thi mot file action"""
-
-    path: str
-    action: str
-    success: bool
-    message: str
-    new_path: Optional[str] = None  # Cho rename action
 
 
 def apply_file_actions(
@@ -935,3 +927,16 @@ def _get_friendly_error(error: Exception) -> str:
         return "Read-only file system: Cannot create file"
 
     return msg
+
+
+class FileActionsService(IFileActionsService):
+    """Concrete file actions service implementing IFileActionsService."""
+
+    def apply_file_actions(
+        self,
+        file_actions: List[FileAction],
+        workspace_roots: Optional[List[Path]] = None,
+        dry_run: bool = False,
+    ) -> List[ActionResult]:
+        return apply_file_actions(file_actions, workspace_roots, dry_run)
+

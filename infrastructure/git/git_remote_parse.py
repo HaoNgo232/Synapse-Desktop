@@ -8,7 +8,6 @@ Module này cung cấp các utilities để:
 """
 
 import re
-from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
 import logging
@@ -17,22 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RemoteRepoInfo:
-    """
-    Thông tin parsed từ remote repository URL.
-
-    Attributes:
-        owner: GitHub username hoặc organization
-        repo: Repository name
-        ref: Branch, tag, hoặc commit SHA (optional)
-        original_url: URL gốc trước khi parse
-    """
-
-    owner: str
-    repo: str
-    ref: Optional[str] = None
-    original_url: str = ""
+from domain.ports.repo_manager_port import RemoteRepoInfo
 
 
 # Pattern cho GitHub shorthand: owner/repo

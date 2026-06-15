@@ -17,11 +17,12 @@ import logging
 import threading
 
 from infrastructure.adapters.cache_protocol import ICacheable
+from domain.ports.cache_registry_port import ICacheRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class CacheRegistry:
+class CacheRegistry(ICacheRegistry):
     """
     Registry trung tam cho tat ca caches.
 

@@ -8,14 +8,14 @@ detect-secrets là thư viện chuyên nghiệp với 27+ plugins được kiể
 giảm thiểu false positives so với custom regex.
 """
 
-from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional, Dict, Set
 from pathlib import Path
 import tempfile
 
 from detect_secrets import SecretsCollection
 from detect_secrets.settings import default_settings
-from infrastructure.filesystem.file_utils import is_binary_file
+from domain.ports.security_scanner_port import SecretMatch, ISecurityScanner
+from shared.utils.file_utils import is_binary_file
 
 
 # ============================================
@@ -47,14 +47,6 @@ def get_security_cache_stats() -> Dict[str, int]:
     }
 
 
-@dataclass
-class SecretMatch:
-    """Kết quả của một secret match."""
-
-    secret_type: str
-    line_number: int  # Line number within the file/content
-    redacted_preview: str
-    file_path: Optional[str] = None  # File path containing the secret
 
 
 def scan_for_secrets(
@@ -344,3 +336,16 @@ def format_security_warning(matches: list[SecretMatch]) -> str:
         if len(types) > 3:
             type_list += f" (+{len(types) - 3} more)"
         return f"Found {count} potential secrets: {type_list}"
+
+
+class SecurityScannerAdapter(ISecurityScanner):
+    """Concrete implementation of ISecurityScanner."""
+
+    def scan_secrets_in_files_cached(
+        self, file_paths: Set[str], max_file_size: int = 1024 * 1024
+    ) -> List[SecretMatch]:
+        return scan_secrets_in_files_cached(file_paths, max_file_size)
+
+    def format_security_warning(self, matches: List[SecretMatch]) -> str:
+        return format_security_warning(matches)
+

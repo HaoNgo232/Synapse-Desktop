@@ -18,7 +18,7 @@ from typing import Any
 WORKSPACE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WORKSPACE))
 
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 
 
 # Định nghĩa một Mock Encoder mô phỏng Hugging Face Tokenizer
@@ -44,7 +44,7 @@ def main():
     encoders._encoder_type = "hf"  # Set loại encoder gốc là hf
 
     # Mock hàm _get_encoder ở cả hai nơi để đảm bảo bypass import cache
-    import application.services.tokenization_service as ts_module
+    import infrastructure.adapters.tokenization_service as ts_module
 
     original_get_encoder = ts_module._get_encoder
     ts_module._get_encoder = lambda tokenizer_repo: MockHFEncoder()
@@ -95,7 +95,7 @@ def main():
 
     # Khôi phục trạng thái cũ
     TokenizationService.__setattr__ = original_setattr
-    import application.services.tokenization_service as ts_module
+    import infrastructure.adapters.tokenization_service as ts_module
 
     ts_module._get_encoder = original_get_encoder
     encoders._get_encoder = original_get_encoder

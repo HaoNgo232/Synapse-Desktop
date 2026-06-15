@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import List
 
-from infrastructure.filesystem.file_actions import ActionResult
+from domain.ports.action_result import ActionResult
 from application.services.error_context import ApplyRowResult
 
 logger = logging.getLogger(__name__)

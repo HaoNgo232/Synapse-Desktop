@@ -14,7 +14,7 @@ class TestBug1TokenCountWorkerArgument:
     def test_worker_accepts_tokenization_service(self, tmp_path):
         """TokenCountWorker should accept tokenization_service parameter"""
         from presentation.components.file_tree.file_tree_model import TokenCountWorker
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')")

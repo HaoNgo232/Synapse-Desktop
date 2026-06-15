@@ -26,8 +26,13 @@ import threading
 import os
 from pathlib import Path
 from datetime import datetime
-from dataclasses import dataclass
 from typing import Optional, Dict, List
+
+from domain.ports.preset_store_port import (
+    PresetEntry,
+    IPresetStore,
+    IPresetStoreFactory,
+)
 
 import logging
 
@@ -37,42 +42,30 @@ PRESET_FILENAME = ".synapse/presets.json"
 CURRENT_VERSION = 1
 
 
-@dataclass
-class PresetEntry:
-    """Một preset chứa snapshot selection state."""
-
-    preset_id: str
-    name: str
-    selected_paths: List[str]
-    instructions: str = ""
-    output_format: str = ""
-    created_at: str = ""
-    updated_at: str = ""
-
-    def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "selected_paths": self.selected_paths,
-            "instructions": self.instructions,
-            "output_format": self.output_format,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
-
-    @staticmethod
-    def from_dict(preset_id: str, data: dict) -> "PresetEntry":
-        return PresetEntry(
-            preset_id=preset_id,
-            name=data.get("name", "Untitled"),
-            selected_paths=data.get("selected_paths", []),
-            instructions=data.get("instructions", ""),
-            output_format=data.get("output_format", ""),
-            created_at=data.get("created_at", ""),
-            updated_at=data.get("updated_at", ""),
-        )
+def preset_to_dict(entry: PresetEntry) -> dict:
+    return {
+        "name": entry.name,
+        "selected_paths": entry.selected_paths,
+        "instructions": entry.instructions,
+        "output_format": entry.output_format,
+        "created_at": entry.created_at,
+        "updated_at": entry.updated_at,
+    }
 
 
-class PresetStore:
+def preset_from_dict(preset_id: str, data: dict) -> PresetEntry:
+    return PresetEntry(
+        preset_id=preset_id,
+        name=data.get("name", "Untitled"),
+        selected_paths=data.get("selected_paths", []),
+        instructions=data.get("instructions", ""),
+        output_format=data.get("output_format", ""),
+        created_at=data.get("created_at", ""),
+        updated_at=data.get("updated_at", ""),
+    )
+
+
+class PresetStore(IPresetStore):
     """
     Quản lý CRUD cho presets, lưu tại workspace_root/.synapse/presets.json.
     Thread-safe với _lock cho mọi read/write operation.
@@ -249,7 +242,7 @@ class PresetStore:
             for pid, pdata in raw_presets.items():
                 try:
                     if self._validate_preset_data(pdata):
-                        presets[pid] = PresetEntry.from_dict(pid, pdata)
+                        presets[pid] = preset_from_dict(pid, pdata)
                 except Exception as e:
                     logger.warning(f"Skipping invalid preset {pid}: {e}")
 
@@ -265,7 +258,9 @@ class PresetStore:
         try:
             data = {
                 "version": CURRENT_VERSION,
-                "presets": {pid: entry.to_dict() for pid, entry in presets.items()},
+                "presets": {
+                    pid: preset_to_dict(entry) for pid, entry in presets.items()
+                },
             }
             content = json.dumps(data, indent=2, ensure_ascii=False)
 
@@ -305,3 +300,12 @@ class PresetStore:
                 logger.info(f"Backed up corrupt preset file to {backup}")
         except OSError as e:
             logger.error(f"Failed to backup corrupt file: {e}")
+
+
+class PresetStoreFactory(IPresetStoreFactory):
+    """
+    Concrete factory class for PresetStore.
+    """
+
+    def create_preset_store(self, workspace_root: Path) -> IPresetStore:
+        return PresetStore(workspace_root)

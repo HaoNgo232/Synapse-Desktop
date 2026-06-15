@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from domain.ports.mcp_installer_port import IMCPInstaller
+
 logger = logging.getLogger("synapse.mcp.config_installer")
 
 
@@ -348,3 +350,35 @@ def auto_update_installed_configs() -> list[str]:
             logger.warning("Auto-update failed for %s: %s", target_name, e)
 
     return updated
+
+
+class MCPInstallerService(IMCPInstaller):
+    """
+    Adapter implementation for IMCPInstaller.
+    """
+
+    def get_mcp_targets(self) -> dict:
+        return MCP_TARGETS
+
+    def check_installed(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> bool:
+        return check_installed(target_name, workspace_path)
+
+    def get_mcp_command(self) -> list[str]:
+        return get_mcp_command()
+
+    def get_config_path(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> str:
+        return str(get_config_path(target_name, workspace_path))
+
+    def preview_json(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> str:
+        return preview_json(target_name, workspace_path)
+
+    def install_config(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> tuple[bool, str]:
+        return install_config(target_name, workspace_path)

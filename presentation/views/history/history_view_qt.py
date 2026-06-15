@@ -15,14 +15,8 @@ De import HistoryViewQt:
 """
 
 from PySide6.QtWidgets import QMessageBox
-from infrastructure.adapters.clipboard_utils import copy_to_clipboard
-from infrastructure.persistence.history_service import (
-    get_history_entries,
-    get_entry_by_id,
-    clear_history,
-    get_history_stats,
-    delete_entry,
-)
+from domain.ports.registry import DomainRegistry
+from presentation.utils.clipboard import copy_to_clipboard
 from presentation.views.history.widgets import (
     create_status_dot_icon,
     create_search_icon,
@@ -34,6 +28,27 @@ from presentation.views.history.widgets import (
     ErrorCard,
 )
 from presentation.views.history.view import HistoryViewQt
+
+
+def get_history_entries(*args, **kwargs):
+    return DomainRegistry.history_service().get_history_entries(*args, **kwargs)
+
+
+def get_entry_by_id(*args, **kwargs):
+    return DomainRegistry.history_service().get_entry_by_id(*args, **kwargs)
+
+
+def clear_history(*args, **kwargs):
+    return DomainRegistry.history_service().clear_history(*args, **kwargs)
+
+
+def get_history_stats(*args, **kwargs):
+    return DomainRegistry.history_service().get_history_stats(*args, **kwargs)
+
+
+def delete_entry(*args, **kwargs):
+    return DomainRegistry.history_service().delete_entry(*args, **kwargs)
+
 
 __all__ = [
     "HistoryViewQt",

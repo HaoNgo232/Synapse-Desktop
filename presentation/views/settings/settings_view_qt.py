@@ -36,29 +36,14 @@ from PySide6.QtCore import Qt, Slot, QTimer, Signal
 from presentation.config.theme import ThemeColors
 from presentation.components.toggle_switch import ToggleSwitch
 from presentation.components.tag_chips_widget import TagChipsWidget
-from infrastructure.adapters.clipboard_utils import (
+from domain.ports.registry import DomainRegistry
+from presentation.utils.clipboard import (
     copy_to_clipboard,
     get_clipboard_text,
 )
-from infrastructure.persistence.session_state import clear_session_state
-from infrastructure.persistence.settings_manager import (
-    load_settings,
-    save_settings,
-    DEFAULT_SETTINGS,
-)
-from infrastructure.persistence.settings_manager import (
-    load_app_settings,
-    update_app_setting,
-)
+from typing import Any
 from presentation.components.toast.toast_qt import toast_success, toast_error
 from presentation.components.qt_utils import create_colored_icon
-
-
-# ============================================================
-# Re-exports tu services.workspace_config (backward compatibility)
-# Cac functions nay da duoc extract sang services/workspace_config.py
-# de tuan thu Dependency Inversion Principle.
-# ============================================================
 from application.services.workspace_config import (  # noqa: F401
     PRESET_PROFILES,
     get_excluded_patterns,
@@ -68,6 +53,69 @@ from application.services.workspace_config import (  # noqa: F401
     remove_excluded_patterns,
     _excluded_notifier,
 )
+
+DEFAULT_SETTINGS = {
+    "excluded_folders": "node_modules\ndist\nbuild\n.next\n__pycache__\n.pytest_cache\npnpm-lock.yaml\npackage-lock.json\ncoverage",
+    "use_gitignore": True,
+    "model_id": "gpt-5.1",
+    "enable_security_check": True,
+    "include_git_changes": True,
+    "use_relative_paths": True,
+    "output_format": "xml",
+    "template_tier": "lite",
+}
+
+
+def load_settings() -> dict[str, Any]:
+    return DomainRegistry.settings_service().load_settings().to_dict()
+
+
+def save_settings(settings_dict: dict[str, Any]) -> bool:
+    svc = DomainRegistry.settings_service()
+    current = svc.load_settings()
+    for k, v in settings_dict.items():
+        if hasattr(current, k):
+            svc.update_setting(k, v)
+    return True
+
+
+def load_app_settings():
+    return DomainRegistry.settings_service().load_settings()
+
+
+def update_app_setting(**kwargs: Any) -> bool:
+    svc = DomainRegistry.settings_service()
+    for k, v in kwargs.items():
+        svc.update_setting(k, v)
+    return True
+
+
+def clear_session_state() -> bool:
+    try:
+        DomainRegistry.session_state().clear_session_state()
+        return True
+    except Exception:
+        return False
+
+
+def check_installed(target_name: str, workspace_path: Optional[str] = None) -> bool:
+    try:
+        return DomainRegistry.mcp_installer().check_installed(
+            target_name, workspace_path
+        )
+    except Exception:
+        return False
+
+
+def install_config(
+    target_name: str, workspace_path: Optional[str] = None
+) -> tuple[bool, str]:
+    try:
+        return DomainRegistry.mcp_installer().install_config(
+            target_name, workspace_path
+        )
+    except Exception as e:
+        return False, str(e)
 
 
 # ============================================================
@@ -794,7 +842,7 @@ class SettingsViewQt(QWidget):
         card6_layout.addSpacing(14)
 
         # Buttons cho tung AI client
-        from infrastructure.mcp.config_installer import MCP_TARGETS, check_installed
+        MCP_TARGETS = DomainRegistry.mcp_installer().get_mcp_targets()
 
         for target_name in MCP_TARGETS:
             btn_row = QHBoxLayout()
@@ -1140,7 +1188,6 @@ class SettingsViewQt(QWidget):
 
     @Slot()
     def _export_settings(self) -> None:
-        from infrastructure.persistence.settings_manager import load_app_settings
 
         # Save current UI state first
         self._save_settings()
@@ -1157,9 +1204,7 @@ class SettingsViewQt(QWidget):
 
     def _get_mcp_command(self) -> list[str]:
         """Tự động phát hiện lệnh khởi chạy MCP server."""
-        from infrastructure.mcp.config_installer import get_mcp_command
-
-        return get_mcp_command()
+        return DomainRegistry.mcp_installer().get_mcp_command()
 
     @Slot()
     def _copy_mcp_config(self) -> None:
@@ -1295,15 +1340,14 @@ class SettingsViewQt(QWidget):
         self, target_name: str, workspace_path: Optional[str] = None
     ) -> None:
         """Hien thi preview JSON day du va ghi config vao file neu user dong y."""
-        from infrastructure.mcp.config_installer import (
-            get_config_path,
-            preview_json,
-            install_config,
-            check_installed,
-        )
+        from pathlib import Path
 
-        config_path = get_config_path(target_name, workspace_path)
-        preview_text = preview_json(target_name, workspace_path)
+        config_path = Path(
+            DomainRegistry.mcp_installer().get_config_path(target_name, workspace_path)
+        )
+        preview_text = DomainRegistry.mcp_installer().preview_json(
+            target_name, workspace_path
+        )
 
         # Tao custom dialog rong rai de hien thi preview JSON cho de doc
         dlg = QDialog(self)
@@ -1539,7 +1583,6 @@ class SettingsViewQt(QWidget):
         Su dung QRunnable background worker de tranh block main UI thread.
         Network request co the mat toi 15 giay neu server cham.
         """
-        from infrastructure.ai.openai_provider import OpenAICompatibleProvider
         from PySide6.QtCore import QThreadPool, QRunnable, QObject, Signal
         from PySide6.QtCore import Slot as QSlot
 
@@ -1575,7 +1618,8 @@ class SettingsViewQt(QWidget):
             @QSlot()
             def run(self) -> None:
                 try:
-                    provider = OpenAICompatibleProvider()
+                    provider_factory = DomainRegistry.ai_provider_factory()
+                    provider = provider_factory()
                     provider.configure(api_key=self._key, base_url=self._url)
                     models = provider.fetch_available_models()
                     self.signals.finished.emit(models)

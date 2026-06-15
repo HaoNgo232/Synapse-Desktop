@@ -21,8 +21,11 @@ from typing import (
 )
 from pathlib import Path
 
+# Re-export IClipboardService từ domain.ports để backward compatible
+from domain.ports.clipboard_port import IClipboardService as IClipboardService
+
 if TYPE_CHECKING:
-    from infrastructure.filesystem.file_utils import TreeItem
+    from domain.smart_context.tree_item import TreeItem
 
 
 @runtime_checkable
@@ -102,7 +105,3 @@ class IPromptBuilder(Protocol):
             So luong tokens
         """
         ...
-
-
-from domain.ports.clipboard_port import IClipboardService
-

@@ -25,7 +25,7 @@ from typing import Any
 from application.services.prompt_build_service import PromptBuildService
 from infrastructure.adapters.clipboard_service import QtClipboardService
 from infrastructure.adapters.cache_registry import CacheRegistry
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 from application.services.service_interfaces import IPromptBuilder, IClipboardService
 from application.interfaces.tokenization_port import ITokenizationService
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
@@ -78,13 +78,22 @@ class ServiceContainer:
         from infrastructure.filesystem.file_utils import ConcreteDirectoryScanner
         from infrastructure.git.git_utils import GitService
         from infrastructure.adapters.ast_parser import AstParser
-        from infrastructure.persistence.settings_manager import load_app_settings, SettingsService
+        from infrastructure.persistence.settings_manager import (
+            load_app_settings,
+            SettingsService,
+        )
         from infrastructure.adapters.security_check import SecurityScannerAdapter
         from infrastructure.git.repo_manager import RepoManager
         from infrastructure.persistence.recent_folders import RecentFoldersService
         from infrastructure.persistence.session_state import SessionStateService
         from infrastructure.filesystem.file_actions import FileActionsService
         from infrastructure.filesystem.file_watcher.service import FileWatcher
+        from infrastructure.ai.openai_provider import OpenAICompatibleProvider
+        from infrastructure.mcp.config_installer import MCPInstallerService
+        from infrastructure.persistence.preset_store import PresetStoreFactory
+        from infrastructure.persistence.history_service import HistoryService
+        from infrastructure.adapters.threading_utils import AppLifecycleService
+        from infrastructure.adapters.memory_monitor import get_memory_monitor
 
         DomainRegistry.register_tokenization_service(self._tokenization_service)
         DomainRegistry.register_workspace_scanner(WorkspaceScanner())
@@ -106,6 +115,12 @@ class ServiceContainer:
         DomainRegistry.register_file_watcher_service(FileWatcher())
         DomainRegistry.register_clipboard_service(self.clipboard)
         DomainRegistry.register_ignore_engine(self.ignore_engine)
+        DomainRegistry.register_ai_provider_factory(OpenAICompatibleProvider)
+        DomainRegistry.register_mcp_installer(MCPInstallerService())
+        DomainRegistry.register_preset_store_factory(PresetStoreFactory())
+        DomainRegistry.register_history_service(HistoryService())
+        DomainRegistry.register_app_lifecycle(AppLifecycleService())
+        DomainRegistry.register_memory_monitor(get_memory_monitor())
 
         # Backward compatibility for old encoder_registry wrapper
         try:

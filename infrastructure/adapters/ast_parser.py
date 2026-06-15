@@ -405,3 +405,12 @@ class AstParser(IAstParser):
         """Parse file source code va tra ve thong tin AST (symbols, imports, classes, functions, v.v.)."""
         outline = extract_file_outline(file_path)
         return {"symbols": outline}
+
+    def generate_repo_map(
+        self,
+        file_paths: list[str],
+        workspace_root: Optional[Path] = None,
+        max_files: int = 500,
+    ) -> str:
+        """Tao Repo Map tu danh sach file paths."""
+        return generate_repo_map(file_paths, workspace_root, max_files)

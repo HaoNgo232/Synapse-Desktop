@@ -292,4 +292,3 @@ class SettingsService(ISettingsService):
 
     def add_instruction_history(self, instruction: str) -> None:
         add_instruction_history(instruction)
-

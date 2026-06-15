@@ -20,9 +20,9 @@ from infrastructure.adapters.encoders import (
 from shared.logging_config import log_info, log_warning
 from domain.tokenization.cache import TokenCache
 from domain.tokenization.cancellation import is_counting_tokens
-from application.interfaces.tokenization_port import ITokenizationService
+from domain.ports.tokenization_port import ITokenizationService
 
-from application.services.tokenization.parallel_counter import (
+from infrastructure.adapters.parallel_counter import (
     MAX_BYTES,
     count_tokens_for_file_no_cache,
     count_tokens_parallel_standard,
@@ -118,7 +118,7 @@ class TokenizationService(ITokenizationService):
                 return cached
 
             # Check binary file
-            from infrastructure.filesystem.file_utils import is_binary_file
+            from shared.utils.file_utils import is_binary_file
 
             if is_binary_file(file_path):
                 return 0

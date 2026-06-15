@@ -155,7 +155,7 @@ $hiddenImports = @(
     "application.services.preview_analyzer",
     "application.services.error_context",
     "application.services.graph_service",
-    "application.services.tokenization_service",
+    "infrastructure.adapters.tokenization_service",
     # --- Domain Layer ---
     "domain.prompt.opx_parser",
     "domain.prompt.generator",
@@ -257,7 +257,7 @@ if ($Debug) {
 # PyInstaller can embed version info via --version-file, but we skip for simplicity
 
 # Entry point
-$pyinstallerArgs += "presentation\main_window.py"
+$pyinstallerArgs += "main.py"
 
 Write-Host "  Running: python $($pyinstallerArgs -join ' ')" -ForegroundColor DarkGray
 Write-Host ""

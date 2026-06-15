@@ -40,7 +40,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 from domain.codemap.tree_map_generator import generate_tree_map_only
 from domain.smart_context.tree_item import TreeItem
 from application.services.workspace_index import WorkspaceScanService
-from application.services.workspace_config import load_app_settings
+from domain.ports.registry import DomainRegistry
 from application.services.workspace_config import (
     get_excluded_patterns,
     get_use_gitignore,
@@ -197,7 +197,7 @@ def _build_fingerprint(
     h.update(f"rel={use_relative_paths}\n".encode())
     h.update(f"xml={include_xml}\n".encode())
     h.update(f"top={instructions_at_top}\n".encode())
-    h.update(f"full_tree={load_app_settings().include_full_tree}\n".encode())
+    h.update(f"full_tree={DomainRegistry.settings().include_full_tree}\n".encode())
     # Note: though full_tree comes from UI toggle, it is synced to settings.
 
     # Instructions
@@ -293,11 +293,10 @@ class SecurityCheckWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         try:
-            from infrastructure.adapters.security_check import (
-                scan_secrets_in_files_cached,
-            )
+            from domain.ports.registry import DomainRegistry
 
-            matches = scan_secrets_in_files_cached(self.paths)
+            scanner = DomainRegistry.security_scanner()
+            matches = scanner.scan_secrets_in_files_cached(self.paths)
             try:
                 self.signals.finished.emit(matches)
             except RuntimeError:
@@ -389,7 +388,7 @@ class CopyActionController(QObject):
         If cache hits, we skip all heavy work entirely.
         """
         output_style_id = self._view.get_output_style().value
-        include_git = load_app_settings().include_git_changes
+        include_git = DomainRegistry.settings().include_git_changes
         use_rel = get_use_relative_paths()
         workspace = self._view.get_workspace_path()
 
@@ -423,7 +422,7 @@ class CopyActionController(QObject):
     ) -> None:
         """Store generated prompt in cache for future hits."""
         output_style_id = self._view.get_output_style().value
-        include_git = load_app_settings().include_git_changes
+        include_git = DomainRegistry.settings().include_git_changes
         use_rel = get_use_relative_paths()
         workspace = self._view.get_workspace_path()
 
@@ -534,15 +533,8 @@ class CopyActionController(QObject):
         return gen == self._copy_generation
 
     def _save_instruction_to_history(self, text: str) -> None:
-        """Luu instruction vao history (thread-safe, atomic, deduplicate, max 30).
-
-        Su dung add_instruction_history() de dam bao toan bo
-        read-modify-write duoc bao ve boi lock, tranh mat du lieu
-        khi user click copy nhanh lien tiep.
-        """
-        from infrastructure.persistence.settings_manager import add_instruction_history
-
-        add_instruction_history(text)
+        """Luu instruction vao history (thread-safe, atomic, deduplicate, max 30)."""
+        DomainRegistry.settings_service().add_instruction_history(text)
 
     def _ask_copy_destination(self, action_label: str) -> Optional[str]:
         """Show copy destination chooser and return 'text'/'file' (or None if cancelled)."""
@@ -764,7 +756,7 @@ class CopyActionController(QObject):
         gen = self._begin_copy_operation()
 
         # Run security check in background to avoid UI freeze
-        security_enabled = load_app_settings().enable_security_check
+        security_enabled = DomainRegistry.settings().enable_security_check
         if security_enabled:
             self._view.show_status("Checking security...")
             self._run_security_check_then_copy(
@@ -1156,7 +1148,7 @@ class CopyActionController(QObject):
 
         gen = self._begin_copy_operation()
         use_rel = get_use_relative_paths()
-        include_git = load_app_settings().include_git_changes
+        include_git = DomainRegistry.settings().include_git_changes
         ui_config = self._view.get_copy_config()
 
         def task() -> PromptResult:
@@ -1469,7 +1461,7 @@ class CopyActionController(QObject):
 
         try:
             from presentation.components.dialogs.dialogs_qt import DiffOnlyDialogQt
-            from infrastructure.git.git_utils import build_diff_only_prompt
+            from domain.ports.registry import DomainRegistry
 
             instructions = self._view.get_instructions_text()
             self._save_instruction_to_history(instructions)
@@ -1486,7 +1478,7 @@ class CopyActionController(QObject):
                 related_depth: int = 1,
                 output_format: str = "xml",
             ) -> str:
-                return build_diff_only_prompt(
+                return DomainRegistry.git_service().build_diff_prompt(
                     diff_result,
                     instructions,
                     include_content,

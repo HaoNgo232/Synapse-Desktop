@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QSize
 
 from presentation.config.theme import ThemeColors
-from infrastructure.persistence.history_service import HistoryEntry
+from domain.ports.history_port import HistoryEntry
 from presentation.views.history.widgets import (
     DateGroupHeader,
     create_status_dot_icon,

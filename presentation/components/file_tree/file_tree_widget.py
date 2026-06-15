@@ -43,7 +43,7 @@ from PySide6.QtCore import (
 from presentation.config.theme import ThemeColors
 from presentation.components.qt_utils import create_colored_icon
 from presentation.utils.qt_utils import DebouncedTimer
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.ports.ignore_engine_port import IIgnoreEngine
 from presentation.components.file_tree.file_tree_model import (
     FileTreeModel,
     TokenCountWorker,
@@ -75,7 +75,7 @@ class FileTreeWidget(QWidget):
 
     def __init__(
         self,
-        ignore_engine: IgnoreEngine,
+        ignore_engine: IIgnoreEngine,
         tokenization_service: "ITokenizationService",
         parent: Optional[QWidget] = None,
     ):
@@ -917,10 +917,10 @@ class FileTreeWidget(QWidget):
         if not workspace:
             return
 
-        from infrastructure.mcp.core.workspace_manager import WorkspaceManager
         import json
 
-        session_file = WorkspaceManager.get_session_file(Path(workspace))
+        session_file = Path(workspace) / ".synapse" / "selection.json"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
         if not session_file.exists():
             return
 
@@ -1008,11 +1008,11 @@ class FileTreeWidget(QWidget):
         # Dam bao poll timer luon thay data moi nhat
         self._last_synced_selection = set(selected)
 
-        from infrastructure.mcp.core.workspace_manager import WorkspaceManager
         import json
 
         workspace_path = Path(workspace)
-        session_file = WorkspaceManager.get_session_file(workspace_path)
+        session_file = workspace_path / ".synapse" / "selection.json"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Convert absolute paths (UI) -> relative paths (cho agent)
         relative_selected = []

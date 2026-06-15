@@ -12,7 +12,8 @@ from typing import Optional, List, Protocol, runtime_checkable
 
 from PySide6.QtCore import QObject, Signal
 
-from infrastructure.persistence.preset_store import PresetStore, PresetEntry
+from domain.ports.registry import DomainRegistry
+from domain.ports.preset_store_port import PresetEntry, IPresetStore
 
 import logging
 
@@ -71,12 +72,14 @@ class PresetController(QObject):
     ) -> None:
         super().__init__(parent)
         self._view = view
-        self._store: Optional[PresetStore] = None
+        self._store: Optional[IPresetStore] = None
         self._active_preset_id: Optional[str] = None
 
     def on_workspace_changed(self, workspace_path: Path) -> None:
         """Khởi tạo/reset PresetStore khi workspace thay đổi."""
-        self._store = PresetStore(workspace_path)
+        self._store = DomainRegistry.preset_store_factory().create_preset_store(
+            workspace_path
+        )
         self._active_preset_id = None
         self.presets_changed.emit()
 

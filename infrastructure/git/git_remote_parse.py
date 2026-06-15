@@ -11,12 +11,10 @@ import re
 from typing import Optional
 from urllib.parse import urlparse
 import logging
+from domain.ports.repo_manager_port import RemoteRepoInfo
 
 # Configure logger
 logger = logging.getLogger(__name__)
-
-
-from domain.ports.repo_manager_port import RemoteRepoInfo
 
 
 # Pattern cho GitHub shorthand: owner/repo

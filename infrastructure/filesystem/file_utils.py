@@ -6,13 +6,18 @@ Ignore/gitignore logic duoc delegate cho core.ignore_engine (single source of tr
 """
 
 import os
-import platform
-import re
 from pathlib import Path
 from typing import Optional, List, Tuple
 import pathspec
 
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.smart_context.tree_item import TreeItem
+from domain.ports.directory_scanner import IDirectoryScanner
+from domain.ports.ignore_engine_port import IIgnoreEngine
+from shared.utils.file_utils import (
+    is_system_path,
+    is_system_path_str,
+)  # noqa: F401
 
 HAS_SCANDIR_RS = False
 try:
@@ -30,10 +35,6 @@ if HAS_SCANDIR_RS:
     except ImportError:  # In scripts, shared.logging_config might not be setup
         pass
 
-# Pre-compile regex for is_system_path (module-level optimization)
-_WINDOWS_RESERVED_PATTERN = re.compile(
-    r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", re.IGNORECASE
-)
 
 # Optimization: Module-level constants (tạo 1 lần duy nhất)
 _TEXT_EXTENSIONS = frozenset(
@@ -78,53 +79,6 @@ _TEXT_EXTENSIONS = frozenset(
         ".dockerfile",
     }
 )
-
-
-from domain.smart_context.tree_item import TreeItem
-from domain.ports.directory_scanner import IDirectoryScanner
-
-
-from shared.utils.file_utils import is_binary_file, is_binary_by_extension  # noqa: F401
-
-
-def is_system_path_str(path_str: str) -> bool:
-    """
-    Version nhanh của is_system_path nhận input là string.
-    Dùng để tối ưu trong các vòng lặp quét hàng chục nghìn file.
-    """
-    system = platform.system()
-    name = os.path.basename(path_str)
-
-    if system == "Windows":
-        # Check reserved names using pre-compiled regex
-        if _WINDOWS_RESERVED_PATTERN.match(name):
-            return True
-        # Check system folders
-        lower_path = path_str.lower()
-        if "\\windows\\" in lower_path or "\\system32\\" in lower_path:
-            return True
-
-    elif system == "Darwin":  # macOS
-        # Common macOS system files/folders
-        if name in (".DS_Store", ".Trashes", ".fseventsd") or name.startswith(
-            ".Spotlight-"
-        ):
-            return True
-
-    elif system == "Linux":
-        # Critical Linux system directories
-        if path_str.startswith(("/proc/", "/sys/", "/dev/")):
-            return True
-
-    return False
-
-
-def is_system_path(file_path: Path) -> bool:
-    """
-    Check if path is an OS system path that should be excluded.
-    Supports: Windows, macOS, Linux
-    """
-    return is_system_path_str(str(file_path))
 
 
 def scan_directory(
@@ -640,8 +594,48 @@ class ConcreteDirectoryScanner(IDirectoryScanner):
     Concrete implementation of IDirectoryScanner that wraps scan_directory.
     """
 
-    def __init__(self, ignore_engine: IgnoreEngine) -> None:
+    def __init__(self, ignore_engine: IIgnoreEngine) -> None:
         self._ignore_engine = ignore_engine
 
-    def scan_directory(self, root_path: Path) -> TreeItem:
-        return scan_directory(root_path, self._ignore_engine)
+    def scan_directory(
+        self,
+        root_path: Path,
+        excluded_patterns: Optional[List[str]] = None,
+        use_gitignore: bool = True,
+    ) -> TreeItem:
+        return scan_directory(
+            root_path,
+            self._ignore_engine,
+            excluded_patterns=excluded_patterns,
+            use_gitignore=use_gitignore,
+        )
+
+    def scan_directory_shallow(
+        self,
+        root_path: Path,
+        ignore_engine: IIgnoreEngine,
+        depth: int = 1,
+        excluded_patterns: Optional[List[str]] = None,
+    ) -> TreeItem:
+        return scan_directory_shallow(
+            root_path,
+            ignore_engine,
+            depth=depth,
+            excluded_patterns=excluded_patterns,
+        )
+
+    def load_folder_children(
+        self,
+        node: TreeItem,
+        ignore_engine: IIgnoreEngine,
+        excluded_patterns: Optional[List[str]] = None,
+        use_gitignore: bool = True,
+        workspace_root: Optional[Path] = None,
+    ) -> None:
+        load_folder_children(
+            node,
+            ignore_engine=ignore_engine,
+            excluded_patterns=excluded_patterns,
+            use_gitignore=use_gitignore,
+            workspace_root=workspace_root,
+        )

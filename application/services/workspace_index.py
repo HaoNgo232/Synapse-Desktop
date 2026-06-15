@@ -19,13 +19,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 
 if TYPE_CHECKING:
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.ports.ignore_engine_port import IIgnoreEngine
+
+from domain.ports.workspace_scanner import IWorkspaceScanner
 
 logger = logging.getLogger(__name__)
 
+HAS_SCANDIR_RS = False
+
 
 def _get_ignore_spec(
-    workspace_path: Path, ignore_engine: "IgnoreEngine"
+    workspace_path: Path, ignore_engine: "IIgnoreEngine"
 ) -> pathspec.PathSpec:
     """Helper để lấy pathspec cho workspace."""
     from application.services.workspace_config import (
@@ -45,14 +49,13 @@ def _get_ignore_spec(
 def build_search_index(
     workspace_path: Path,
     generation_check: Optional[Callable[[], bool]] = None,
-    ignore_engine: Optional["IgnoreEngine"] = None,
+    ignore_engine: Optional["IIgnoreEngine"] = None,
 ) -> Dict[str, List[str]]:
     """Build flat search index sử dụng scandir-rs (nếu có) hoặc os.walk."""
     from shared.constants import DIRECTORY_QUICK_SKIP
-    from infrastructure.filesystem.file_utils import (
+    from shared.utils.file_utils import (
         is_binary_file,
         is_system_path_str,
-        HAS_SCANDIR_RS,
     )
 
     scandir_rs = None
@@ -60,13 +63,13 @@ def build_search_index(
         try:
             import scandir_rs
         except ImportError:
-            HAS_SCANDIR_RS = False
+            pass
 
     root_path = workspace_path.resolve()
     if ignore_engine is None:
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.ports.registry import DomainRegistry
 
-        ignore_engine = IgnoreEngine()
+        ignore_engine = DomainRegistry.ignore_engine()
 
     spec = _get_ignore_spec(root_path, ignore_engine)
     root_path_str = str(root_path)
@@ -221,14 +224,13 @@ def _search_content_in_files(
 def collect_files_from_disk(
     folder: Path,
     workspace_path: Optional[Path] = None,
-    ignore_engine: Optional["IgnoreEngine"] = None,
+    ignore_engine: Optional["IIgnoreEngine"] = None,
 ) -> List[str]:
     """Scan filesystem trực tiếp để lấy tất cả files trong folder (lazy loading fallback)."""
     from shared.constants import DIRECTORY_QUICK_SKIP
-    from infrastructure.filesystem.file_utils import (
+    from shared.utils.file_utils import (
         is_binary_file,
         is_system_path_str,
-        HAS_SCANDIR_RS,
     )
 
     scandir_rs = None
@@ -236,16 +238,16 @@ def collect_files_from_disk(
         try:
             import scandir_rs
         except ImportError:
-            HAS_SCANDIR_RS = False
+            pass
 
     if workspace_path is None:
         raise ValueError("workspace_path is required")
 
     root_path = workspace_path.resolve()
     if ignore_engine is None:
-        from infrastructure.filesystem.ignore_engine import IgnoreEngine
+        from domain.ports.registry import DomainRegistry
 
-        ignore_engine = IgnoreEngine()
+        ignore_engine = DomainRegistry.ignore_engine()
 
     spec = _get_ignore_spec(root_path, ignore_engine)
     root_path_str = str(root_path)
@@ -334,9 +336,6 @@ def collect_files_from_disk(
     return result
 
 
-from domain.ports.workspace_scanner import IWorkspaceScanner
-
-
 class WorkspaceScanner(IWorkspaceScanner):
     """
     Adapter class for IWorkspaceScanner using collect_files_from_disk.
@@ -359,11 +358,10 @@ class WorkspaceScanService:
         excluded_patterns: Optional[List[str]] = None,
         use_gitignore: bool = True,
     ) -> Any:
-        from infrastructure.filesystem.file_utils import scan_directory
+        from domain.ports.registry import DomainRegistry
 
-        return scan_directory(
+        return DomainRegistry.directory_scanner().scan_directory(
             workspace,
-            ignore_engine=ignore_engine,
             excluded_patterns=excluded_patterns,
             use_gitignore=use_gitignore,
         )

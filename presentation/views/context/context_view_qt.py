@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Optional, Set, List, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.ports.ignore_engine_port import IIgnoreEngine
     from application.interfaces.tokenization_port import ITokenizationService
     from domain.tokenization.comparison_service import (
         TokenComparison,
@@ -23,9 +23,9 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer
 
 
-from infrastructure.filesystem.file_utils import TreeItem
-from infrastructure.filesystem.file_watcher_facade import FileWatcher, WatcherCallbacks
-from infrastructure.persistence.settings_manager import update_app_setting
+from domain.smart_context.tree_item import TreeItem
+from domain.ports.file_watcher_port import WatcherCallbacks
+from domain.ports.registry import DomainRegistry
 from domain.config.output_format import (
     OutputStyle,
     get_style_by_id,
@@ -44,7 +44,19 @@ from presentation.views.context.tree_management_controller import (
 )
 
 
+def update_app_setting(**kwargs: Any) -> bool:
+    svc = DomainRegistry.settings_service()
+    for k, v in kwargs.items():
+        svc.update_setting(k, v)
+    return True
+
+
 logger = logging.getLogger(__name__)
+
+
+# Compatibility Alias for UI Tests
+class FileWatcher:
+    pass
 
 
 class ContextViewQt(
@@ -59,7 +71,7 @@ class ContextViewQt(
         parent: Optional[QWidget] = None,
         prompt_builder=None,
         clipboard_service=None,
-        ignore_engine: Optional["IgnoreEngine"] = None,
+        ignore_engine: Optional["IIgnoreEngine"] = None,
         tokenization_service: Optional["ITokenizationService"] = None,
         token_comparison_service: Optional["TokenComparisonService"] = None,
     ):
@@ -69,17 +81,11 @@ class ContextViewQt(
 
         # IgnoreEngine duoc inject tu ServiceContainer
         if ignore_engine is None:
-            from infrastructure.filesystem.ignore_engine import IgnoreEngine as _IE
-
-            ignore_engine = _IE()
-        self._ignore_engine: "IgnoreEngine" = ignore_engine
+            ignore_engine = DomainRegistry.ignore_engine()
+        self._ignore_engine: "IIgnoreEngine" = ignore_engine
 
         if tokenization_service is None:
-            from infrastructure.adapters.encoder_registry import (
-                get_tokenization_service,
-            )
-
-            tokenization_service = get_tokenization_service()
+            tokenization_service = DomainRegistry.tokenization_service()
         self._tokenization_service: "ITokenizationService" = tokenization_service
 
         if token_comparison_service is None:
@@ -107,7 +113,7 @@ class ContextViewQt(
         self._ai_suggest_generation: int = 0
 
         # Services (with dependency injection support)
-        self._file_watcher: Optional[FileWatcher] = FileWatcher()
+        self._file_watcher = DomainRegistry.file_watcher_service()
 
         if prompt_builder is None:
             from application.services.prompt_build_service import PromptBuildService
@@ -119,9 +125,7 @@ class ContextViewQt(
         self._prompt_builder = prompt_builder
 
         if clipboard_service is None:
-            from infrastructure.adapters.clipboard_service import QtClipboardService
-
-            clipboard_service = QtClipboardService()
+            clipboard_service = DomainRegistry.clipboard_service()
         self._clipboard_service = clipboard_service
 
         # RelatedFilesController: quan ly logic auto-select related files
@@ -243,9 +247,7 @@ class ContextViewQt(
         self._related_controller.set_mode(False, 0, silent=True)
 
         # 3. Clear all caches for old workspace via CacheRegistry
-        from infrastructure.adapters.cache_registry import cache_registry
-
-        cache_registry.invalidate_for_workspace()
+        DomainRegistry.cache_registry().invalidate_for_workspace()
         self._copy_controller._prompt_cache.invalidate_all()
 
         # 4. Reset preset controller BEFORE loading tree to avoid race condition
@@ -926,12 +928,10 @@ class ContextViewQt(
     @Slot()
     def _populate_history_menu(self) -> None:
         """Đổ dữ liệu recent instructions vào history menu khi được click."""
-        from infrastructure.persistence.settings_manager import load_app_settings
-
         menu = self._history_menu
         menu.clear()
 
-        settings = load_app_settings()
+        settings = DomainRegistry.settings()
         history = settings.instruction_history
 
         if not history:
@@ -976,12 +976,7 @@ class ContextViewQt(
                 return
 
             if action_type == "delete" and text:
-                from infrastructure.persistence.settings_manager import (
-                    load_app_settings,
-                    update_app_setting,
-                )
-
-                settings = load_app_settings()
+                settings = DomainRegistry.settings()
                 history_list = settings.instruction_history.copy()
                 if text in history_list:
                     history_list.remove(text)
@@ -1000,7 +995,6 @@ class ContextViewQt(
     def _clear_prompt_history(self) -> None:
         """Xoa toan bo lich su cua prompt input."""
         from PySide6.QtWidgets import QMessageBox
-        from infrastructure.persistence.settings_manager import update_app_setting
 
         reply = QMessageBox.question(
             self,
@@ -1156,9 +1150,11 @@ class ContextViewQt(
         Resets encoder and clears cache to trigger recount with the new tokenizer.
         """
         # Reset encoder va reinitialize voi model moi qua TokenizationService
-        from infrastructure.adapters.encoder_registry import get_tokenizer_repo
+        from domain.config.model_config import get_model_by_id
 
-        repo = get_tokenizer_repo()
+        settings = DomainRegistry.settings()
+        model_config = get_model_by_id(settings.model_id)
+        repo = model_config.tokenizer_repo if model_config else None
         self._tokenization_service.set_model_config(tokenizer_repo=repo)
 
         # Invalidate prompt cache (token counts will differ with new tokenizer)
@@ -1251,14 +1247,12 @@ class ContextViewQt(
             toast_error("Please write your instruction first.")
             return
 
-        from infrastructure.persistence.settings_manager import load_app_settings
         from application.services.ai_context_worker import AIContextWorker
         from domain.prompt.generator import generate_file_map
-        from infrastructure.git.git_utils import get_git_diffs
         from domain.prompt.context_builder_prompts import build_full_tree_string
         from presentation.components.toast.toast_qt import toast_error
 
-        settings = load_app_settings()
+        settings = DomainRegistry.settings()
         if not settings.ai_api_key:
             toast_error("Please configure AI API Key in Settings first.")
             return
@@ -1283,7 +1277,7 @@ class ContextViewQt(
         git_diff_str = None
         if workspace:
             try:
-                diff_result = get_git_diffs(workspace)
+                diff_result = DomainRegistry.git_service().get_diffs(workspace)
                 if diff_result is not None:
                     _, git_diff_str = build_full_tree_string(
                         file_tree_map, diff_result, include_git=True

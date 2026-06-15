@@ -31,11 +31,22 @@ from domain.config.output_format import (
     get_style_by_id,
     DEFAULT_OUTPUT_STYLE,
 )
-from infrastructure.persistence.settings_manager import load_app_settings
+from domain.ports.registry import DomainRegistry
 from presentation.components.token_usage_bar import TokenUsageBar
 
 # Compatibility Alias for UI Tests
 TokenStatsPanelQt = TokenUsageBar
+
+
+def load_app_settings() -> Any:
+    return DomainRegistry.settings()
+
+
+def update_app_setting(**kwargs: Any) -> bool:
+    svc = DomainRegistry.settings_service()
+    for k, v in kwargs.items():
+        svc.update_setting(k, v)
+    return True
 
 
 class UIBuilderMixin:
@@ -340,10 +351,8 @@ class UIBuilderMixin:
         # --- Phần phải: Output Format + Model Selector + Token Tracker ---
         toolbar_layout.addStretch()
 
-        # Import sớm để dùng cho cả format combo lẫn model selector
-        from infrastructure.persistence.settings_manager import (
-            load_app_settings as _load_settings,
-        )
+        # Dung DomainRegistry thay vi load_app_settings
+        _load_settings = DomainRegistry.settings
 
         # Output Format Selector (QToolButton + QMenu - đồng nhất với Model Selector)
         self._format_menu = QMenu(self)
@@ -505,7 +514,7 @@ class UIBuilderMixin:
         # Cập nhật model hiện tại từ settings và đồng bộ view
         from domain.config.model_config import get_model_by_id, DEFAULT_MODEL_ID
 
-        app_settings = load_app_settings()
+        app_settings = DomainRegistry.settings()
         saved_model_id = app_settings.model_id or DEFAULT_MODEL_ID
         self._selected_model_id = saved_model_id  # Sync quan trọng cho view
 
@@ -553,17 +562,11 @@ class UIBuilderMixin:
         # Nhan ignore_engine tu ContextViewQt (hoac fallback sang instance moi)
         _ignore_engine = getattr(self, "_ignore_engine", None)
         if _ignore_engine is None:
-            from infrastructure.filesystem.ignore_engine import IgnoreEngine as _IE
-
-            _ignore_engine = _IE()
+            _ignore_engine = DomainRegistry.ignore_engine()
 
         _tokenization_service = getattr(self, "_tokenization_service", None)
         if _tokenization_service is None:
-            from infrastructure.adapters.encoder_registry import (
-                get_tokenization_service,
-            )
-
-            _tokenization_service = get_tokenization_service()
+            _tokenization_service = DomainRegistry.tokenization_service()
 
         self.file_tree_widget = FileTreeWidget(
             ignore_engine=_ignore_engine,
@@ -885,7 +888,6 @@ class UIBuilderMixin:
         """
         from PySide6.QtWidgets import QProgressBar, QCheckBox, QButtonGroup
         from presentation.components.toggle_switch import ToggleSwitch
-        from infrastructure.persistence.settings_manager import update_app_setting
 
         container = QWidget()
         container.setStyleSheet("background-color: transparent;")
@@ -1238,8 +1240,6 @@ class UIBuilderMixin:
             self._model_btn.setText(action.text())
 
             # Persist selection vào settings để survive app restart
-            from infrastructure.persistence.settings_manager import update_app_setting
-
             update_app_setting(model_id=model_id)
 
             # Trigger logic in ContextViewQt

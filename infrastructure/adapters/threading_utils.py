@@ -11,6 +11,8 @@ import threading
 from typing import Callable, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from domain.ports.lifecycle_port import IAppLifecycleService
+
 
 # ────────────────────────────────────────────────────────────────
 # Global Stop Event — set when app is closing
@@ -213,3 +215,32 @@ def shutdown_all() -> None:
     if _global_task_manager:
         _global_task_manager.shutdown(wait=False)
         _global_task_manager = None
+
+
+class AppLifecycleService(IAppLifecycleService):
+    """Concrete implementation of IAppLifecycleService."""
+
+    def set_active_view(self, view_id: str) -> None:
+        set_active_view(view_id)
+
+    def get_active_view(self) -> str:
+        return get_active_view() or ""
+
+    def is_view_active(self, view_id: str) -> bool:
+        return is_view_active(view_id)
+
+    def is_app_stopping(self) -> bool:
+        return is_app_stopping()
+
+    def shutdown_all(self) -> None:
+        shutdown_all()
+
+    def stop_scanning(self) -> None:
+        from infrastructure.filesystem.file_scanner import stop_scanning
+
+        stop_scanning()
+
+    def stop_token_counting(self) -> None:
+        from infrastructure.adapters.token_display import stop_token_counting
+
+        stop_token_counting()

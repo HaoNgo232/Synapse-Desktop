@@ -209,3 +209,8 @@ class RecentFoldersService(IRecentFoldersService):
     def clear_recent_folders(self) -> None:
         clear_recent_folders()
 
+    def add_recent_folder(self, folder_path: str) -> bool:
+        return add_recent_folder(folder_path)
+
+    def get_folder_display_name(self, folder_path: str) -> str:
+        return get_folder_display_name(folder_path)

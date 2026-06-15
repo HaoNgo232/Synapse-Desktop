@@ -160,8 +160,6 @@ def cleanup_old_backups(max_age_days: int = 7, max_count: int = 100) -> int:
     return deleted_count
 
 
-
-
 def apply_file_actions(
     file_actions: list[FileAction],
     workspace_roots: Optional[list[Path]] = None,
@@ -940,3 +938,14 @@ class FileActionsService(IFileActionsService):
     ) -> List[ActionResult]:
         return apply_file_actions(file_actions, workspace_roots, dry_run)
 
+    def apply_search_replace_to_content(
+        self,
+        content: str,
+        search: str,
+        replace: str,
+        occurrence: Optional[Union[Literal["first", "last"], int]],
+    ) -> tuple[bool, str, str]:
+        return apply_search_replace_to_content(content, search, replace, occurrence)
+
+    def normalize_eol(self, text: str, eol: str) -> str:
+        return normalize_eol(text, eol)

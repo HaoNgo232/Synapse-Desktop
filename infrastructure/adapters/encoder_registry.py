@@ -18,7 +18,7 @@ import threading
 from typing import Optional
 
 from application.interfaces.tokenization_port import ITokenizationService
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 
 # TokenizationService singleton instance (thread-safe) - backward compat
 # Preference: Su dung ServiceContainer.tokenization thay the

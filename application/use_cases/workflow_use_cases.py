@@ -124,9 +124,9 @@ class BuildContextUseCase:
             payload={"task_description": command.task_description},
         )
 
-        from infrastructure.git.git_utils import GitService
+        from domain.ports.registry import DomainRegistry
 
-        git_service = GitService()
+        git_service = DomainRegistry.git_service()
 
         def _run(context: WorkflowContext) -> None:
             context.result = run_context_builder(
@@ -178,9 +178,9 @@ class CodeReviewUseCase:
             payload={"review_focus": command.review_focus},
         )
 
-        from infrastructure.git.git_utils import GitService
+        from domain.ports.registry import DomainRegistry
 
-        git_service = GitService()
+        git_service = DomainRegistry.git_service()
 
         def _run(context: WorkflowContext) -> None:
             context.result = run_code_review(

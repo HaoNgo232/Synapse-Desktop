@@ -26,10 +26,7 @@ from domain.config.model_config import (
     get_model_by_id,
     ModelConfig,
 )
-from infrastructure.persistence.settings_manager import (
-    load_app_settings,
-    update_app_setting,
-)
+from domain.ports.registry import DomainRegistry
 
 
 class TokenStatsPanelQt(QWidget):
@@ -61,7 +58,7 @@ class TokenStatsPanelQt(QWidget):
         self._is_loading = False
 
         # Load saved model
-        saved_model_id = load_app_settings().model_id or DEFAULT_MODEL_ID
+        saved_model_id = DomainRegistry.settings().model_id or DEFAULT_MODEL_ID
         model = get_model_by_id(saved_model_id)
         if not model:
             saved_model_id = DEFAULT_MODEL_ID
@@ -262,7 +259,7 @@ class TokenStatsPanelQt(QWidget):
             if model:
                 self._selected_model_id = model_id
                 self._selected_model = model
-                update_app_setting(model_id=model_id)
+                DomainRegistry.settings_service().update_setting("model_id", model_id)
 
                 # Reset tokenizer de reload voi model moi qua TokenizationService
                 self._tokenization_service.reset_encoder()

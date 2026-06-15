@@ -22,8 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
-from infrastructure.ai.base_provider import LLMMessage, LLMResponse
-from infrastructure.ai.openai_provider import OpenAICompatibleProvider
+from domain.ports.ai_port import LLMMessage, LLMResponse
 from domain.prompt.context_builder_prompts import (
     CONTEXT_SELECTION_SCHEMA,
     build_context_builder_messages,
@@ -124,7 +123,7 @@ class AIContextWorker(QRunnable):
             if self._all_file_paths and self._workspace_root:
                 self.signals.progress.emit("Generating Repo Map...")
                 try:
-                    from infrastructure.adapters.ast_parser import generate_repo_map
+                    from domain.ports.registry import DomainRegistry
 
                     file_list = [
                         str(self._workspace_root / p)
@@ -132,7 +131,7 @@ class AIContextWorker(QRunnable):
                         else p
                         for p in self._all_file_paths
                     ]
-                    repo_map_str = generate_repo_map(
+                    repo_map_str = DomainRegistry.ast_parser().generate_repo_map(
                         file_list, workspace_root=self._workspace_root
                     )
                     if repo_map_str and not repo_map_str.strip():
@@ -145,8 +144,11 @@ class AIContextWorker(QRunnable):
 
             self.signals.progress.emit("Connecting to LLM...")
 
+            from domain.ports.registry import DomainRegistry
+
             # Khoi tao provider rieng cho worker nay (khong chia se state)
-            provider = OpenAICompatibleProvider()
+            provider_factory = DomainRegistry.ai_provider_factory()
+            provider = provider_factory()
             provider.configure(api_key=self._api_key, base_url=self._base_url)
 
             # Xay dung messages cho LLM (co Repo Map neu co)

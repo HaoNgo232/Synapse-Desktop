@@ -15,11 +15,6 @@ Functions:
 
 from typing import Callable
 
-from infrastructure.persistence.settings_manager import (
-    load_app_settings,
-    update_app_setting,
-)
-
 
 # ============================================================
 # Preset profiles cho excluded patterns
@@ -40,18 +35,24 @@ PRESET_PROFILES = {
 
 def get_excluded_patterns() -> list[str]:
     """Tra ve danh sach excluded patterns da normalize tu settings."""
-    settings = load_app_settings()
+    from domain.ports.registry import DomainRegistry
+
+    settings = DomainRegistry.settings_service().load_settings()
     return settings.get_excluded_patterns_list()
 
 
 def get_use_gitignore() -> bool:
     """Tra ve co respect .gitignore khong (True/False)."""
-    return load_app_settings().use_gitignore
+    from domain.ports.registry import DomainRegistry
+
+    return DomainRegistry.settings_service().load_settings().use_gitignore
 
 
 def get_use_relative_paths() -> bool:
     """Tra ve co dung workspace-relative paths trong prompts khong."""
-    return load_app_settings().use_relative_paths
+    from domain.ports.registry import DomainRegistry
+
+    return DomainRegistry.settings_service().load_settings().use_relative_paths
 
 
 # ============================================================
@@ -108,10 +109,14 @@ def add_excluded_patterns(patterns: list[str]) -> bool:
         if normalized and normalized not in merged:
             merged.append(normalized)
     new_value = "\n".join(merged)
-    if update_app_setting(excluded_folders=new_value):
+    try:
+        from domain.ports.registry import DomainRegistry
+
+        DomainRegistry.settings_service().update_setting("excluded_folders", new_value)
         _excluded_notifier.emit()
         return True
-    return False
+    except Exception:
+        return False
 
 
 def remove_excluded_patterns(patterns: list[str]) -> bool:
@@ -131,7 +136,11 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
     existing = get_excluded_patterns()
     filtered = [p for p in existing if p not in to_remove]
     new_value = "\n".join(filtered)
-    if update_app_setting(excluded_folders=new_value):
+    try:
+        from domain.ports.registry import DomainRegistry
+
+        DomainRegistry.settings_service().update_setting("excluded_folders", new_value)
         _excluded_notifier.emit()
         return True
-    return False
+    except Exception:
+        return False

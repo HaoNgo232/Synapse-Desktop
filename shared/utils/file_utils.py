@@ -1,5 +1,7 @@
 import os
 import stat
+import platform
+import re
 from pathlib import Path
 from shared.constants import BINARY_EXTENSIONS
 
@@ -45,6 +47,11 @@ _TEXT_EXTENSIONS = frozenset(
         ".tf",
         ".dockerfile",
     }
+)
+
+# Pre-compile regex for is_system_path (module-level optimization)
+_WINDOWS_RESERVED_PATTERN = re.compile(
+    r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", re.IGNORECASE
 )
 
 
@@ -96,3 +103,43 @@ def is_binary_by_extension(file_path: Path) -> bool:
     Use is_binary_file() for more accurate detection.
     """
     return file_path.suffix.lower() in BINARY_EXTENSIONS
+
+
+def is_system_path_str(path_str: str) -> bool:
+    """
+    Version nhanh của is_system_path nhận input là string.
+    Dùng để tối ưu trong các vòng lặp quét hàng chục nghìn file.
+    """
+    system = platform.system()
+    name = os.path.basename(path_str)
+
+    if system == "Windows":
+        # Check reserved names using pre-compiled regex
+        if _WINDOWS_RESERVED_PATTERN.match(name):
+            return True
+        # Check system folders
+        lower_path = path_str.lower()
+        if "\\windows\\" in lower_path or "\\system32\\" in lower_path:
+            return True
+
+    elif system == "Darwin":  # macOS
+        # Common macOS system files/folders
+        if name in (".DS_Store", ".Trashes", ".fseventsd") or name.startswith(
+            ".Spotlight-"
+        ):
+            return True
+
+    elif system == "Linux":
+        # Critical Linux system directories
+        if path_str.startswith(("/proc/", "/sys/", "/dev/")):
+            return True
+
+    return False
+
+
+def is_system_path(file_path: Path) -> bool:
+    """
+    Check if path is an OS system path that should be excluded.
+    Supports: Windows, macOS, Linux
+    """
+    return is_system_path_str(str(file_path))

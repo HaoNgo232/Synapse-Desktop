@@ -7,7 +7,6 @@ import subprocess
 import sys
 import re
 from pathlib import Path
-from dataclasses import dataclass, field
 from typing import Optional, Any, Protocol
 import logging
 
@@ -15,6 +14,9 @@ import logging
 # Truoc day inline de tranh circular import, gio an toan vi path_utils
 # khong import git_utils hay prompt_generator
 from shared.utils.path_utils import path_for_display
+from shared.types.git_types import DiffOnlyResult
+from shared.types.git_types import GitDiffResult, GitCommit, GitLogResult
+from domain.workflow.interfaces.git_port import IGitService
 
 
 # Diff Only - file_summary mo ta context la git changes
@@ -106,10 +108,6 @@ _DIFF_GIT_HEADER_RE = re.compile(
 )
 
 
-from shared.types.git_types import GitDiffResult, GitCommit, GitLogResult
-from domain.workflow.interfaces.git_port import IGitService
-
-
 class GitService(IGitService):
     def get_diffs(
         self, root_path: Path, base_ref: Optional[str] = None
@@ -121,20 +119,51 @@ class GitService(IGitService):
     ) -> Optional[GitLogResult]:
         return get_git_logs(root_path, max_commits)
 
+    def get_diff_only(
+        self,
+        root_path: Path,
+        num_commits: int = 0,
+        include_staged: bool = True,
+        include_unstaged: bool = True,
+    ) -> DiffOnlyResult:
+        return get_diff_only(
+            root_path,
+            num_commits=num_commits,
+            include_staged=include_staged,
+            include_unstaged=include_unstaged,
+        )
 
-@dataclass
-class DiffOnlyResult:
-    """Kết quả cho Copy Diff Only feature"""
+    def filter_diff_by_files(self, diff_content: str, files: list[str]) -> str:
+        return filter_diff_by_files(diff_content, files)
 
-    diff_content: str
-    files_changed: int
-    insertions: int
-    deletions: int
-    commits_included: int
-    changed_files: list[str] = field(
-        default_factory=_new_str_list
-    )  # List of changed file paths
-    error: Optional[str] = None
+    def extract_changed_files_from_diff(self, diff_content: str) -> list[str]:
+        return extract_changed_files_from_diff(diff_content)
+
+    def build_diff_prompt(
+        self,
+        diff_result: DiffOnlyResult,
+        instructions: str,
+        include_changed_content: bool,
+        include_tree_structure: bool,
+        workspace_root: Optional[Path] = None,
+        use_relative_paths: bool = False,
+        include_related_files: bool = False,
+        related_depth: int = 1,
+        related_max_files: int = 20,
+        output_format: str = "xml",
+    ) -> str:
+        return build_diff_only_prompt(
+            diff_result,
+            instructions,
+            include_changed_content,
+            include_tree_structure,
+            workspace_root,
+            use_relative_paths,
+            include_related_files,
+            related_depth,
+            related_max_files,
+            output_format,
+        )
 
 
 def is_git_installed() -> bool:

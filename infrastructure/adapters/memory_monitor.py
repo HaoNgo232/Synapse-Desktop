@@ -10,7 +10,6 @@ Cung cấp:
 
 import os
 from typing import Callable, Optional
-from dataclasses import dataclass
 
 from PySide6.QtCore import QTimer
 
@@ -21,25 +20,10 @@ from shared.logging_config import log_error
 import psutil
 
 
-@dataclass
-class MemoryStats:
-    """
-    Thống kê memory usage.
-
-    Attributes:
-        rss_mb: Resident Set Size in MB (actual physical memory used)
-        token_cache_count: Số entries trong token cache
-        file_count: Số files trong tree
-        warning: Warning message nếu có
-    """
-
-    rss_mb: float
-    token_cache_count: int = 0
-    file_count: int = 0
-    warning: Optional[str] = None
+from domain.ports.memory_port import IMemoryMonitor, MemoryStats
 
 
-class MemoryMonitor:
+class MemoryMonitor(IMemoryMonitor):
     """
     Service theo dõi memory usage của app.
 
@@ -68,7 +52,7 @@ class MemoryMonitor:
             on_update: Callback khi có memory stats mới.
                        Called on main thread — safe for direct UI updates.
         """
-        self.on_update = on_update
+        self._on_update = on_update
         self._timer: Optional[QTimer] = None
         self._is_running = False
         self._process = psutil.Process(os.getpid())
@@ -76,6 +60,14 @@ class MemoryMonitor:
         # External stats (set từ bên ngoài)
         self._token_cache_count = 0
         self._file_count = 0
+
+    @property
+    def on_update(self) -> Optional[Callable[[MemoryStats], None]]:
+        return self._on_update
+
+    @on_update.setter
+    def on_update(self, callback: Optional[Callable[[MemoryStats], None]]) -> None:
+        self._on_update = callback
 
     def start(self):
         """Bắt đầu monitoring. Must be called from main thread."""
@@ -194,26 +186,4 @@ def get_memory_monitor() -> MemoryMonitor:
     return _monitor
 
 
-def format_memory_display(stats: MemoryStats) -> str:
-    """
-    Format memory stats thành string để hiển thị.
-
-    Args:
-        stats: MemoryStats object
-
-    Returns:
-        Formatted string, ví dụ: "Memory: 156MB | Cache: 1.2k | Files: 350"
-    """
-    parts = [f"Mem: {stats.rss_mb:.0f}MB"]
-
-    if stats.token_cache_count > 0:
-        if stats.token_cache_count >= 1000:
-            cache_str = f"{stats.token_cache_count / 1000:.1f}k"
-        else:
-            cache_str = str(stats.token_cache_count)
-        parts.append(f"Cache: {cache_str}")
-
-    if stats.file_count > 0:
-        parts.append(f"Files: {stats.file_count}")
-
-    return " | ".join(parts)
+# format_memory_display was moved to domain/ports/memory_port.py

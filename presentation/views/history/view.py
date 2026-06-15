@@ -23,12 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QTimer
 
 from presentation.config.theme import ThemeColors
-from infrastructure.persistence.history_service import (
-    get_history_entries,
-    get_entry_by_id,
-    clear_history,
-    get_history_stats,
-)
+from domain.ports.registry import DomainRegistry
 from presentation.views.history.list_panel import HistoryListPanel
 from presentation.views.history.detail_panel import HistoryDetailPanel
 from presentation.views.history.widgets import make_ghost_btn, make_danger_btn
@@ -199,13 +194,13 @@ class HistoryViewQt(QWidget):
     @Slot()
     def _refresh(self) -> None:
         """Refresh danh sach entries."""
-        entries = get_history_entries(limit=100)
+        entries = DomainRegistry.history_service().get_history_entries(limit=100)
         self._list_panel.load_entries(entries)
         self._update_stats()
 
     def _update_stats(self) -> None:
         """Update stats label o header."""
-        stats = get_history_stats()
+        stats = DomainRegistry.history_service().get_history_stats()
         self._stats_label.setText(
             f"{stats['total_entries']} entries · "
             f"{stats['total_operations']} ops · "
@@ -218,7 +213,7 @@ class HistoryViewQt(QWidget):
 
     def _on_entry_selected(self, entry_id: str) -> None:
         """Goi boi HistoryListPanel khi user chon mot entry."""
-        entry = get_entry_by_id(entry_id)
+        entry = DomainRegistry.history_service().get_entry_by_id(entry_id)
         if entry:
             self._detail_panel.show_entry(entry)
         else:
@@ -246,7 +241,7 @@ class HistoryViewQt(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            if clear_history():
+            if DomainRegistry.history_service().clear_history():
                 self._list_panel.clear_selection()
                 self._refresh()
                 self._detail_panel.show_empty()

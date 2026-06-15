@@ -27,8 +27,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from presentation.config.theme import ThemeColors
-from infrastructure.persistence.history_service import HistoryEntry, delete_entry
-from infrastructure.adapters.clipboard_utils import copy_to_clipboard
+from domain.ports.history_port import HistoryEntry
+from domain.ports.registry import DomainRegistry
+from presentation.utils.clipboard import copy_to_clipboard
 from presentation.views.history.widgets import (
     FileChangeRow,
     ErrorCard,
@@ -580,7 +581,7 @@ class HistoryDetailPanel(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            if delete_entry(entry_id):
+            if DomainRegistry.history_service().delete_entry(entry_id):
                 if self._on_entry_deleted:
                     self._on_entry_deleted()
                 if self._on_footer_message:

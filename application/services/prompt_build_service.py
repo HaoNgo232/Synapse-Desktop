@@ -18,7 +18,7 @@ from domain.prompt.generator import (
     OutputStyle,
 )
 from domain.prompt.copy_mode import CopyConfig, CopyMode
-from infrastructure.filesystem.file_utils import TreeItem
+from domain.smart_context.tree_item import TreeItem
 from shared.types.prompt_types_extra import BuildResult
 from application.services.prompt_helpers import (
     count_per_file_tokens,
@@ -58,11 +58,9 @@ class PromptBuildService:
         tokenization_service: Optional["ITokenizationService"] = None,
     ):
         if tokenization_service is None:
-            from infrastructure.adapters.encoder_registry import (
-                get_tokenization_service,
-            )
+            from domain.ports.registry import DomainRegistry
 
-            tokenization_service = get_tokenization_service()
+            tokenization_service = DomainRegistry.tokenization_service()
         self._tokenization_service = tokenization_service
 
     def build_prompt(
@@ -237,10 +235,13 @@ class PromptBuildService:
 
         # 0. Fetch git data neu can
         if include_git_changes:
-            from infrastructure.git.git_utils import get_git_diffs, get_git_logs
+            from domain.ports.registry import DomainRegistry
 
-            git_diffs = get_git_diffs(workspace)
-            git_logs = get_git_logs(workspace, max_commits=config.git_commit_depth)
+            git_service = DomainRegistry.git_service()
+            git_diffs = git_service.get_diffs(workspace)
+            git_logs = git_service.get_logs(
+                workspace, max_commits=config.git_commit_depth
+            )
 
         # 1. Generate file map
         if tree_item:

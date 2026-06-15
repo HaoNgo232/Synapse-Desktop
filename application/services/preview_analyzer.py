@@ -15,10 +15,7 @@ from domain.diff.generator import (
     generate_create_diff_lines,
     generate_delete_diff_lines,
 )
-from infrastructure.filesystem.file_actions import (
-    apply_search_replace_to_content,
-    normalize_eol,
-)
+from domain.ports.registry import DomainRegistry
 
 
 @dataclass
@@ -334,12 +331,18 @@ def generate_preview_diff_lines(
             for change in file_action.changes:
                 if change.search and change.content:
                     eol = "\r\n" if "\r\n" in modified_content else "\n"
-                    normalized_search = normalize_eol(change.search, eol)
-                    success, new_content, _ = apply_search_replace_to_content(
-                        modified_content,
-                        normalized_search,
-                        change.content,
-                        change.occurrence,
+                    normalized_search = (
+                        DomainRegistry.file_actions_service().normalize_eol(
+                            change.search, eol
+                        )
+                    )
+                    success, new_content, _ = (
+                        DomainRegistry.file_actions_service().apply_search_replace_to_content(
+                            modified_content,
+                            normalized_search,
+                            change.content,
+                            change.occurrence,
+                        )
                     )
                     if success:
                         modified_content = new_content

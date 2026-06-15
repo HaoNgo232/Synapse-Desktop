@@ -261,23 +261,22 @@ class TestDependencyInjection:
             with patch(
                 "presentation.views.context.context_view_qt.UIBuilderMixin._build_ui"
             ):
-                with patch("presentation.views.context.context_view_qt.FileWatcher"):
-                    with patch("PySide6.QtGui.QShortcut"):
-                        # Goi __init__ thuc su nhung QWidget.__init__ da bi neutralised
-                        view.__init__(
-                            get_workspace=lambda: Path("/test"),
-                            prompt_builder=mock_builder,
-                            clipboard_service=mock_clipboard,
-                        )
+                with patch("PySide6.QtGui.QShortcut"):
+                    # Goi __init__ thuc su nhung QWidget.__init__ da bi neutralised
+                    view.__init__(
+                        get_workspace=lambda: Path("/test"),
+                        prompt_builder=mock_builder,
+                        clipboard_service=mock_clipboard,
+                    )
 
-                    assert view._prompt_builder is mock_builder
-                    assert view._clipboard_service is mock_clipboard
+                assert view._prompt_builder is mock_builder
+                assert view._clipboard_service is mock_clipboard
 
     def test_context_view_creates_defaults_when_none(self):
         """ContextViewQt tao default services khi khong truyen vao."""
         from presentation.views.context.context_view_qt import ContextViewQt
         from application.services.prompt_build_service import PromptBuildService
-        from infrastructure.adapters.clipboard_service import QtClipboardService
+        from domain.ports.clipboard_port import IClipboardService
 
         with patch(
             "presentation.views.context.context_view_qt.QWidget.__init__",
@@ -286,14 +285,13 @@ class TestDependencyInjection:
             with patch(
                 "presentation.views.context.context_view_qt.UIBuilderMixin._build_ui"
             ):
-                with patch("presentation.views.context.context_view_qt.FileWatcher"):
-                    with patch("PySide6.QtGui.QShortcut"):
-                        view = ContextViewQt(
-                            get_workspace=lambda: Path("/test"),
-                        )
+                with patch("PySide6.QtGui.QShortcut"):
+                    view = ContextViewQt(
+                        get_workspace=lambda: Path("/test"),
+                    )
 
-                    assert isinstance(view._prompt_builder, PromptBuildService)
-                    assert isinstance(view._clipboard_service, QtClipboardService)
+                assert isinstance(view._prompt_builder, PromptBuildService)
+                assert isinstance(view._clipboard_service, IClipboardService)
 
     def test_mock_services_are_called_correctly(self):
         """Injected mocks receive calls dung nhu expected."""

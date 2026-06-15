@@ -29,12 +29,9 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from infrastructure.filesystem.file_utils import (
-    TreeItem,
-    scan_directory_shallow,
-    is_binary_file,
-)
-from infrastructure.filesystem.ignore_engine import IgnoreEngine
+from domain.smart_context.tree_item import TreeItem
+from shared.utils.file_utils import is_binary_file
+from domain.ports.ignore_engine_port import IIgnoreEngine
 from domain.selection.manager import SelectionManager
 
 logger = logging.getLogger(__name__)
@@ -189,7 +186,7 @@ class FileTreeModel(QAbstractItemModel):
     selection_changed = Signal(set)  # Set[str] - selected file paths
     token_count_updated = Signal(str, int)  # (path, count)
 
-    def __init__(self, ignore_engine: IgnoreEngine, parent: Optional[QObject] = None):
+    def __init__(self, ignore_engine: IIgnoreEngine, parent: Optional[QObject] = None):
         super().__init__(parent)
 
         # IgnoreEngine duoc inject tu ServiceContainer
@@ -491,24 +488,21 @@ class FileTreeModel(QAbstractItemModel):
             return
 
         try:
-            from infrastructure.filesystem.file_utils import (
-                load_folder_children,
-                TreeItem as _TreeItem,
-            )
+            from domain.ports.registry import DomainRegistry
             from application.services.workspace_config import (
                 get_excluded_patterns,
                 get_use_gitignore,
             )
 
             # Build a temporary TreeItem to use with load_folder_children
-            temp_item = _TreeItem(
+            temp_item = TreeItem(
                 label=node.label,
                 path=node.path,
                 is_dir=True,
                 is_loaded=False,
                 children=[],
             )
-            load_folder_children(
+            DomainRegistry.directory_scanner().load_folder_children(
                 temp_item,
                 ignore_engine=self._ignore_engine,
                 excluded_patterns=get_excluded_patterns(),
@@ -601,7 +595,9 @@ class FileTreeModel(QAbstractItemModel):
 
             excluded = get_excluded_patterns()
 
-            tree_item = scan_directory_shallow(
+            from domain.ports.registry import DomainRegistry
+
+            tree_item = DomainRegistry.directory_scanner().scan_directory_shallow(
                 workspace_path,
                 ignore_engine=self._ignore_engine,
                 depth=1,
@@ -758,7 +754,6 @@ class FileTreeModel(QAbstractItemModel):
         if self._workspace_path is None:
             return
 
-        from infrastructure.filesystem.file_utils import is_binary_file
         from application.services.workspace_index import collect_files_from_disk
 
         for child in node.children:
@@ -1096,7 +1091,6 @@ class FileTreeModel(QAbstractItemModel):
 
     def _select_node(self, node: TreeNode) -> None:
         """Select node và tất cả children (recursive), skip binary files."""
-        from infrastructure.filesystem.file_utils import is_binary_file
 
         # Skip binary files
         if not node.is_dir and is_binary_file(Path(node.path)):
@@ -1140,7 +1134,6 @@ class FileTreeModel(QAbstractItemModel):
 
     def _select_all_recursive(self, node: TreeNode) -> None:
         """Recursively select tất cả nodes, skip binary files."""
-        from infrastructure.filesystem.file_utils import is_binary_file
 
         # Skip binary files
         if not node.is_dir and is_binary_file(Path(node.path)):
@@ -1305,7 +1298,6 @@ class TokenCountWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         """Đếm tokens cho tất cả files. Skip binary/image files."""
-        from infrastructure.filesystem.file_utils import is_binary_file
 
         # Max file size for token counting (5MB) - prevents OOM on large binaries
         MAX_TOKEN_FILE_SIZE = 5 * 1024 * 1024

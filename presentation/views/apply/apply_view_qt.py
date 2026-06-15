@@ -23,12 +23,12 @@ from domain.prompt.patch_detection_service import PatchDetectionService
 
 from presentation.config.theme import ThemeColors
 from domain.prompt.opx_parser import parse_any_response
-from infrastructure.filesystem.file_actions import apply_file_actions, ActionResult
-from infrastructure.adapters.clipboard_utils import (
+from domain.ports.action_result import ActionResult
+from domain.ports.registry import DomainRegistry
+from presentation.utils.clipboard import (
     copy_to_clipboard,
     get_clipboard_text,
 )
-from infrastructure.persistence.history_service import add_history_entry
 from application.services.preview_analyzer import (
     analyze_file_actions,
     PreviewRow,
@@ -43,6 +43,14 @@ from application.services.error_context import (
 from application.services.apply_service import convert_to_row_results, save_memory_block
 from presentation.components.diff_viewer_qt import DiffViewerWidget
 from presentation.components.toast.toast_qt import toast_success, toast_error
+
+
+def apply_file_actions(*args, **kwargs):
+    return DomainRegistry.file_actions_service().apply_file_actions(*args, **kwargs)
+
+
+def add_history_entry(*args, **kwargs):
+    return DomainRegistry.history_service().add_history_entry(*args, **kwargs)
 
 
 logger = logging.getLogger(__name__)

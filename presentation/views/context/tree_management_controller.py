@@ -167,11 +167,11 @@ class TreeManagementController(QObject):
 
     def open_remote_repo_dialog(self, parent_widget) -> None:
         """Mo dialog clone remote repository."""
-        from infrastructure.git.repo_manager import RepoManager
         from presentation.components.dialogs.dialogs_qt import RemoteRepoDialogQt
+        from domain.ports.registry import DomainRegistry
 
         if self._repo_manager is None:
-            self._repo_manager = RepoManager()
+            self._repo_manager = DomainRegistry.repo_manager()
 
         def on_clone_success(repo_path):
             """Handle clone thanh cong — mo cloned repo lam workspace."""
@@ -183,11 +183,11 @@ class TreeManagementController(QObject):
 
     def open_cache_management_dialog(self, parent_widget) -> None:
         """Mo dialog quan ly cached repos."""
-        from infrastructure.git.repo_manager import RepoManager
         from presentation.components.dialogs.dialogs_qt import CacheManagementDialogQt
+        from domain.ports.registry import DomainRegistry
 
         if self._repo_manager is None:
-            self._repo_manager = RepoManager()
+            self._repo_manager = DomainRegistry.repo_manager()
 
         def on_open_repo(repo_path):
             """Handle mo cached repo."""
@@ -214,9 +214,9 @@ class TreeManagementController(QObject):
         Invalidate cac cache lien quan den file nay.
         Thread-safe: co the goi tu bat ky thread nao.
         """
-        from infrastructure.adapters.cache_registry import cache_registry
+        from domain.ports.registry import DomainRegistry
 
-        cache_registry.invalidate_for_path(path)
+        DomainRegistry.cache_registry().invalidate_for_path(path)
         # Prompt cache la instance-level (khong nam trong registry)
         self._view.invalidate_prompt_cache()
 

@@ -89,7 +89,7 @@ fi
 echo -e "${GREEN}Starting application (Synapse Desktop)...${NC}\n"
 # Set PYTHONPATH to current directory to ensure modules are found
 export PYTHONPATH=$PYTHONPATH:.
-python3 -m presentation.main_window
+python3 main.py
 
 # Save exit code
 APP_EXIT_CODE=$?

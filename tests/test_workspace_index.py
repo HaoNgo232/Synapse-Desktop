@@ -191,11 +191,11 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -236,11 +236,11 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 side_effect=mock_is_binary,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -266,10 +266,6 @@ class TestBuildSearchIndex:
 
         with (
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.find_git_root",
-                return_value=tmp_path,
-            ),
-            patch(
                 "application.services.workspace_config.get_excluded_patterns",
                 return_value=[],
             ),
@@ -278,15 +274,15 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.ignore_engine.IgnoreEngine.build_pathspec",
+                "application.services.workspace_index._get_ignore_spec",
                 return_value=mock_spec,
             ),
         ):
@@ -316,11 +312,11 @@ class TestBuildSearchIndex:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -392,11 +388,11 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -438,11 +434,11 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 side_effect=mock_is_binary,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(
@@ -476,11 +472,11 @@ class TestCollectFilesFromDisk:
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_binary_file",
+                "shared.utils.file_utils.is_binary_file",
                 return_value=False,
             ),
             patch(
-                "infrastructure.filesystem.file_utils.is_system_path_str",
+                "shared.utils.file_utils.is_system_path_str",
                 return_value=False,
             ),
             patch(

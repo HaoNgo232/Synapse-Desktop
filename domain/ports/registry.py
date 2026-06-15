@@ -5,6 +5,7 @@ from domain.ports.directory_scanner import IDirectoryScanner
 from domain.workflow.interfaces.git_port import IGitService
 from domain.workflow.interfaces.ast_parser_port import IAstParser
 from domain.config.app_settings import AppSettings
+from domain.ports.ai_port import IAIProvider
 
 from domain.ports.repo_manager_port import IRepoManager
 from domain.ports.settings_service_port import ISettingsService
@@ -16,6 +17,11 @@ from domain.ports.session_state_port import ISessionStateService
 from domain.ports.security_scanner_port import ISecurityScanner
 from domain.ports.file_watcher_port import IFileWatcherService
 from domain.ports.clipboard_port import IClipboardService
+from domain.ports.mcp_installer_port import IMCPInstaller
+from domain.ports.preset_store_port import IPresetStoreFactory
+from domain.ports.history_port import IHistoryService
+from domain.ports.lifecycle_port import IAppLifecycleService
+from domain.ports.memory_port import IMemoryMonitor
 
 
 class DomainRegistry:
@@ -43,6 +49,12 @@ class DomainRegistry:
     _file_watcher_service: Optional[IFileWatcherService] = None
     _clipboard_service: Optional[IClipboardService] = None
     _ignore_engine: Optional[IIgnoreEngine] = None
+    _ai_provider_factory: Optional[Callable[[], IAIProvider]] = None
+    _mcp_installer: Optional[IMCPInstaller] = None
+    _preset_store_factory: Optional[IPresetStoreFactory] = None
+    _history_service: Optional[IHistoryService] = None
+    _app_lifecycle: Optional[IAppLifecycleService] = None
+    _memory_monitor: Optional[IMemoryMonitor] = None
 
     @classmethod
     def register_tokenization_service(cls, service: ITokenizationService) -> None:
@@ -205,3 +217,65 @@ class DomainRegistry:
         if cls._ignore_engine is None:
             raise RuntimeError("IIgnoreEngine is not registered")
         return cls._ignore_engine
+
+    @classmethod
+    def register_ai_provider_factory(cls, factory: Callable[[], IAIProvider]) -> None:
+        cls._ai_provider_factory = factory
+
+    @classmethod
+    def ai_provider_factory(cls) -> Callable[[], IAIProvider]:
+        if cls._ai_provider_factory is None:
+            raise RuntimeError(
+                "IAIProvider factory is not registered in DomainRegistry"
+            )
+        return cls._ai_provider_factory
+
+    @classmethod
+    def register_mcp_installer(cls, installer: IMCPInstaller) -> None:
+        cls._mcp_installer = installer
+
+    @classmethod
+    def mcp_installer(cls) -> IMCPInstaller:
+        if cls._mcp_installer is None:
+            raise RuntimeError("IMCPInstaller is not registered")
+        return cls._mcp_installer
+
+    @classmethod
+    def register_preset_store_factory(cls, factory: IPresetStoreFactory) -> None:
+        cls._preset_store_factory = factory
+
+    @classmethod
+    def preset_store_factory(cls) -> IPresetStoreFactory:
+        if cls._preset_store_factory is None:
+            raise RuntimeError("IPresetStoreFactory is not registered")
+        return cls._preset_store_factory
+
+    @classmethod
+    def register_history_service(cls, service: IHistoryService) -> None:
+        cls._history_service = service
+
+    @classmethod
+    def history_service(cls) -> IHistoryService:
+        if cls._history_service is None:
+            raise RuntimeError("IHistoryService is not registered")
+        return cls._history_service
+
+    @classmethod
+    def register_app_lifecycle(cls, service: IAppLifecycleService) -> None:
+        cls._app_lifecycle = service
+
+    @classmethod
+    def app_lifecycle(cls) -> IAppLifecycleService:
+        if cls._app_lifecycle is None:
+            raise RuntimeError("IAppLifecycleService is not registered")
+        return cls._app_lifecycle
+
+    @classmethod
+    def register_memory_monitor(cls, monitor: IMemoryMonitor) -> None:
+        cls._memory_monitor = monitor
+
+    @classmethod
+    def memory_monitor(cls) -> IMemoryMonitor:
+        if cls._memory_monitor is None:
+            raise RuntimeError("IMemoryMonitor is not registered")
+        return cls._memory_monitor

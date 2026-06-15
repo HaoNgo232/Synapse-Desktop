@@ -190,7 +190,7 @@ class TestTokenCacheAdapter:
 
     def _make_adapter(self):
         """Helper tao adapter voi TokenizationService fresh."""
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         return TokenCacheAdapter(TokenizationService())
 
@@ -201,7 +201,7 @@ class TestTokenCacheAdapter:
     def test_invalidate_path_clears_file(self, tmp_path):
         """invalidate_path goi clear_file_from_cache tren service."""
         from unittest.mock import patch
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         svc = TokenizationService()
         adapter = TokenCacheAdapter(svc)
@@ -212,7 +212,7 @@ class TestTokenCacheAdapter:
     def test_invalidate_all_calls_clear(self):
         """invalidate_all goi clear_cache tren service."""
         from unittest.mock import patch
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         svc = TokenizationService()
         adapter = TokenCacheAdapter(svc)
@@ -309,7 +309,7 @@ class TestRegisterAllCaches:
 
     def test_registers_all_four_caches(self):
         from infrastructure.filesystem.ignore_engine import IgnoreEngine
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         register_all_caches(
             ignore_engine=IgnoreEngine(),
@@ -323,7 +323,7 @@ class TestRegisterAllCaches:
 
     def test_idempotent(self):
         from infrastructure.filesystem.ignore_engine import IgnoreEngine
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         kwargs = dict(
             ignore_engine=IgnoreEngine(),

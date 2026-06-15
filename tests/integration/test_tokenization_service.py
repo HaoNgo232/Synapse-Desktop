@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 from application.interfaces.tokenization_port import ITokenizationService
 
 
@@ -328,7 +328,7 @@ class TestFallbackWarning:
 
         with patch.object(service, "_get_or_create_encoder", return_value=None):
             with patch(
-                "application.services.tokenization_service.log_warning"
+                "infrastructure.adapters.tokenization_service.log_warning"
             ) as mock_warn:
                 service.count_tokens("test1")
                 service.count_tokens("test2")
@@ -419,7 +419,7 @@ class TestBatchProcessing:
         """Empty list -> empty dict."""
         service = TokenizationService()
         with patch(
-            "application.services.tokenization_service.is_counting_tokens",
+            "infrastructure.adapters.tokenization_service.is_counting_tokens",
             return_value=True,
         ):
             result = service.count_tokens_batch_parallel([])
@@ -441,7 +441,7 @@ class TestBatchProcessing:
         missing = tmp_path / "missing.py"
 
         with patch(
-            "application.services.tokenization_service.is_counting_tokens",
+            "infrastructure.adapters.tokenization_service.is_counting_tokens",
             return_value=True,
         ):
             results = service.count_tokens_batch_parallel(
@@ -464,7 +464,7 @@ class TestBatchProcessing:
             files.append(f)
 
         with patch(
-            "application.services.tokenization_service.is_counting_tokens",
+            "infrastructure.adapters.tokenization_service.is_counting_tokens",
             return_value=True,
         ):
             results = service.count_tokens_batch_parallel(files, max_workers=2)
@@ -487,7 +487,7 @@ class TestBatchProcessing:
 
         # Cancellation flag = False -> return empty
         with patch(
-            "application.services.tokenization_service.is_counting_tokens",
+            "infrastructure.adapters.tokenization_service.is_counting_tokens",
             return_value=False,
         ):
             result = service.count_tokens_batch_parallel(files)

@@ -1,26 +1,5 @@
 {
-  "import_violations": [
-    "presentation/components/dialogs/dialogs_qt.py imports forbidden root 'infrastructure'",
-    "presentation/components/file_tree/file_tree_model.py imports forbidden root 'infrastructure'",
-    "presentation/components/file_tree/file_tree_widget.py imports forbidden root 'infrastructure'",
-    "presentation/components/token_stats_qt.py imports forbidden root 'infrastructure'",
-    "presentation/main_window.py imports forbidden root 'infrastructure'",
-    "presentation/views/apply/apply_view_qt.py imports forbidden root 'infrastructure'",
-    "presentation/views/context/context_view_qt.py imports forbidden root 'infrastructure'",
-    "presentation/views/context/copy_action_controller.py imports forbidden root 'infrastructure'",
-    "presentation/views/context/preset_controller.py imports forbidden root 'infrastructure'",
-    "presentation/views/context/tree_management_controller.py imports forbidden root 'infrastructure'",
-    "presentation/views/context/ui_builder.py imports forbidden root 'infrastructure'",
-    "presentation/views/history/detail_panel.py imports forbidden root 'infrastructure'",
-    "presentation/views/history/history_view_qt.py imports forbidden root 'infrastructure'",
-    "presentation/views/history/list_panel.py imports forbidden root 'infrastructure'",
-    "presentation/views/history/view.py imports forbidden root 'infrastructure'",
-    "presentation/views/history/widgets.py imports forbidden root 'infrastructure'",
-    "presentation/views/settings/settings_view_qt.py imports forbidden root 'infrastructure'"
-  ],
+  "import_violations": [],
   "god_service_violations": [],
-  "layer_cycles": [
-    "application -> infrastructure -> application",
-    "infrastructure -> application -> infrastructure"
-  ]
+  "layer_cycles": []
 }

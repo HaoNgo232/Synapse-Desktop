@@ -17,29 +17,13 @@ from datetime import datetime
 
 from shared.logging_config import log_error, log_debug, log_info
 from shared.config.paths import HISTORY_FILE
+from domain.ports.history_port import HistoryEntry, IHistoryService
 
 # Số lượng tối đa entries lưu trữ
 MAX_HISTORY_ENTRIES = 100
 
 # Lock bảo vệ đọc/ghi file lịch sử - tránh race condition đa luồng
 _history_lock = threading.RLock()
-
-
-@dataclass
-class HistoryEntry:
-    """Một entry trong lịch sử"""
-
-    id: str  # UUID
-    timestamp: str  # ISO format
-    workspace_path: str
-    opx_content: str
-    file_count: int
-    success_count: int
-    fail_count: int
-    action_summary: List[str] = field(
-        default_factory=list
-    )  # ["CREATE file1.py", "MODIFY file2.py"]
-    error_messages: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -241,3 +225,30 @@ def get_history_stats() -> dict:
             (total_success / total_operations * 100) if total_operations > 0 else 0
         ),
     }
+
+
+class HistoryService(IHistoryService):
+    """Concrete history service implementing IHistoryService."""
+
+    def add_history_entry(
+        self,
+        workspace_path: str,
+        opx_content: str,
+        action_results: List[dict],
+    ) -> Optional[HistoryEntry]:
+        return add_history_entry(workspace_path, opx_content, action_results)
+
+    def get_history_entries(self, limit: int = 50) -> List[HistoryEntry]:
+        return get_history_entries(limit)
+
+    def get_entry_by_id(self, entry_id: str) -> Optional[HistoryEntry]:
+        return get_entry_by_id(entry_id)
+
+    def delete_entry(self, entry_id: str) -> bool:
+        return delete_entry(entry_id)
+
+    def clear_history(self) -> bool:
+        return clear_history()
+
+    def get_history_stats(self) -> dict:
+        return get_history_stats()

@@ -17,7 +17,7 @@ import pytest
 from pathlib import Path
 import os
 
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 from domain.tokenization.batch import get_worker_count
 from infrastructure.adapters.encoders import _estimate_tokens
 from shared.constants.binary_detection import _looks_binary, _check_magic_numbers

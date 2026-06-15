@@ -111,7 +111,7 @@ class TestTokenCountWorkerSkipsBinary:
     def test_skip_binary_without_extension(self, tmp_path):
         """TokenCountWorker phải skip binary files KHÔNG có extension"""
         from presentation.components.file_tree.file_tree_model import TokenCountWorker
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         # Create binary file without extension (giả lập ELF)
         binary_file = tmp_path / "my-binary-x86_64-linux"
@@ -142,7 +142,7 @@ class TestTokenCountWorkerSkipsBinary:
     def test_skip_large_file(self, tmp_path):
         """TokenCountWorker phải skip files > 5MB"""
         from presentation.components.file_tree.file_tree_model import TokenCountWorker
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         # Create large text file (> 5MB)
         large_file = tmp_path / "huge.txt"
@@ -352,7 +352,7 @@ class TestRealWorldProxypalBinaries:
     def test_token_worker_skips_proxypal_binaries(self):
         """TokenCountWorker phải skip tất cả proxypal binaries, KHÔNG đọc file"""
         from presentation.components.file_tree.file_tree_model import TokenCountWorker
-        from application.services.tokenization_service import TokenizationService
+        from infrastructure.adapters.tokenization_service import TokenizationService
 
         binary_paths = [str(f) for f in self.BINARIES_DIR.iterdir() if f.is_file()]
         assert len(binary_paths) > 0, "No binary files found"

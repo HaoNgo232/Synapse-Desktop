@@ -19,27 +19,13 @@ Lưu lại khi đóng app:
 
 import json
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, asdict, field
+from typing import Optional
+from dataclasses import asdict
 from datetime import datetime
-from domain.ports.session_state_port import ISessionStateService
+from domain.ports.session_state_port import ISessionStateService, SessionState
 
 from shared.logging_config import log_error, log_debug, log_info, log_warning
 from shared.config.paths import SESSION_FILE
-
-
-@dataclass
-class SessionState:
-    """Trạng thái session của app"""
-
-    workspace_path: Optional[str] = None
-    selected_files: List[str] = field(default_factory=list)
-    expanded_folders: List[str] = field(default_factory=list)
-    instructions_text: str = ""
-    active_tab_index: int = 0
-    window_width: Optional[int] = None
-    window_height: Optional[int] = None
-    saved_at: Optional[str] = None
 
 
 def save_session_state(state: SessionState) -> bool:
@@ -193,25 +179,11 @@ def get_session_age_hours() -> Optional[float]:
 class SessionStateService(ISessionStateService):
     """Concrete session state service implementing ISessionStateService."""
 
-    def load_session_state(self) -> Dict[str, Any]:
-        state = load_session_state()
-        if state is None:
-            return {}
-        return asdict(state)
+    def load_session_state(self) -> Optional[SessionState]:
+        return load_session_state()
 
-    def save_session_state(self, state: Dict[str, Any]) -> None:
-        state_obj = SessionState(
-            workspace_path=state.get("workspace_path"),
-            selected_files=state.get("selected_files", []),
-            expanded_folders=state.get("expanded_folders", []),
-            instructions_text=state.get("instructions_text", ""),
-            active_tab_index=state.get("active_tab_index", 0),
-            window_width=state.get("window_width"),
-            window_height=state.get("window_height"),
-            saved_at=state.get("saved_at"),
-        )
-        save_session_state(state_obj)
+    def save_session_state(self, state: SessionState) -> bool:
+        return save_session_state(state)
 
-    def clear_session_state(self) -> None:
-        clear_session_state()
-
+    def clear_session_state(self) -> bool:
+        return clear_session_state()

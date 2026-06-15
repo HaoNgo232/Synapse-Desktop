@@ -47,8 +47,6 @@ def get_security_cache_stats() -> Dict[str, int]:
     }
 
 
-
-
 def scan_for_secrets(
     content: str, file_path: Optional[str] = None
 ) -> list[SecretMatch]:
@@ -348,4 +346,3 @@ class SecurityScannerAdapter(ISecurityScanner):
 
     def format_security_warning(self, matches: List[SecretMatch]) -> str:
         return format_security_warning(matches)
-

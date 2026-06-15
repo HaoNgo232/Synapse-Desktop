@@ -46,27 +46,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QTimer, QSize
 from PySide6.QtGui import QIcon
 
-from presentation.config.theme import ThemeColors, ThemeFonts, apply_theme
+from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.components.qt_utils import create_colored_icon
-from presentation.utils.qt_utils import (
-    get_signal_bridge,
-)
-from infrastructure.adapters.threading_utils import shutdown_all, set_active_view
-from infrastructure.persistence.recent_folders import (
-    load_recent_folders,
-    add_recent_folder,
-    get_folder_display_name,
-)
-from infrastructure.persistence.session_state import (
-    SessionState,
-    save_session_state,
-    load_session_state,
-)
-from infrastructure.adapters.memory_monitor import (
-    get_memory_monitor,
-    format_memory_display,
-    MemoryStats,
-)
+from domain.ports.registry import DomainRegistry
+from domain.ports.session_state_port import SessionState
+from domain.ports.memory_port import MemoryStats, format_memory_display
 
 
 # ── Tab configuration: icon (SVG filename) + label ────────────────
@@ -102,7 +86,7 @@ class SynapseMainWindow(QMainWindow):
         self._current_tab_index = 0
 
         # Memory monitor
-        self._memory_monitor = get_memory_monitor()
+        self._memory_monitor = DomainRegistry.memory_monitor()
         self._memory_monitor.on_update = self._on_memory_update
 
         # Cached git branch (refreshed asynchronously by _refresh_git_branch_async)
@@ -572,7 +556,7 @@ class SynapseMainWindow(QMainWindow):
     def _refresh_recent_folders_menu(self) -> None:
         """Làm mới danh sách thư mục mở gần đây (recent folders)."""
         self._recent_menu.clear()
-        recent = load_recent_folders()
+        recent = DomainRegistry.recent_folders().load_recent_folders()
 
         if not recent:
             action = self._recent_menu.addAction("No recent folders")
@@ -580,7 +564,9 @@ class SynapseMainWindow(QMainWindow):
             return
 
         for folder_path in recent:
-            display_name = get_folder_display_name(folder_path)
+            display_name = DomainRegistry.recent_folders().get_folder_display_name(
+                folder_path
+            )
             action = self._recent_menu.addAction(display_name)
             icon_folder = create_colored_icon(
                 str(self.assets_dir / "folder.svg"), ThemeColors.TEXT_SECONDARY
@@ -626,7 +612,7 @@ class SynapseMainWindow(QMainWindow):
         self._update_window_title()
 
         # Save to recent
-        add_recent_folder(str(path))
+        DomainRegistry.recent_folders().add_recent_folder(str(path))
         self._refresh_recent_folders_menu()
 
         # Update status bar
@@ -647,7 +633,7 @@ class SynapseMainWindow(QMainWindow):
 
         view_names = ["context", "apply", "history", "settings"]
         if 0 <= index < len(view_names):
-            set_active_view(view_names[index])
+            DomainRegistry.app_lifecycle().set_active_view(view_names[index])
 
         if index == 2:
             self.history_view.on_view_activated()
@@ -722,12 +708,10 @@ class SynapseMainWindow(QMainWindow):
         CLEAN SESSION MODE: Only restore workspace path and instructions text.
         Other state (selected files, expanded folders) starts fresh.
         """
-        from infrastructure.persistence.recent_folders import load_recent_folders
-
-        session = load_session_state()
+        session = DomainRegistry.session_state().load_session_state()
 
         # Restore workspace from most recent folder
-        recent_folders = load_recent_folders()
+        recent_folders = DomainRegistry.recent_folders().load_recent_folders()
         if recent_folders:
             workspace = Path(recent_folders[0])
             if workspace.exists() and workspace.is_dir():
@@ -764,6 +748,7 @@ class SynapseMainWindow(QMainWindow):
             window_width=self.width(),
             window_height=self.height(),
         )
+        save_session_state = DomainRegistry.session_state().save_session_state
         save_session_state(state)
 
     def resizeEvent(self, event) -> None:
@@ -782,23 +767,19 @@ class SynapseMainWindow(QMainWindow):
 
         # 1. Stop background scanning
         try:
-            from infrastructure.filesystem.file_scanner import stop_scanning
-
-            stop_scanning()
+            DomainRegistry.app_lifecycle().stop_scanning()
         except Exception as e:
             log_error("closeEvent: stop_scanning failed", e)
 
         # 2. Stop token counting
         try:
-            from infrastructure.adapters.token_display import stop_token_counting
-
-            stop_token_counting()
+            DomainRegistry.app_lifecycle().stop_token_counting()
         except Exception as e:
             log_error("closeEvent: stop_token_counting failed", e)
 
         # 3. Shutdown thread pools
         try:
-            shutdown_all()
+            DomainRegistry.app_lifecycle().shutdown_all()
             # Don dep va cho doi cac thread trong global QThreadPool de tranh bi treo ung dung khi close
             from PySide6.QtCore import QThreadPool
 
@@ -859,95 +840,4 @@ class SynapseMainWindow(QMainWindow):
         event.accept()
 
 
-def main() -> None:
-    """Entry point for Synapse Desktop."""
-    # CRITICAL for Windows EXE: Prevent fork bomb when using multiprocessing.
-    # Without this, each spawned process re-executes main(), creating infinite
-    # window spawning loops (the "flashing windows" issue).
-    import multiprocessing
-
-    multiprocessing.freeze_support()
-
-    # ===== MCP Server Mode =====
-    # Neu co co --run-mcp, khoi dong MCP Server thay vi giao dien PySide6.
-    # Cho phep AI clients (Cursor, Copilot, Antigravity) giao tiep qua stdio.
-    # Cach su dung: python main_window.py --run-mcp [workspace_path]
-    if "--run-mcp" in sys.argv:
-        idx = sys.argv.index("--run-mcp")
-        workspace = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else None
-        from infrastructure.mcp.server import run_mcp_server
-
-        run_mcp_server(workspace)
-        return
-
-    # CRITICAL for Windows taskbar icon: Set AppUserModelID TRƯỚC KHI tạo QApplication
-    # Windows nhóm app theo AppUserModelID - nếu không set, Windows sẽ dùng icon của Python
-    from infrastructure.adapters.windows_utils import (
-        set_app_user_model_id,
-        get_default_app_user_model_id,
-    )
-
-    set_app_user_model_id(get_default_app_user_model_id())
-
-    from shared.config.paths import ensure_app_directories
-    from infrastructure.adapters.encoder_registry import initialize_encoder
-
-    ensure_app_directories()
-
-    # Khoi tao encoder config (inject settings vao core layer)
-    # NOTE: Cach moi nen dung ServiceContainer.tokenization thay the.
-    # initialize_encoder() van duoc goi o day de backward compat voi cac module
-    # chua duoc migrate sang DI injection pattern.
-    initialize_encoder()
-
-    # Register all cache adapters into CacheRegistry
-    # NOTE: Sau khi Phase 2 hoan tat, cac adapters se dang ky vao container.cache_registry
-    # Tao ServiceContainer truoc de co ignore_engine
-    # (container se duoc dung lai khi tao views ben duoi)
-    from presentation.service_container import ServiceContainer as _SC
-    from infrastructure.adapters.cache_adapters import register_all_caches
-
-    _boot_container = _SC()
-    register_all_caches(
-        ignore_engine=_boot_container.ignore_engine,
-        tokenization_service=_boot_container.tokenization,
-    )
-
-    app = QApplication(sys.argv)
-    app.setApplicationName("Code to Prompt")
-    app.setOrganizationName("Code to Prompt")
-
-    # Store boot container on app instance for reuse
-    app._service_container = _boot_container  # type: ignore[attr-defined]
-
-    # Set application icon (de hien thi icon tren taskbar)
-    # Tim icon file: uu tien .ico, sau do .png
-    base_path = Path(__file__).parent
-    if hasattr(sys, "_MEIPASS"):
-        assets_dir = Path(sys._MEIPASS) / "assets"
-    else:
-        assets_dir = base_path.parent / "assets"
-
-    icon_path = None
-    if (assets_dir / "icon.ico").exists():
-        icon_path = assets_dir / "icon.ico"
-    elif (assets_dir / "icon.png").exists():
-        icon_path = assets_dir / "icon.png"
-
-    if icon_path:
-        app.setWindowIcon(QIcon(str(icon_path)))
-
-    # Apply global dark stylesheet (single source of truth)
-    apply_theme(app)
-
-    # Initialize global signal bridge on main thread
-    get_signal_bridge()
-
-    window = SynapseMainWindow()
-    window.show()
-
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
+# main() was moved to root main.py

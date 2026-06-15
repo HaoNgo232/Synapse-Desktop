@@ -13,6 +13,7 @@ from typing import Dict, List, Set, Optional
 
 from domain.codemap.dependency_resolver import DependencyResolver
 from domain.codemap.symbol_extractor import extract_symbols
+from domain.workflow.interfaces.git_port import IGitService
 
 
 @dataclass
@@ -87,9 +88,6 @@ def detect_scope_from_file_paths(
         relevant_symbols={},
         confidence=1.0,  # User-specified paths = highest confidence
     )
-
-
-from domain.workflow.interfaces.git_port import IGitService
 
 
 def detect_scope_from_git_diff(

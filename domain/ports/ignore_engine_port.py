@@ -2,6 +2,7 @@ from typing import Protocol, Optional, List, runtime_checkable
 from pathlib import Path
 import pathspec
 
+
 @runtime_checkable
 class IIgnoreEngine(Protocol):
     def build_pathspec(
@@ -10,14 +11,10 @@ class IIgnoreEngine(Protocol):
         use_default_ignores: bool = True,
         excluded_patterns: Optional[List[str]] = None,
         use_gitignore: bool = True,
-    ) -> pathspec.PathSpec:
-        ...
+    ) -> pathspec.PathSpec: ...
 
-    def read_gitignore(self, path: Path) -> List[str]:
-        ...
+    def read_gitignore(self, path: Path) -> List[str]: ...
 
-    def find_git_root(self, path: Path) -> Optional[Path]:
-        ...
+    def find_git_root(self, path: Path) -> Optional[Path]: ...
 
-    def clear_cache(self) -> None:
-        ...
+    def clear_cache(self) -> None: ...

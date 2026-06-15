@@ -14,7 +14,7 @@ Verify:
 import pytest
 from unittest.mock import patch
 from domain.config.app_settings import AppSettings
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 from infrastructure.adapters.encoders import (
     reset_encoder,
     HAS_TOKENIZERS,

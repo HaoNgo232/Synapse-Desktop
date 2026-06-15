@@ -34,7 +34,7 @@ from domain.tokenization.batch import (
     TASKS_PER_WORKER,
     MIN_FILES_FOR_PARALLEL,
 )
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 
 
 # ============================================================================

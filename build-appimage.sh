@@ -47,7 +47,7 @@ pyinstaller \
     --distpath "$BUILD_DIR/dist" \
     --workpath "$BUILD_DIR/work" \
     --specpath "$BUILD_DIR" \
-    presentation/main_window.py
+    main.py
 
 echo "[3/6] Copying files to AppDir..."
 cp -r "$BUILD_DIR/dist/$APP_NAME"/* "$APPDIR/usr/bin/"

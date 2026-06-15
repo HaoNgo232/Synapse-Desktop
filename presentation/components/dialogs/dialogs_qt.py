@@ -18,10 +18,10 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from infrastructure.adapters.security_check import SecretMatch
-    from infrastructure.git.repo_manager import RepoManager
-    from infrastructure.git.git_utils import DiffOnlyResult
-    from application.interfaces.tokenization_port import ITokenizationService
+    from domain.ports.security_scanner_port import SecretMatch
+    from domain.ports.repo_manager_port import IRepoManager
+    from shared.types.git_types import DiffOnlyResult
+    from domain.ports.tokenization_port import ITokenizationService
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -45,7 +45,7 @@ from PySide6.QtGui import QFont
 
 from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.utils.qt_utils import run_on_main_thread
-from infrastructure.adapters.clipboard_utils import copy_to_clipboard
+from presentation.utils.clipboard import copy_to_clipboard
 from shared.utils.diff_filter_utils import should_auto_exclude as _should_auto_exclude
 
 
@@ -141,7 +141,7 @@ class SecurityDialogQt(BaseDialogQt):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        from infrastructure.adapters.security_check import format_security_warning
+        from domain.ports.registry import DomainRegistry
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -160,7 +160,9 @@ class SecurityDialogQt(BaseDialogQt):
         layout.addLayout(header)
 
         # Warning message
-        warning_msg = format_security_warning(self.matches)
+        warning_msg = DomainRegistry.security_scanner().format_security_warning(
+            self.matches
+        )
         msg_label = self._make_label(warning_msg)
         layout.addWidget(msg_label)
 
@@ -487,9 +489,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
 
         def _work():
-            from infrastructure.git.git_utils import get_diff_only
+            from domain.ports.registry import DomainRegistry
 
-            return get_diff_only(
+            return DomainRegistry.git_service().get_diff_only(
                 workspace,
                 num_commits=commits,
                 include_staged=include_staged,
@@ -549,8 +551,6 @@ class DiffOnlyDialogQt(BaseDialogQt):
             related_depth,
             self.output_format,
         )
-
-        from infrastructure.adapters.clipboard_utils import copy_to_clipboard
 
         success, message = copy_to_clipboard(prompt)
         if success:
@@ -683,7 +683,7 @@ class DiffOnlyDialogQt(BaseDialogQt):
         result: "DiffOnlyResult",
     ) -> Optional["DiffOnlyResult"]:
         from dataclasses import replace
-        from infrastructure.git.git_utils import filter_diff_by_files
+        from domain.ports.registry import DomainRegistry
 
         # Không re-populate checkboxes — dùng trạng thái hiện tại của user
         selected_files = self._get_selected_files()
@@ -700,7 +700,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
             self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
             return None
 
-        filtered_diff = filter_diff_by_files(result.diff_content, selected_files)
+        filtered_diff = DomainRegistry.git_service().filter_diff_by_files(
+            result.diff_content, selected_files
+        )
         if not filtered_diff.strip():
             self._status.setText("Selected files have no diff blocks to copy.")
             self._status.setStyleSheet(f"color: {ThemeColors.WARNING};")
@@ -736,9 +738,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
         self._status.setStyleSheet(f"color: {ThemeColors.TEXT_SECONDARY};")
 
         def _work():
-            from infrastructure.git.git_utils import get_diff_only
+            from domain.ports.registry import DomainRegistry
 
-            return get_diff_only(
+            return DomainRegistry.git_service().get_diff_only(
                 self.workspace,
                 num_commits=commits,
                 include_staged=include_staged,
@@ -761,14 +763,16 @@ class DiffOnlyDialogQt(BaseDialogQt):
         if generation != self._refresh_generation:
             return  # Stale result — bỏ qua
 
-        from infrastructure.git.git_utils import extract_changed_files_from_diff
+        from domain.ports.registry import DomainRegistry
 
         if result.error:
             self._status.setText(f"Error: {result.error}")
             self._status.setStyleSheet(f"color: {ThemeColors.ERROR};")
             return
 
-        changed_files = extract_changed_files_from_diff(result.diff_content)
+        changed_files = DomainRegistry.git_service().extract_changed_files_from_diff(
+            result.diff_content
+        )
         if not changed_files and result.changed_files:
             changed_files = result.changed_files
 
@@ -815,7 +819,7 @@ class RemoteRepoDialogQt(BaseDialogQt):
     def __init__(
         self,
         parent: QWidget,
-        repo_manager: "RepoManager",
+        repo_manager: "IRepoManager",
         on_clone_success: Callable[[Path], None],
     ):
         super().__init__(parent, "Open Remote Repository")
@@ -903,7 +907,7 @@ class CacheManagementDialogQt(BaseDialogQt):
     def __init__(
         self,
         parent: QWidget,
-        repo_manager: "RepoManager",
+        repo_manager: "IRepoManager",
         on_open_repo: Callable[[Path], None],
     ):
         super().__init__(parent, "Cached Repositories")
@@ -1058,7 +1062,7 @@ class DirtyRepoDialogQt(BaseDialogQt):
     def __init__(
         self,
         parent: QWidget,
-        repo_manager: "RepoManager",
+        repo_manager: "IRepoManager",
         repo_path: Path,
         repo_name: str,
         on_done: Callable[[str], None],
@@ -1202,7 +1206,7 @@ class FilePreviewDialogQt(BaseDialogQt):
 
         # Read content
         if self._content is None:
-            from infrastructure.filesystem.file_utils import is_binary_file
+            from shared.utils.file_utils import is_binary_file
 
             if is_binary_file(path_obj):
                 self._show_error_content(layout, "Cannot preview binary file.")
@@ -1322,8 +1326,6 @@ class FilePreviewDialogQt(BaseDialogQt):
     @Slot()
     def _copy_content(self) -> None:
         if self._content:
-            from infrastructure.adapters.clipboard_utils import copy_to_clipboard
-
             success, _ = copy_to_clipboard(self._content)
             if success:
                 self._copy_btn.setText("Copied! ✅")

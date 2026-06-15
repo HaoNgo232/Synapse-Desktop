@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from application.services.prompt_build_service import PromptBuildService
 from infrastructure.filesystem.ignore_engine import IgnoreEngine
 from application.services.graph_service import GraphService
-from application.services.tokenization_service import TokenizationService
+from infrastructure.adapters.tokenization_service import TokenizationService
 
 
 def test_formats():

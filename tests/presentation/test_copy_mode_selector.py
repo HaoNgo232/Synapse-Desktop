@@ -264,18 +264,16 @@ def test_copy_logic_receives_git_commit_depth(qtbot, context_view):
     view._git_diff_cb.setChecked(True)
     view._commit_depth_spin.setValue(12)
 
-    # Tắt security check để gọi trực tiếp _run_copy_in_background đồng bộ trong test
-    with patch(
-        "presentation.views.context.copy_action_controller.load_app_settings"
-    ) as mock_load:
-        mock_settings = MagicMock()
-        mock_settings.enable_security_check = False
-        mock_settings.include_git_changes = True
-        mock_settings.git_commit_depth = 12
-        mock_settings.copy_mode = "full"
-        mock_settings.tree_map_only = False
-        mock_load.return_value = mock_settings
+    mock_settings = MagicMock()
+    mock_settings.enable_security_check = False
+    mock_settings.include_git_changes = True
+    mock_settings.git_commit_depth = 12
+    mock_settings.copy_mode = "full"
+    mock_settings.tree_map_only = False
 
+    from domain.ports.registry import DomainRegistry
+
+    with patch.object(DomainRegistry, "settings", return_value=mock_settings):
         with patch.object(view._copy_controller, "_run_copy_in_background") as mock_run:
             qtbot.mouseClick(view._copy_btn, Qt.MouseButton.LeftButton)
 
@@ -332,16 +330,15 @@ def test_copy_allowed_with_no_files_selected_if_git_diff_checked(qtbot, context_
     view._mode_full_btn.setChecked(True)
     view._git_diff_cb.setChecked(True)
 
-    with patch(
-        "presentation.views.context.copy_action_controller.load_app_settings"
-    ) as mock_load:
-        mock_settings = MagicMock()
-        mock_settings.enable_security_check = False
-        mock_settings.include_git_changes = True
-        mock_settings.copy_mode = "full"
-        mock_settings.tree_map_only = False
-        mock_load.return_value = mock_settings
+    mock_settings = MagicMock()
+    mock_settings.enable_security_check = False
+    mock_settings.include_git_changes = True
+    mock_settings.copy_mode = "full"
+    mock_settings.tree_map_only = False
 
+    from domain.ports.registry import DomainRegistry
+
+    with patch.object(DomainRegistry, "settings", return_value=mock_settings):
         with patch.object(view._copy_controller, "_run_copy_in_background") as mock_run:
             qtbot.mouseClick(view._copy_btn, Qt.MouseButton.LeftButton)
 

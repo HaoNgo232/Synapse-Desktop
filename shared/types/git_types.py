@@ -22,3 +22,16 @@ class GitLogResult:
     log_content: str = ""
     commit_count: int = 0
     error: Optional[str] = None
+
+
+@dataclass
+class DiffOnlyResult:
+    """Kết quả cho Copy Diff Only feature"""
+
+    diff_content: str
+    files_changed: int
+    insertions: int
+    deletions: int
+    commits_included: int
+    changed_files: List[str] = field(default_factory=list)  # List of changed file paths
+    error: Optional[str] = None

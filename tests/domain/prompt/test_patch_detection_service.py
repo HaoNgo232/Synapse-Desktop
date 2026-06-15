@@ -1,20 +1,21 @@
 import time
-import pytest
 import os
-from domain.prompt.patch_detection_service import PatchDetectionService, PatchDetectionResult
+from domain.prompt.patch_detection_service import (
+    PatchDetectionService,
+)
 
 
 def test_detects_search_replace_blocks() -> None:
     """Kiểm tra việc phát hiện các khối Search/Replace hợp lệ."""
     text = """
     Chào bạn, dưới đây là thay đổi tôi đề xuất:
-    <<<<<<< SEARCH main.py
-    def old():
-        pass
-    =======
-    def new():
-        return 1
-    >>>>>>> REPLACE
+<<<<<<< SEARCH main.py
+def old():
+    pass
+=======
+def new():
+    return 1
+>>>>>>> REPLACE
     """
     service = PatchDetectionService()
     result = service.detect(text)
@@ -105,13 +106,13 @@ def test_performance_100kb_under_500ms() -> None:
         "Hệ thống AI đang phân tích mã nguồn và trả về kết quả.\n" * 1600
     )  # ~85KB
     patch_text = """
-    <<<<<<< SEARCH test_perf.py
-    def test_run():
-        pass
-    =======
-    def test_run():
-        print("performance check")
-    >>>>>>> REPLACE
+<<<<<<< SEARCH test_perf.py
+def test_run():
+    pass
+=======
+def test_run():
+    print("performance check")
+>>>>>>> REPLACE
     """
     full_text = base_text + patch_text + (base_text[:10000])  # ~100KB
     service = PatchDetectionService()

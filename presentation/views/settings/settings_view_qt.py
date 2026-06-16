@@ -954,10 +954,16 @@ class SettingsViewQt(QWidget):
 
         col3_layout.addWidget(card6)
 
+        # Product Licensing
+        license_card = self._build_license_section()
+        col3_layout.addWidget(license_card)
+        self._update_license_display()
+
         # ─────────────────────────────
         # CARD 5: Data & Session
         # ─────────────────────────────
         card5 = _make_card()
+
         card5_layout = QVBoxLayout(card5)
         card5_layout.setContentsMargins(22, 22, 22, 22)
         card5_layout.setSpacing(0)
@@ -1678,3 +1684,61 @@ class SettingsViewQt(QWidget):
 
         if msg:
             self._show_status(msg, is_error=True)
+
+    def _build_license_section(self) -> QWidget:
+        card = _make_card()
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(22, 22, 22, 22)
+        layout.setSpacing(12)
+
+        # Title
+        layout.addWidget(_AccentDotLabel("Product Licensing"))
+        layout.addSpacing(6)
+
+        # Info body layout
+        self._license_info_label = QLabel("Loading license details...")
+        self._license_info_label.setStyleSheet(
+            f"color: {ThemeColors.TEXT_SECONDARY}; "
+            f"font-size: 12px; "
+            f"border: none;"
+        )
+        self._license_info_label.setWordWrap(True)
+        layout.addWidget(self._license_info_label)
+
+        # Deactivate button
+        self._deactivate_btn = _make_danger_btn("Deactivate License")
+        self._deactivate_btn.clicked.connect(self._on_deactivate_clicked)
+        layout.addWidget(self._deactivate_btn, 0, Qt.AlignmentFlag.AlignLeft)
+
+        return card
+
+    def _update_license_display(self) -> None:
+        settings = DomainRegistry.settings_service().load_settings()
+        info = DomainRegistry.license_service().verify_license_key(settings.license_key)
+        
+        if info.is_valid:
+            self._license_info_label.setText(
+                f"License ID: {info.license_id}\n"
+                f"Licensed Owner: {info.email}\n"
+                f"Valid Until: {info.expiry_date}\n"
+                f"Status: Active / Verified"
+            )
+            self._deactivate_btn.setEnabled(True)
+        else:
+            self._license_info_label.setText("Product is currently UNLICENSED.")
+            self._deactivate_btn.setEnabled(False)
+
+    def _on_deactivate_clicked(self) -> None:
+        reply = QMessageBox.question(
+            self,
+            "Deactivate License",
+            "Are you sure you want to deactivate the license on this device?\n"
+            "This will close the application and prompt for a new key on next startup.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            DomainRegistry.settings_service().update_setting("license_key", "")
+            from PySide6.QtWidgets import QApplication as QApp
+            QApp.quit()
+

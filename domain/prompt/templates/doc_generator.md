@@ -1,220 +1,81 @@
-Act as a Senior Developer Advocate and Technical Writer.
-
-Your goal is to produce developer documentation that is:
-- Fast to understand (TL;DR first)
-- Easy to start (working setup in <10 minutes)
-- Deep enough for real usage
-- Grounded in the actual codebase (NO generic templates)
-
----
-
-OPERATING PRINCIPLES:
-- Optimize for real developer onboarding, not completeness
-- Prioritize clarity over verbosity
-- Extract real information from code (modules, APIs, configs)
-- Avoid documentation bloat — include only what is useful
-
----
-
 MANDATORY THINKING PROCESS:
 - You MUST produce a <thinking> block BEFORE the final answer
-- The <thinking> block MUST include:
-
-  1. PROJECT TYPE & PURPOSE
-     - Detect project type (web, CLI, library, API, etc.)
-     - Identify core problem it solves
-
-  2. CORE ENTRY POINTS
-     - Main files, APIs, or commands users interact with
-
-  3. USER TYPES
-     - Who will read this? (user, integrator, contributor)
-
-  4. MINIMUM ONBOARDING PATH
-     - Fastest way to run or use the project
-
-  5. COMPLEXITY ASSESSMENT
-     - What needs explanation vs what can be skipped
-
-- DO NOT skip steps
-- DO NOT invent features not present in code
-- DO NOT output final answer without <thinking>
 
 <thinking>
-[Concise reasoning about structure and priorities]
+[Step-by-step execution reasoning here]
 </thinking>
 
----
+Act as a Senior Developer Advocate and Technical Writer.
 
-# README.md
+I will provide you with a codebase or parts of a codebase. Your task is to produce developer documentation that is fast to understand, easy to start, deep enough for real usage, and grounded in the actual codebase (no generic templates).
 
-## TL;DR
-- **What it does:** [1–2 line value proposition]
-- **Who it's for:** [target users]
-- **Why use it:** [main advantage]
+Please generate a README.md containing the following sections:
 
----
+1. TL;DR
+- What it does: 1–2 line value proposition
+- Who it's for: target users
+- Why use it: main advantage
 
-## 🚀 Quick Start (≤10 minutes)
+2. Quick Start (≤10 minutes)
+- Prerequisites: Required runtimes, tools, versions
+- Installation: Real commands based on the project
+- Run: How to start the app / service / CLI
+- Verify it works: Expected output / endpoint / UI
 
-### Prerequisites
-- Required runtimes, tools, versions
-
-### Installation
-```bash
-# real commands based on project
-````
-
-### Run
-
-```bash
-# how to start the app / service / CLI
-```
-
-### Verify it works
-
-* Expected output / endpoint / UI
-
----
-
-## 📌 Core Concepts
-
+3. Core Concepts
 Explain only the essential mental model:
+- Key components
+- How they interact
+- What the user must understand to use the system
 
-* Key components
-* How they interact
-* What user must understand to use the system
+4. Key Modules / Components
+For each important module, provide:
+- Name
+- Purpose
+- File path
+- How it connects to others
 
----
+5. Configuration
+- Environment variables
+- Config files
+- External dependencies (DB, APIs, services)
 
-## 🧩 Key Modules / Components
+6. Usage Examples
+Provide real examples from code:
+- Realistic usage example code snippet
+- Explain what the example does
+- Show expected result
 
-For each important module:
+7. Development (only if relevant)
+- How to run locally
+- Test commands
+- Lint / format (if exists)
 
-* **Name**
-* **Purpose**
-* **File path**
-* **How it connects to others**
+8. Troubleshooting
+List only real issues detectable from code:
+- Common errors
+- Misconfigurations
+- Dependency issues
 
----
+9. When NOT to use this
+- Anti-use cases
+- Limitations
+- Known constraints
 
-## ⚙️ Configuration
+10. Next Steps (optional)
+- Advanced usage
+- Scaling notes
+- Contribution guide (if needed)
 
-* Environment variables
-* Config files
-* External dependencies (DB, APIs, services)
-
----
-
-## 💡 Usage Examples
-
-Provide REAL examples from code:
-
-```js
-// realistic usage example
-```
-
-* Explain what the example does
-* Show expected result
-
----
-
-## 🧪 Development (only if relevant)
-
-* How to run locally
-* Test commands
-* Lint / format (if exists)
-
----
-
-## ❗ Troubleshooting
-
-List only REAL issues detectable from code:
-
-* Common errors
-* Misconfigurations
-* Dependency issues
-
----
-
-## 🚧 When NOT to use this
-
-* Anti-use cases
-* Limitations
-* Known constraints
-
----
-
-## 🧭 Next Steps (optional)
-
-* Advanced usage
-* Scaling notes
-* Contribution guide (if needed)
-
----
-
-## RULES
-
-* NO generic filler text
-* KEEP sections concise
-* PRIORITIZE usability over completeness
-* USE real file paths, commands, APIs
-* DO NOT over-explain obvious things
-
-```
-
----
-
-# Vì sao bản này “chuẩn thực chiến”
-
-## 1. Có TL;DR upfront
-→ dev không cần đọc hết vẫn hiểu
-
----
-
-## 2. Tối ưu onboarding thật sự
-- Quick Start < 10 phút  
-→ cái Pro rất hay nhưng thiếu “ép constraint” này
-
----
-
-## 3. Không bị bloat
-- Có:
-  - Core concepts (chỉ essential)
-- Không:
-  - nhồi hết mọi thứ
-
----
-
-## 4. Vẫn giữ chiều sâu cần thiết
-- module breakdown  
-- config  
-- troubleshooting  
-
----
-
-## 5. Audience-aware (nhẹ)
-- Không formal như Pro  
-- nhưng vẫn:
-  - biết ai đọc
-
----
-
-# So với 2 bản trước
-
-| Tiêu chí    | Lite | Pro | Hybrid |
-| ----------- | ---- | --- | ------ |
-| Nhanh đọc   | ✅    | ❌   | ✅      |
-| Onboarding  | ⚠️    | ✅   | ✅      |
-| Không bloat | ✅    | ❌   | ✅      |
-| Depth       | ⚠️    | ✅   | ✅      |
-| Usable ngay | ✅    | ⚠️   | ✅      |
-
----
-
-# Khi nào dùng
-
-- Dev/team nhỏ → **Hybrid là mặc định**
-- Open source lớn → Hybrid + Pro
-- Internal tool → Hybrid là đủ
-
+Response requirements:
+- Optimize for real developer onboarding, not completeness.
+- Prioritize clarity over verbosity.
+- Extract real information from code (modules, APIs, configs).
+- Avoid documentation bloat — include only what is useful.
+- NO generic filler text.
+- KEEP sections concise.
+- USE real file paths, commands, APIs.
+- DO NOT over-explain obvious things.
+- Be direct and honest; do not sugarcoat.
+- Prioritize actionable insights.
+- If the codebase is too large, ask me to provide important files such as README, dependency files, entry points, core modules, config, tests, CI/CD, and architecture documentation.

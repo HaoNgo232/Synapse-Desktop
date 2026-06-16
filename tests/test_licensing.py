@@ -19,9 +19,15 @@ def test_license_info_entity():
     assert info.error_message == ""
 
 def test_license_service_registry_not_registered():
-    with pytest.raises(AttributeError):
-        # Should raise error before registration port is added to DomainRegistry
-        DomainRegistry.license_service()
+    # Reset state to prevent test pollution
+    original_service = DomainRegistry._license_service
+    DomainRegistry._license_service = None
+    try:
+        with pytest.raises(AttributeError):
+            DomainRegistry.license_service()
+    finally:
+        DomainRegistry._license_service = original_service
+
 
 def test_license_service_empty_or_malformed_key():
     from infrastructure.adapters.license_service import Ed25519LicenseService

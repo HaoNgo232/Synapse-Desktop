@@ -119,6 +119,7 @@ class TestAppSettings:
             "copy_mode",
             "tree_map_only",
             "git_commit_depth",
+            "license_key",
         }
         assert set(d.keys()) == expected_keys
 

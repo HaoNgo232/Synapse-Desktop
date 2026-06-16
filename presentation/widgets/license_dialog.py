@@ -153,12 +153,12 @@ class LicenseActivationDialog(QDialog):
 
         if info.is_valid:
             try:
-                from infrastructure.persistence.settings_manager import update_app_setting
-                update_app_setting(license_key=key)
+                DomainRegistry.settings_service().update_setting("license_key", key)
                 self.accept()
             except Exception as e:
                 self.error_label.setText(f"Failed to save settings: {e}")
                 self.error_label.setVisible(True)
+
         else:
             self.error_label.setText(info.error_message or "Invalid license key")
             self.error_label.setVisible(True)

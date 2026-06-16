@@ -22,6 +22,8 @@ from domain.ports.preset_store_port import IPresetStoreFactory
 from domain.ports.history_port import IHistoryService
 from domain.ports.lifecycle_port import IAppLifecycleService
 from domain.ports.memory_port import IMemoryMonitor
+from domain.ports.license_service_port import ILicenseService
+
 
 
 class DomainRegistry:
@@ -55,6 +57,7 @@ class DomainRegistry:
     _history_service: Optional[IHistoryService] = None
     _app_lifecycle: Optional[IAppLifecycleService] = None
     _memory_monitor: Optional[IMemoryMonitor] = None
+    _license_service: Optional[ILicenseService] = None
 
     @classmethod
     def register_tokenization_service(cls, service: ITokenizationService) -> None:
@@ -279,3 +282,13 @@ class DomainRegistry:
         if cls._memory_monitor is None:
             raise RuntimeError("IMemoryMonitor is not registered")
         return cls._memory_monitor
+
+    @classmethod
+    def register_license_service(cls, service: ILicenseService) -> None:
+        cls._license_service = service
+
+    @classmethod
+    def license_service(cls) -> ILicenseService:
+        if cls._license_service is None:
+            raise AttributeError("license_service is not registered in DomainRegistry")
+        return cls._license_service

@@ -7,6 +7,13 @@ setlocal
 set VENV_DIR=.venv
 set REQUIREMENTS_FILE=requirements.txt
 
+REM Detect if the existing .venv is a Linux virtual environment
+if exist "%VENV_DIR%\bin\activate" (
+    if not exist "%VENV_DIR%\Scripts\activate.bat" (
+        set VENV_DIR=.venv-win
+    )
+)
+
 echo === Synapse Desktop Startup Script (Windows) ===
 echo.
 

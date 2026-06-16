@@ -35,6 +35,23 @@ $DIST_DIR = Join-Path $BUILD_DIR "dist"
 $WORK_DIR = Join-Path $BUILD_DIR "work"
 $SPEC_DIR = Join-Path $BUILD_DIR "spec"
 $VENV_DIR = Join-Path $SCRIPT_DIR ".venv"
+
+# Detect if the existing .venv is a Linux virtual environment
+$isLinuxVenv = $false
+$cfgPath = Join-Path $VENV_DIR "pyvenv.cfg"
+if (Test-Path $cfgPath) {
+    $cfgContent = Get-Content $cfgPath
+    if (-not ($cfgContent -match "python.exe")) {
+        $isLinuxVenv = $true
+    }
+} elseif (Test-Path (Join-Path $VENV_DIR "bin\activate")) {
+    $isLinuxVenv = $true
+}
+
+if ($isLinuxVenv) {
+    $VENV_DIR = Join-Path $SCRIPT_DIR ".venv-win"
+}
+
 $VENV_PYTHON = Join-Path $VENV_DIR "Scripts\python.exe"
 $VENV_PIP = Join-Path $VENV_DIR "Scripts\pip.exe"
 $ASSETS_DIR = Join-Path $SCRIPT_DIR "assets"
@@ -48,8 +65,9 @@ Write-Host ""
 
 # ── Step 0: Validate environment ──────────────────────────────
 if (-not (Test-Path $VENV_PYTHON)) {
+    $vName = Split-Path $VENV_DIR -Leaf
     Write-Host "[ERROR] Virtual environment not found at: $VENV_DIR" -ForegroundColor Red
-    Write-Host "Run: python -m venv .venv && .\.venv\Scripts\pip install -r requirements.txt" -ForegroundColor Yellow
+    Write-Host "Run: python -m venv $vName && .\$vName\Scripts\pip install -r requirements.txt" -ForegroundColor Yellow
     exit 1
 }
 

@@ -12,11 +12,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Detect if the existing .venv is a Windows virtual environment
+if [ -d "$VENV_DIR/Scripts" ] || ( [ -f "$VENV_DIR/pyvenv.cfg" ] && grep -q "python.exe" "$VENV_DIR/pyvenv.cfg" ); then
+    VENV_DIR=".venv-linux"
+fi
+
 echo -e "${GREEN}=== Synapse Desktop Startup Script ===${NC}\n"
 
-# Check if virtual environment exists
-if [ ! -d "$VENV_DIR" ]; then
-    echo -e "${YELLOW}[INFO] Virtual environment not found. Creating at: $VENV_DIR...${NC}"
+# Check if virtual environment exists and is valid (contains activate script)
+if [ ! -d "$VENV_DIR" ] || [ ! -f "$VENV_DIR/bin/activate" ]; then
+    echo -e "${YELLOW}[INFO] Virtual environment not found or broken. Creating at: $VENV_DIR...${NC}"
     python3 -m venv "$VENV_DIR"
     
     if [ $? -ne 0 ]; then

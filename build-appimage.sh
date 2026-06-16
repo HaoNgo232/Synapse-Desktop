@@ -41,8 +41,24 @@ mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
-echo "[1/6] Installing PyInstaller..."
-source "$SCRIPT_DIR/.venv/bin/activate"
+echo "[1/6] Activating virtual environment..."
+VENV_DIR="$SCRIPT_DIR/.venv"
+if [ -d "$VENV_DIR/Scripts" ] || ( [ -f "$VENV_DIR/pyvenv.cfg" ] && grep -q "python.exe" "$VENV_DIR/pyvenv.cfg" ); then
+    VENV_DIR="$SCRIPT_DIR/.venv-linux"
+fi
+
+if [ ! -d "$VENV_DIR" ] || [ ! -f "$VENV_DIR/bin/activate" ]; then
+    echo "Creating Linux virtual environment at $VENV_DIR..."
+    python3 -m venv "$VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+    echo "Installing requirements..."
+    python3 -m pip install --upgrade pip
+    pip install -r "$SCRIPT_DIR/requirements.txt"
+else
+    source "$VENV_DIR/bin/activate"
+fi
+
+echo "Installing PyInstaller..."
 pip install pyinstaller --quiet
 
 echo "[2/6] Building with PyInstaller..."
@@ -122,14 +138,39 @@ echo "========================================"
 
 # Auto move to Desktop
 DESKTOP_DIR="$HOME/Desktop"
+
+# Detect WSL to move to Windows Desktop
+if grep -qE "(Microsoft|WSL)" /proc/version 2>/dev/null; then
+    # Running under WSL, resolve Windows User Profile path
+    WIN_USERPROFILE=$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')
+    if [ -n "$WIN_USERPROFILE" ]; then
+        WSL_DESKTOP=$(wslpath "$WIN_USERPROFILE/Desktop" 2>/dev/null)
+        if [ -d "$WSL_DESKTOP" ]; then
+            DESKTOP_DIR="$WSL_DESKTOP"
+        fi
+    fi
+fi
+
 OUTPUT_FILE="$BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 DESKTOP_DEST="$DESKTOP_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 
 if [ -f "$OUTPUT_FILE" ]; then
+    # Ensure destination directory exists
+    mkdir -p "$DESKTOP_DIR"
     echo "Moving AppImage to Desktop..."
-    mv -f "$OUTPUT_FILE" "$DESKTOP_DEST"
-    chmod +x "$DESKTOP_DEST"
-    echo "Successfully moved to: $DESKTOP_DEST"
+    if mv -f "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null; then
+        chmod +x "$DESKTOP_DEST"
+        echo "Successfully moved to: $DESKTOP_DEST"
+    else
+        # Fallback to copy + remove (useful for cross-device mount links in WSL)
+        if cp "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null; then
+            rm -f "$OUTPUT_FILE"
+            chmod +x "$DESKTOP_DEST"
+            echo "Successfully moved to: $DESKTOP_DEST"
+        else
+            echo "Warning: Could not move AppImage to Desktop. File remains at: $OUTPUT_FILE"
+        fi
+    fi
 else
     echo "Warning: Build succeeded but AppImage file not found at $OUTPUT_FILE"
 fi

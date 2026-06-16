@@ -90,10 +90,18 @@ ruff format .
 ### Building
 
 ```bash
-# Build AppImage (Linux only)
-./build-appimage.sh
-# Build Windows script via Bash
-./build-windows.ps1
+# Build AppImage (Linux)
+./build-appimage.sh                # Normal build (with license check)
+./build-appimage.sh --no-license   # Build without license check
+```
+
+```powershell
+# Build Windows .exe (PowerShell)
+# 1. Standard build (enforces license check) - single EXE + clean cache
+.\build-windows.ps1
+
+# 2. Personal build (bypasses license check) - single EXE + clean cache
+.\build-windows.ps1 -NoLicense
 ```
 
 ## 2. Code Style Guidelines

@@ -6,7 +6,7 @@ This is the instruction given to LLMs to format their responses in OPX format.
 """
 
 # Giữ nguyên từ TypeScript, chỉ chuyển từ template literal sang Python string
-XML_FORMATTING_INSTRUCTIONS = """<search_replace_instructions>
+XML_FORMATTING_INSTRUCTIONS = r"""<search_replace_instructions>
 
 # Role
 You produce Search/Replace blocks (Aider-style) that precisely describe file edits to apply to the current workspace.

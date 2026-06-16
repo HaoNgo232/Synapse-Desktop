@@ -2,9 +2,9 @@
 # Build Synapse Desktop thành EXE cho Windows
 #
 # Usage:
-#   .\build-windows.ps1              # Build bản onedir (nhanh, dễ debug)
-#   .\build-windows.ps1 -OneFile     # Build bản single EXE (tiện phân phối)
-#   .\build-windows.ps1 -Clean       # Xóa build cũ trước khi build
+#   .\build-windows.ps1              # Build bản single EXE (mặc định tự động clean cache)
+#   .\build-windows.ps1 -NoLicense   # Build bản single EXE bỏ qua kiểm tra bản quyền
+#   .\build-windows.ps1 -Debug       # Build bản debug chi tiết
 #
 # Requirements:
 #   - Python 3.10+ với .venv đã cài đặt
@@ -17,11 +17,12 @@
 #   4. multiprocessing.freeze_support(): Tránh fork bomb trên Windows EXE
 
 param(
-    [switch]$OneFile,
-    [switch]$Clean,
     [switch]$Debug,
     [switch]$NoLicense
 )
+
+$OneFile = $true
+$Clean = $true
 
 $ErrorActionPreference = "Stop"
 
@@ -162,7 +163,6 @@ $hiddenImports = @(
     "application.services.workspace_config",
     "application.services.preview_analyzer",
     "application.services.error_context",
-    "application.services.graph_service",
     "infrastructure.adapters.tokenization_service",
     # --- Domain Layer ---
     "domain.prompt.opx_parser",

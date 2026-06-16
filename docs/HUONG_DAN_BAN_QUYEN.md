@@ -79,13 +79,23 @@ Thay vì tự sinh key offline bằng tool, chúng ta sử dụng hệ thống q
 * **Vị trí lưu Key:** Key sau khi kích hoạt thành công được lưu tại `~/.config/synapse-desktop/settings.json` (trường `"license_key"`).
 * **Cơ chế offline:** Ứng dụng **chỉ gọi API Gumroad trực tuyến 1 lần duy nhất lúc kích hoạt**. Khi khởi động các lần tiếp theo, ứng dụng chỉ kiểm tra xem trường `license_key` trong cài đặt có khác rỗng hay không, giúp khởi động cực kỳ nhanh và hoạt động offline hoàn toàn.
 * **Cơ chế Feature Flag:** Để đóng gói sản phẩm thương mại (AppImage trên Linux, EXE trên Windows), quá trình build mặc định sẽ không truyền tham số `--no-license`, bắt buộc ứng dụng phải được kích hoạt bản quyền qua giao diện để có thể sử dụng.
-* **Tắt kiểm tra bản quyền khi build bản cá nhân:**
-  * **Trên Linux (AppImage):** Bạn có thể truyền thêm tham số `--no-license` khi chạy script build để AppImage tự động bỏ qua check bản quyền khi khởi chạy:
-    ```bash
-    ./build-appimage.sh --no-license
-    ```
-  * **Trên Windows (EXE):** Bạn có thể truyền thêm cờ `-NoLicense` khi chạy script build bằng PowerShell để file EXE đóng gói tự động bỏ qua check bản quyền:
-    ```powershell
-    .\build-windows.ps1 -NoLicense
-    ```
+* **Hướng dẫn đóng gói (Build) sản phẩm:**
+  * **Trên Linux (AppImage):**
+    * **Build bình thường** (yêu cầu kích hoạt bản quyền khi khởi chạy):
+      ```bash
+      ./build-appimage.sh
+      ```
+    * **Build bỏ qua bản quyền** (bản cá nhân):
+      ```bash
+      ./build-appimage.sh --no-license
+      ```
+  * **Trên Windows (EXE - chạy qua PowerShell):**
+    * **Build bình thường** (yêu cầu kích hoạt bản quyền khi khởi chạy):
+      ```powershell
+      .\build-windows.ps1
+      ```
+    * **Build bỏ qua bản quyền** (bản cá nhân):
+      ```powershell
+      .\build-windows.ps1 -NoLicense
+      ```
 

@@ -954,10 +954,14 @@ class SettingsViewQt(QWidget):
 
         col3_layout.addWidget(card6)
 
-        # Product Licensing
-        license_card = self._build_license_section()
-        col3_layout.addWidget(license_card)
-        self._update_license_display()
+        # Product Licensing — only when SYNAPSE_LICENSE_CHECK is enabled
+        # and --no-license CLI argument is not passed
+        import sys
+        import os
+        if os.environ.get("SYNAPSE_LICENSE_CHECK") == "1" and "--no-license" not in sys.argv:
+            license_card = self._build_license_section()
+            col3_layout.addWidget(license_card)
+            self._update_license_display()
 
         # ─────────────────────────────
         # CARD 5: Data & Session

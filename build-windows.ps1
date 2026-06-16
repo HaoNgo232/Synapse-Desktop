@@ -241,6 +241,9 @@ $pyinstallerArgs = @(
 # Add icon if available
 $pyinstallerArgs += $iconArg
 
+# Add runtime hook to enable license checking in production
+$pyinstallerArgs += @("--runtime-hook", (Join-Path $SCRIPT_DIR "runtime_hook_license.py"))
+
 # Add data files
 $pyinstallerArgs += $addDataArgs
 

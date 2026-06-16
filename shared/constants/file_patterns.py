@@ -190,7 +190,6 @@ DIRECTORY_QUICK_SKIP: frozenset[str] = frozenset(
         # vendor đã có ở Go section
         # === .NET / C# ===
         "obj",
-        "packages",
         # === Dart / Flutter ===
         ".dart_tool",
         ".pub-cache",

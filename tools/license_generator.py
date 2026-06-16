@@ -1,7 +1,7 @@
 import base64
 import json
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 
@@ -46,7 +46,7 @@ def sign_license(
     if lifetime:
         expiry_date = "never"
     else:
-        expiry_date = (datetime.utcnow() + timedelta(days=days_valid)).strftime(
+        expiry_date = (datetime.now(timezone.utc) + timedelta(days=days_valid)).strftime(
             "%Y-%m-%d"
         )
 
@@ -93,10 +93,19 @@ def main():
     if args.keygen:
         generate_key_pair()
     else:
-        key = sign_license(args.id, args.email, args.days, args.lifetime)
-        print("=== GENERATED LICENSE KEY ===")
-        print(key)
-        print("=============================")
+        # Generate both a lifetime key and a trial key (365 days or custom --days)
+        lifetime_key = sign_license(f"{args.id}-LIFETIME", args.email, 0, lifetime=True)
+        trial_key = sign_license(f"{args.id}-TRIAL", args.email, args.days, lifetime=False)
+
+        print("=== GENERATED LICENSE KEYS ===")
+        print(f"Email: {args.email}")
+        print("-" * 30)
+        print(f"1. Lifetime Key (ID: {args.id}-LIFETIME):")
+        print(lifetime_key)
+        print()
+        print(f"2. Trial Key - {args.days} Days (ID: {args.id}-TRIAL):")
+        print(trial_key)
+        print("==============================")
 
 
 if __name__ == "__main__":

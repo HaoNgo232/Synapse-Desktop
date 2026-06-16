@@ -1,7 +1,7 @@
 import base64
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from domain.licensing.entities import LicenseInfo
 from domain.ports.license_service_port import ILicenseService
@@ -98,7 +98,7 @@ class Ed25519LicenseService(ILicenseService):
             try:
                 expiry_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
                 # Use UTC to prevent local clock spoofing where possible
-                if expiry_date < datetime.utcnow().date():
+                if expiry_date < datetime.now(timezone.utc).date():
                     return LicenseInfo(
                         license_id,
                         email,

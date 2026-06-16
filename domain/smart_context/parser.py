@@ -60,8 +60,6 @@ def smart_parse(
     Part 2: Compressed File Contents (Signatures, types, imports - bodies stripped)
     """
     from domain.codemap.symbol_extractor import extract_symbols
-    from domain.codemap.relationship_extractor import extract_relationships
-    from domain.codemap.types import RelationshipKind
     from domain.smart_context.config import is_supported
     from domain.smart_context.loader import get_language
     from domain.codemap.dependency_graph_generator import DependencyGraphGenerator
@@ -86,25 +84,8 @@ def smart_parse(
         symbols = extract_symbols(file_path, content, tree=tree, language=language)
         # Don't return None immediately here; try to get at least imports
 
-        # 2. Extract Imports
-        relationships = extract_relationships(
-            file_path,
-            content,
-            tree=tree,
-            language=language,
-            workspace_root=Path(workspace_root) if workspace_root else None,
-        )
-        imports = [r for r in relationships if r.kind == RelationshipKind.IMPORTS]
-
-        # Get raw import lines from content
-        lines = content.split("\n")
-        import_lines = []
-        seen_import_rows = set()
-        for imp in imports:
-            row = imp.source_line - 1
-            if row < len(lines) and row not in seen_import_rows:
-                import_lines.append(lines[row].strip())
-                seen_import_rows.add(row)
+        # 2. Extract Imports - dùng AST nodes để lấy full text (kể cả multi-line)
+        import_lines = _extract_import_texts(tree, content)
 
         # Assemble Compressed Content with Intelligent Separator
         compressed_content = ""
@@ -113,7 +94,9 @@ def smart_parse(
         # 3. Add Symbol Signatures (Imports first)
         if import_lines:
             compressed_content += "\n".join(import_lines)
-            last_line = max(seen_import_rows) if seen_import_rows else -1
+            # last_line: track last import row để detect gaps với symbols tiếp theo
+            # Dùng -1 vì _extract_import_texts không trả về row info
+            last_line = -1
 
         if symbols:
             for s in symbols:
@@ -175,6 +158,100 @@ def smart_parse(
     except Exception as e:
         logger.error("smart_parse failed for %s: %s", file_path, e, exc_info=True)
         return None
+
+
+def _extract_import_texts(tree: Any, content: str) -> list[str]:
+    """
+    Trích xuất toàn bộ text của các import statements từ AST.
+
+    Khác với cách cũ (dùng Relationship.source_line để lấy 1 dòng),
+    hàm này walk trực tiếp AST tree để lấy node.text - đảm bảo lấy đủ
+    toàn bộ multi-line imports như:
+        from PySide6.QtWidgets import (
+            QWidget,
+            QVBoxLayout,
+        )
+
+    Args:
+        tree: Tree-sitter parse tree
+        content: Raw file content (dùng để fallback nếu node.text là None)
+
+    Returns:
+        Danh sách import text strings, theo thứ tự xuất hiện trong file.
+    """
+    # Node types cần lấy text (Python, JS/TS, Go, Rust, Java, C#...)
+    IMPORT_NODE_TYPES = {
+        # Python
+        "import_statement",
+        "import_from_statement",
+        # JS/TS
+        "import_declaration",
+        "import_statement",
+        # Go
+        "import_declaration",
+        "import_spec",
+        # Rust
+        "use_declaration",
+        # Java
+        "import_declaration",
+        # C#
+        "using_directive",
+        # C/C++
+        "preproc_include",
+        # Ruby
+        "require",
+    }
+
+    if not tree or not tree.root_node:
+        return []
+
+    lines = content.split("\n")
+    import_texts: list[str] = []
+    seen_positions: set[tuple[int, int]] = set()
+
+    def walk(node: Any) -> None:
+        if node.type in IMPORT_NODE_TYPES:
+            pos = (node.start_point[0], node.end_point[0])
+            if pos not in seen_positions:
+                seen_positions.add(pos)
+                # Lấy text trực tiếp từ node (bao gồm toàn bộ multi-line)
+                if node.text is not None:
+                    text = node.text.decode("utf-8", errors="replace").strip()
+                else:
+                    # Fallback: cắt từ raw content theo row/col
+                    start_row, start_col = node.start_point
+                    end_row, end_col = node.end_point
+                    if start_row == end_row:
+                        line_bytes = lines[start_row].encode("utf-8")
+                        text = (
+                            line_bytes[start_col:end_col]
+                            .decode("utf-8", errors="replace")
+                            .strip()
+                        )
+                    else:
+                        node_lines = []
+                        for r in range(start_row, end_row + 1):
+                            if r >= len(lines):
+                                break
+                            line = lines[r]
+                            if r == start_row:
+                                node_lines.append(line[start_col:])
+                            elif r == end_row:
+                                node_lines.append(line[:end_col])
+                            else:
+                                node_lines.append(line)
+                        text = "\n".join(node_lines).strip()
+
+                if text:
+                    import_texts.append(text)
+            # Không đi sâu vào con của import node (tránh duplicate)
+            return
+
+        for child in node.children:
+            walk(child)
+
+    walk(tree.root_node)
+    return import_texts
 
 
 def _build_relationships_section(

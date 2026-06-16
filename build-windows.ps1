@@ -104,6 +104,13 @@ if (Test-Path $TEMPLATES_DIR) {
     Write-Host "  + domain/prompt/templates/" -ForegroundColor DarkGray
 }
 
+# SCM Queries
+$QUERIES_DIR = Join-Path $SCRIPT_DIR "domain\codemap\queries"
+if (Test-Path $QUERIES_DIR) {
+    $addDataArgs += @("--add-data", "${QUERIES_DIR};domain\codemap\queries")
+    Write-Host "  + domain/codemap/queries/" -ForegroundColor DarkGray
+}
+
 # ── Step 5: Determine hidden imports ──────────────────────────
 Write-Host "[5/7] Resolving hidden imports..." -ForegroundColor Green
 

@@ -8,9 +8,10 @@ from pathlib import Path
 
 def _load_query(lang: str) -> str:
     # Aider/Synapse pattern: {lang}-tags.scm
-    query_path = Path("domain/codemap/queries") / f"{lang}-tags.scm"
+    query_dir = Path(__file__).resolve().parent.parent.parent / "codemap" / "queries"
+    query_path = query_dir / f"{lang}-tags.scm"
     if query_path.exists():
-        return query_path.read_text()
+        return query_path.read_text(encoding="utf-8")
     return ""
 
 

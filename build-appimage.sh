@@ -41,6 +41,7 @@ pyinstaller \
     --clean \
     --add-data "$SCRIPT_DIR/assets:assets" \
     --add-data "$SCRIPT_DIR/domain/prompt/templates:domain/prompt/templates" \
+    --add-data "$SCRIPT_DIR/domain/codemap/queries:domain/codemap/queries" \
     --hidden-import tiktoken_ext \
     --hidden-import tiktoken_ext.openai_public \
     --collect-all tiktoken_ext \

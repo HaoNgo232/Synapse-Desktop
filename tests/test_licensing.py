@@ -118,3 +118,21 @@ def test_embedded_key_pair_verification():
     info = service.verify_license_key(live_key)
     assert info.is_valid is True
     assert info.email == "live@test.com"
+
+
+def test_lifetime_license_verification():
+    from infrastructure.adapters.license_service import Ed25519LicenseService
+    from tools.license_generator import sign_license
+
+    service = Ed25519LicenseService()
+
+    # Generate and verify lifetime key
+    lifetime_key = sign_license(
+        "LIC-LIFETIME-TEST", "lifetime@test.com", 365, lifetime=True
+    )
+    info = service.verify_license_key(lifetime_key)
+
+    assert info.is_valid is True
+    assert info.expiry_date == "never"
+    assert info.email == "lifetime@test.com"
+    assert info.license_id == "LIC-LIFETIME-TEST"

@@ -1715,10 +1715,15 @@ class SettingsViewQt(QWidget):
         info = DomainRegistry.license_service().verify_license_key(settings.license_key)
 
         if info.is_valid:
+            expiry_str = (
+                "Lifetime (Never Expires)"
+                if info.expiry_date == "never"
+                else info.expiry_date
+            )
             self._license_info_label.setText(
                 f"License ID: {info.license_id}\n"
                 f"Licensed Owner: {info.email}\n"
-                f"Valid Until: {info.expiry_date}\n"
+                f"Valid Until: {expiry_str}\n"
                 f"Status: Active / Verified"
             )
             self._deactivate_btn.setEnabled(True)

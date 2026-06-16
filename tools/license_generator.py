@@ -34,14 +34,21 @@ def generate_key_pair():
     print(public_pem.decode("utf-8"))
 
 
-def sign_license(license_id: str, email: str, days_valid: int) -> str:
+def sign_license(
+    license_id: str, email: str, days_valid: int, lifetime: bool = False
+) -> str:
     # Read private key
     private_key = serialization.load_pem_private_key(PRIVATE_KEY_PEM, password=None)
     if not isinstance(private_key, ed25519.Ed25519PrivateKey):
         raise ValueError("Key is not an Ed25519 private key")
 
     # Use UTC to calculate expiry date safely
-    expiry_date = (datetime.utcnow() + timedelta(days=days_valid)).strftime("%Y-%m-%d")
+    if lifetime:
+        expiry_date = "never"
+    else:
+        expiry_date = (datetime.utcnow() + timedelta(days=days_valid)).strftime(
+            "%Y-%m-%d"
+        )
 
     payload = {
         "license_id": license_id,
@@ -71,6 +78,11 @@ def main():
     )
     parser.add_argument("--days", type=int, default=365, help="Number of days valid")
     parser.add_argument(
+        "--lifetime",
+        action="store_true",
+        help="Generate a lifetime license with no expiration",
+    )
+    parser.add_argument(
         "--keygen",
         action="store_true",
         help="Generate a new keypair instead of signing",
@@ -81,7 +93,7 @@ def main():
     if args.keygen:
         generate_key_pair()
     else:
-        key = sign_license(args.id, args.email, args.days)
+        key = sign_license(args.id, args.email, args.days, args.lifetime)
         print("=== GENERATED LICENSE KEY ===")
         print(key)
         print("=============================")

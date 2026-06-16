@@ -34,6 +34,11 @@ Mở một cửa sổ terminal mới (hoặc tạm dừng app) và chạy lệnh
   env -u PYTHONHOME -u PYTHONPATH .venv/bin/python tools/license_generator.py --id LIC-DEV-99 --email dev@test.com --days 365
   ```
 
+* **Tạo Key trọn đời (Lifetime - Mua 1 lần):**
+  ```bash
+  env -u PYTHONHOME -u PYTHONPATH .venv/bin/python tools/license_generator.py --id LIC-LIFE-99 --email dev@test.com --lifetime
+  ```
+
 * **Kết quả hiển thị trên terminal:**
   ```text
   === GENERATED LICENSE KEY ===

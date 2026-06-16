@@ -94,27 +94,29 @@ class Ed25519LicenseService(ILicenseService):
             )
 
         # Validate expiry date
-        try:
-            expiry_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
-            # Use UTC to prevent local clock spoofing where possible
-            if expiry_date < datetime.utcnow().date():
+        if expiry_date_str != "never":
+            try:
+                expiry_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
+                # Use UTC to prevent local clock spoofing where possible
+                if expiry_date < datetime.utcnow().date():
+                    return LicenseInfo(
+                        license_id,
+                        email,
+                        expiry_date_str,
+                        product,
+                        is_valid=False,
+                        error_message=f"License expired on {expiry_date_str}",
+                    )
+            except ValueError:
                 return LicenseInfo(
                     license_id,
                     email,
                     expiry_date_str,
                     product,
                     is_valid=False,
-                    error_message=f"License expired on {expiry_date_str}",
+                    error_message="Invalid expiry date format",
                 )
-        except ValueError:
-            return LicenseInfo(
-                license_id,
-                email,
-                expiry_date_str,
-                product,
-                is_valid=False,
-                error_message="Invalid expiry date format",
-            )
+
 
         # Verify signature
         if not self._public_key:

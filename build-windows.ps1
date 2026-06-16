@@ -288,7 +288,13 @@ if ($NoLicense) {
 }
 
 # Version info (Windows-specific metadata)
-# PyInstaller can embed version info via --version-file, but we skip for simplicity
+$versionFile = Join-Path $ASSETS_DIR "file_version_info.txt"
+if (Test-Path $versionFile) {
+    Write-Host "  Found version info file: $versionFile" -ForegroundColor DarkGray
+    $pyinstallerArgs += @("--version-file", $versionFile)
+} else {
+    Write-Host "  WARNING: file_version_info.txt not found, building without version info" -ForegroundColor Yellow
+}
 
 # Entry point
 $pyinstallerArgs += "main.py"

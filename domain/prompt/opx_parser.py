@@ -468,10 +468,11 @@ def _map_op_to_action(
 
 # SR block regex: <<<<<<< SEARCH filename\n...\n=======\n...\n>>>>>>> REPLACE
 # Group 1: File path
-# Group 2: Search block content
-# Group 3: Replace block content
+# Group 2: Optional description
+# Group 3: Search block content
+# Group 4: Replace block content
 _SR_BLOCK_RE = re.compile(
-    r"^<{7}\s+SEARCH\s+(\S+)[^\n]*\n(.*?)^={7}\s*\n(.*?)^>{7}\s+REPLACE[^\n]*$",
+    r"^<{7}[ \t]+SEARCH[ \t]+(\S+)(?:[ \t]+-[ \t]+([^\n\r]*))?[^\n\r]*\r?\n(.*?)^={7}[ \t]*\r?\n(.*?)^>{7}[ \t]+REPLACE[^\n\r]*$",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -526,8 +527,12 @@ def parse_search_replace_response(text: str) -> ParseResult:
             if path.startswith("file://"):
                 path = path[7:]
 
-            search_text = match.group(2)
-            replace_text = match.group(3)
+            comment_desc = match.group(2)
+            if comment_desc:
+                comment_desc = comment_desc.strip()
+
+            search_text = match.group(3)
+            replace_text = match.group(4)
 
             # Theo chuẩn định dạng: SEARCH block trống nghĩa là tạo file mới
             is_create = search_text.strip() == ""
@@ -538,8 +543,14 @@ def parse_search_replace_response(text: str) -> ParseResult:
                     path=path, action=action_type, changes=[]
                 )
 
+            desc = (
+                comment_desc
+                if comment_desc
+                else ("Create file" if is_create else "Search/Replace patch")
+            )
+
             block = ChangeBlock(
-                description="Search/Replace patch" if not is_create else "Create file",
+                description=desc,
                 content=replace_text.rstrip("\n"),
                 search=None if is_create else search_text.rstrip("\n"),
             )

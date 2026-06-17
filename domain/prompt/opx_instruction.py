@@ -26,13 +26,13 @@ You produce Search/Replace blocks (Aider-style) that precisely describe file edi
 # Format at a glance
 
 1) Create a new file (Empty SEARCH block):
-<<<<<<< SEARCH path/to/file.ext
+<<<<<<< SEARCH path/to/file.ext - <Brief description of the creation>
 =======
 [file content]
 >>>>>>> REPLACE
 
 2) Patch a region of a file (Modify):
-<<<<<<< SEARCH path/to/file.ext
+<<<<<<< SEARCH path/to/file.ext - <Brief description of the changes>
 [exact original code block to replace]
 =======
 [replacement code block]
@@ -56,7 +56,7 @@ path/to/new_file.ext
 # Examples
 
 <!-- Example 1: Create a new file -->
-<<<<<<< SEARCH src/utils/strings.ts
+<<<<<<< SEARCH src/utils/strings.ts - Create titleCase helper function
 =======
 export function titleCase(s: string): string {
   return s.split(/\s+/).map(w => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ');
@@ -64,7 +64,7 @@ export function titleCase(s: string): string {
 >>>>>>> REPLACE
 
 <!-- Example 2: Patch a region of an existing file -->
-<<<<<<< SEARCH src/api/users.ts
+<<<<<<< SEARCH src/api/users.ts - Add fetchUser timeout and error logging
 export async function fetchUser(id: string) {
   const res = await fetch(`/api/users/${id}`);
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
@@ -103,6 +103,7 @@ src/lib/feature-flags.ts
 - The entire SEARCH region is replaced by the entire REPLACE block.
 - Preserve indentation to fit the surrounding code.
 - If you need to make multiple edits to the same file, output multiple blocks. Order them top-to-bottom to avoid offset drift.
+- Always add a space, a hyphen, a space, and a brief description of the changes on the `<<<<<<< SEARCH` line, like: `<<<<<<< SEARCH path/to/file.ext - <Brief description of changes>`. The description must be concise, on a single line, and must not contain any newlines.
 
 # Safety & Truncation
 - If you see `[NOTE: File content trimmed...]` or `[NOTE: Converted to Smart Context...]` or `[NOTE: File severely truncated...]` in a file's content, do NOT generate SEARCH/REPLACE blocks for that file if you don't know the exact content.

@@ -934,8 +934,8 @@ class ApplyViewQt(QWidget):
             diff_layout.setContentsMargins(0, 4, 0, 0)
 
             diff_viewer = DiffViewerWidget(row.diff_lines)
-            diff_viewer.setMinimumHeight(120)
-            diff_viewer.setMaximumHeight(400)
+            diff_viewer.setMinimumHeight(550)
+            diff_viewer.setMaximumHeight(800)
             diff_layout.addWidget(diff_viewer)
 
         # Hien thi hint neu khong co diff (va khong phai rename)

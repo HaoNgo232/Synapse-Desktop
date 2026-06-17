@@ -29,3 +29,4 @@ pytest.ini
 
 # VS Code Material Icons Theme Integration
 assets/material-icons/
+runtime_hook_no_license.py

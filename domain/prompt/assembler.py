@@ -296,21 +296,10 @@ def _assemble_xml(
     )
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    # Minimizing Agent Role logic (unified logic for all formats)
-    role = (
-        AGENT_ROLE_INSTRUCTION
-        if not include_xml_formatting
-        else "Analyze the provided codebase."
-    )
-
     if include_xml_formatting:
-        file_summary_content = generate_file_summary_xml_minimal()
-        # In OPX mode, we still want to clarify the agent role if it's missing from minimal summary
-        if "<agent_role>" not in file_summary_content:
-            file_summary_content = file_summary_content.replace(
-                "<file_summary>", f"<file_summary>\n<agent_role>\n{role}\n</agent_role>"
-            )
-        file_summary = file_summary_content
+        # In OPX mode, XML_FORMATTING_INSTRUCTIONS already defines the agent role precisely.
+        # Injecting a separate <agent_role> here would create conflicting instructions.
+        file_summary = generate_file_summary_xml_minimal()
     else:
         file_summary = generate_file_summary_xml()
 

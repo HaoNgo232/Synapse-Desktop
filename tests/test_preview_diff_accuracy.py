@@ -3,11 +3,20 @@ QA Tests for Preview Diff Accuracy vs Apply Results.
 Verifies that preview diff simulator matches 100% with actual applied results on various complex patch scenarios.
 """
 
+import pytest
 from pathlib import Path
 
+from domain.ports.registry import DomainRegistry
+from infrastructure.filesystem.file_actions import FileActionsService, apply_file_actions
 from domain.prompt.opx_parser import ChangeBlock, FileAction
 from application.services.preview_analyzer import generate_preview_diff_lines
-from infrastructure.filesystem.file_actions import apply_file_actions
+
+@pytest.fixture(autouse=True)
+def setup_real_file_actions():
+    old_service = DomainRegistry._file_actions_service
+    DomainRegistry.register_file_actions_service(FileActionsService())
+    yield
+    DomainRegistry._file_actions_service = old_service
 
 
 def test_preview_diff_exact_match(tmp_path: Path) -> None:
@@ -57,7 +66,7 @@ def test_preview_diff_eol_normalization(tmp_path: Path) -> None:
     target = tmp_path / file_name
     # File dùng CRLF
     original_content = "line1\r\nline2\r\nline3\r\n"
-    target.write_text(original_content, encoding="utf-8")
+    target.write_bytes(original_content.encode("utf-8"))
 
     action = FileAction(
         path=file_name,

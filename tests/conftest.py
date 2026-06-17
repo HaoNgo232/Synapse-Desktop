@@ -1,8 +1,9 @@
 import pathspec
 import pytest
 from pathlib import Path
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Callable
 from domain.ports.registry import DomainRegistry
+from domain.ports.cache_registry_port import ICacheRegistry
 from domain.ports.directory_scanner import IDirectoryScanner
 from domain.workflow.interfaces.git_port import IGitService
 from domain.workflow.interfaces.ast_parser_port import IAstParser
@@ -17,6 +18,14 @@ from domain.ports.history_port import IHistoryService, HistoryEntry
 from domain.ports.file_actions_port import IFileActionsService
 from domain.ports.action_result import ActionResult
 from domain.prompt.opx_parser import FileAction
+from domain.ports.mcp_installer_port import IMCPInstaller
+from domain.ports.repo_manager_port import IRepoManager, CachedRepo, RemoteRepoInfo
+from domain.ports.preset_store_port import IPresetStore, IPresetStoreFactory, PresetEntry
+from domain.ports.memory_port import IMemoryMonitor, MemoryStats
+from domain.ports.recent_folders_port import IRecentFoldersService
+
+
+
 
 
 class DummyDirectoryScanner(IDirectoryScanner):
@@ -244,6 +253,169 @@ class DummySettingsService(ISettingsService):
         pass
 
 
+class DummyCacheRegistry(ICacheRegistry):
+    def get_stats(self) -> Dict[str, int]:
+        return {}
+
+    def get_registered_names(self) -> List[str]:
+        return []
+
+    def invalidate_for_workspace(self) -> None:
+        pass
+
+    def invalidate_for_path(self, path: str) -> None:
+        pass
+
+
+class DummyMCPInstaller(IMCPInstaller):
+    def get_mcp_targets(self) -> dict:
+        return {}
+
+    def check_installed(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> bool:
+        return False
+
+    def get_mcp_command(self) -> list[str]:
+        return []
+
+    def get_config_path(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> str:
+        return ""
+
+    def preview_json(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> str:
+        return ""
+
+    def install_config(
+        self, target_name: str, workspace_path: Optional[str] = None
+    ) -> tuple[bool, str]:
+        return True, ""
+
+
+class DummyRepoManager(IRepoManager):
+    def clone_repo(
+        self,
+        url: str,
+        on_progress: Optional[Any] = None,
+        timeout: Optional[int] = None,
+        force_reclone: bool = False,
+    ) -> Path:
+        return Path()
+
+    def get_cached_repos(self) -> List[CachedRepo]:
+        return []
+
+    def delete_repo(self, repo_name: str) -> bool:
+        return True
+
+    def clear_cache(self) -> int:
+        return 0
+
+    def get_cache_size(self) -> int:
+        return 0
+
+    def format_size(self, size_bytes: int) -> str:
+        return "0 B"
+
+    def is_dirty(self, repo_path: Path) -> bool:
+        return False
+
+    def stash_changes(self, repo_path: Path) -> bool:
+        return True
+
+    def discard_changes(self, repo_path: Path) -> bool:
+        return True
+
+
+class DummyPresetStore(IPresetStore):
+    def list_presets(self) -> List[PresetEntry]:
+        return []
+
+    def get_preset(self, preset_id: str) -> Optional[PresetEntry]:
+        return None
+
+    def create_preset(
+        self,
+        name: str,
+        selected_paths: List[str],
+        instructions: str = "",
+        output_format: str = "",
+    ) -> PresetEntry:
+        return PresetEntry("", "", [])
+
+    def update_preset(
+        self,
+        preset_id: str,
+        name: Optional[str] = None,
+        selected_paths: Optional[List[str]] = None,
+        instructions: Optional[str] = None,
+        output_format: Optional[str] = None,
+    ) -> Optional[PresetEntry]:
+        return None
+
+    def delete_preset(self, preset_id: str) -> bool:
+        return True
+
+    def rename_preset(self, preset_id: str, new_name: str) -> Optional[PresetEntry]:
+        return None
+
+    def to_absolute_paths(self, relative_paths: List[str]) -> List[str]:
+        return []
+
+
+class DummyPresetStoreFactory(IPresetStoreFactory):
+    def create_preset_store(self, workspace_root: Path) -> IPresetStore:
+        return DummyPresetStore()
+
+
+class DummyMemoryMonitor(IMemoryMonitor):
+    def __init__(self):
+        self._on_update = None
+
+    @property
+    def on_update(self) -> Optional[Callable[[MemoryStats], None]]:
+        return self._on_update
+
+    @on_update.setter
+    def on_update(self, callback: Optional[Callable[[MemoryStats], None]]) -> None:
+        self._on_update = callback
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def set_token_cache_count(self, count: int) -> None:
+        pass
+
+    def set_file_count(self, count: int) -> None:
+        pass
+
+    def get_current_stats(self) -> MemoryStats:
+        return MemoryStats(rss_mb=0.0)
+
+
+class DummyRecentFolders(IRecentFoldersService):
+    def load_recent_folders(self) -> List[str]:
+        return []
+
+    def save_recent_folders(self, folders: List[str]) -> None:
+        pass
+
+    def clear_recent_folders(self) -> None:
+        pass
+
+    def add_recent_folder(self, folder_path: str) -> bool:
+        return True
+
+    def get_folder_display_name(self, folder_path: str) -> str:
+        return ""
+
+
 @pytest.fixture(autouse=True, scope="session")
 def setup_dummy_domain_ports():
     try:
@@ -296,6 +468,42 @@ def setup_dummy_domain_ports():
     except RuntimeError:
         DomainRegistry.register_tokenization_service(DummyTokenizationService())
 
+    try:
+        DomainRegistry.cache_registry()
+    except RuntimeError:
+        DomainRegistry.register_cache_registry(DummyCacheRegistry())
+
+    try:
+        DomainRegistry.workspace_scanner()
+    except RuntimeError:
+        from application.services.workspace_index import WorkspaceScanner
+        DomainRegistry.register_workspace_scanner(WorkspaceScanner())
+
+    try:
+        DomainRegistry.mcp_installer()
+    except RuntimeError:
+        DomainRegistry.register_mcp_installer(DummyMCPInstaller())
+
+    try:
+        DomainRegistry.repo_manager()
+    except RuntimeError:
+        DomainRegistry.register_repo_manager(DummyRepoManager())
+
+    try:
+        DomainRegistry.preset_store_factory()
+    except RuntimeError:
+        DomainRegistry.register_preset_store_factory(DummyPresetStoreFactory())
+
+    try:
+        DomainRegistry.memory_monitor()
+    except RuntimeError:
+        DomainRegistry.register_memory_monitor(DummyMemoryMonitor())
+
+    try:
+        DomainRegistry.recent_folders()
+    except RuntimeError:
+        DomainRegistry.register_recent_folders(DummyRecentFolders())
+
     # Register default settings provider returning standard AppSettings
     try:
         DomainRegistry.settings()
@@ -303,3 +511,6 @@ def setup_dummy_domain_ports():
         pass
     # Always register settings provider for tests to ensure a default exists
     DomainRegistry.register_settings_provider(lambda: AppSettings())
+
+
+

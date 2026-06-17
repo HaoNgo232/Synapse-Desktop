@@ -140,8 +140,8 @@ class TestGeneratePrompt:
             file_map="file.py", file_contents="code", include_xml_formatting=True
         )
 
-        # Phải có OPX instructions
-        assert "OPX" in result or "<edit" in result or "operation" in result.lower()
+        # Phải có Aider-style hoặc XML formatting instructions
+        assert "SEARCH" in result or "REPLACE" in result or "search/replace" in result.lower()
 
     def test_search_replace_instructions_before_user_when_both_present(self):
         """search_replace_instructions xuất hiện trước user_instructions."""
@@ -400,7 +400,7 @@ class TestRepomixXmlFormat:
         )
 
         # Path phai la relative, khong chua absolute
-        assert 'path="src/main.py"' in result
+        assert 'path="src/main.py"' in result.replace('\\', '/')
         assert str(tmp_path) not in result
 
     def test_xml_use_relative_paths_off_fallback(self, tmp_path):

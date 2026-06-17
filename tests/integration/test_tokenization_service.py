@@ -11,6 +11,7 @@ Test cac tuong tac THUC giua cac component:
 - Fallback warning (Option 2b)
 """
 
+import sys
 import time
 import threading
 from pathlib import Path
@@ -395,6 +396,7 @@ class TestFileHandlingEdgeCases:
         result = service.count_tokens_for_file(f)
         assert result > 0
 
+    @pytest.mark.skipif(sys.platform == 'win32', reason="Symlinks require admin privileges on Windows")
     def test_symlink_to_file(self, tmp_path):
         """Symlink tro den file thuc -> dem duoc."""
         service = TokenizationService()
@@ -415,15 +417,19 @@ class TestFileHandlingEdgeCases:
 class TestBatchProcessing:
     """Test count_tokens_batch_parallel() voi nhieu scenarios."""
 
+    def setup_method(self):
+        from domain.tokenization.cancellation import start_token_counting
+        start_token_counting()
+
+    def teardown_method(self):
+        from domain.tokenization.cancellation import stop_token_counting
+        stop_token_counting()
+
     def test_empty_list(self):
         """Empty list -> empty dict."""
         service = TokenizationService()
-        with patch(
-            "infrastructure.adapters.tokenization_service.is_counting_tokens",
-            return_value=True,
-        ):
-            result = service.count_tokens_batch_parallel([])
-            assert result == {}
+        result = service.count_tokens_batch_parallel([])
+        assert result == {}
 
     def test_batch_with_mixed_files(self, tmp_path):
         """Batch voi text + binary + nonexistent files."""
@@ -440,13 +446,9 @@ class TestBatchProcessing:
         # Nonexistent file
         missing = tmp_path / "missing.py"
 
-        with patch(
-            "infrastructure.adapters.tokenization_service.is_counting_tokens",
-            return_value=True,
-        ):
-            results = service.count_tokens_batch_parallel(
-                [text_file, binary_file, missing], max_workers=2
-            )
+        results = service.count_tokens_batch_parallel(
+            [text_file, binary_file, missing], max_workers=2
+        )
 
         assert str(text_file) in results
         assert results[str(text_file)] > 0
@@ -463,11 +465,7 @@ class TestBatchProcessing:
             f.write_text(f"x = {i}\n" * 10)
             files.append(f)
 
-        with patch(
-            "infrastructure.adapters.tokenization_service.is_counting_tokens",
-            return_value=True,
-        ):
-            results = service.count_tokens_batch_parallel(files, max_workers=2)
+        results = service.count_tokens_batch_parallel(files, max_workers=2)
 
         # Verify cache duoc populate
         for f in files:
@@ -486,12 +484,11 @@ class TestBatchProcessing:
             files.append(f)
 
         # Cancellation flag = False -> return empty
-        with patch(
-            "infrastructure.adapters.tokenization_service.is_counting_tokens",
-            return_value=False,
-        ):
-            result = service.count_tokens_batch_parallel(files)
-            assert result == {}
+        from domain.tokenization.cancellation import stop_token_counting
+        stop_token_counting()
+
+        result = service.count_tokens_batch_parallel(files)
+        assert result == {}
 
 
 # ================================================================
@@ -499,38 +496,7 @@ class TestBatchProcessing:
 # ================================================================
 
 
-class TestMmapReading:
-    """Test _read_file_mmap() doc file hieu qua."""
-
-    def test_read_normal_file(self, tmp_path):
-        """Doc file binh thuong qua mmap."""
-        service = TokenizationService()
-        f = tmp_path / "normal.txt"
-        content = "Hello, world!\nLine 2"
-        f.write_text(content)
-
-        result = service._read_file_mmap(f)
-        assert result == content
-
-    def test_read_empty_file(self, tmp_path):
-        """Doc empty file -> return empty string."""
-        service = TokenizationService()
-        f = tmp_path / "empty.txt"
-        f.write_text("")
-
-        result = service._read_file_mmap(f)
-        assert result == ""
-
-    def test_read_large_file(self, tmp_path):
-        """Doc file lon qua mmap van dung."""
-        service = TokenizationService()
-        f = tmp_path / "large.txt"
-        content = "A" * 100_000
-        f.write_text(content)
-
-        result = service._read_file_mmap(f)
-        assert result is not None
-        assert len(result) == 100_000
+# TestMmapReading removed as TokenizationService no longer has _read_file_mmap method.
 
 
 # ================================================================

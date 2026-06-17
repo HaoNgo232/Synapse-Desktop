@@ -85,7 +85,7 @@ class TestWorkspaceManagerAutoDetect:
         """Auto-detect workspace tu ctx.session.list_roots()."""
         # Mock Root object
         mock_root = MagicMock()
-        mock_root.uri = f"file://{tmp_path}"
+        mock_root.uri = tmp_path.as_uri()
 
         # Mock ListRootsResult
         mock_roots_result = MagicMock()
@@ -109,9 +109,9 @@ class TestWorkspaceManagerAutoDetect:
         other_dir.mkdir()
 
         mock_root1 = MagicMock()
-        mock_root1.uri = f"file://{tmp_path}"
+        mock_root1.uri = tmp_path.as_uri()
         mock_root2 = MagicMock()
-        mock_root2.uri = f"file://{other_dir}"
+        mock_root2.uri = other_dir.as_uri()
 
         mock_roots_result = MagicMock()
         mock_roots_result.roots = [mock_root1, mock_root2]
@@ -183,7 +183,7 @@ class TestWorkspaceManagerAutoDetect:
     async def test_auto_detect_with_dict_root(self, tmp_path):
         """Root la dict thay vi object (edge case)."""
         mock_roots_result = MagicMock()
-        mock_roots_result.roots = [{"uri": f"file://{tmp_path}"}]
+        mock_roots_result.roots = [{"uri": tmp_path.as_uri()}]
 
         mock_session = MagicMock()
         mock_session.list_roots = AsyncMock(return_value=mock_roots_result)

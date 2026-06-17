@@ -56,7 +56,24 @@ def mock_view(temp_workspace):
 
 
 @pytest.fixture
-def controller(mock_view, temp_workspace):
+def setup_preset_store():
+    """Setup real PresetStoreFactory for isolated tests and restore dummy afterwards."""
+    from infrastructure.persistence.preset_store import PresetStoreFactory
+    from domain.ports.registry import DomainRegistry
+    from tests.conftest import DummyPresetStoreFactory
+
+    try:
+        old_factory = DomainRegistry.preset_store_factory()
+    except RuntimeError:
+        old_factory = DummyPresetStoreFactory()
+
+    DomainRegistry.register_preset_store_factory(PresetStoreFactory())
+    yield
+    DomainRegistry.register_preset_store_factory(old_factory)
+
+
+@pytest.fixture
+def controller(mock_view, temp_workspace, setup_preset_store):
     """Create controller with mock view."""
     ctrl = PresetController(mock_view)
     ctrl.on_workspace_changed(temp_workspace)

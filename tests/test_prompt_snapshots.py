@@ -1,7 +1,7 @@
 """
 Snapshot Tests cho prompt output formats.
 
-Dam bao output cua 4 formats (Markdown, XML, JSON, Plain) khong
+Dam bao output cua XML va Plain formats khong
 bi thay doi ngoai y muon sau khi refactoring.
 
 Strategy:
@@ -16,9 +16,7 @@ Strategy:
 from pathlib import Path
 
 from domain.prompt.generator import (
-    generate_file_contents,
     generate_file_contents_xml,
-    generate_file_contents_json,
     generate_file_contents_plain,
 )
 
@@ -65,23 +63,7 @@ def _load_or_create_snapshot(name: str, actual: str) -> str:
 
 
 class TestPromptSnapshots:
-    """Snapshot tests cho 4 prompt output formats."""
-
-    def test_markdown_format(self, tmp_path):
-        """Markdown format output khong thay doi sau refactoring."""
-        paths = _create_test_files(tmp_path)
-        output = generate_file_contents(
-            paths,
-            workspace_root=tmp_path,
-            use_relative_paths=True,
-        )
-        normalized = _normalize_output(output, tmp_path)
-        expected = _load_or_create_snapshot("markdown_format.txt", normalized)
-        assert normalized == expected, (
-            "Markdown format output da thay doi!\n"
-            "Neu thay doi la co y dinh, xoa tests/snapshots/markdown_format.txt "
-            "va chay lai test de tao golden file moi."
-        )
+    """Snapshot tests cho XML va Plain prompt output formats."""
 
     def test_xml_format(self, tmp_path):
         """XML format output khong thay doi sau refactoring."""
@@ -96,22 +78,6 @@ class TestPromptSnapshots:
         assert normalized == expected, (
             "XML format output da thay doi!\n"
             "Neu thay doi la co y dinh, xoa tests/snapshots/xml_format.txt "
-            "va chay lai test de tao golden file moi."
-        )
-
-    def test_json_format(self, tmp_path):
-        """JSON format output khong thay doi sau refactoring."""
-        paths = _create_test_files(tmp_path)
-        output = generate_file_contents_json(
-            paths,
-            workspace_root=tmp_path,
-            use_relative_paths=True,
-        )
-        normalized = _normalize_output(output, tmp_path)
-        expected = _load_or_create_snapshot("json_format.txt", normalized)
-        assert normalized == expected, (
-            "JSON format output da thay doi!\n"
-            "Neu thay doi la co y dinh, xoa tests/snapshots/json_format.txt "
             "va chay lai test de tao golden file moi."
         )
 

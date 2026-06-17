@@ -152,8 +152,16 @@ def test_edge_file_deletion_during_operation(app_e2e, qtbot, tmp_path):
     # Select file
     window.context_view.file_tree_widget.add_paths_to_selection([str(f)])
 
-    # Xoa file tren disk
-    f.unlink()
+    # Xoa file tren disk (voi retry loop vi file co the dang bi lock boi FileTree/Watcher tren Windows)
+    import time
+    for _ in range(20):
+        try:
+            f.unlink()
+            break
+        except (PermissionError, OSError):
+            time.sleep(0.1)
+    else:
+        f.unlink()
 
     # Trigger Copy
     copy_btn = None

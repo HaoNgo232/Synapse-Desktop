@@ -19,7 +19,7 @@ def test_list_returns_exactly_8_builtin():
         "test_writer",
         "performance_optimizer",
         "doc_generator",
-        "roi_analyer",
+        "roi_analyzer",
     }
     assert {t.template_id for t in builtin} == expected_ids
 
@@ -74,7 +74,7 @@ def test_all_8_templates_have_content():
         "test_writer",
         "performance_optimizer",
         "doc_generator",
-        "roi_analyer",
+        "roi_analyzer",
     ]
     for tid in expected_ids:
         content = load_template(tid)

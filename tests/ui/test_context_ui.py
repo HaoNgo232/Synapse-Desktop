@@ -23,6 +23,7 @@ def test_context_view_initialization(context_view):
 def test_context_view_default_services_injected(qtbot):
     """Kiem tra default services khi khong truyen (lines 87-96)."""
     from tests.ui.conftest import FakeFileTreeWidget, FakeTokenStatsPanel
+    from domain.ports.registry import DomainRegistry
 
     mock_app_settings = MagicMock()
     mock_app_settings.output_format = None
@@ -47,9 +48,6 @@ def test_context_view_default_services_injected(qtbot):
         patch(
             "application.services.prompt_build_service.PromptBuildService"
         ) as mock_pb,
-        patch(
-            "infrastructure.adapters.clipboard_service.QtClipboardService"
-        ) as mock_cs,
     ):
         from presentation.views.context.context_view_qt import ContextViewQt
 
@@ -58,7 +56,8 @@ def test_context_view_default_services_injected(qtbot):
         )
         qtbot.addWidget(view)
         mock_pb.assert_called_once()
-        mock_cs.assert_called_once()
+        assert view._clipboard_service == DomainRegistry.clipboard_service()
+
 
 
 def test_context_view_set_get_instructions(context_view):
@@ -123,9 +122,12 @@ def test_on_workspace_changed(context_view):
     # Mock preset controller de tranh PresetStore tao .synapse/ tai fake path
     view._preset_controller = MagicMock()
 
+    from domain.ports.registry import DomainRegistry
+    mock_registry = MagicMock()
+
     new_path = Path("/new/workspace")
     with (
-        patch("infrastructure.adapters.cache_registry.cache_registry") as mock_registry,
+        patch.object(DomainRegistry, "cache_registry", return_value=mock_registry),
         patch("shared.logging_config.log_info"),
     ):
         # workspace path doesn't exist in test
@@ -136,6 +138,7 @@ def test_on_workspace_changed(context_view):
     assert len(view._related_controller._last_added_related_files) == 0
     mock_registry.invalidate_for_workspace.assert_called_once()
     view.file_tree_widget.load_tree.assert_called_once_with(new_path)
+
 
 
 def test_on_workspace_changed_starts_watcher(context_view, tmp_path):
@@ -312,12 +315,10 @@ def test_on_template_selected_error(context_view):
 def test_populate_history_menu_empty(context_view):
     """Kiem tra _populate_history_menu khi history empty (lines 269-283)."""
     view = context_view
+    from domain.ports.registry import DomainRegistry
     mock_settings = MagicMock()
     mock_settings.instruction_history = []
-    with patch(
-        "infrastructure.persistence.settings_manager.load_app_settings",
-        return_value=mock_settings,
-    ):
+    with patch.object(DomainRegistry, "settings", return_value=mock_settings):
         view._populate_history_menu()
 
     # Menu should have "No history yet"
@@ -329,20 +330,19 @@ def test_populate_history_menu_empty(context_view):
 def test_populate_history_menu_with_entries(context_view):
     """Kiem tra _populate_history_menu voi entries (lines 285-291)."""
     view = context_view
+    from domain.ports.registry import DomainRegistry
     mock_settings = MagicMock()
     mock_settings.instruction_history = [
         "Short instruction",
         "A" * 100,  # Long instruction -> truncated label
     ]
-    with patch(
-        "infrastructure.persistence.settings_manager.load_app_settings",
-        return_value=mock_settings,
-    ):
+    with patch.object(DomainRegistry, "settings", return_value=mock_settings):
         view._populate_history_menu()
 
     actions = view._history_menu.actions()
     # 4 items: Header + Separator + 2 history entries
     assert len(actions) == 4
+
 
 
 def test_on_history_selected(context_view):
@@ -369,18 +369,26 @@ def test_on_model_changed(context_view):
     mock_model._token_cache = {}
     view.file_tree_widget._start_token_counting = MagicMock()
 
-    with patch(
-        "infrastructure.adapters.encoder_registry.get_tokenizer_repo",
-        return_value="test/repo",
-    ) as mock_repo:
-        with patch.object(
-            view._tokenization_service, "set_model_config"
-        ) as mock_set_conf:
-            view._on_model_changed("claude-3")
+    from domain.ports.registry import DomainRegistry
+    mock_settings = MagicMock()
+    mock_settings.model_id = "claude-3"
+    mock_config = MagicMock()
+    mock_config.tokenizer_repo = "test/repo"
 
-    mock_repo.assert_called_once()
+    with patch.object(DomainRegistry, "settings", return_value=mock_settings):
+        with patch(
+            "domain.config.model_config.get_model_by_id",
+            return_value=mock_config,
+        ):
+            with patch.object(
+                view._tokenization_service, "set_model_config"
+            ) as mock_set_conf:
+                view._on_model_changed("claude-3")
+
+
     mock_set_conf.assert_called_once_with(tokenizer_repo="test/repo")
     view.file_tree_widget._start_token_counting.assert_called_once()
+
 
 
 def test_show_status_error(context_view):

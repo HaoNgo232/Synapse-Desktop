@@ -81,7 +81,7 @@ def test_affected_files_populated_correctly() -> None:
     assert result.has_patches is True
     assert len(result.file_actions) == 3
     # Phải chuyển thành relative path và loại bỏ trùng lặp (giữ thứ tự)
-    assert result.affected_files == ["src/main.py", "src/utils.py"]
+    assert [f.replace("\\", "/") for f in result.affected_files] == ["src/main.py", "src/utils.py"]
 
 
 def test_parse_errors_captured() -> None:

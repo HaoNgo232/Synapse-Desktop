@@ -18,7 +18,7 @@ class TestIsBinaryFile:
 
     def test_binary_with_extension(self, tmp_path):
         """File có extension binary (.exe) phải được detect"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         exe_file = tmp_path / "test.exe"
         exe_file.write_bytes(b"MZ" + b"\x00" * 100)
@@ -26,7 +26,7 @@ class TestIsBinaryFile:
 
     def test_binary_without_extension_elf(self, tmp_path):
         """ELF binary (Linux executable) KHÔNG có extension phải được detect"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         # ELF magic bytes
         elf_binary = tmp_path / "my-program-x86_64-unknown-linux-gnu"
@@ -35,7 +35,7 @@ class TestIsBinaryFile:
 
     def test_binary_without_extension_macho(self, tmp_path):
         """Mach-O binary (macOS executable) KHÔNG có extension phải được detect"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         # Mach-O magic bytes (64-bit)
         macho_binary = tmp_path / "my-program-aarch64-apple-darwin"
@@ -44,7 +44,7 @@ class TestIsBinaryFile:
 
     def test_binary_without_extension_null_bytes(self, tmp_path):
         """File chứa null bytes phải được detect là binary"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         binary_file = tmp_path / "some-binary-no-ext"
         binary_file.write_bytes(b"some data\x00more data\x00" + b"\x00" * 50)
@@ -52,7 +52,7 @@ class TestIsBinaryFile:
 
     def test_text_file_not_binary(self, tmp_path):
         """File text thuần KHÔNG phải binary"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         text_file = tmp_path / "readme.txt"
         text_file.write_text("Hello world\nThis is text\n")
@@ -60,7 +60,7 @@ class TestIsBinaryFile:
 
     def test_text_file_without_extension_not_binary(self, tmp_path):
         """File text KHÔNG có extension cũng KHÔNG phải binary"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         text_file = tmp_path / "Makefile"
         text_file.write_text("all:\n\techo hello\n")
@@ -68,7 +68,7 @@ class TestIsBinaryFile:
 
     def test_empty_file_not_binary(self, tmp_path):
         """File rỗng KHÔNG phải binary"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         empty_file = tmp_path / "empty"
         empty_file.write_bytes(b"")
@@ -76,7 +76,7 @@ class TestIsBinaryFile:
 
     def test_nonexistent_file_not_binary(self, tmp_path):
         """File không tồn tại → False"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         missing = tmp_path / "does-not-exist"
         assert is_binary_file(missing) is False
@@ -87,7 +87,7 @@ class TestIsBinaryByExtension:
 
     def test_misses_binary_without_extension(self, tmp_path):
         """EXPECTED: is_binary_by_extension MISS binary without extension"""
-        from infrastructure.filesystem.file_utils import is_binary_by_extension
+        from shared.utils.file_utils import is_binary_by_extension
 
         # ELF binary without extension
         elf_file = tmp_path / "cli-proxy-x86_64-linux"
@@ -98,7 +98,7 @@ class TestIsBinaryByExtension:
 
     def test_detects_binary_with_extension(self, tmp_path):
         """is_binary_by_extension CAN detect .exe"""
-        from infrastructure.filesystem.file_utils import is_binary_by_extension
+        from shared.utils.file_utils import is_binary_by_extension
 
         exe_file = tmp_path / "test.exe"
         exe_file.write_bytes(b"MZ" + b"\x00" * 100)
@@ -258,29 +258,7 @@ class TestPromptGeneratorSkipsBinary:
         # Text file content should be included
         assert "print" in result
 
-    def test_json_format_skip_binary(self, tmp_path):
-        """generate_file_contents_json phải skip binary KHÔNG có extension"""
-        import json
-        from domain.prompt.generator import generate_file_contents_json
 
-        binary_file = tmp_path / "server-binary"
-        binary_file.write_bytes(b"\x7fELF" + b"\x00" * 100)
-
-        text_file = tmp_path / "app.py"
-        text_file.write_text("print('hi')")
-
-        result = json.loads(
-            generate_file_contents_json({str(binary_file), str(text_file)})
-        )
-
-        # Binary should be skipped
-        if str(binary_file) in result:
-            assert (
-                "skipped" in result[str(binary_file)].lower()
-                or "binary" in result[str(binary_file)].lower()
-            )
-        # Text file content should be present
-        assert "print" in result.get(str(text_file), "")
 
     def test_plain_format_skip_binary(self, tmp_path):
         """generate_file_contents_plain phải skip binary KHÔNG có extension"""
@@ -335,7 +313,7 @@ class TestRealWorldProxypalBinaries:
     )
     def test_all_proxypal_binaries_detected(self):
         """Tất cả binary files trong proxypal phải được is_binary_file detect"""
-        from infrastructure.filesystem.file_utils import is_binary_file
+        from shared.utils.file_utils import is_binary_file
 
         for f in self.BINARIES_DIR.iterdir():
             if f.is_file():

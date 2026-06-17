@@ -244,8 +244,13 @@ class TestPreviewAnalyzerExtra:
 
     def test_resolve_path(self, tmp_path):
         # 18. Absolute path (lines 264-265)
-        abs_path = "/usr/bin/local"
+        import sys
+        if sys.platform == "win32":
+            abs_path = "C:/usr/bin/local"
+        else:
+            abs_path = "/usr/bin/local"
         assert _resolve_path(abs_path) == Path(abs_path)
+
 
         # 19. Relative path but no workspace root (line 271)
         assert _resolve_path("local.py") is None

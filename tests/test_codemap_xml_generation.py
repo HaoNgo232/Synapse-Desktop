@@ -1,12 +1,12 @@
 """
 Unit tests for codemap XML generation in prompt_generator.py
 
-Tests the _generate_codemap_xml() helper and generate_file_contents_xml() with codemap_paths.
+Tests the _generate_codemap_xml_elements() helper and generate_file_contents_xml() with codemap_paths.
 """
 
 import pytest
 from unittest.mock import patch, Mock
-from domain.prompt.generator import generate_file_contents_xml, _generate_codemap_xml
+from domain.prompt.generator import generate_file_contents_xml, _generate_codemap_xml_elements
 
 
 class TestCodemapXMLGeneration:
@@ -39,12 +39,13 @@ class TestCodemapXMLGeneration:
             mock_parse.return_value = "def hello(): ..."
 
             # Act
-            result = _generate_codemap_xml(
+            elements = _generate_codemap_xml_elements(
                 paths,
                 max_file_size=1024 * 1024,
                 workspace_root=temp_workspace,
                 use_relative_paths=True,
             )
+            result = "\n".join(elements)
 
             # Assert: Should contain codemap XML with context attribute
             assert '<file path="test.py" context="codemap">' in result
@@ -64,12 +65,13 @@ class TestCodemapXMLGeneration:
             mock_supported.return_value = False
 
             # Act
-            result = _generate_codemap_xml(
+            elements = _generate_codemap_xml_elements(
                 paths,
                 max_file_size=1024 * 1024,
                 workspace_root=temp_workspace,
                 use_relative_paths=True,
             )
+            result = "\n".join(elements)
 
             # Assert: Should use codemap-fallback context
             assert '<file path="test.txt" context="codemap-fallback">' in result
@@ -86,12 +88,13 @@ class TestCodemapXMLGeneration:
             mock_binary.return_value = True
 
             # Act
-            result = _generate_codemap_xml(
+            elements = _generate_codemap_xml_elements(
                 paths,
                 max_file_size=1024 * 1024,
                 workspace_root=temp_workspace,
                 use_relative_paths=True,
             )
+            result = "\n".join(elements)
 
             # Assert: Should return empty string
             assert result == ""
@@ -104,12 +107,13 @@ class TestCodemapXMLGeneration:
         paths = {str(large_file)}
 
         # Act: Set max_file_size to 1000 bytes
-        result = _generate_codemap_xml(
+        elements = _generate_codemap_xml_elements(
             paths,
             max_file_size=1000,
             workspace_root=temp_workspace,
             use_relative_paths=True,
         )
+        result = "\n".join(elements)
 
         # Assert: Should skip the file
         assert result == ""
@@ -128,21 +132,23 @@ class TestCodemapXMLGeneration:
         with (
             patch("domain.prompt.generator.collect_files") as mock_collect,
             patch("domain.prompt.generator.format_files_xml") as mock_format_xml,
-            patch("domain.prompt.generator._generate_codemap_xml") as mock_codemap,
+            patch("domain.prompt.generator._generate_codemap_xml_elements") as mock_codemap,
         ):
             # Mock full content collection
             mock_entry = Mock()
             mock_entry.display_path = "full.py"
             mock_entry.content = "def full(): pass"
+            mock_entry.error = None
+            mock_entry.dependencies = []
             mock_collect.return_value = [mock_entry]
             mock_format_xml.return_value = (
                 '<file path="full.py">def full(): pass</file>'
             )
 
             # Mock codemap generation
-            mock_codemap.return_value = (
+            mock_codemap.return_value = [
                 '<file path="codemap.py" context="codemap">def codemap(): ...</file>'
-            )
+            ]
 
             # Act
             result = generate_file_contents_xml(

@@ -104,13 +104,38 @@ def test_context_view_restore_tree_state(qtbot, tmp_path):
     d1 = tmp_path / "folder1"
     d1.mkdir()
 
-    # Load workspace first so file tree model is populated
-    view.on_workspace_changed(tmp_path)
+    # Register custom scanner returning correct tree
+    from domain.ports.registry import DomainRegistry
+    from domain.smart_context.tree_item import TreeItem
+    
+    class TestDirectoryScanner:
+        def scan_directory(self, root_path: Path) -> TreeItem:
+            root = TreeItem(label="root", path=str(root_path), is_dir=True)
+            f1_item = TreeItem(label="file1.py", path=str(root_path / "file1.py"), is_dir=False)
+            d1_item = TreeItem(label="folder1", path=str(root_path / "folder1"), is_dir=True)
+            root.children = [f1_item, d1_item]
+            return root
 
-    # Restore state
-    view.restore_tree_state(selected_files=[str(f1)], expanded_folders=[str(d1)])
-    # verify
-    assert str(f1) in view.file_tree_widget.get_selected_paths()
+        def scan_directory_shallow(self, root_path, ignore_engine, depth=1, excluded_patterns=None):
+            return self.scan_directory(root_path)
+
+        def load_folder_children(self, node, ignore_engine, excluded_patterns=None, use_gitignore=True, workspace_root=None):
+            pass
+
+    old_scanner = DomainRegistry.directory_scanner()
+    DomainRegistry.register_directory_scanner(TestDirectoryScanner())
+
+    try:
+        # Load workspace first so file tree model is populated
+        view.on_workspace_changed(tmp_path)
+
+        # Restore state
+        view.restore_tree_state(selected_files=[str(f1)], expanded_folders=[str(d1)])
+        # verify
+        assert str(f1) in view.file_tree_widget.get_selected_paths()
+    finally:
+        DomainRegistry.register_directory_scanner(old_scanner)
+
 
 
 def test_context_view_instructions(qtbot):

@@ -9,7 +9,6 @@ with patch("presentation.config.theme.ThemeFonts.load_fonts"):
 def test_main_window_initialization(qtbot):
     """Kiểm tra MainWindow khởi tạo thành công và chứa các tabs cơ bản."""
     with (
-        patch("presentation.main_window.get_memory_monitor"),
         patch("presentation.components.toast.toast_qt.init_toast_manager"),
         patch(
             "infrastructure.persistence.session_state.load_session_state",
@@ -37,7 +36,6 @@ def test_main_window_initialization(qtbot):
 def test_main_window_open_folder(qtbot, tmp_path):
     """Kiểm tra chức năng mô phỏng mở folder qua QFileDialog."""
     with (
-        patch("presentation.main_window.get_memory_monitor"),
         patch("presentation.components.toast.toast_qt.init_toast_manager"),
         patch(
             "infrastructure.persistence.session_state.load_session_state",

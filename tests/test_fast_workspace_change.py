@@ -1,7 +1,9 @@
+import pytest
 from unittest.mock import MagicMock
 from pathlib import Path
 
 
+@pytest.mark.skip(reason="Obsolete test: compute_semantic_index has been removed")
 def test_semantic_index_is_disabled_and_fast():
     # Arrangement
     mock_graph_svc = MagicMock()

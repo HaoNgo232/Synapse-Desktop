@@ -412,7 +412,8 @@ class TestReadFileMmap:
         """Doc file nhieu dong."""
         f = tmp_path / "multi.py"
         content = "line1\nline2\nline3\n"
-        f.write_text(content)
+        with open(f, "w", newline="\n", encoding="utf-8") as fp:
+            fp.write(content)
         assert _read_file_mmap(f) == content
 
 

@@ -13,8 +13,9 @@ from domain.prompt.generator import (
 )
 from domain.smart_context.tree_item import TreeItem
 
+import sys
 # Determine correct platform Path class for mock patching
-PATH_CLASS = pathlib.PosixPath if hasattr(pathlib, "PosixPath") else pathlib.Path
+PATH_CLASS = pathlib.WindowsPath if sys.platform == "win32" else (pathlib.PosixPath if hasattr(pathlib, "PosixPath") else pathlib.Path)
 
 
 class TestPromptGeneratorExtra:

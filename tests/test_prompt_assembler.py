@@ -247,7 +247,7 @@ class TestAssembleDiffOnlyPrompt:
         )
 
         assert "<related_files_content>" in prompt
-        assert "src/utils.py" in prompt
+        assert "src/utils.py" in prompt.replace('\\', '/')
         assert "def helper()" in prompt
         assert "</related_files_content>" in prompt
 

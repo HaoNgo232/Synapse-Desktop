@@ -76,27 +76,34 @@ class TestBug2OSErrorBypassSizeCheck:
 
     def test_oserror_skips_file(self, tmp_path: Path, monkeypatch):
         """Test that OSError during stat() causes file to be skipped."""
-        from domain.prompt.generator import _generate_codemap_xml
+        from domain.prompt.generator import _generate_codemap_xml_elements
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")
 
-        # Mock stat() to raise OSError
-        original_stat = Path.stat
+        # Mock stat() to raise OSError (mock ca WindowsPath/PosixPath tren Python 3.12)
+        import pathlib
+        original_stat = pathlib.Path.stat
 
         def mock_stat(self):
             if self.name == "test.py":
                 raise OSError("Permission denied")
             return original_stat(self)
 
-        monkeypatch.setattr(Path, "stat", mock_stat)
+        monkeypatch.setattr(pathlib.Path, "stat", mock_stat)
+        if hasattr(pathlib, "WindowsPath"):
+            monkeypatch.setattr(pathlib.WindowsPath, "stat", mock_stat)
+        if hasattr(pathlib, "PosixPath"):
+            monkeypatch.setattr(pathlib.PosixPath, "stat", mock_stat)
 
         # Should skip the file instead of processing it
-        result = _generate_codemap_xml(
-            {str(test_file)},
-            workspace_root=tmp_path,
-            use_relative_paths=False,
-            max_file_size=1024,
+        result = "\n".join(
+            _generate_codemap_xml_elements(
+                {str(test_file)},
+                workspace_root=tmp_path,
+                use_relative_paths=False,
+                max_file_size=1024,
+            )
         )
 
         # File should NOT be in result (currently buggy: file IS in result)
@@ -110,7 +117,7 @@ class TestBug3DoubleFileRead:
 
     def test_file_read_once_only(self, tmp_path: Path, monkeypatch):
         """Test that file is read only once even when smart_parse fails."""
-        from domain.prompt.generator import _generate_codemap_xml
+        from domain.prompt.generator import _generate_codemap_xml_elements
 
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")
@@ -133,7 +140,7 @@ class TestBug3DoubleFileRead:
 
         monkeypatch.setattr(domain.smart_context, "smart_parse", mock_smart_parse)
 
-        _generate_codemap_xml(
+        _generate_codemap_xml_elements(
             {str(test_file)},
             workspace_root=tmp_path,
             use_relative_paths=False,

@@ -164,13 +164,13 @@ def generate_file_summary_xml_minimal() -> str:
 {GENERATION_HEADER}
 
 <purpose>
-This file contains code context for generating OPX (Overwrite Patch XML) modifications.
-Use the provided code to understand structure, then generate precise XML patches.
+This file contains code context for generating Search/Replace (Aider-style) patches.
+Analyze the provided code to understand structure, then generate precise Search/Replace blocks.
 </purpose>
 
 <usage_guidelines>
 - Analyze code structure and identify exact modification points
-- Generate OPX patches using precise search patterns from provided code
+- Generate Search/Replace blocks using precise search patterns from the provided code
 - Ensure all file paths and code snippets match exactly
 </usage_guidelines>
 </file_summary>

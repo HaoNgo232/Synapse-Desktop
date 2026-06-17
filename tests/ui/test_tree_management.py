@@ -191,14 +191,17 @@ def test_open_cache_management_dialog(mock_repo_mgr, mock_dialog, context_view):
     mock_dialog_instance.exec.assert_called_once()
 
 
-@patch("infrastructure.adapters.cache_registry.cache_registry")
-def test_on_file_modified(mock_registry, context_view):
+def test_on_file_modified(context_view):
     """Kiem tra _on_file_modified invalidate caches."""
     view = context_view
-    view._tree_controller.on_file_modified("/fake/workspace/src/main.py")
-    mock_registry.invalidate_for_path.assert_called_once_with(
-        "/fake/workspace/src/main.py"
-    )
+    from domain.ports.registry import DomainRegistry
+    mock_registry = MagicMock()
+    with patch.object(DomainRegistry, "cache_registry", return_value=mock_registry):
+        view._tree_controller.on_file_modified("/fake/workspace/src/main.py")
+        mock_registry.invalidate_for_path.assert_called_once_with(
+            "/fake/workspace/src/main.py"
+        )
+
 
 
 def test_on_file_deleted_delegates(context_view):

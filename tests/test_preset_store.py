@@ -45,8 +45,9 @@ class TestPresetStore:
         assert entry.updated_at
 
         # Verify relative paths
-        assert "src/main.py" in entry.selected_paths
-        assert "src/utils.py" in entry.selected_paths
+        selected_paths_posix = [p.replace('\\', '/') for p in entry.selected_paths]
+        assert "src/main.py" in selected_paths_posix
+        assert "src/utils.py" in selected_paths_posix
 
     def test_list_presets(self, store, temp_workspace):
         """Test listing presets sorted by updated_at."""

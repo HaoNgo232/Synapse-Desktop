@@ -41,7 +41,7 @@ class TestIgnoreSelectedPatternFormat:
             rel_path = selected_path.relative_to(workspace)
 
             # Pattern should be full relative path
-            pattern = str(rel_path)
+            pattern = rel_path.as_posix()
             assert pattern == "src/utils/helper.py"
             assert pattern != "helper.py"  # ❌ Wrong format
 
@@ -86,20 +86,50 @@ class TestIgnoreSelectedPatternFormat:
             assert str(workspace / "src" / "config.py") not in files
 
 
+from domain.ports.registry import DomainRegistry
+from domain.config.app_settings import AppSettings
+from typing import Any
+
+class FakeSettingsService:
+    def __init__(self):
+        self._settings = AppSettings()
+        raw = load_settings()
+        self._settings.excluded_folders = raw.get("excluded_folders", "")
+
+    def load_settings(self) -> AppSettings:
+        return self._settings
+
+    def update_setting(self, key: str, value: Any) -> None:
+        if key == "excluded_folders":
+            self._settings.excluded_folders = value
+            raw = load_settings()
+            raw[key] = value
+            save_settings(raw)
+
+    def add_instruction_history(self, instruction: str) -> None:
+        pass
+
+
 class TestIgnoreSelectedIntegration:
     """Test full ignore selected workflow."""
 
     def setup_method(self):
         """Clear settings before each test."""
+        self._old_settings_service = DomainRegistry._settings_service
+        self._fake_service = FakeSettingsService()
+        DomainRegistry.register_settings_service(self._fake_service)
+
         settings = load_settings()
         settings["excluded_folders"] = ""
         save_settings(settings)
+        self._fake_service._settings.excluded_folders = ""
 
     def teardown_method(self):
         """Clear settings after each test."""
         settings = load_settings()
         settings["excluded_folders"] = ""
         save_settings(settings)
+        DomainRegistry._settings_service = self._old_settings_service
 
     def test_add_and_scan_with_exclusion(self):
         """Test adding pattern and scanning with exclusion."""

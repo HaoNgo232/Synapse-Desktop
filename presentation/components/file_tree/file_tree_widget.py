@@ -805,7 +805,7 @@ class FileTreeWidget(QWidget):
         try:
             path_obj = Path(file_path)
             rel = path_obj.relative_to(workspace)
-            pattern = str(rel)
+            pattern = str(rel).replace("\\", "/")
         except ValueError:
             pattern = Path(file_path).name
 

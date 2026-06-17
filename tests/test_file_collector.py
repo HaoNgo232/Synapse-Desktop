@@ -140,7 +140,7 @@ class TestCollectFilesRelativePaths:
             use_relative_paths=True,
         )
         assert len(result) == 1
-        assert result[0].display_path == "src/main.py"
+        assert result[0].display_path.replace('\\', '/') == "src/main.py"
 
     def test_absolute_path_display(self, tmp_path):
         """Khi use_relative_paths=False, display_path la absolute."""

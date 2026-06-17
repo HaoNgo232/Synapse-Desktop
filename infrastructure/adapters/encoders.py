@@ -16,8 +16,11 @@ Functions:
 - _estimate_tokens(): Uoc luong tokens khi encoder khong kha dung
 """
 
+import logging
 import threading
 from typing import Optional, Any, TYPE_CHECKING
+
+logger = logging.getLogger("synapse-desktop")
 
 
 # ============================================================
@@ -163,7 +166,10 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
                 log_info("[Encoders] Using rs-bpe (Rust) - 5x faster than tiktoken")
                 return _encoder
             except Exception:
-                pass
+                logger.error(
+                    "Encoders: rs-bpe o200k_base() failed, trying cl100k_base",
+                    exc_info=True,
+                )
 
             try:
                 _encoder = rs_bpe_openai.cl100k_base()
@@ -173,7 +179,10 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
                 log_info("[Encoders] Using rs-bpe cl100k_base (Rust)")
                 return _encoder
             except Exception:
-                pass
+                logger.error(
+                    "Encoders: rs-bpe cl100k_base() failed, falling back to tiktoken",
+                    exc_info=True,
+                )
 
         # Fallback ve tiktoken (lazy import)
         try:
@@ -192,6 +201,9 @@ def _get_encoder(tokenizer_repo: Optional[str] = None) -> Optional[Any]:
                 log_info(f"[Encoders] Using tiktoken {encoding_name}")
                 return _encoder
             except Exception:
+                logger.error(
+                    f"Encoders: tiktoken '{encoding_name}' failed", exc_info=True
+                )
                 continue
 
         return None

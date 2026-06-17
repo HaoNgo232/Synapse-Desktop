@@ -5,7 +5,11 @@ Ap dung Registry pattern + lifecycle management.
 """
 
 import threading
+import logging
 from typing import Dict, List, Set
+
+logger = logging.getLogger("synapse-desktop")
+
 
 from application.errors import UseCaseValidationError, WorkflowExecutionError
 from application.plugins.contracts import (
@@ -60,8 +64,7 @@ class WorkflowPluginRegistry:
         try:
             plugin.shutdown()
         except Exception:
-            # Khong de shutdown failure lam vo unregister flow
-            pass
+            logger.error("plugin_registry: failed to load plugin", exc_info=True)
         return True
 
     def get(self, plugin_id: str) -> IWorkflowPlugin | None:

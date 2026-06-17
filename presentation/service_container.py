@@ -206,4 +206,7 @@ class ServiceContainer:
                 return model_config.tokenizer_repo
             return None
         except Exception:
+            logger.error(
+                "service_container: service initialization failed", exc_info=True
+            )
             return None

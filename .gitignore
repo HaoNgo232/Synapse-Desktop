@@ -10,9 +10,10 @@ stubs/
 .coverage
 =
 lint_output.json
-.synapse
+.synapse/
 build-win/
-.venv-linux
+.venv-linux/
+.gitnexus/
 
 # Optional: Uncomment to keep presets personal (or commit to share with team)
 # .synapse_presets.json

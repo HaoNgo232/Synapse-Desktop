@@ -8,7 +8,9 @@ detect-secrets là thư viện chuyên nghiệp với 27+ plugins được kiể
 giảm thiểu false positives so với custom regex.
 """
 
+import logging
 from typing import List, Tuple, Optional, Dict, Set
+
 from pathlib import Path
 import tempfile
 
@@ -16,6 +18,8 @@ from detect_secrets import SecretsCollection
 from detect_secrets.settings import default_settings
 from domain.ports.security_scanner_port import SecretMatch, ISecurityScanner
 from shared.utils.file_utils import is_binary_file
+
+logger = logging.getLogger("synapse-desktop")
 
 
 # ============================================
@@ -79,15 +83,16 @@ def scan_for_secrets(
             try:
                 Path(temp_path).unlink()
             except Exception:
-                pass
+                logger.error("SecurityCheck: pattern matching failed", exc_info=True)
         return matches
     except Exception:
+        logger.error("SecurityCheck: pattern matching failed", exc_info=True)
         # Clean up on unexpected errors (MemoryError, etc.)
         if temp_path:
             try:
                 Path(temp_path).unlink()
             except Exception:
-                pass
+                logger.error("SecurityCheck: pattern matching failed", exc_info=True)
         return matches
 
     try:
@@ -129,14 +134,13 @@ def scan_for_secrets(
                 )
             )
     except Exception:
-        # Nếu có lỗi khi scan, bỏ qua
-        pass
+        logger.error("SecurityCheck: file scan failed", exc_info=True)
     finally:
         # Cleanup temp file
         try:
             Path(temp_path).unlink()
         except Exception:
-            pass
+            logger.error("SecurityCheck: file scan failed", exc_info=True)
 
     # Loại bỏ duplicate dựa trên secret_type và line_number
     seen = set()
@@ -273,6 +277,7 @@ def scan_secrets_in_files_cached(
                     mtime = path.stat().st_mtime
                     return (path_str, mtime, file_matches)
                 except Exception:
+                    logger.error("SecurityCheck: failed scanning file", exc_info=True)
                     return (path_str, 0.0, [])
 
             with ThreadPoolExecutor(max_workers=4) as executor:
@@ -287,7 +292,9 @@ def scan_secrets_in_files_cached(
                             _security_scan_cache[path_str] = (mtime, file_matches)
                         all_matches.extend(file_matches)
                     except Exception:
-                        pass
+                        logger.error(
+                            "SecurityCheck: failed scanning file", exc_info=True
+                        )
 
     # Cleanup cache if too large (use LRU-style eviction)
     if len(_security_scan_cache) > _MAX_CACHE_SIZE:

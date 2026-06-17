@@ -298,7 +298,7 @@ def collect_files_from_disk(
                     seen.add(full_path)
             return result
         except Exception:
-            pass
+            logger.error("workspace_index: indexing step failed", exc_info=True)
 
     # Fallback to os.walk
     try:
@@ -331,7 +331,7 @@ def collect_files_from_disk(
                     result.append(full_path)
                     seen.add(full_path)
     except (PermissionError, OSError):
-        pass
+        pass  # intentionally silent — directory permission error or os error during walk
 
     return result
 

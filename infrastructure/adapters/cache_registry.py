@@ -115,6 +115,7 @@ class CacheRegistry(ICacheRegistry):
             try:
                 stats[name] = cache.size()
             except Exception:
+                logger.error("CacheRegistry: eviction/cleanup failed", exc_info=True)
                 stats[name] = -1
         return stats
 

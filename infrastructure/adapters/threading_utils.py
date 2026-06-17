@@ -7,11 +7,15 @@ Provides:
 - TaskManager for cancellable background tasks
 """
 
+import logging
 import threading
 from typing import Callable, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
+
 from dataclasses import dataclass
 from domain.ports.lifecycle_port import IAppLifecycleService
+
+logger = logging.getLogger("synapse-desktop")
 
 
 # ────────────────────────────────────────────────────────────────
@@ -147,7 +151,7 @@ class TaskManager:
                     if on_complete:
                         on_complete(result)
             except Exception:
-                pass
+                logger.error("threading_utils: callback raised", exc_info=True)
             finally:
                 with self._lock:
                     self._tasks.pop(task_id, None)

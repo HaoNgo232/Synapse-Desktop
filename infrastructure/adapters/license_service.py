@@ -46,6 +46,9 @@ class GumroadLicenseService(ILicenseService):
                         "message", f"HTTP error {response.status_code}"
                     )
                 except Exception:
+                    logger.error(
+                        "LicenseService: validation request failed", exc_info=True
+                    )
                     err_msg = f"HTTP error {response.status_code}"
                 return LicenseInfo(
                     license_id=key_str,

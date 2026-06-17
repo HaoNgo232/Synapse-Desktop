@@ -190,6 +190,7 @@ def is_git_repo(root_path: Path) -> bool:
         )
         return result.returncode == 0 and result.stdout.strip() == "true"
     except Exception:
+        logger.error("git_utils: git operation failed", exc_info=True)
         return False
 
 
@@ -590,7 +591,7 @@ def _unescape_git_path(path: str) -> str:
             if isinstance(unescaped_bytes, bytes):
                 path = unescaped_bytes.decode("utf-8")
         except Exception:
-            pass
+            logger.error("git_utils: diff parsing failed", exc_info=True)
     return path
 
 
@@ -857,7 +858,9 @@ def build_diff_only_prompt(
                                 ]
                             )
                     except Exception:
-                        pass
+                        logger.error(
+                            "git_utils: failed processing git entry", exc_info=True
+                        )
             parts.append("</changed_files_content>")
 
         if include_related_files and workspace_root and diff_result.changed_files:
@@ -899,10 +902,13 @@ def build_diff_only_prompt(
                                         ]
                                     )
                             except Exception:
-                                pass
+                                logger.error(
+                                    "git_utils: failed processing git entry",
+                                    exc_info=True,
+                                )
                     parts.append("</related_files_content>")
             except Exception:
-                pass
+                logger.error("git_utils: failed processing git entry", exc_info=True)
 
         if instructions and instructions.strip():
             parts.extend(
@@ -951,7 +957,9 @@ def build_diff_only_prompt(
                             )
                             contents.append({"path": path_display, "content": content})
                     except Exception:
-                        pass
+                        logger.error(
+                            "git_utils: failed processing git entry", exc_info=True
+                        )
             data["changed_files_content"] = contents
 
         if instructions and instructions.strip():
@@ -1009,7 +1017,9 @@ def build_diff_only_prompt(
                                 ]
                             )
                     except Exception:
-                        pass
+                        logger.error(
+                            "git_utils: failed processing git entry", exc_info=True
+                        )
 
         if instructions and instructions.strip():
             parts.extend(
@@ -1070,7 +1080,9 @@ def build_diff_only_prompt(
                                 ]
                             )
                     except Exception:
-                        pass
+                        logger.error(
+                            "git_utils: failed processing git entry", exc_info=True
+                        )
 
         if instructions and instructions.strip():
             parts.extend(

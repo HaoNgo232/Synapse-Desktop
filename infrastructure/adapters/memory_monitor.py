@@ -17,10 +17,12 @@ from shared.logging_config import log_error
 
 # psutil should always be available (in requirements.txt)
 # but wrap in try/except for runtime errors
+import logging
 import psutil
 
-
 from domain.ports.memory_port import IMemoryMonitor, MemoryStats
+
+logger = logging.getLogger("synapse-desktop")
 
 
 class MemoryMonitor(IMemoryMonitor):
@@ -118,6 +120,7 @@ class MemoryMonitor(IMemoryMonitor):
             mem_info = self._process.memory_info()
             rss_mb = mem_info.rss / (1024 * 1024)
         except Exception:
+            logger.error("MemoryMonitor: failed to collect stats", exc_info=True)
             # Method 2: Fallback đọc /proc trên Linux
             rss_mb = self._read_proc_memory()
 
@@ -163,10 +166,8 @@ class MemoryMonitor(IMemoryMonitor):
         if self.on_update:
             try:
                 self.on_update(stats)
-            except Exception as e:
-                from shared.logging_config import log_debug
-
-                log_debug(f"[MemoryMonitor] Callback error: {e}")
+            except Exception:
+                logger.error("MemoryMonitor: on_update callback raised", exc_info=True)
 
 
 # Singleton instance

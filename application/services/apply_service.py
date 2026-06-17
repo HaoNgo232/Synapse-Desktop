@@ -152,8 +152,11 @@ def save_memory_block(
                 )
                 os.replace(str(tmp_file), str(memory_file))
             except Exception:
+                logger.error("apply_service: apply step failed", exc_info=True)
                 if tmp_file.exists():
-                    tmp_file.unlink()
-                raise
+                    try:
+                        tmp_file.unlink()
+                    except OSError:
+                        pass  # intentionally silent — cleanup fail during recovery
         except Exception as e:
             logger.error("Failed to save synapse memory: %s", e)

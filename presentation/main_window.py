@@ -62,6 +62,9 @@ _TAB_CONFIG = [
 ]
 
 
+logger = logging.getLogger("synapse-desktop")
+
+
 class SynapseMainWindow(QMainWindow):
     """Main application window — Phase 1 redesigned."""
 
@@ -486,6 +489,9 @@ class SynapseMainWindow(QMainWindow):
 
             return f"{selected_count} files | {total_tokens:,} tokens"
         except Exception:
+            logger.warning(
+                "main_window: _build_token_status_text failed", exc_info=True
+            )
             return "0 files | 0 tokens"
 
     def _detect_git_branch(self) -> Optional[str]:
@@ -536,7 +542,7 @@ class SynapseMainWindow(QMainWindow):
                 if result.returncode == 0:
                     return result.stdout.strip()
             except Exception:
-                pass
+                pass  # intentionally silent — git not available in this workspace
             return None
 
         def _on_result(branch: object) -> None:
@@ -834,7 +840,7 @@ class SynapseMainWindow(QMainWindow):
             flush_logs()
             cleanup_old_logs(max_age_days=7)
         except Exception:
-            pass  # Nothing we can do if logging itself fails
+            pass  # intentionally silent — shutdown path, nothing we can do if logging fails
 
         event.accept()
 

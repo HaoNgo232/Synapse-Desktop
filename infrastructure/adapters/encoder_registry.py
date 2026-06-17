@@ -14,11 +14,14 @@ Dependency flow:
     services.settings_manager -> encoder_registry -> TokenizationService -> core.encoders
 """
 
+import logging
 import threading
 from typing import Optional
 
 from application.interfaces.tokenization_port import ITokenizationService
 from infrastructure.adapters.tokenization_service import TokenizationService
+
+logger = logging.getLogger("synapse-desktop")
 
 # TokenizationService singleton instance (thread-safe) - backward compat
 # Preference: Su dung ServiceContainer.tokenization thay the
@@ -76,6 +79,7 @@ def get_current_model() -> str:
         settings = load_app_settings()
         return settings.model_id.lower() if settings.model_id else ""
     except Exception:
+        logger.error("encoder_registry: failed to initialize encoder", exc_info=True)
         return ""
 
 
@@ -101,4 +105,5 @@ def get_tokenizer_repo() -> Optional[str]:
 
         return None
     except Exception:
+        logger.error("encoder_registry: count_tokens failed", exc_info=True)
         return None

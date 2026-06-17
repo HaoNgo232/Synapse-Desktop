@@ -40,5 +40,5 @@ def create_colored_icon(svg_path: str, color: str) -> QIcon:
 
         return QIcon(pixmap)
     except Exception:
-        # Fallback to original icon if anything fails
+        # intentionally silent — non-critical UI, fallback to original icon
         return QIcon(svg_path)

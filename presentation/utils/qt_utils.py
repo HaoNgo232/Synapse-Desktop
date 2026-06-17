@@ -210,11 +210,14 @@ class BackgroundWorker(QRunnable):
             except RuntimeError:
                 pass
         except Exception as e:
-            logger.error(f"BackgroundWorker error: {e}")
+            logger.error(
+                f"BackgroundWorker error in '{self.fn.__qualname__}': {e}",
+                exc_info=True,
+            )
             try:
                 self.signals.error.emit(str(e))
             except RuntimeError:
-                pass
+                pass  # intentionally silent — signals deleted during app shutdown
         finally:
             try:
                 self.signals.finished.emit()
@@ -230,6 +233,22 @@ def _cleanup_worker(worker: BackgroundWorker) -> None:
     """Xoa worker khoi danh sach active de GC co the thu don sau khi hoan thanh."""
     if worker in _active_workers:
         _active_workers.remove(worker)
+
+
+def _default_background_error_handler(msg: str) -> None:
+    """
+    Fallback error handler khi schedule_background() không nhận on_error.
+
+    Log ERROR và cố hiển thị toast (best-effort).
+    Được gọi trên main thread (Qt signal/slot).
+    """
+    logger.error(f"Background task failed (no error handler provided): {msg}")
+    try:
+        from presentation.components.toast.toast_qt import toast_error
+
+        toast_error(f"Background task failed: {msg}")
+    except Exception:
+        pass  # intentionally silent — toast system may not be ready yet
 
 
 def schedule_background(
@@ -265,8 +284,13 @@ def schedule_background(
 
     if on_result:
         worker.signals.result.connect(on_result)
-    if on_error:
-        worker.signals.error.connect(on_error)
+
+    # Dùng default handler nếu caller không truyền on_error
+    effective_error_handler = (
+        on_error if on_error is not None else _default_background_error_handler
+    )
+    worker.signals.error.connect(effective_error_handler)
+
     if on_finished:
         worker.signals.finished.connect(on_finished)
 

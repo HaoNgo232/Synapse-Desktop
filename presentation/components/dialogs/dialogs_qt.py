@@ -3,6 +3,7 @@ Dialogs Qt - PySide6 versions of all dialogs.
 """
 
 import json
+import logging
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -47,6 +48,8 @@ from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.utils.qt_utils import run_on_main_thread
 from presentation.utils.clipboard import copy_to_clipboard
 from shared.utils.diff_filter_utils import should_auto_exclude as _should_auto_exclude
+
+logger = logging.getLogger("synapse-desktop")
 
 
 class SecurityMatchLike(Protocol):
@@ -577,9 +580,9 @@ class DiffOnlyDialogQt(BaseDialogQt):
                                 if len(content) <= 50000:
                                     related_count += 1
                             except Exception:
-                                pass
+                                pass  # intentionally silent — Qt object cleanup during shutdown
                 except Exception:
-                    pass
+                    pass  # intentionally silent — Qt object cleanup during shutdown
 
             if self.on_success:
                 files_str = f"{result.files_changed} files"
@@ -1321,7 +1324,7 @@ class FilePreviewDialogQt(BaseDialogQt):
                         self._text_edit.setTextCursor(cursor)
                         self._text_edit.ensureCursorVisible()
                 except Exception:
-                    pass
+                    logger.error("dialogs_qt: dialog operation failed", exc_info=True)
 
             QTimer.singleShot(100, do_scroll)
 
@@ -1401,6 +1404,7 @@ class FilePreviewDialogQt(BaseDialogQt):
             try:
                 lexer = get_lexer_by_name_fn(language, stripall=True)
             except Exception:
+                logger.error("dialogs_qt: dialog operation failed", exc_info=True)
                 lexer = text_lexer_cls()
 
             # Dracula-inspired inline styles
@@ -1487,6 +1491,7 @@ class FilePreviewDialogQt(BaseDialogQt):
         except ImportError:
             return None
         except Exception:
+            logger.error("dialogs_qt: dialog operation failed", exc_info=True)
             return None
 
     @staticmethod

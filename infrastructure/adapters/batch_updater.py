@@ -21,9 +21,12 @@ Usage:
     updater.flush()
 """
 
+import logging
 import time
 import threading
 from typing import Any, Optional, Set, Callable
+
+logger = logging.getLogger("synapse-desktop")
 
 
 class BatchUpdater:
@@ -133,7 +136,7 @@ class BatchUpdater:
                 self._page.update()
                 self._last_update_time = now
         except Exception:
-            pass  # Ignore errors (page may be closed)
+            logger.error("BatchUpdater._do_update: page.update() failed", exc_info=True)
 
     def flush(self):
         """
@@ -153,7 +156,7 @@ class BatchUpdater:
                 self._page.update()
                 self._last_update_time = time.time()
         except Exception:
-            pass
+            logger.error("BatchUpdater.flush: page.update() failed", exc_info=True)
 
     def cleanup(self):
         """Cleanup resources."""
@@ -208,7 +211,10 @@ class ThrottledCallback:
         try:
             self._callback()
         except Exception:
-            pass
+            logger.error(
+                f"ThrottledCallback '{self._callback.__qualname__}' raised",
+                exc_info=True,
+            )
 
     def _delayed_execute(self):
         """Execute after delay."""

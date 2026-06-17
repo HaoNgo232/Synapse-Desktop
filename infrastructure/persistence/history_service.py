@@ -17,6 +17,10 @@ from datetime import datetime
 
 from shared.logging_config import log_error, log_debug, log_info
 from shared.config.paths import HISTORY_FILE
+import logging
+
+logger = logging.getLogger("synapse-desktop")
+
 from domain.ports.history_port import HistoryEntry, IHistoryService
 
 # Số lượng tối đa entries lưu trữ
@@ -92,11 +96,14 @@ def save_history(history: HistoryData) -> bool:
                 )
                 os.replace(str(tmp_file), str(HISTORY_FILE))
             except Exception:
+                logger.error(
+                    "history_service: failed to persist history entry", exc_info=True
+                )
                 try:
                     if tmp_file.exists():
                         tmp_file.unlink()
                 except OSError:
-                    pass
+                    pass  # intentionally silent — cleanup fail during recovery
                 raise
             return True
 

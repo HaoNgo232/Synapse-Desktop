@@ -13,12 +13,15 @@ Line counting logic port tu Repomix:
 - Else: newline_count + 1
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Callable
 from dataclasses import dataclass
 from threading import Lock
 
 from infrastructure.filesystem.file_utils import TreeItem
+
+logger = logging.getLogger("synapse-desktop")
 
 
 @dataclass
@@ -277,6 +280,7 @@ class LineCountService:
 
                     return newline_count if ends_with_newline else newline_count + 1
         except Exception:
+            logger.error("LineCountDisplay: update failed", exc_info=True)
             # Fallback to direct read
             return self._count_lines_direct(file_path)
 
@@ -318,6 +322,7 @@ class LineCountService:
             return newline_count if content.endswith("\n") else newline_count + 1
 
         except Exception:
+            logger.error("LineCountDisplay: display refresh failed", exc_info=True)
             return 0
 
     def _cleanup_cache_if_needed(self):

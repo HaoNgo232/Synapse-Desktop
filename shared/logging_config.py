@@ -13,7 +13,7 @@ Optimized for production:
 import logging
 import logging.handlers
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 from shared.config.paths import LOG_DIR, DEBUG_MODE
 
@@ -178,3 +178,30 @@ def log_debug(message: str):
     """Log debug - only written if DEBUG_MODE is enabled"""
     if DEBUG_MODE:
         get_logger().debug(message)
+
+
+def log_error_ctx(
+    message: str,
+    exc: Optional[Exception] = None,
+    **context: Any,
+) -> None:
+    """
+    Log ERROR với full traceback và key-value context.
+
+    Args:
+        message: Mô tả ngắn gọn lỗi xảy ra ở đâu.
+        exc: Exception instance. Nếu None, chỉ log message.
+        **context: Key-value pairs bổ sung (vd: file=str(path), thread="worker-1").
+
+    Usage:
+        log_error_ctx(
+            "Token counter crashed",
+            exc,
+            file=str(path),
+            thread=threading.current_thread().name,
+        )
+    """
+    logger = get_logger()
+    ctx_str = " | ".join(f"{k}={v}" for k, v in context.items())
+    full_msg = f"{message} [{ctx_str}]" if ctx_str else message
+    logger.error(full_msg, exc_info=exc is not None)

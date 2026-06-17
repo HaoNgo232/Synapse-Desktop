@@ -10,9 +10,13 @@ Features:
 - Graceful cleanup
 """
 
+import logging
 import asyncio
 from typing import Any, Coroutine, Optional, List, TypeVar
+
 from dataclasses import dataclass
+
+logger = logging.getLogger("synapse-desktop")
 
 T = TypeVar("T")
 
@@ -125,6 +129,9 @@ class AsyncTaskQueue:
                     self._running -= 1
         except Exception:
             self._pending = max(0, self._pending - 1)
+            logger.error(
+                "AsyncTaskQueue.add: semaphore management failed", exc_info=True
+            )
             raise
 
     async def add_many(

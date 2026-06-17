@@ -19,6 +19,9 @@ from domain.ports.action_result import ActionResult
 from domain.ports.file_actions_port import IFileActionsService
 from shared.logging_config import log_error, log_info, log_debug, log_warning
 from shared.config.paths import BACKUP_DIR
+import logging
+
+logger = logging.getLogger("synapse-desktop")
 
 
 def create_backup(file_path: Path) -> Optional[Path]:
@@ -314,6 +317,7 @@ def _resolve_path(
         # Re-raise access denied errors
         raise
     except Exception:
+        logger.error("file_actions: failed writing file", exc_info=True)
         # resolve() that bai (broken symlink, permission, etc.)
         # Thu check parent directory (cho create operations voi file chua ton tai)
         if not final_path.exists():
@@ -322,7 +326,7 @@ def _resolve_path(
                 if _validate_path_in_workspace(parent_resolved, workspace_roots):
                     return final_path
             except Exception:
-                pass
+                logger.error("file_actions: failed in file iteration", exc_info=True)
 
         # SECURITY DEFAULT: Deny khi khong the validate
         log_error(f"Security: Could not validate path {final_path}, denying access")

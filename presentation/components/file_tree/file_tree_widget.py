@@ -938,7 +938,7 @@ class FileTreeWidget(QWidget):
                     fp = (workspace_path / rel_path).absolute()
                     absolute_selected.add(str(fp))
                 except Exception:
-                    pass
+                    logger.error("file_tree_widget: token update failed", exc_info=True)
 
             # CHU Y: Tren Windows, path casing co the khong nhat quan (e: vs E:)
             # Chung ta can filter ra nhung paths thuc su khac biet de tranh loop refresh

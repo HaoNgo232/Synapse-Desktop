@@ -14,6 +14,9 @@ Functions:
 """
 
 from typing import Callable
+import logging
+
+logger = logging.getLogger("synapse-desktop")
 
 
 # ============================================================
@@ -82,7 +85,7 @@ class ExcludedChangedNotifier:
             try:
                 cb()
             except Exception:
-                pass  # Ignore callback errors
+                logger.error("workspace_config: config operation failed", exc_info=True)
 
 
 # Singleton notifier instance — subscribe tu bat ky module nao
@@ -116,6 +119,7 @@ def add_excluded_patterns(patterns: list[str]) -> bool:
         _excluded_notifier.emit()
         return True
     except Exception:
+        logger.error("workspace_config: config operation failed", exc_info=True)
         return False
 
 
@@ -143,4 +147,5 @@ def remove_excluded_patterns(patterns: list[str]) -> bool:
         _excluded_notifier.emit()
         return True
     except Exception:
+        logger.error("workspace_config: config operation failed", exc_info=True)
         return False

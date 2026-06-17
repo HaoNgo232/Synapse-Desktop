@@ -33,6 +33,10 @@ from domain.config.output_format import (
 )
 from domain.ports.registry import DomainRegistry
 from presentation.components.token_usage_bar import TokenUsageBar
+import logging
+
+logger = logging.getLogger("synapse-desktop")
+
 
 # Compatibility Alias for UI Tests
 TokenStatsPanelQt = TokenUsageBar
@@ -424,6 +428,7 @@ class UIBuilderMixin:
             else:
                 self._format_btn.setText("Format")
         except (ValueError, AttributeError):
+            pass  # intentionally silent — format not found or settings not initialized
             self._format_btn.setText("Format")
 
         toolbar_layout.addWidget(self._format_btn)
@@ -519,6 +524,7 @@ class UIBuilderMixin:
             else:
                 self._model_btn.setText("Select Model")
         except Exception:
+            logger.error("ui_builder: UI construction failed", exc_info=True)
             self._model_btn.setText("Select Model")
 
         # Token Usage Bar — single source of truth cho token stats

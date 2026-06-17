@@ -213,7 +213,7 @@ class ContextViewQt(
             if self._preset_widget.isVisible():
                 self._preset_widget.focus_selector()
         except (RuntimeError, AttributeError):
-            pass
+            pass  # intentionally silent — widget may be deleted or not initialized
 
     def on_workspace_changed(self, workspace_path: Path) -> None:
         """Handle workspace change."""
@@ -676,9 +676,9 @@ class ContextViewQt(
                             self._preset_widget._refresh_menu
                         )
                     except (RuntimeError, TypeError):
-                        pass
+                        pass  # intentionally silent — signal connection might not exist
             except (RuntimeError, TypeError, AttributeError):
-                pass
+                pass  # intentionally silent — widget or widget children already deleted
             self._preset_widget.deleteLater()
             self._preset_widget = None  # type: ignore
 
@@ -705,7 +705,7 @@ class ContextViewQt(
             if manager is not None:
                 manager.dismiss_all(force=True)
         except Exception:
-            pass
+            logger.error("context_view: operation failed", exc_info=True)
 
         if self._file_watcher:
             self._file_watcher.stop()
@@ -730,8 +730,7 @@ class ContextViewQt(
             if callable(cancel):
                 cancel()
         except Exception:
-            # Khong de viec huy worker lam vo UI
-            logger.debug("Failed to cancel AIContextWorker", exc_info=True)
+            logger.error("context_view: operation failed", exc_info=True)
 
         try:
             signals = getattr(worker, "signals", None)
@@ -739,18 +738,18 @@ class ContextViewQt(
                 try:
                     signals.finished.disconnect()
                 except (RuntimeError, TypeError):
-                    pass
+                    pass  # intentionally silent — signal might not be connected
                 try:
                     signals.error.disconnect()
                 except (RuntimeError, TypeError):
-                    pass
+                    pass  # intentionally silent — signal might not be connected
                 try:
                     signals.progress.disconnect()
                 except (RuntimeError, TypeError):
-                    pass
+                    pass  # intentionally silent — signal might not be connected
         except RuntimeError:
             # signals co the da bi xoa boi Qt
-            pass
+            pass  # intentionally silent — worker or signals already deleted by Qt
 
         self._ai_suggest_worker = None
 
@@ -1283,7 +1282,7 @@ class ContextViewQt(
                         file_tree_map, diff_result, include_git=True
                     )
             except Exception:
-                pass
+                logger.error("context_view: operation failed", exc_info=True)
 
         # Luu snapshot selection hien tai de phuc vu Undo
         self._ai_suggest_previous_selection = list(

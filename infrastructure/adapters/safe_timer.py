@@ -12,9 +12,12 @@ Usage:
     timer.cancel()  # Cancel timer và prevent callback
 """
 
+import logging
 import threading
 from threading import Timer
 from typing import Callable, Optional, Any
+
+logger = logging.getLogger("synapse-desktop")
 
 
 class SafeTimer:
@@ -150,8 +153,7 @@ class SafeTimer:
                 # Defer đến main thread via page.run_task()
                 self._page.run_task(_async_callback)
             except Exception:
-                # Page không available hoặc đã closed
-                pass
+                pass  # intentionally silent — Flet page not available or already closed
         else:
             # Execute trực tiếp trên Timer thread
             self._safe_callback()
@@ -169,8 +171,10 @@ class SafeTimer:
         try:
             self._callback()
         except Exception:
-            # Swallow errors để không crash Timer thread
-            pass
+            logger.error(
+                f"SafeTimer callback '{self._callback.__qualname__}' raised",
+                exc_info=True,
+            )
 
 
 class DebouncedCallback:

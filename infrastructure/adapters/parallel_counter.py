@@ -1,3 +1,4 @@
+import logging
 import mmap
 import os
 from pathlib import Path
@@ -6,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from shared.logging_config import log_error
 from domain.tokenization.cancellation import is_counting_tokens
+
+logger = logging.getLogger("synapse-desktop")
 
 MAX_BYTES = 5 * 1024 * 1024
 
@@ -97,6 +100,10 @@ def count_tokens_parallel_standard(
             count = count_tokens_for_file_no_cache_func(path)
             return (str(path), count, stat.st_mtime)
         except Exception:
+            logger.error(
+                f"parallel_counter: count_single_file failed for '{path}'",
+                exc_info=True,
+            )
             return (str(path), 0, 0)
 
     try:
@@ -113,6 +120,9 @@ def count_tokens_parallel_standard(
                         file_mtimes[path_str] = mtime_val
                 except Exception:
                     path = futures[future]
+                    logger.error(
+                        f"parallel_counter: future failed for '{path}'", exc_info=True
+                    )
                     results[str(path)] = 0
 
         # Update cache MOT LAN (an toan, khong contention)
@@ -150,6 +160,9 @@ def count_tokens_batch_sequential(
         try:
             results[str(path)] = count_tokens_for_file_func(path)
         except Exception:
+            logger.error(
+                f"parallel_counter: sequential count failed for '{path}'", exc_info=True
+            )
             results[str(path)] = 0
 
         if i > 0 and i % 3 == 0 and not is_counting_tokens():
@@ -201,6 +214,9 @@ def count_tokens_batch_hf(
             all_texts.append(content)
             valid_paths.append(path_str)
         except Exception:
+            logger.error(
+                f"parallel_counter: HF batch failed reading '{path}'", exc_info=True
+            )
             results[str(path)] = 0
 
     # Batch encode voi Rust backend

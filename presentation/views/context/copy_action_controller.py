@@ -270,12 +270,12 @@ class CopyTaskWorker(QRunnable):
             try:
                 self.signals.finished.emit(prompt, token_count, breakdown)
             except RuntimeError:
-                pass  # Signals da bi delete (app shutting down)
+                pass  # intentionally silent — signals deleted during app shutdown
         except Exception as e:
             try:
                 self.signals.error.emit(str(e))
             except RuntimeError:
-                pass
+                pass  # intentionally silent — signals deleted during app shutdown
 
 
 class SecurityCheckWorker(QRunnable):
@@ -301,12 +301,12 @@ class SecurityCheckWorker(QRunnable):
             try:
                 self.signals.finished.emit(matches)
             except RuntimeError:
-                pass
+                pass  # intentionally silent — signals deleted during app shutdown
         except Exception as e:
             try:
                 self.signals.error.emit(f"Security scan error: {e}")
             except RuntimeError:
-                pass
+                pass  # intentionally silent — signals deleted during app shutdown
 
 
 class CopyActionViewProtocol(Protocol):
@@ -466,7 +466,9 @@ class CopyActionController(QObject):
             if manager is not None:
                 manager.dismiss_all(force=True)
         except Exception:
-            pass
+            logger.warning(
+                "copy_action_controller: dismiss_all toast failed", exc_info=True
+            )
 
         # 2. Force cleanup ALL stale refs now — don't wait for callbacks.
         #    Workers that are still running will finish on thread pool but
@@ -477,7 +479,7 @@ class CopyActionController(QObject):
                 try:
                     obj.deleteLater()
                 except RuntimeError:
-                    pass
+                    pass  # intentionally silent — worker object already deleted by Qt
         self._stale_workers.clear()
 
         # 3. Move current refs to stale list for next cleanup cycle.
@@ -527,7 +529,7 @@ class CopyActionController(QObject):
                 try:
                     obj.deleteLater()
                 except RuntimeError:
-                    pass  # Object da bi delete roi
+                    pass  # intentionally silent — object already deleted by Qt
 
     def _is_current_generation(self, gen: int) -> bool:
         """Check if gen matches current _copy_generation."""
@@ -962,7 +964,7 @@ class CopyActionController(QObject):
                             instructions_at_top=instructions_at_top,
                         )
                     except Exception:
-                        pass  # Cache storage failure is non-critical
+                        pass  # intentionally silent — Cache storage failure is non-critical
 
                 if copy_destination == "file":
                     success, err_msg = copy_as_file_to_clipboard(prompt)
@@ -1392,7 +1394,10 @@ class CopyActionController(QObject):
                         instructions_at_top=True,
                     )
                 except Exception:
-                    pass
+                    logger.warning(
+                        "copy_action_controller: post-worker cleanup failed",
+                        exc_info=True,
+                    )
 
                 success, result = copy_as_file_to_clipboard(prompt)
                 if success:

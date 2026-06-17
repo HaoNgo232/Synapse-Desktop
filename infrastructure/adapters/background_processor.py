@@ -13,11 +13,14 @@ Sử dụng ThreadPoolExecutor thay vì actual processes để:
 - Dễ dàng cancel tasks
 """
 
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Any, Dict, List, TypeVar, Generic
 from enum import Enum
+from typing import Callable, Optional, Any, Dict, List, TypeVar, Generic
+
+logger = logging.getLogger("synapse-desktop")
 
 T = TypeVar("T")
 
@@ -246,6 +249,10 @@ class BackgroundProcessor:
 
                 self._page.run_task(_async_callback)
             except Exception:
+                logger.error(
+                    "BackgroundProcessor._invoke_callback: page.run_task failed, falling back to direct call",
+                    exc_info=True,
+                )
                 # Fallback: call directly
                 callback(arg)
         else:

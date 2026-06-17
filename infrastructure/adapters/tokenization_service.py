@@ -6,9 +6,11 @@ Moi trang thai (encoder, tokenizer_repo, cache) duoc quan ly o instance level,
 dam bao thread-safe va loai bo race conditions.
 """
 
+import logging
 import os
 import threading
 from pathlib import Path
+
 from typing import Any, Dict, List, Optional
 
 from infrastructure.adapters.encoders import (
@@ -29,6 +31,8 @@ from infrastructure.adapters.parallel_counter import (
     count_tokens_batch_sequential,
     count_tokens_batch_hf,
 )
+
+logger = logging.getLogger("synapse-desktop")
 
 # Worker config cho batch processing
 TASKS_PER_WORKER = 100
@@ -95,6 +99,7 @@ class TokenizationService(ITokenizationService):
 
             return base_count
         except Exception:
+            logger.error("TokenizationService: background count failed", exc_info=True)
             # Fallback neu encode that bai
             return _estimate_tokens(text)
 

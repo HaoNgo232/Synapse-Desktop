@@ -8,6 +8,9 @@ va ap dung Step pipeline de chuan hoa cach thuc thi workflows.
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol
+import logging
+
+logger = logging.getLogger("synapse-desktop")
 
 
 def _empty_metadata_dict() -> Dict[str, Any]:
@@ -129,5 +132,8 @@ class WorkflowEngine:
             try:
                 observer.on_event(event)
             except Exception:
-                # Observer errors khong duoc phep lam fail workflow runtime
-                continue
+                logger.error(
+                    f"WorkflowEngine._emit: observer '{observer.__class__.__name__}' raised",
+                    exc_info=True,
+                )
+                continue  # giữ behavior

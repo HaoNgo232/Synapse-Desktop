@@ -12,6 +12,10 @@ Features:
 import json
 from pathlib import Path
 from typing import Optional, Callable
+import logging
+
+logger = logging.getLogger("synapse-desktop")
+
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -95,6 +99,7 @@ def clear_session_state() -> bool:
         DomainRegistry.session_state().clear_session_state()
         return True
     except Exception:
+        logger.error("settings_view: failed to load setting value", exc_info=True)
         return False
 
 
@@ -104,6 +109,7 @@ def check_installed(target_name: str, workspace_path: Optional[str] = None) -> b
             target_name, workspace_path
         )
     except Exception:
+        logger.error("settings_view: failed to load setting value", exc_info=True)
         return False
 
 
@@ -1455,8 +1461,7 @@ class SettingsViewQt(QWidget):
                             f"font-size: 11px; font-weight: 600; color: {ThemeColors.SUCCESS};"
                         )
             except Exception:
-                # Neu viec cap nhat trang thai that bai thi chi log toast, khong chan luong chinh
-                pass
+                logger.warning("settings_view: worker cleanup failed", exc_info=True)
 
         self._show_status(
             f"MCP installed to {target_name}!" if success else msg,

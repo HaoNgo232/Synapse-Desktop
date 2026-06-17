@@ -7,6 +7,10 @@ Hien thi +lines/-lines thay doi truoc khi apply.
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List
+import logging
+
+logger = logging.getLogger("synapse-desktop")
+
 
 from domain.prompt.opx_parser import FileAction
 from shared.types.diff_types import DiffLine
@@ -169,7 +173,7 @@ def _calculate_rewrite_changes(
             content = file_path.read_text(encoding="utf-8")
             removed = _count_lines(content)
         except Exception:
-            pass
+            logger.error("preview_analyzer: analysis failed", exc_info=True)
 
     return ChangeSummary(added=added, removed=removed)
 
@@ -204,7 +208,7 @@ def _calculate_delete_changes(
             removed = _count_lines(content)
             return ChangeSummary(added=0, removed=removed)
         except Exception:
-            pass
+            logger.error("preview_analyzer: diff computation failed", exc_info=True)
 
     # File khong ton tai, estimate 50 lines
     return ChangeSummary(added=0, removed=50)
@@ -301,7 +305,7 @@ def generate_preview_diff_lines(
         try:
             old_content = file_path.read_text(encoding="utf-8")
         except Exception:
-            pass
+            logger.error("preview_analyzer: post-processing failed", exc_info=True)
 
     # Lay noi dung moi tu changes
     new_content = ""

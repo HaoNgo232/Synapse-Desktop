@@ -44,6 +44,10 @@ RustWalk: Any = None
 # RACE CONDITION FIX: Sử dụng threading.Lock để đảm bảo thread-safe
 # ============================================
 import threading  # noqa: E402
+import logging
+
+logger = logging.getLogger("synapse-desktop")
+
 
 _scanning_lock = threading.Lock()
 _is_scanning = False
@@ -595,7 +599,9 @@ class FileScanner:
             try:
                 callback(progress_copy)
             except Exception:
-                pass  # Ignore callback errors
+                logger.error(
+                    "file_scanner: failed scanning directory entry", exc_info=True
+                )
 
 
 def scan_single_level(

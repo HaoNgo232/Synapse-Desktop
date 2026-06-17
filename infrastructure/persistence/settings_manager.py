@@ -20,7 +20,11 @@ API cu (backward compat, DEPRECATED):
 
 import json
 import threading
+import logging
 from typing import Dict, Any
+
+logger = logging.getLogger("synapse-desktop")
+
 
 from shared.config.paths import SETTINGS_FILE
 from domain.config.app_settings import AppSettings
@@ -63,7 +67,7 @@ def _load_app_settings_unlocked() -> AppSettings:
             saved = json.loads(content)
             return AppSettings.from_dict(saved)
     except (OSError, json.JSONDecodeError):
-        pass
+        pass  # intentionally silent — settings file might not exist or be corrupted initially
     return AppSettings()
 
 
@@ -85,7 +89,7 @@ def _save_app_settings_unlocked(settings: AppSettings) -> bool:
                 content = SETTINGS_FILE.read_text(encoding="utf-8")
                 existing_data = json.loads(content)
         except (OSError, json.JSONDecodeError):
-            pass
+            pass  # intentionally silent — settings file might not exist or be corrupted initially
 
         updated = {**existing_data, **settings.to_dict()}
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -96,12 +100,15 @@ def _save_app_settings_unlocked(settings: AppSettings) -> bool:
             tmp_file.write_text(json.dumps(updated, indent=2), encoding="utf-8")
             os.replace(str(tmp_file), str(SETTINGS_FILE))
         except Exception:
+            logger.error(
+                "settings_manager: failed to load settings from disk", exc_info=True
+            )
             # Dọn tmp file nếu có lỗi
             try:
                 if tmp_file.exists():
                     tmp_file.unlink()
             except OSError:
-                pass
+                pass  # intentionally silent — cleanup fail during recovery
             raise
         return True
     except (OSError, IOError):
@@ -227,7 +234,7 @@ def load_settings() -> Dict[str, Any]:
             saved = json.loads(content)
             return {**DEFAULT_SETTINGS, **saved}
     except (OSError, json.JSONDecodeError):
-        pass
+        pass  # intentionally silent — settings file might not exist or be corrupted initially
 
     return DEFAULT_SETTINGS.copy()
 
@@ -259,11 +266,14 @@ def save_settings(settings: Dict[str, Any]) -> bool:
                 tmp_file.write_text(json.dumps(updated, indent=2), encoding="utf-8")
                 os.replace(str(tmp_file), str(SETTINGS_FILE))
             except Exception:
+                logger.error(
+                    "settings_manager: failed to save settings to disk", exc_info=True
+                )
                 try:
                     if tmp_file.exists():
                         tmp_file.unlink()
                 except OSError:
-                    pass
+                    pass  # intentionally silent — cleanup fail during recovery
                 raise
             return True
         except (OSError, IOError):

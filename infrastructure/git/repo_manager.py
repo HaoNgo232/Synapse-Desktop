@@ -432,7 +432,7 @@ class RepoManager(IRepoManager):
                 if file.is_file():
                     total += file.stat().st_size
         except Exception:
-            pass
+            logger.error("repo_manager: git operation failed", exc_info=True)
         return total
 
     def delete_repo(self, repo_name: str) -> bool:

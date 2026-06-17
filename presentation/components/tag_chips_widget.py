@@ -10,8 +10,6 @@ Features:
 """
 
 from typing import List, Optional
-import sys
-from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -31,10 +29,9 @@ from presentation.components.qt_utils import create_colored_icon
 
 
 # Icon paths
-if hasattr(sys, "_MEIPASS"):
-    ASSETS_DIR = Path(sys._MEIPASS) / "assets"
-else:
-    ASSETS_DIR = Path(__file__).parent.parent / "assets"
+from shared.utils.path_utils import get_assets_dir
+
+ASSETS_DIR = get_assets_dir()
 
 ICON_ADD = str(ASSETS_DIR / "add.svg")
 ICON_REMOVE = str(ASSETS_DIR / "remove.svg")

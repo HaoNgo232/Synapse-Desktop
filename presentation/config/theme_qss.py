@@ -10,14 +10,9 @@ import os
 
 from presentation.config.theme import ThemeColors, ThemeSpacing, ThemeRadius, ThemeFonts
 
-import sys
+from shared.utils.path_utils import get_assets_dir
 
-if hasattr(sys, "_MEIPASS"):
-    _ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
-else:
-    _ASSETS_DIR = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
-    )
+_ASSETS_DIR = str(get_assets_dir())
 
 _ARROW_RIGHT = os.path.join(_ASSETS_DIR, "arrow-right.svg").replace("\\", "/")
 _ARROW_DOWN = os.path.join(_ASSETS_DIR, "arrow-down.svg").replace("\\", "/")

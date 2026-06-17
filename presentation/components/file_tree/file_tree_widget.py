@@ -156,14 +156,9 @@ class FileTreeWidget(QWidget):
         actions_layout = QHBoxLayout()
         actions_layout.setSpacing(4)
 
-        import sys
+        from shared.utils.path_utils import get_assets_dir
 
-        if hasattr(sys, "_MEIPASS"):
-            assets_dir = os.path.join(sys._MEIPASS, "assets")
-        else:
-            assets_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
-            )
+        assets_dir = str(get_assets_dir())
 
         # Select All
         self._select_all_btn = QPushButton()

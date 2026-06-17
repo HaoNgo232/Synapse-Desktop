@@ -1012,7 +1012,9 @@ class CacheManagementDialogQt(BaseDialogQt):
         del_btn.setFixedWidth(32)
         from presentation.components.qt_utils import create_colored_icon
 
-        assets_dir = Path(__file__).parent.parent.parent.parent / "assets"
+        from shared.utils.path_utils import get_assets_dir
+
+        assets_dir = get_assets_dir()
         del_icon = create_colored_icon(str(assets_dir / "trash.svg"), ThemeColors.ERROR)
         del_btn.setIcon(del_icon)
         del_btn.setStyleSheet("border: none; background-color: transparent;")

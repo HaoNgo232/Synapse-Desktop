@@ -47,3 +47,16 @@ def path_for_display(
     except ValueError:
         # Path khong nam trong workspace (vd. symlink) -> fallback absolute
         return str(path)
+
+
+def get_assets_dir() -> Path:
+    """
+    Get the absolute path to the assets directory, supporting both
+    development (source code) and production (packaged AppImage/EXE) environments.
+    """
+    import sys
+
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "assets"
+
+    return Path(__file__).resolve().parent.parent.parent / "assets"

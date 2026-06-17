@@ -44,7 +44,7 @@ class TestPathForDisplay:
         file_path.touch()
 
         result = path_for_display(file_path, tmp_path, use_relative_paths=True)
-        assert result == "src/main.py"
+        assert result == str(Path("src/main.py"))
 
     def test_nested_relative_path(self, tmp_path: Path):
         """Relative path nhieu cap (nested directories)."""
@@ -53,7 +53,7 @@ class TestPathForDisplay:
         file_path.touch()
 
         result = path_for_display(file_path, tmp_path, use_relative_paths=True)
-        assert result == "src/core/utils/helper.py"
+        assert result == str(Path("src/core/utils/helper.py"))
 
     def test_root_path_hien_thi_ten_folder(self, tmp_path: Path):
         """Khi path == workspace_root (rel=="."), hien thi ten folder lowercase."""
@@ -85,7 +85,7 @@ class TestPathForDisplay:
         dir_path.mkdir(parents=True)
 
         result = path_for_display(dir_path, tmp_path, use_relative_paths=True)
-        assert result == "src/components"
+        assert result == str(Path("src/components"))
 
     def test_workspace_root_co_trailing_slash(self, tmp_path: Path):
         """Workspace root co trailing slash van hoat dong dung."""
@@ -104,3 +104,51 @@ class TestPathForDisplay:
         path = Path("/some/absolute/path.py")
         result = path_for_display(path, None, use_relative_paths=False)
         assert result == str(path)
+
+
+class TestGetAssetsDir:
+    """Test suite cho get_assets_dir."""
+
+    def test_get_assets_dir_development(self):
+        """Test that get_assets_dir returns the project-root assets directory during dev."""
+        from shared.utils.path_utils import get_assets_dir
+        import sys
+
+        # Ensure frozen is patched to False
+        orig_frozen = getattr(sys, "frozen", None)
+        if hasattr(sys, "frozen"):
+            del sys.frozen
+
+        try:
+            assets_dir = get_assets_dir()
+            assert assets_dir.exists()
+            assert assets_dir.is_dir()
+            assert (assets_dir / "icon.ico").exists()
+        finally:
+            if orig_frozen is not None:
+                sys.frozen = orig_frozen
+
+    def test_get_assets_dir_frozen(self):
+        """Test that get_assets_dir respects sys._MEIPASS when sys.frozen is True."""
+        from shared.utils.path_utils import get_assets_dir
+        import sys
+
+        orig_frozen = getattr(sys, "frozen", None)
+        orig_meipass = getattr(sys, "_MEIPASS", None)
+
+        sys.frozen = True
+        sys._MEIPASS = "/mock/meipass"
+
+        try:
+            assets_dir = get_assets_dir()
+            assert assets_dir == Path("/mock/meipass/assets")
+        finally:
+            if orig_frozen is not None:
+                sys.frozen = orig_frozen
+            else:
+                del sys.frozen
+
+            if orig_meipass is not None:
+                sys._MEIPASS = orig_meipass
+            else:
+                del sys._MEIPASS

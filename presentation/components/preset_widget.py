@@ -18,7 +18,6 @@ from PySide6.QtGui import QCursor
 from presentation.config.theme import ThemeColors
 from presentation.components.qt_utils import create_colored_icon
 import os
-import sys
 import logging
 
 if TYPE_CHECKING:
@@ -83,15 +82,9 @@ class PresetWidget(QWidget):
         layout.setSpacing(4)
 
         # Lấy đường dẫn đến thư mục assets (hỗ trợ cả môi trường phát triển và đóng gói)
-        if hasattr(sys, "_MEIPASS"):
-            self._assets_dir = os.path.join(sys._MEIPASS, "assets")
-        else:
-            self._assets_dir = os.path.join(
-                os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                ),
-                "assets",
-            )
+        from shared.utils.path_utils import get_assets_dir
+
+        self._assets_dir = str(get_assets_dir())
         arrow_icon = os.path.join(self._assets_dir, "arrow-down.svg")
 
         # --- Nut chinh (QToolButton + QMenu) ---

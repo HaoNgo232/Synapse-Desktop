@@ -330,12 +330,9 @@ class SettingsViewQt(QWidget):
         _excluded_notifier.connect(self._reload_excluded_from_settings)
 
     def _build_ui(self) -> None:
-        import sys
+        from shared.utils.path_utils import get_assets_dir
 
-        if hasattr(sys, "_MEIPASS"):
-            self.assets_dir = Path(sys._MEIPASS) / "assets"
-        else:
-            self.assets_dir = Path(__file__).parent.parent.parent.parent / "assets"
+        self.assets_dir = get_assets_dir()
 
         settings = load_settings()
 

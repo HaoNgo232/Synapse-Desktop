@@ -37,13 +37,9 @@ class LicenseActivationDialog(QDialog):
         header_layout.setSpacing(12)
 
         self.icon_label = QLabel()
-        from pathlib import Path
-        import sys
+        from shared.utils.path_utils import get_assets_dir
 
-        if hasattr(sys, "_MEIPASS"):
-            assets_dir = Path(sys._MEIPASS) / "assets"
-        else:
-            assets_dir = Path(__file__).parent.parent.parent / "assets"
+        assets_dir = get_assets_dir()
 
         icon_path = assets_dir / "gem.svg"
         key_icon = create_colored_icon(str(icon_path), ThemeColors.WARNING)

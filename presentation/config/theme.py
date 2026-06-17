@@ -8,7 +8,6 @@ All views and components reference these constants for visual consistency.
 
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication
-from pathlib import Path
 
 
 class ThemeFonts:
@@ -26,7 +25,9 @@ class ThemeFonts:
         if ThemeFonts._fonts_loaded:
             return
 
-        font_dir = Path(__file__).parent.parent / "assets" / "fonts"
+        from shared.utils.path_utils import get_assets_dir
+
+        font_dir = get_assets_dir() / "fonts"
 
         # Load custom fonts tu assets/fonts (dam bao nhat quan giua cac may)
         # Cascadia Code: monospace font cho code display (MIT license, Microsoft)

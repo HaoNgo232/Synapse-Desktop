@@ -71,10 +71,9 @@ class SynapseMainWindow(QMainWindow):
         super().__init__()
 
         # Xác định đường dẫn thư mục assets (hỗ trợ cả chạy dev và chạy bundle)
-        if hasattr(sys, "_MEIPASS"):
-            self.assets_dir = Path(sys._MEIPASS) / "assets"
-        else:
-            self.assets_dir = Path(__file__).parent.parent / "assets"
+        from shared.utils.path_utils import get_assets_dir
+
+        self.assets_dir = get_assets_dir()
 
         # Load custom fonts FIRST
         ThemeFonts.load_fonts()

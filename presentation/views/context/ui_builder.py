@@ -119,17 +119,9 @@ class UIBuilderMixin:
         toolbar_layout.setSpacing(10)
         toolbar_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        import sys
+        from shared.utils.path_utils import get_assets_dir
 
-        if hasattr(sys, "_MEIPASS"):
-            assets_dir = os.path.join(sys._MEIPASS, "assets")
-        else:
-            assets_dir = os.path.join(
-                os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                ),
-                "assets",
-            )
+        assets_dir = str(get_assets_dir())
 
         # Style cho toolbar buttons (Modern & Minimal)
         modern_btn_style = (
@@ -665,17 +657,9 @@ class UIBuilderMixin:
         header.addWidget(self._template_btn)
 
         # Find assets directory
-        import sys
+        from shared.utils.path_utils import get_assets_dir
 
-        if hasattr(sys, "_MEIPASS"):
-            assets_dir = os.path.join(sys._MEIPASS, "assets")
-        else:
-            assets_dir = os.path.join(
-                os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                ),
-                "assets",
-            )
+        assets_dir = str(get_assets_dir())
 
         # Add Save Template button (one-click)
         self._save_template_btn = QToolButton()

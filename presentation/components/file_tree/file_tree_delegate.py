@@ -13,7 +13,6 @@ Qt chỉ gọi paint() cho visible rows.
 """
 
 from typing import cast
-import sys
 
 from PySide6.QtWidgets import (
     QStyledItemDelegate,
@@ -35,13 +34,16 @@ from pathlib import Path
 import json
 import logging
 
+from shared.utils.path_utils import get_assets_dir
 from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.components.file_tree.file_tree_model import FileTreeRoles
 
 logger = logging.getLogger(__name__)
 
+
 class MaterialIconMapper:
     """Parses material-icons.json and maps files/folders to their SVG icons."""
+
     def __init__(self, assets_dir: Path):
         self.assets_dir = assets_dir
         self.json_path = assets_dir / "material-icons" / "material-icons.json"
@@ -52,7 +54,9 @@ class MaterialIconMapper:
 
     def load_config(self):
         if not self.json_path.exists():
-            logger.info(f"Material-icons config not found at {self.json_path}. Falling back to default icons.")
+            logger.info(
+                f"Material-icons config not found at {self.json_path}. Falling back to default icons."
+            )
             return
         try:
             with open(self.json_path, "r", encoding="utf-8") as f:
@@ -61,7 +65,9 @@ class MaterialIconMapper:
         except Exception as e:
             logger.error(f"Failed to load material-icons config: {e}")
 
-    def get_icon_path(self, name: str, is_dir: bool, is_expanded: bool = False) -> str | None:
+    def get_icon_path(
+        self, name: str, is_dir: bool, is_expanded: bool = False
+    ) -> str | None:
         if not self.enabled:
             return None
 
@@ -112,26 +118,26 @@ class MaterialIconMapper:
             return str(full_path)
         return None
 
-if hasattr(sys, "_MEIPASS"):
-    ASSETS_DIR = Path(sys._MEIPASS) / "assets"
-else:
-    ASSETS_DIR = Path(__file__).parent.parent.parent.parent / "assets"
+
+ASSETS_DIR = get_assets_dir()
 
 _svg_icon_cache: dict[str, QPixmap] = {}
+
 
 def _get_svg_pixmap(svg_path: str, size: int = 16) -> QPixmap:
     cache_key = f"{svg_path}_{size}"
     if cache_key not in _svg_icon_cache:
         try:
             from PySide6.QtSvg import QSvgRenderer
+
             renderer = QSvgRenderer(svg_path)
             pixmap = QPixmap(size, size)
             pixmap.fill(Qt.GlobalColor.transparent)
-            
+
             painter = QPainter(pixmap)
             renderer.render(painter)
             painter.end()
-            
+
             _svg_icon_cache[cache_key] = pixmap
         except Exception as e:
             logger.error(f"Failed to render SVG {svg_path}: {e}")
@@ -261,7 +267,14 @@ def _get_qta_pixmap(name: str, color: QColor, size: int = ICON_SIZE) -> QPixmap:
 
 
 def _draw_file_icon(
-    painter: QPainter, x: int, y: int, label: str, is_dir: bool, height: int, mapper: MaterialIconMapper, is_expanded: bool = False
+    painter: QPainter,
+    x: int,
+    y: int,
+    label: str,
+    is_dir: bool,
+    height: int,
+    mapper: MaterialIconMapper,
+    is_expanded: bool = False,
 ):
     """Vẽ icon bằng Material SVG hoặc dự phòng qtawesome pixmap."""
     svg_path = mapper.get_icon_path(label, is_dir, is_expanded)
@@ -346,7 +359,16 @@ class FileTreeDelegate(QStyledItemDelegate):
 
         # 2. Draw icon (Material Design)
         is_expanded = bool(state & QStyle.StateFlag.State_Open)
-        _draw_file_icon(painter, x, y, label, is_dir or False, height, self._icon_mapper, is_expanded)
+        _draw_file_icon(
+            painter,
+            x,
+            y,
+            label,
+            is_dir or False,
+            height,
+            self._icon_mapper,
+            is_expanded,
+        )
         x += ICON_SIZE + SPACING
 
         # 3. Process Badges and Eye Icon widths to determine Label space

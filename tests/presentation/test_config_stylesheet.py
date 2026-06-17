@@ -57,8 +57,10 @@ def test_theme_qss_meipass_branch():
             saved_modules[m] = sys.modules[m]
             del sys.modules[m]
 
-    # 2. Patch sys._MEIPASS
+    # 2. Patch sys._MEIPASS and sys.frozen
     sys._MEIPASS = "/mock/meipass"
+    orig_frozen = getattr(sys, "frozen", None)
+    sys.frozen = True
 
     try:
         # 3. Import again
@@ -74,6 +76,10 @@ def test_theme_qss_meipass_branch():
         # Clean up
         if hasattr(sys, "_MEIPASS"):
             del sys._MEIPASS
+        if orig_frozen is not None:
+            sys.frozen = orig_frozen
+        elif hasattr(sys, "frozen"):
+            del sys.frozen
 
         # Restore original modules
         for m in modules_to_unload:

@@ -192,3 +192,28 @@ def test_summary_shows_success_after_apply(qtbot, monkeypatch) -> None:
     assert view._summary_label is not None
     assert "Successfully applied 1 changes" in view._summary_label.text()
     assert not view._summary_label.isHidden()
+
+
+def test_auto_trigger_preview_after_debounce(qtbot, tmp_path) -> None:
+    """Kiểm tra preview tự động chạy và render sau khi debounce hoàn thành."""
+    # Tạo một file giả lập để preview có thể đọc
+    test_file = tmp_path / "main.py"
+    test_file.write_text("hello world", encoding="utf-8")
+
+    view = ApplyViewQt(get_workspace=lambda: tmp_path)
+    qtbot.addWidget(view)
+
+    # Đưa nội dung search/replace vào input
+    opx_text = (
+        "<<<<<<< SEARCH main.py\nhello world\n=======\nhello python\n>>>>>>> REPLACE"
+    )
+    view._opx_input.setPlainText(opx_text)
+
+    # Đợi 900ms để trigger debounce
+    qtbot.wait(900)
+
+    # Kiểm tra xem preview_data đã được tự động phân tích và render chưa
+    assert view.last_preview_data is not None
+    assert len(view.last_preview_data.rows) == 1
+    assert view.last_preview_data.rows[0].path == "main.py"
+    assert view.last_opx_text == opx_text

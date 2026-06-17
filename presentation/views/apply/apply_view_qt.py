@@ -1139,6 +1139,11 @@ class ApplyViewQt(QWidget):
 
         self._update_detection_ui()
 
+        # Tự động trigger preview nếu phát hiện có patch hợp lệ và nội dung mới
+        if self._detection_result and self._detection_result.has_patches:
+            if text.strip() != (self.last_opx_text or "").strip():
+                self._preview_changes()
+
     @Slot(str)
     def _show_affected_files_menu(self, link_text: str) -> None:
         """Hiển thị Popup Menu chứa các file bị ảnh hưởng."""
@@ -1194,6 +1199,12 @@ class ApplyViewQt(QWidget):
                 self._summary_label.hide()
             if self._apply_btn:
                 self._apply_btn.setEnabled(False)
+            self._render_empty_state()
+            self._cached_file_actions.clear()
+            self._cached_memory_block = None
+            self._detection_result = None
+            self.last_opx_text = ""
+            self.last_preview_data = None
             return
 
         if self._detection_result and self._detection_result.has_patches:

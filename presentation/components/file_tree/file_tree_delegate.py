@@ -13,6 +13,7 @@ Qt chỉ gọi paint() cho visible rows.
 """
 
 from typing import cast
+import sys
 
 from PySide6.QtWidgets import (
     QStyledItemDelegate,
@@ -114,6 +115,34 @@ class MaterialIconMapper:
         if full_path.exists():
             return str(full_path)
         return None
+
+if hasattr(sys, "_MEIPASS"):
+    ASSETS_DIR = Path(sys._MEIPASS) / "assets"
+else:
+    ASSETS_DIR = Path(__file__).parent.parent.parent.parent / "assets"
+
+_svg_icon_cache: dict[str, QPixmap] = {}
+
+def _get_svg_pixmap(svg_path: str, size: int = 16) -> QPixmap:
+    cache_key = f"{svg_path}_{size}"
+    if cache_key not in _svg_icon_cache:
+        try:
+            from PySide6.QtSvg import QSvgRenderer
+            renderer = QSvgRenderer(svg_path)
+            pixmap = QPixmap(size, size)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+            
+            _svg_icon_cache[cache_key] = pixmap
+        except Exception as e:
+            logger.error(f"Failed to render SVG {svg_path}: {e}")
+            pixmap = QPixmap(size, size)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            _svg_icon_cache[cache_key] = pixmap
+    return _svg_icon_cache[cache_key]
 
 
 # Row dimensions
@@ -236,23 +265,28 @@ def _get_qta_pixmap(name: str, color: QColor, size: int = ICON_SIZE) -> QPixmap:
 
 
 def _draw_file_icon(
-    painter: QPainter, x: int, y: int, label: str, is_dir: bool, height: int
+    painter: QPainter, x: int, y: int, label: str, is_dir: bool, height: int, mapper: MaterialIconMapper, is_expanded: bool = False
 ):
-    """Vẽ icon bằng qtawesome pixmap."""
-    if is_dir:
-        pixmap = _get_qta_pixmap("mdi6.folder", COLOR_FOLDER)
+    """Vẽ icon bằng Material SVG hoặc dự phòng qtawesome pixmap."""
+    svg_path = mapper.get_icon_path(label, is_dir, is_expanded)
+    if svg_path:
+        pixmap = _get_svg_pixmap(svg_path)
     else:
-        # Check extension for specific icons
-        icon_name = "mdi6.file-outline"
-        icon_color = COLOR_FILE
+        # Fallback to original qtawesome logic
+        if is_dir:
+            pixmap = _get_qta_pixmap("mdi6.folder", COLOR_FOLDER)
+        else:
+            # Check extension for specific icons
+            icon_name = "mdi6.file-outline"
+            icon_color = COLOR_FILE
 
-        for ext, (name, color) in _EXT_ICONS.items():
-            if label.endswith(ext):
-                icon_name = name
-                icon_color = QColor(color)
-                break
+            for ext, (name, color) in _EXT_ICONS.items():
+                if label.endswith(ext):
+                    icon_name = name
+                    icon_color = QColor(color)
+                    break
 
-        pixmap = _get_qta_pixmap(icon_name, icon_color)
+            pixmap = _get_qta_pixmap(icon_name, icon_color)
 
     icon_y = y + (height - ICON_SIZE) // 2
     painter.drawPixmap(x, icon_y, pixmap)
@@ -268,6 +302,7 @@ class FileTreeDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._search_query: str = ""
+        self._icon_mapper = MaterialIconMapper(ASSETS_DIR)
 
     def set_search_query(self, query: str) -> None:
         """Set search query để highlight matches."""
@@ -314,7 +349,8 @@ class FileTreeDelegate(QStyledItemDelegate):
         x += CHECKBOX_SIZE + SPACING
 
         # 2. Draw icon (Material Design)
-        _draw_file_icon(painter, x, y, label, is_dir or False, height)
+        is_expanded = bool(state & QStyle.StateFlag.State_Open)
+        _draw_file_icon(painter, x, y, label, is_dir or False, height, self._icon_mapper, is_expanded)
         x += ICON_SIZE + SPACING
 
         # 3. Process Badges and Eye Icon widths to determine Label space

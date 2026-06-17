@@ -68,3 +68,10 @@ def test_material_icon_mapper():
         p = mapper.get_icon_path("src", is_dir=True, is_expanded=True)
         assert p is not None
         assert Path(p).name == "folder_src_open.svg"
+
+
+def test_file_tree_delegate_fallback():
+    # Test that delegate fallback structure is present
+    from presentation.components.file_tree.file_tree_delegate import FileTreeDelegate
+    delegate = FileTreeDelegate()
+    assert delegate._icon_mapper is not None

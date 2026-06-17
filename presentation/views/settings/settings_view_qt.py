@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Slot, QTimer, Signal
 
-from presentation.config.theme import ThemeColors
+from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.components.toggle_switch import ToggleSwitch
 from presentation.components.tag_chips_widget import TagChipsWidget
 from domain.ports.registry import DomainRegistry
@@ -1280,7 +1280,7 @@ class SettingsViewQt(QWidget):
                 border: 1px solid {ThemeColors.BORDER};
                 border-radius: 8px;
                 padding: 12px;
-                font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+                font-family: {ThemeFonts.FAMILY_MONO};
                 font-size: 13px;
             }}
         """
@@ -1403,7 +1403,7 @@ class SettingsViewQt(QWidget):
                 border: 1px solid {ThemeColors.BORDER};
                 border-radius: 8px;
                 padding: 12px;
-                font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+                font-family: {ThemeFonts.FAMILY_MONO};
                 font-size: 13px;
             }}
         """

@@ -49,9 +49,9 @@ if not exist "%VENV_DIR%\Scripts\activate.bat" (
     call "%VENV_DIR%\Scripts\activate.bat"
 )
 
-REM Check main_window.py
-if not exist "presentation\main_window.py" (
-    echo [ERROR] presentation\main_window.py not found!
+REM Check main.py
+if not exist "main.py" (
+    echo [ERROR] main.py not found!
     pause
     exit /b 1
 )
@@ -60,7 +60,7 @@ REM Start application
 echo Starting application (Synapse Desktop)...
 echo.
 set PYTHONPATH=%PYTHONPATH%;.
-python -m presentation.main_window
+python main.py %*
 
 set APP_EXIT_CODE=%errorlevel%
 

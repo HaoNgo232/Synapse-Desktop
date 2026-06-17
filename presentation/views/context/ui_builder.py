@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
 
-from presentation.config.theme import ThemeColors
+from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.components.file_tree.file_tree_widget import FileTreeWidget
 from presentation.components.qt_utils import create_colored_icon
 from domain.config.output_format import (
@@ -812,7 +812,7 @@ class UIBuilderMixin:
         self._instructions_field.setStyleSheet(
             f"""
             QTextEdit {{
-                font-family: 'IBM Plex Sans', sans-serif;
+                font-family: {ThemeFonts.FAMILY_BODY};
                 font-size: 13px;
                 background-color: {ThemeColors.BG_ELEVATED};
                 color: {ThemeColors.TEXT_PRIMARY};

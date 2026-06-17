@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Slot, QSize
 
-from presentation.config.theme import ThemeColors
+from presentation.config.theme import ThemeColors, ThemeFonts
 from domain.ports.history_port import HistoryEntry
 from presentation.views.history.widgets import (
     DateGroupHeader,
@@ -246,7 +246,7 @@ class HistoryListPanel(QWidget):
             f"""
             color: {ThemeColors.TEXT_PRIMARY};
             font-size: 13px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
             font-weight: 700;
         """
         )
@@ -272,7 +272,7 @@ class HistoryListPanel(QWidget):
             border-radius: 4px;
             font-size: 10px;
             font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
         """
         )
         line1.addWidget(status_badge)
@@ -289,7 +289,7 @@ class HistoryListPanel(QWidget):
                 f"""
                 color: {ThemeColors.TEXT_MUTED};
                 font-size: 11px;
-                font-family: 'JetBrains Mono', monospace;
+                font-family: {ThemeFonts.FAMILY_MONO};
             """
             )
             line2.addWidget(ops_label)
@@ -306,7 +306,7 @@ class HistoryListPanel(QWidget):
             f"""
             color: {ThemeColors.SUCCESS};
             font-size: 11px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
         """
         )
         line3.addWidget(done_label)
@@ -323,7 +323,7 @@ class HistoryListPanel(QWidget):
             f"""
             color: {fail_color};
             font-size: 11px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
         """
         )
         line3.addWidget(fail_label)

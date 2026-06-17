@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from presentation.config.theme import ThemeColors
+from presentation.config.theme import ThemeColors, ThemeFonts
 from domain.ports.history_port import HistoryEntry
 from domain.ports.registry import DomainRegistry
 from presentation.utils.clipboard import copy_to_clipboard
@@ -182,7 +182,7 @@ class HistoryDetailPanel(QWidget):
             color: {ThemeColors.TEXT_PRIMARY};
             font-size: 14px;
             font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
         """
         )
         row1.addWidget(entry_label)
@@ -199,7 +199,7 @@ class HistoryDetailPanel(QWidget):
             f"""
             color: {ThemeColors.TEXT_SECONDARY};
             font-size: 12px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
         """
         )
         row1.addWidget(time_label)
@@ -286,7 +286,7 @@ class HistoryDetailPanel(QWidget):
             f"""
             color: {stats_color};
             font-size: 12px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
             font-weight: 600;
         """
         )
@@ -475,7 +475,7 @@ class HistoryDetailPanel(QWidget):
             border-radius: 4px;
             font-size: 11px;
             font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: {ThemeFonts.FAMILY_MONO};
         """
         )
         header_layout.addWidget(count_badge)

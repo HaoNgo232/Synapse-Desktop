@@ -31,7 +31,7 @@ from PySide6.QtGui import (
 )
 import qtawesome as qta
 
-from presentation.config.theme import ThemeColors
+from presentation.config.theme import ThemeColors, ThemeFonts
 from presentation.components.file_tree.file_tree_model import FileTreeRoles
 
 
@@ -61,33 +61,15 @@ COLOR_CHECKBOX_BG = QColor(ThemeColors.BG_SURFACE)
 COLOR_SEARCH_HIGHLIGHT = QColor(ThemeColors.SEARCH_HIGHLIGHT)
 
 # Fonts (lazy initialized)
-_font_normal: QFont | None = None
-_font_bold: QFont | None = None
 _font_mono: QFont | None = None
 _font_small: QFont | None = None
-
-
-def _get_font_normal() -> QFont:
-    global _font_normal
-    if _font_normal is None:
-        _font_normal = QFont("IBM Plex Sans")
-        _font_normal.setPointSize(11)
-    return _font_normal
-
-
-def _get_font_bold() -> QFont:
-    global _font_bold
-    if _font_bold is None:
-        _font_bold = QFont("IBM Plex Sans")
-        _font_bold.setPointSize(11)
-        _font_bold.setWeight(QFont.Weight.Medium)  # Medium thay vì Bold
-    return _font_bold
 
 
 def _get_font_mono() -> QFont:
     global _font_mono
     if _font_mono is None:
-        _font_mono = QFont("Cascadia Code, Fira Code, Consolas, monospace")
+        font_family = ThemeFonts.FAMILY_MONO.split(",")[0].strip('"')
+        _font_mono = QFont(font_family)
         _font_mono.setPointSize(10)
     return _font_mono
 
@@ -95,7 +77,8 @@ def _get_font_mono() -> QFont:
 def _get_font_small() -> QFont:
     global _font_small
     if _font_small is None:
-        _font_small = QFont()
+        font_family = ThemeFonts.FAMILY_BODY.split(",")[0].strip('"')
+        _font_small = QFont(font_family)
         _font_small.setPointSize(8)
     return _font_small
 
@@ -312,7 +295,10 @@ class FileTreeDelegate(QStyledItemDelegate):
         label_max_width = max(int(label_max_width), 40)
 
         # 5. Draw label (with search highlight)
-        painter.setFont(_get_font_bold() if is_dir else _get_font_normal())
+        font = QFont(option.font)
+        if is_dir:
+            font.setWeight(QFont.Weight.Medium)
+        painter.setFont(font)
 
         # Task 2: Highlight label color on hover to indicate interactiveness
         is_row_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
@@ -436,8 +422,18 @@ class FileTreeDelegate(QStyledItemDelegate):
 
         label_max_width = max(int(available_for_label_and_eye - eye_reserve), 40)
 
-        painter_font = _get_font_bold() if is_dir else _get_font_normal()
-        fm = QFontMetrics(painter_font)
+        # Get tree view's font to match paint() font metrics perfectly
+        font = QFont()
+        if hasattr(self.parent(), "_tree_view"):
+            font = QFont(self.parent()._tree_view.font())
+        else:
+            font_family = ThemeFonts.FAMILY_BODY.split(",")[0].strip('"')
+            font = QFont(font_family)
+            font.setPointSize(11)
+
+        if is_dir:
+            font.setWeight(QFont.Weight.Medium)
+        fm = QFontMetrics(font)
         elided_label = fm.elidedText(
             label, Qt.TextElideMode.ElideRight, label_max_width
         )

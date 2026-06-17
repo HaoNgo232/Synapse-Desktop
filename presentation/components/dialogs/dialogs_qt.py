@@ -1173,11 +1173,14 @@ class FilePreviewDialogQt(BaseDialogQt):
         self.file_path = file_path
         self._content = content
         self._highlight_line = highlight_line
-        self.setMinimumSize(1200, 850)
+        self.setMinimumSize(1000, 700)
 
         # Bỏ block modal để người dùng có thể click ra bên ngoài
         # Override BaseDialogQt setting
         self.setModal(False)
+
+        # Cho phép phóng to, thu nhỏ và đóng window
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMinMaxButtonsHint)
 
         self._build_ui()
 
@@ -1248,50 +1251,77 @@ class FilePreviewDialogQt(BaseDialogQt):
 
         # Code editor (read only) with syntax highlighting
         self._text_edit = QTextEdit()
+        self._text_edit.setObjectName("preview_text_edit")
         self._text_edit.setReadOnly(True)
-        # Sử dụng font chữ chung của app thay vì mono font cứng nhắc
-        self._text_edit.setFont(QFont(ThemeFonts.FAMILY_BODY, 14))
+        # Sử dụng Cascadia Code / Monospace font cho code display
+        self._text_edit.setFont(QFont(ThemeFonts.FAMILY_MONO, 12))
         self._text_edit.setStyleSheet(
-            f"QTextEdit {{ "
+            f"#preview_text_edit {{ "
             f"  background-color: #282a36; color: #f8f8f2; "
-            f"  font-family: {ThemeFonts.FAMILY_BODY}; font-size: 14px; "
-            f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 8px; "
+            f"  font-family: {ThemeFonts.FAMILY_MONO}; font-size: 13px; "
+            f"  border: 1px solid {ThemeColors.BORDER}; border-radius: 4px; padding: 0px; "
             f"}} "
-            f"QScrollBar:vertical {{ "
+            f"#preview_text_edit QScrollBar:vertical {{ "
             f"  background: #1e1f29; width: 14px; margin: 0; border-radius: 7px; "
             f"}} "
-            f"QScrollBar::handle:vertical {{ "
+            f"#preview_text_edit QScrollBar::handle:vertical {{ "
             f"  background: #6272a4; border-radius: 7px; min-height: 30px; "
             f"}} "
-            f"QScrollBar::handle:vertical:hover {{ "
+            f"#preview_text_edit QScrollBar::handle:vertical:hover {{ "
             f"  background: #8be9fd; "
             f"}} "
-            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ "
+            f"#preview_text_edit QScrollBar::add-line:vertical, #preview_text_edit QScrollBar::sub-line:vertical {{ "
             f"  height: 0; "
             f"}} "
-            f"QScrollBar:horizontal {{ "
+            f"#preview_text_edit QScrollBar:horizontal {{ "
             f"  background: #1e1f29; height: 14px; margin: 0; border-radius: 7px; "
             f"}} "
-            f"QScrollBar::handle:horizontal {{ "
+            f"#preview_text_edit QScrollBar::handle:horizontal {{ "
             f"  background: #6272a4; border-radius: 7px; min-width: 30px; "
             f"}} "
-            f"QScrollBar::handle:horizontal:hover {{ "
+            f"#preview_text_edit QScrollBar::handle:horizontal:hover {{ "
             f"  background: #8be9fd; "
             f"}} "
-            f"QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ "
+            f"#preview_text_edit QScrollBar::add-line:horizontal, #preview_text_edit QScrollBar::sub-line:horizontal {{ "
             f"  width: 0; "
             f"}}"
         )
         self._text_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
 
         # Apply syntax highlighting via Pygments + Dracula
-        highlighted_html = self._highlight_code(self._content, language)
+        highlighted_html = self._highlight_code(
+            self._content, language, self._highlight_line
+        )
         if highlighted_html:
             self._text_edit.setHtml(highlighted_html)
         else:
             self._text_edit.setPlainText(self._content)
 
         layout.addWidget(self._text_edit, stretch=1)
+
+        # Tự động cuộn đến dòng highlight
+        if self._highlight_line and 1 <= self._highlight_line <= len(lines):
+
+            def do_scroll():
+                try:
+                    if not self._text_edit or not self._text_edit.document():
+                        return
+                    from shiboken6 import isValid
+
+                    if not isValid(self._text_edit):
+                        return
+                    block = self._text_edit.document().findBlockByNumber(
+                        self._highlight_line - 1
+                    )
+                    if block.isValid():
+                        cursor = self._text_edit.textCursor()
+                        cursor.setPosition(block.position())
+                        self._text_edit.setTextCursor(cursor)
+                        self._text_edit.ensureCursorVisible()
+                except Exception:
+                    pass
+
+            QTimer.singleShot(100, do_scroll)
 
         if truncated:
             warn_label = QLabel(f"⚠️ Showing first {self.MAX_LINES} lines only")
@@ -1347,8 +1377,10 @@ class FilePreviewDialogQt(BaseDialogQt):
             pass
 
     @staticmethod
-    def _highlight_code(content: str, language: str) -> Optional[str]:
-        """Apply Pygments syntax highlighting with Dracula theme."""
+    def _highlight_code(
+        content: str, language: str, highlight_line: Optional[int] = None
+    ) -> Optional[str]:
+        """Apply Pygments syntax highlighting with Dracula theme and line numbers table."""
         try:
             # Dung dynamic import de giu runtime behavior, dong thoi tranh unknown stubs.
             pygments_mod: Any = __import__("pygments", fromlist=["highlight"])
@@ -1370,24 +1402,86 @@ class FilePreviewDialogQt(BaseDialogQt):
                 lexer = text_lexer_cls()
 
             # Dracula-inspired inline styles
+            # Use nowrap=True to get raw highlighted HTML spans per line without wrapper div/pre/table
             formatter = html_formatter_cls(
                 style="dracula",
                 noclasses=True,  # Use inline styles
-                nowrap=False,
-                linenos=True,
-                linenostart=1,
-                lineanchors="line",
+                nowrap=True,
             )
-            html_body = highlight_fn(content, lexer, formatter)
-            # Inject style block de ep font chu cho toan bo HTML (bao gom ca bang line numbers)
+            html_body: str = highlight_fn(content, lexer, formatter)
+
+            highlighted_lines = html_body.split("\n")
+            if highlighted_lines and not highlighted_lines[-1]:
+                highlighted_lines.pop()
+
+            # Build a table where each line is a row, guaranteeing perfect line-number alignment
+            rows_html = []
+            for i, line_html in enumerate(highlighted_lines):
+                line_num = i + 1
+                is_highlighted = (
+                    highlight_line is not None and line_num == highlight_line
+                )
+
+                # Semantic coloring based on ThemeColors and Dracula palette
+                # If highlighted: use ThemeColors.SEARCH_HIGHLIGHT (#422006) as background
+                row_bg = (
+                    ThemeColors.SEARCH_HIGHLIGHT if is_highlighted else "transparent"
+                )
+                num_bg = ThemeColors.SEARCH_HIGHLIGHT if is_highlighted else "#21222c"
+                num_color = ThemeColors.WARNING if is_highlighted else "#6272a4"
+                code_bg = ThemeColors.SEARCH_HIGHLIGHT if is_highlighted else "#282a36"
+
+                # Wrap each line's content
+                safe_line = line_html if line_html else "&nbsp;"
+
+                row_html = (
+                    f'<tr style="background-color: {row_bg};">'
+                    f'<td style="background-color: {num_bg}; color: {num_color}; text-align: right; '
+                    f"padding-right: 12px; padding-left: 8px; width: 45px; "
+                    f"font-family: {ThemeFonts.FAMILY_MONO}; font-size: 13px; "
+                    f'white-space: nowrap; -qt-block-indent: 0; vertical-align: top;">'
+                    f"{line_num}"
+                    f"</td>"
+                    f'<td style="background-color: {code_bg}; padding-left: 12px; '
+                    f"font-family: {ThemeFonts.FAMILY_MONO}; font-size: 13px; "
+                    f'white-space: pre; vertical-align: top;">'
+                    f"{safe_line}"
+                    f"</td>"
+                    f"</tr>"
+                )
+                rows_html.append(row_html)
+
+            table_body = "\n".join(rows_html)
+
             style_header = f"""
             <style>
-                * {{ font-family: {ThemeFonts.FAMILY_BODY}; font-size: 14px; line-height: 1.6; }}
-                table, tr, td, pre, span, code {{ font-family: {ThemeFonts.FAMILY_BODY}; }}
-                pre {{ margin: 0; padding: 12px; background-color: #282a36; }}
+                table {{ 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    background-color: #282a36; 
+                    margin: 0; 
+                    padding: 0;
+                }}
+                td {{ 
+                    font-family: {ThemeFonts.FAMILY_MONO}; 
+                    font-size: 13px; 
+                    line-height: 1.4;
+                    padding: 2px 0px;
+                }}
             </style>
             """
-            return style_header + html_body
+
+            html_content = (
+                f"<html>"
+                f"<head>{style_header}</head>"
+                f'<body style="background-color: #282a36; margin: 0; padding: 0;">'
+                f'<table cellspacing="0" cellpadding="0">'
+                f"{table_body}"
+                f"</table>"
+                f"</body>"
+                f"</html>"
+            )
+            return html_content
         except ImportError:
             return None
         except Exception:

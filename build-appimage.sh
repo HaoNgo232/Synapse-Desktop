@@ -103,7 +103,7 @@ SELF=\$(readlink -f "\$0")
 HERE=\${SELF%/*}
 export PATH="\${HERE}/usr/bin:\${PATH}"
 export LD_LIBRARY_PATH="\${HERE}/usr/lib:\${LD_LIBRARY_PATH}"
-exec "\${HERE}/usr/bin/Synapse-Desktop" "\$@"
+exec "\${HERE}/usr/bin/${APP_NAME}" "\$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 

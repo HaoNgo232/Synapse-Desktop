@@ -99,9 +99,6 @@ class AppSettings:
         ]
     )
 
-    # --- License Settings ---
-    license_key: str = ""
-
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
         """
@@ -178,7 +175,6 @@ class AppSettings:
             "copy_mode": self.copy_mode,
             "tree_map_only": self.tree_map_only,
             "git_commit_depth": self.git_commit_depth,
-            "license_key": self.license_key,
         }
 
     def to_safe_dict(self) -> dict[str, Any]:
@@ -193,7 +189,6 @@ class AppSettings:
         """
         d = self.to_dict()
         d.pop("ai_api_key", None)
-        d.pop("license_key", None)
         return d
 
     def get_excluded_patterns_list(self) -> list[str]:

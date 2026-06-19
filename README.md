@@ -95,21 +95,13 @@ python main.py
 ### 📦 Build AppImage (Linux)
 
 ```bash
-# Standard build (license check enabled):
 chmod +x build-appimage.sh && ./build-appimage.sh
-
-# Personal build (license check disabled):
-chmod +x build-appimage.sh && ./build-appimage.sh --no-license
 ```
 
 ### 📦 Build Windows EXE
 
 ```powershell
-# Standard build:
 .\build-windows.ps1
-
-# Personal build (license check disabled):
-.\build-windows.ps1 -NoLicense
 ```
 
 **First run:** The app opens to the **Context** tab. Click **Open Folder** in the top bar and select your project directory. The file tree populates on the left.
@@ -617,10 +609,9 @@ Use this when you have a bug and want AI to identify the root cause before touch
 
 ### CLI Arguments
 
-| Argument                | Description                                                  |
-| ----------------------- | ------------------------------------------------------------ |
-| `--no-license`          | Bypass the license verification checks (for personal builds) |
-| `--run-mcp [workspace]` | Start in MCP server mode (for AI client integration)         |
+| Argument                | Description                                          |
+| ----------------------- | ---------------------------------------------------- |
+| `--run-mcp [workspace]` | Start in MCP server mode (for AI client integration) |
 
 ---
 
@@ -696,4 +687,4 @@ The auto-detection debounces for 800ms. Wait briefly after pasting. If it still 
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE) for details.

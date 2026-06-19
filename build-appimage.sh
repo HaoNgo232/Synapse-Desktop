@@ -15,21 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 APPDIR="$BUILD_DIR/$APP_NAME.AppDir"
 
-# Check if --no-license is passed to the build script
-NO_LICENSE_FLAG=""
-for arg in "$@"; do
-    if [ "$arg" = "--no-license" ]; then
-        NO_LICENSE_FLAG="--no-license"
-        break
-    fi
-done
-
 echo "========================================"
-if [ -n "$NO_LICENSE_FLAG" ]; then
-    echo "Building $APP_NAME v$APP_VERSION AppImage (LICENSE CHECK DISABLED BY DEFAULT)"
-else
-    echo "Building $APP_NAME v$APP_VERSION AppImage"
-fi
+echo "Building $APP_NAME v$APP_VERSION AppImage"
 echo "========================================"
 
 # Cleanup previous build
@@ -116,7 +103,7 @@ SELF=\$(readlink -f "\$0")
 HERE=\${SELF%/*}
 export PATH="\${HERE}/usr/bin:\${PATH}"
 export LD_LIBRARY_PATH="\${HERE}/usr/lib:\${LD_LIBRARY_PATH}"
-exec "\${HERE}/usr/bin/Synapse-Desktop" ${NO_LICENSE_FLAG} "\$@"
+exec "\${HERE}/usr/bin/Synapse-Desktop" "\$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 

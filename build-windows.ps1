@@ -3,7 +3,6 @@
 #
 # Usage:
 #   .\build-windows.ps1              # Build bản single EXE (mặc định tự động clean cache)
-#   .\build-windows.ps1 -NoLicense   # Build bản single EXE bỏ qua kiểm tra bản quyền
 #   .\build-windows.ps1 -Debug       # Build bản debug chi tiết
 #
 # Requirements:
@@ -17,8 +16,7 @@
 #   4. multiprocessing.freeze_support(): Tránh fork bomb trên Windows EXE
 
 param(
-    [switch]$Debug,
-    [switch]$NoLicense
+    [switch]$Debug
 )
 
 $OneFile = $true
@@ -286,14 +284,6 @@ if ($Debug) {
     Write-Host "  Debug mode enabled" -ForegroundColor Yellow
 }
 
-# No License mode: inject runtime hook to bypass licensing check
-$tempHook = Join-Path $SCRIPT_DIR "runtime_hook_no_license.py"
-if ($NoLicense) {
-    Write-Host "  Bypassing license check in build (injecting runtime hook)..." -ForegroundColor Yellow
-    Set-Content -Path $tempHook -Value 'import sys; sys.argv.append("--no-license")' -Encoding UTF8
-    $pyinstallerArgs += @("--runtime-hook", $tempHook)
-}
-
 # Version info (Windows-specific metadata)
 $versionFile = Join-Path $ASSETS_DIR "file_version_info.txt"
 if (Test-Path $versionFile) {
@@ -379,15 +369,7 @@ if (Test-Path $exePath) {
     Write-Host "    & '$exePath'" -ForegroundColor DarkGray
     Write-Host ""
 } else {
-    $tempHook = Join-Path $SCRIPT_DIR "runtime_hook_no_license.py"
-    if (Test-Path $tempHook) { Remove-Item -Force $tempHook }
     Write-Host "[ERROR] Expected EXE not found at: $exePath" -ForegroundColor Red
     Write-Host "Check build output above for errors." -ForegroundColor Yellow
     exit 1
-}
-
-# Cleanup temporary runtime hook if created
-$tempHook = Join-Path $SCRIPT_DIR "runtime_hook_no_license.py"
-if (Test-Path $tempHook) {
-    Remove-Item -Force $tempHook
-}
+}

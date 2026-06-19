@@ -957,13 +957,6 @@ class SettingsViewQt(QWidget):
 
         col3_layout.addWidget(card6)
 
-        # Product Licensing — unless --no-license CLI argument is passed
-        import sys
-
-        if "--no-license" not in sys.argv:
-            license_card = self._build_license_section()
-            col3_layout.addWidget(license_card)
-            self._update_license_display()
 
         # ─────────────────────────────
         # CARD 5: Data & Session
@@ -1690,93 +1683,3 @@ class SettingsViewQt(QWidget):
         if msg:
             self._show_status(msg, is_error=True)
 
-    def _build_license_section(self) -> QWidget:
-        card = _make_card()
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(12)
-
-        # Title
-        layout.addWidget(_AccentDotLabel("Product Licensing"))
-        layout.addSpacing(6)
-
-        # Info body layout
-        self._license_info_label = QLabel("Loading license details...")
-        self._license_info_label.setStyleSheet(
-            f"color: {ThemeColors.TEXT_SECONDARY}; font-size: 12px; border: none;"
-        )
-        self._license_info_label.setWordWrap(True)
-        layout.addWidget(self._license_info_label)
-
-        # Deactivate button
-        self._deactivate_btn = _make_danger_btn("Deactivate License")
-        self._deactivate_btn.clicked.connect(self._on_deactivate_clicked)
-        layout.addWidget(self._deactivate_btn, 0, Qt.AlignmentFlag.AlignLeft)
-
-        return card
-
-    def _update_license_display(self) -> None:
-        settings = DomainRegistry.settings_service().load_settings()
-        if not settings.license_key:
-            self._license_info_label.setText("Product is currently UNLICENSED.")
-            self._deactivate_btn.setEnabled(False)
-            return
-
-        self._license_info_label.setText("Checking license status...")
-        self._deactivate_btn.setEnabled(False)
-
-        from presentation.utils.qt_utils import schedule_background
-
-        def do_verify():
-            return DomainRegistry.license_service().verify_license_key(
-                settings.license_key
-            )
-
-        def on_result(info):
-            if info.is_valid:
-                expiry_str = (
-                    "Lifetime (Never Expires)"
-                    if info.expiry_date == "never"
-                    else info.expiry_date
-                )
-                masked_key = settings.license_key
-                if len(masked_key) > 10:
-                    masked_key = f"{masked_key[:4]}...{masked_key[-4:]}"
-                self._license_info_label.setText(
-                    f"License Key: {masked_key}\n"
-                    f"Licensed Owner: {info.email}\n"
-                    f"Valid Until: {expiry_str}\n"
-                    f"Status: Active / Verified"
-                )
-                self._deactivate_btn.setEnabled(True)
-            else:
-                self._license_info_label.setText(
-                    f"Product is currently UNLICENSED.\nReason: {info.error_message or 'Invalid key'}"
-                )
-                self._deactivate_btn.setEnabled(False)
-
-        def on_error(err):
-            masked_key = settings.license_key
-            if len(masked_key) > 10:
-                masked_key = f"{masked_key[:4]}...{masked_key[-4:]}"
-            self._license_info_label.setText(
-                f"License Key: {masked_key}\nStatus: Active (Offline Mode)"
-            )
-            self._deactivate_btn.setEnabled(True)
-
-        schedule_background(do_verify, on_result=on_result, on_error=on_error)
-
-    def _on_deactivate_clicked(self) -> None:
-        reply = QMessageBox.question(
-            self,
-            "Deactivate License",
-            "Are you sure you want to deactivate the license on this device?\n"
-            "This will close the application and prompt for a new key on next startup.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            DomainRegistry.settings_service().update_setting("license_key", "")
-            from PySide6.QtWidgets import QApplication as QApp
-
-            QApp.quit()

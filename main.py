@@ -84,23 +84,6 @@ def main() -> None:
     # Apply global dark stylesheet
     apply_theme(app)
 
-    # Boot verification checks — unless --no-license CLI argument is passed
-    if "--no-license" not in sys.argv:
-        from infrastructure.persistence.settings_manager import load_app_settings
-
-        # Verify license key stored in settings
-        settings = load_app_settings()
-
-        # Check if license key exists
-        if not settings.license_key:
-            from presentation.widgets.license_dialog import LicenseActivationDialog
-
-            dialog = LicenseActivationDialog()
-            # Execute dialog blocking window boot
-            if dialog.exec() != LicenseActivationDialog.DialogCode.Accepted:
-                # User canceled activation dialog, terminate app gracefully
-                sys.exit(0)
-
     # Initialize global signal bridge on main thread
     get_signal_bridge()
 

@@ -685,6 +685,16 @@ The auto-detection debounces for 800ms. Wait briefly after pasting. If it still 
 
 ---
 
+## Inspirations and Credits
+
+Synapse Desktop was inspired by and references several excellent tools in the AI development space:
+
+- **[RepoPrompt](https://repoprompt.com/)**: Inspired the core interface concept and context management workflow. Since RepoPrompt is native and exclusive to macOS, Synapse Desktop was built using Python/PySide6 to bring a similar cross-platform tool to Windows and Linux developers.
+- **[Overwrite](https://github.com/mnismt/overwrite)**: The patch apply mechanism was inspired by Overwrite's OPX XML format.
+- **[Aider](https://github.com/Aider-AI/aider)**: The patch apply mechanism also supports the popular and compact search/replace block format popularized by Aider.
+
+---
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) for details.

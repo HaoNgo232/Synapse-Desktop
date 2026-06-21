@@ -26,19 +26,26 @@ class TestAIContextWorkerExtra:
     @pytest.fixture(autouse=True)
     def setup_registry(self):
         self.old_factory = None
+        self.old_ci = None
         try:
             self.old_factory = DomainRegistry.ai_provider_factory()
+        except RuntimeError:
+            pass
+        try:
+            self.old_ci = DomainRegistry.code_intelligence()
         except RuntimeError:
             pass
         yield
         if self.old_factory is not None:
             DomainRegistry.register_ai_provider_factory(self.old_factory)
+        if self.old_ci is not None:
+            DomainRegistry.register_code_intelligence(self.old_ci)
 
     def test_repo_map_generation_exception_and_empty(self, tmp_path):
         # 1. Exception during repo map generation (lines 139-140)
         mock_ast = MagicMock()
         mock_ast.generate_repo_map.side_effect = Exception("Parsing crash")
-        DomainRegistry.register_ast_parser(mock_ast)
+        DomainRegistry.register_code_intelligence(mock_ast)
 
         provider = DummyAIProvider(
             content=json.dumps({"selected_paths": ["main.py"], "reasoning": "ok"})
@@ -83,7 +90,7 @@ class TestAIContextWorkerExtra:
         # 1. Cancel after repo map (line 143)
         mock_ast = MagicMock()
         mock_ast.generate_repo_map.return_value = "repo map content"
-        DomainRegistry.register_ast_parser(mock_ast)
+        DomainRegistry.register_code_intelligence(mock_ast)
 
         worker = AIContextWorker(
             api_key="key",

@@ -180,6 +180,21 @@ def test_flow_c_copy_context(app_e2e, qtbot, workspace_dir):
     file_path = workspace_dir / "main.py"
     window.context_view.file_tree_widget.add_paths_to_selection([str(file_path)])
 
+    # Wait until selection is resolved to avoid race conditions with lazy loading or search index
+    qtbot.waitUntil(
+        lambda: len(window.context_view.file_tree_widget.get_selected_paths()) == 1,
+        timeout=5000,
+    )
+
+    # Ensure Copy Mode is set to 'Full' so that the file content body is copied
+    full_mode_btn = None
+    for btn in window.context_view.findChildren(QPushButton):
+        if btn.text() == "Full":
+            full_mode_btn = btn
+            break
+    assert full_mode_btn is not None, "Could not find 'Full' mode button"
+    qtbot.mouseClick(full_mode_btn, Qt.MouseButton.LeftButton)
+
     # 2. Nhap instructions (optional nhung tot cho E2E)
     window.context_view.set_instructions_text("Test instruction")
 

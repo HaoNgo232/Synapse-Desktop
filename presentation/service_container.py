@@ -77,7 +77,10 @@ class ServiceContainer:
         from application.services.workspace_index import WorkspaceScanner
         from infrastructure.filesystem.file_utils import ConcreteDirectoryScanner
         from infrastructure.git.git_utils import GitService
-        from infrastructure.adapters.ast_parser import AstParser
+        from infrastructure.adapters.code_intelligence.tree_sitter_backend import TreeSitterBackend
+        from infrastructure.adapters.code_intelligence.python_ast_backend import PythonAstBackend
+        from infrastructure.adapters.code_intelligence.regex_fallback_backend import RegexFallbackBackend
+        from infrastructure.adapters.code_intelligence.router_adapter import CodeIntelligenceRouterAdapter
         from infrastructure.persistence.settings_manager import (
             load_app_settings,
             SettingsService,
@@ -101,7 +104,12 @@ class ServiceContainer:
             ConcreteDirectoryScanner(self.ignore_engine)
         )
         DomainRegistry.register_git_service(GitService())
-        DomainRegistry.register_ast_parser(AstParser())
+        backends = [
+            TreeSitterBackend(),
+            PythonAstBackend(),
+            RegexFallbackBackend()
+        ]
+        DomainRegistry.register_code_intelligence(CodeIntelligenceRouterAdapter(backends))
         DomainRegistry.register_settings_provider(load_app_settings)
 
         # Register Clean Architecture ports concrete adapters

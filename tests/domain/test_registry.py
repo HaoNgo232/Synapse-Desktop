@@ -1,7 +1,7 @@
 from domain.ports.registry import DomainRegistry
 from domain.ports.directory_scanner import IDirectoryScanner
 from domain.ports.git_port import IGitService
-from domain.ports.ast_parser_port import IAstParser
+from domain.ports.code_intelligence_port import ICodeIntelligencePort, ParsedCodeInfo
 from domain.config.app_settings import AppSettings
 from domain.smart_context.tree_item import TreeItem
 from pathlib import Path
@@ -74,32 +74,65 @@ class DummyGitService(IGitService):
         return ""
 
 
-class DummyAstParser(IAstParser):
-    def parse_file(self, file_path):
-        return {"symbols": []}
+class DummyCodeIntelligence(ICodeIntelligencePort):
+    def parse_file(self, file_path: Path, content: str) -> ParsedCodeInfo:
+        return ParsedCodeInfo(file_path=file_path, language="py")
 
-    def generate_repo_map(self, file_paths, workspace_root=None, max_files=500):
+    def generate_repo_map(self, file_paths: List[str], workspace_root: Optional[Path] = None, max_files: int = 500) -> str:
         return ""
 
 
 def test_registry_new_ports():
-    # 1. Directory scanner
-    scanner = DummyDirectoryScanner()
-    DomainRegistry.register_directory_scanner(scanner)
-    assert DomainRegistry.directory_scanner() == scanner
+    # Save old registry values to prevent test pollution
+    old_scanner = None
+    old_git = None
+    old_ci = None
+    old_settings = None
+    try:
+        old_scanner = DomainRegistry.directory_scanner()
+    except RuntimeError:
+        pass
+    try:
+        old_git = DomainRegistry.git_service()
+    except RuntimeError:
+        pass
+    try:
+        old_ci = DomainRegistry.code_intelligence()
+    except RuntimeError:
+        pass
+    try:
+        old_settings = DomainRegistry._settings_provider
+    except AttributeError:
+        pass
 
-    # 2. Git service
-    git = DummyGitService()
-    DomainRegistry.register_git_service(git)
-    assert DomainRegistry.git_service() == git
+    try:
+        # 1. Directory scanner
+        scanner = DummyDirectoryScanner()
+        DomainRegistry.register_directory_scanner(scanner)
+        assert DomainRegistry.directory_scanner() == scanner
 
-    # 3. AST parser
-    parser = DummyAstParser()
-    DomainRegistry.register_ast_parser(parser)
-    assert DomainRegistry.ast_parser() == parser
+        # 2. Git service
+        git = DummyGitService()
+        DomainRegistry.register_git_service(git)
+        assert DomainRegistry.git_service() == git
 
-    # 4. Settings Provider
-    DomainRegistry.register_settings_provider(
-        lambda: AppSettings(output_language="Japanese")
-    )
-    assert DomainRegistry.settings().output_language == "Japanese"
+        # 3. Code intelligence
+        ci = DummyCodeIntelligence()
+        DomainRegistry.register_code_intelligence(ci)
+        assert DomainRegistry.code_intelligence() == ci
+
+        # 4. Settings Provider
+        DomainRegistry.register_settings_provider(
+            lambda: AppSettings(output_language="Japanese")
+        )
+        assert DomainRegistry.settings().output_language == "Japanese"
+    finally:
+        # Restore old registry values
+        if old_scanner is not None:
+            DomainRegistry.register_directory_scanner(old_scanner)
+        if old_git is not None:
+            DomainRegistry.register_git_service(old_git)
+        if old_ci is not None:
+            DomainRegistry.register_code_intelligence(old_ci)
+        if old_settings is not None:
+            DomainRegistry.register_settings_provider(old_settings)

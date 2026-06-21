@@ -20,7 +20,7 @@ from typing import Optional
 from domain.prompt.context_builder_prompts import build_full_tree_string
 from domain.prompt.generator import generate_file_map
 from shared.types.git_types import GitDiffResult
-from domain.ports.ast_parser_port import IAstParser
+from domain.ports.code_intelligence_port import ICodeIntelligencePort
 from domain.smart_context.tree_item import TreeItem
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class WorkspaceSummary:
 
 
 def _generate_repo_map_with_parser(
-    ast_parser: IAstParser,
+    code_intel: ICodeIntelligencePort,
     file_paths: list[str],
     workspace_root: Optional[Path] = None,
     max_files: int = 500,
@@ -64,8 +64,12 @@ def _generate_repo_map_with_parser(
             break
 
         file_path = Path(file_path_str)
-        outline_res = ast_parser.parse_file(file_path)
-        outline = outline_res.get("symbols", [])
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        outline_res = code_intel.parse_file(file_path, content)
+        outline = outline_res.outline
         if not outline:
             continue
 
@@ -77,7 +81,8 @@ def _generate_repo_map_with_parser(
         else:
             display_path = file_path
 
-        lines.append(f"{display_path}:")
+        display_path_str = str(display_path).replace("\\", "/")
+        lines.append(f"{display_path_str}:")
         for item in outline:
             lines.append(f"  {item}")
         lines.append("")
@@ -95,7 +100,7 @@ def build_canonical_summary(
     git_diffs: Optional[GitDiffResult] = None,
     use_relative_paths: bool = False,
     max_repo_map_files: int = 500,
-    ast_parser: Optional[IAstParser] = None,
+    code_intel: Optional[ICodeIntelligencePort] = None,
 ) -> WorkspaceSummary:
     """
     THE canonical entry point de tao workspace summary.
@@ -113,7 +118,7 @@ def build_canonical_summary(
         git_diffs: Ket qua git diff, bat buoc neu include_git_changes=True
         use_relative_paths: True de su dung relative paths thay vi absolute
         max_repo_map_files: Gioi han so file cho repo map (tranh OOM)
-        ast_parser: Optional IAstParser port for generating repo map
+        code_intel: Optional ICodeIntelligencePort port for generating repo map
 
     Returns:
         WorkspaceSummary chua tat ca thong tin workspace structure
@@ -137,9 +142,9 @@ def build_canonical_summary(
     if include_repo_map:
         source_files = _filter_file_paths(selected_paths, is_dir_map)
         if source_files:
-            if ast_parser is not None:
+            if code_intel is not None:
                 repo_map = _generate_repo_map_with_parser(
-                    ast_parser,
+                    code_intel,
                     source_files,
                     workspace_root=workspace_root,
                     max_files=max_repo_map_files,
@@ -148,7 +153,7 @@ def build_canonical_summary(
                 from domain.ports.registry import DomainRegistry
 
                 repo_map = _generate_repo_map_with_parser(
-                    DomainRegistry.ast_parser(),
+                    DomainRegistry.code_intelligence(),
                     source_files,
                     workspace_root=workspace_root,
                     max_files=max_repo_map_files,

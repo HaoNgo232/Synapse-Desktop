@@ -279,15 +279,26 @@ class TestWorkspaceIndexExtra:
         # 13. WorkspaceScanService.scan_directory (lines 361-367)
         mock_scanner = MagicMock()
         mock_scanner.scan_directory.return_value = "scan_result"
-        DomainRegistry.register_directory_scanner(mock_scanner)
+        
+        try:
+            old_scanner = DomainRegistry.directory_scanner()
+        except RuntimeError:
+            old_scanner = None
 
-        res = WorkspaceScanService.scan_directory(
-            tmp_path, "ignore_engine", ["pattern"], True
-        )
-        assert res == "scan_result"
-        mock_scanner.scan_directory.assert_called_once_with(
-            tmp_path, excluded_patterns=["pattern"], use_gitignore=True
-        )
+        DomainRegistry.register_directory_scanner(mock_scanner)
+        try:
+            res = WorkspaceScanService.scan_directory(
+                tmp_path, "ignore_engine", ["pattern"], True
+            )
+            assert res == "scan_result"
+            mock_scanner.scan_directory.assert_called_once_with(
+                tmp_path, excluded_patterns=["pattern"], use_gitignore=True
+            )
+        finally:
+            if old_scanner is not None:
+                DomainRegistry.register_directory_scanner(old_scanner)
+            else:
+                DomainRegistry._directory_scanner = None
 
     def test_get_related_files_for_paths_edge_cases(self, tmp_path):
         # 14. path is not a file (line 389)

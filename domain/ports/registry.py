@@ -3,7 +3,7 @@ from domain.ports.tokenization_port import ITokenizationService
 from domain.ports.workspace_scanner import IWorkspaceScanner
 from domain.ports.directory_scanner import IDirectoryScanner
 from domain.ports.git_port import IGitService
-from domain.ports.ast_parser_port import IAstParser
+from domain.ports.code_intelligence_port import ICodeIntelligencePort
 from domain.config.app_settings import AppSettings
 from domain.ports.ai_port import IAIProvider
 
@@ -36,7 +36,8 @@ class DomainRegistry:
     _workspace_scanner: Optional[IWorkspaceScanner] = None
     _directory_scanner: Optional[IDirectoryScanner] = None
     _git_service: Optional[IGitService] = None
-    _ast_parser: Optional[IAstParser] = None
+    _code_intelligence: Optional[ICodeIntelligencePort] = None
+
     _settings_provider: Optional[Callable[[], AppSettings]] = None
 
     _security_scanner: Optional[ISecurityScanner] = None
@@ -99,14 +100,14 @@ class DomainRegistry:
         return cls._git_service
 
     @classmethod
-    def register_ast_parser(cls, parser: IAstParser) -> None:
-        cls._ast_parser = parser
+    def register_code_intelligence(cls, ci: ICodeIntelligencePort) -> None:
+        cls._code_intelligence = ci
 
     @classmethod
-    def ast_parser(cls) -> IAstParser:
-        if cls._ast_parser is None:
-            raise RuntimeError("IAstParser is not registered in DomainRegistry")
-        return cls._ast_parser
+    def code_intelligence(cls) -> ICodeIntelligencePort:
+        if cls._code_intelligence is None:
+            raise RuntimeError("ICodeIntelligencePort is not registered in DomainRegistry")
+        return cls._code_intelligence
 
     @classmethod
     def register_settings_provider(cls, provider: Callable[[], AppSettings]) -> None:

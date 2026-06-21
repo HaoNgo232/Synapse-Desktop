@@ -131,7 +131,7 @@ class AIContextWorker(QRunnable):
                         else p
                         for p in self._all_file_paths
                     ]
-                    repo_map_str = DomainRegistry.ast_parser().generate_repo_map(
+                    repo_map_str = DomainRegistry.code_intelligence().generate_repo_map(
                         file_list, workspace_root=self._workspace_root
                     )
                     if repo_map_str and not repo_map_str.strip():

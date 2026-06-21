@@ -59,11 +59,9 @@ def smart_parse(
     Part 1: Project Dependency Graph (If requested/with workspace_root)
     Part 2: Compressed File Contents (Signatures, types, imports - bodies stripped)
     """
-    from domain.codemap.symbol_extractor import extract_symbols
+    from domain.ports.registry import DomainRegistry
     from domain.smart_context.config import is_supported
-    from domain.smart_context.loader import get_language
     from domain.codemap.dependency_graph_generator import DependencyGraphGenerator
-    from tree_sitter import Parser
 
     _, ext = os.path.splitext(file_path)
     ext = ext.lstrip(".")
@@ -72,34 +70,20 @@ def smart_parse(
         return None
 
     try:
-        language = get_language(ext)
-        if not language:
-            logger.debug(f"Language loader failed for extension: {ext}")
-            return None
-
-        parser = Parser(language)
-        tree = parser.parse(bytes(content, "utf-8"))
-
-        # 1. Extract Symbols (Signatures) - Reuse tree đã parse
-        symbols = extract_symbols(file_path, content, tree=tree, language=language)
-        # Don't return None immediately here; try to get at least imports
-
-        # 2. Extract Imports - dùng AST nodes để lấy full text (kể cả multi-line)
-        import_lines = _extract_import_texts(tree, content)
+        # Extract via the centralized port DTO
+        info = DomainRegistry.code_intelligence().parse_file(Path(file_path), content)
 
         # Assemble Compressed Content with Intelligent Separator
         compressed_content = ""
         last_line = -1
 
-        # 3. Add Symbol Signatures (Imports first)
-        if import_lines:
-            compressed_content += "\n".join(import_lines)
-            # last_line: track last import row để detect gaps với symbols tiếp theo
-            # Dùng -1 vì _extract_import_texts không trả về row info
+        # Add Symbol Signatures (Imports first)
+        if info.imports:
+            compressed_content += "\n".join(info.imports)
             last_line = -1
 
-        if symbols:
-            for s in symbols:
+        if info.symbols:
+            for s in info.symbols:
                 if s.name == "[ENTRY POINT]":
                     if compressed_content:
                         compressed_content += f"\n{CHUNK_SEPARATOR}\n"
@@ -108,19 +92,14 @@ def smart_parse(
                     continue
 
                 # Check for gap between symbols to insert separator
-                # Nếu có khoảng trống giữa symbol trước và symbol này -> chèn ⋮----
                 if last_line != -1 and s.line_start > last_line + 1:
-                    # Nếu là nested symbol (có parent), có thể không muốn chèn separator to?
-                    # Nhưng để đơn giản và giống Repomix:
                     if not compressed_content.endswith(f"{CHUNK_SEPARATOR}\n"):
                         compressed_content += f"\n{CHUNK_SEPARATOR}\n"
                 elif compressed_content and not compressed_content.endswith("\n"):
                     compressed_content += "\n"
 
                 # Indentation based on nesting
-                indent = ""
-                if s.parent:
-                    indent = "  "  # Một cấp độ indent đơn giản
+                indent = "  " if s.parent else ""
 
                 # Signature extraction (already contains decorators/docstrings from SymbolExtractor)
                 sig = s.signature if s.signature else s.name
@@ -132,18 +111,15 @@ def smart_parse(
                 compressed_content += indented_sig
                 last_line = s.line_end
 
-        # Cuối cùng, nếu symbol cuối cùng chưa kết thúc file, bạn có thể muốn chèn separator
-        # Nhưng thường Repomix không làm vậy ở cuối file trừ khi có yêu cầu.
-
-        # 3.5 Build and Append Relationships Section if requested
+        # Build and Append Relationships Section if requested
         if include_relationships:
             rel_section = _build_relationships_section(
-                file_path, content, tree=tree, language=language
+                file_path, content, info=info
             )
             if rel_section:
                 compressed_content += f"\n\n{rel_section}"
 
-        # 4. Part 1: Dependency Graph (Only if requested and multiple files context is provided)
+        # Part 1: Dependency Graph (Only if requested and multiple files context is provided)
         if workspace_root and all_files_content:
             # Inject resolver để tránh rebuild index (Full Directory Walk)
             graph_gen = DependencyGraphGenerator(
@@ -255,7 +231,7 @@ def _extract_import_texts(tree: Any, content: str) -> list[str]:
 
 
 def _build_relationships_section(
-    file_path: str, content: str, tree=None, language=None
+    file_path: str, content: str, tree=None, language=None, info=None
 ) -> Optional[str]:
     """Build relationships section."""
     content_key = str(hash(content))
@@ -264,12 +240,31 @@ def _build_relationships_section(
         return cached if cached else None
 
     try:
-        from domain.codemap.relationship_extractor import extract_relationships
         from domain.codemap.types import RelationshipKind
 
-        relationships = extract_relationships(
-            file_path, content, tree=tree, language=language
-        )
+        if info is not None:
+            relationships = info.relationships
+        else:
+            from domain.codemap.relationship_extractor import extract_relationships
+            from domain.smart_context.loader import get_language
+            from tree_sitter import Parser
+            import os
+
+            _, ext = os.path.splitext(file_path)
+            ext = ext.lstrip(".")
+            language = get_language(ext)
+            if language:
+                try:
+                    parser = Parser(language)
+                    tree = parser.parse(bytes(content, "utf-8"))
+                    relationships = extract_relationships(
+                        file_path, content, tree=tree, language=language
+                    )
+                except Exception:
+                    relationships = []
+            else:
+                relationships = []
+
         if not relationships:
             _cache_relationships(file_path, content_key, "")
             return None
@@ -302,3 +297,4 @@ def _build_relationships_section(
     except Exception as e:
         logger.debug("_build_relationships_section failed: %s", e)
         return None
+

@@ -6,7 +6,7 @@ from domain.ports.registry import DomainRegistry
 from domain.ports.cache_registry_port import ICacheRegistry
 from domain.ports.directory_scanner import IDirectoryScanner
 from domain.ports.git_port import IGitService
-from domain.ports.ast_parser_port import IAstParser
+from domain.ports.code_intelligence_port import ICodeIntelligencePort, ParsedCodeInfo
 from domain.smart_context.tree_item import TreeItem
 from domain.ports.settings_service_port import ISettingsService
 from domain.ports.file_watcher_port import IFileWatcherService
@@ -183,11 +183,36 @@ class DummyTokenizationService(ITokenizationService):
         pass
 
 
-class DummyAstParser(IAstParser):
-    def parse_file(self, file_path):
-        return {"symbols": []}
+class DummyCodeIntelligence(ICodeIntelligencePort):
+    def __init__(self) -> None:
+        self._real_adapter = None
+
+    def _get_real_adapter(self):
+        if self._real_adapter is None:
+            try:
+                from infrastructure.adapters.code_intelligence.tree_sitter_backend import TreeSitterBackend
+                from infrastructure.adapters.code_intelligence.python_ast_backend import PythonAstBackend
+                from infrastructure.adapters.code_intelligence.regex_fallback_backend import RegexFallbackBackend
+                from infrastructure.adapters.code_intelligence.router_adapter import CodeIntelligenceRouterAdapter
+                self._real_adapter = CodeIntelligenceRouterAdapter([
+                    TreeSitterBackend(),
+                    PythonAstBackend(),
+                    RegexFallbackBackend()
+                ])
+            except Exception:
+                pass
+        return self._real_adapter
+
+    def parse_file(self, file_path, content):
+        adapter = self._get_real_adapter()
+        if adapter is not None:
+            return adapter.parse_file(file_path, content)
+        return ParsedCodeInfo(file_path=file_path, language="py")
 
     def generate_repo_map(self, file_paths, workspace_root=None, max_files=500):
+        adapter = self._get_real_adapter()
+        if adapter is not None:
+            return adapter.generate_repo_map(file_paths, workspace_root, max_files)
         return ""
 
 
@@ -445,9 +470,9 @@ def setup_dummy_domain_ports():
         DomainRegistry.register_git_service(DummyGitService())
 
     try:
-        DomainRegistry.ast_parser()
+        DomainRegistry.code_intelligence()
     except RuntimeError:
-        DomainRegistry.register_ast_parser(DummyAstParser())
+        DomainRegistry.register_code_intelligence(DummyCodeIntelligence())
 
     try:
         DomainRegistry.settings_service()

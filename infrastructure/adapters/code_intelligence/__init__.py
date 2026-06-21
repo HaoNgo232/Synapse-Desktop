@@ -1,0 +1,1 @@
+# Code intelligence adapters package

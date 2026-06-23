@@ -161,7 +161,7 @@ class FileTreeModel(QAbstractItemModel):
          tinh tu CHILDREN, KHONG tu folder's own _selected_paths membership.
 
     2. TOKEN COUNTING PIPELINE:
-       selection_changed -> debounce 300ms -> _start_token_counting()
+       selection_changed -> debounce 0ms -> _start_token_counting()
        -> get_selected_paths() [MAIN THREAD, co the block]
        -> TokenCountWorker [BACKGROUND THREAD]
        -> token_counts_batch signal -> update_token_counts_batch() [MAIN THREAD]

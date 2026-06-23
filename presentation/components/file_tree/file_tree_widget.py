@@ -90,7 +90,7 @@ class FileTreeWidget(QWidget):
 
         # Token counting
         self._current_token_worker: Optional[TokenCountWorker] = None
-        self._token_debounce = DebouncedTimer(300, self._start_token_counting, self)
+        self._token_debounce = DebouncedTimer(0, self._start_token_counting, self)
 
         # Search debounce
         self._search_debounce = DebouncedTimer(150, self._apply_search, self)
@@ -633,9 +633,9 @@ class FileTreeWidget(QWidget):
         """Forward model selection changes va trigger token counting.
 
         PIPELINE: User check/uncheck -> setData() -> selection_changed signal
-        -> _on_model_selection_changed() -> debounce 300ms -> _start_token_counting()
+        -> _on_model_selection_changed() -> debounce 0ms -> _start_token_counting()
 
-        Debounce 300ms de:
+        Debounce 0ms de:
         - Gop nhieu selection changes lien tiep (vi du: rapid click)
         - Cho setData() hoan thanh targeted emit truoc khi bat dau counting
         - Tranh spam background workers

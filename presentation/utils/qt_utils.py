@@ -130,7 +130,10 @@ class DebouncedTimer:
             callback: Function sẽ được gọi sau delay
             parent: QObject parent (cho memory management)
         """
-        self._timer = QTimer(parent)
+        try:
+            self._timer = QTimer(parent)
+        except RuntimeError:
+            self._timer = QTimer(None)
         self._timer.setSingleShot(True)
         self._timer.setInterval(interval_ms)
         self._timer.timeout.connect(callback)

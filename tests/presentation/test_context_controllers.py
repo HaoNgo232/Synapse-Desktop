@@ -33,6 +33,17 @@ from presentation.views.context.copy_action_controller import (
 # ===========================================================================
 
 
+class SyncDebouncedTimer:
+    def __init__(self, interval_ms, callback, parent=None):
+        self.callback = callback
+    def start(self, interval_ms=None):
+        self.callback()
+    def stop(self):
+        pass
+    def is_active(self):
+        return False
+
+
 @pytest.fixture(autouse=True)
 def mock_qt_threading():
     """Chuyển đổi chạy background thread thành chạy đồng bộ để test ổn định."""
@@ -45,6 +56,10 @@ def mock_qt_threading():
         patch(
             "presentation.views.context.related_files_controller.run_on_main_thread",
             lambda f: f(),
+        ),
+        patch(
+            "presentation.views.context.related_files_controller.DebouncedTimer",
+            SyncDebouncedTimer,
         ),
         patch(
             "presentation.views.context.tree_management_controller.run_on_main_thread",
@@ -711,3 +726,22 @@ def test_copy_action_warning_xml_smart_conflict(qtbot):
         controller.on_copy_context_requested(include_xml=True)
         # Phải hiện cảnh báo không tương thích
         mock_warning.assert_called_once()
+
+
+def test_related_files_debounce():
+    """Test related files resolution is properly debounced."""
+    view = MockRelatedFilesView()
+    controller = RelatedFilesController(view)
+
+    # Mock the actual _resolve_debounce timer
+    mock_timer = MagicMock()
+    controller._resolve_debounce = mock_timer
+    controller._mode_active = True
+    controller._resolving = False
+
+    # Trigger selection changed multiple times
+    for _ in range(5):
+        controller.resolve_for_current_selection()
+
+    # The timer's start() should be called 5 times to reset the debounce timer
+    assert mock_timer.start.call_count == 5

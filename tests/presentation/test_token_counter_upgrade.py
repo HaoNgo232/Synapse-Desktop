@@ -196,6 +196,7 @@ def test_update_triggered_same_time_as_existing_counter(qtbot, monkeypatch):
     view._smart_comparison_worker = None
 
     ContextViewQt._update_token_display(view)
+    view._on_comparison_debounce_timeout()
 
     assert comparison_service.calls == [["/project/a.py"]]
     assert "Full: 48,200" in bar._token_label.text()

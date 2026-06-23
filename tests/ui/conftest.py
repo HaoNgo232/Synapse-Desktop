@@ -14,6 +14,17 @@ from PySide6.QtCore import Signal
 from presentation.views.context.context_view_qt import ContextViewQt
 
 
+class SyncDebouncedTimer:
+    def __init__(self, interval_ms, callback, parent=None):
+        self.callback = callback
+    def start(self, interval_ms=None):
+        self.callback()
+    def stop(self):
+        pass
+    def is_active(self):
+        return False
+
+
 class FakeFileTreeWidget(QWidget):
     """Fake FileTreeWidget thay the cho testing, chua cac signal can thiet."""
 
@@ -140,6 +151,14 @@ def context_view(qtbot):
         patch(
             "presentation.views.context.context_view_qt.FileWatcher",
             return_value=MagicMock(),
+        ),
+        patch(
+            "presentation.views.context.context_view_qt.DebouncedTimer",
+            SyncDebouncedTimer,
+        ),
+        patch(
+            "presentation.views.context.related_files_controller.DebouncedTimer",
+            SyncDebouncedTimer,
         ),
     ):
         view = ContextViewQt(

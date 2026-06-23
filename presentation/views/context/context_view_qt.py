@@ -42,6 +42,7 @@ from presentation.views.context.related_files_controller import RelatedFilesCont
 from presentation.views.context.tree_management_controller import (
     TreeManagementController,
 )
+from presentation.utils.qt_utils import DebouncedTimer
 
 
 def update_app_setting(**kwargs: Any) -> bool:
@@ -107,6 +108,10 @@ class ContextViewQt(
         self._smart_comparison_key: tuple[str, ...] | None = None
         self._latest_token_comparison: Optional["TokenComparison"] = None
         self._smart_comparison_worker: Any = None
+        
+        # Debounce timer for token comparison (300ms) - lazily initialized
+        self._pending_comparison_args: Optional[tuple[list[str], int, int, int]] = None
+        
         # AI Suggest Select state: worker reference + snapshot cho Undo
         self._ai_suggest_worker = None
         self._ai_suggest_previous_selection: Optional[List[str]] = None
@@ -1094,6 +1099,30 @@ class ContextViewQt(
             )
 
     def _request_token_comparison(
+        self,
+        selected_paths: list[str],
+        total_tokens: int,
+        limit: int,
+        file_count: int,
+    ) -> None:
+        """Lưu trữ args và restart timer để debounce Smart token comparison."""
+        self._pending_comparison_args = (selected_paths, total_tokens, limit, file_count)
+        
+        # Khởi tạo lười (lazy initialization) nếu chưa có (ví dụ: bị bypass qua __new__ hoặc __init__ bị mock trong tests)
+        if not hasattr(self, "_comparison_debounce"):
+            self._comparison_debounce = DebouncedTimer(300, self._on_comparison_debounce_timeout, self)
+                
+        self._comparison_debounce.start()
+
+    @Slot()
+    def _on_comparison_debounce_timeout(self) -> None:
+        """Chạy Smart token comparison khi timer timeout (sau khi debounce)."""
+        if self._pending_comparison_args is None:
+            return
+        selected_paths, total_tokens, limit, file_count = self._pending_comparison_args
+        self._run_token_comparison_immediate(selected_paths, total_tokens, limit, file_count)
+
+    def _run_token_comparison_immediate(
         self,
         selected_paths: list[str],
         total_tokens: int,

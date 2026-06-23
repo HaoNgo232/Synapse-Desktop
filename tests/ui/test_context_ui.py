@@ -412,3 +412,17 @@ def test_show_status_empty_message(context_view):
     with patch("presentation.components.toast.toast_qt.toast_success") as mock_toast:
         view._show_status("")
         mock_toast.assert_not_called()
+
+
+def test_token_comparison_debounce(context_view):
+    """Test token comparison is properly debounced."""
+    view = context_view
+    mock_timer = MagicMock()
+    view._comparison_debounce = mock_timer
+
+    # Trigger selection changed multiple times
+    for _ in range(5):
+        view._request_token_comparison(["file.py"], 100, 128000, 1)
+
+    # The timer's start() should be called 5 times to reset the debounce timer
+    assert mock_timer.start.call_count == 5

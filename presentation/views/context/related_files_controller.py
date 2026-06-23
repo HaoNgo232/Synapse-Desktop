@@ -13,7 +13,7 @@ from typing import Any, Protocol, Set, runtime_checkable, Optional
 from PySide6.QtCore import QObject
 
 from application.services.workspace_index import get_related_files_for_paths
-from presentation.utils.qt_utils import run_on_main_thread, schedule_background
+from presentation.utils.qt_utils import run_on_main_thread, schedule_background, DebouncedTimer
 
 
 @runtime_checkable
@@ -89,6 +89,8 @@ class RelatedFilesController(QObject):
         self._last_added_related_files: Set[str] = set()
         self._resolving: bool = False
 
+        # Debounce timer for related files resolution (300ms) - lazily initialized
+
     # ===== Public API =====
 
     @property
@@ -132,6 +134,13 @@ class RelatedFilesController(QObject):
 
         Goi khi selection thay doi (neu related mode dang active).
         """
+        if self._mode_active and not self._resolving:
+            if not hasattr(self, "_resolve_debounce"):
+                self._resolve_debounce = DebouncedTimer(300, self._on_resolve_debounce_timeout, self)
+            self._resolve_debounce.start()
+
+    def _on_resolve_debounce_timeout(self) -> None:
+        """Slot duoc goi khi debounce timer cho resolve timeout."""
         if self._mode_active and not self._resolving:
             self._resolve_related_files()
 

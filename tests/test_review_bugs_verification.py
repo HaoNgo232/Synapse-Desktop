@@ -309,8 +309,6 @@ class TestBug4RaceCondition:
             else:
                 print(f"\n✅ No race detected, files preserved: {files}")
 
-        return race_detected
-
 
 def run_all_bug_verifications():
     """Run all bug verification tests and generate report."""

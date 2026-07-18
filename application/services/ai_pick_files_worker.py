@@ -45,11 +45,11 @@ def _get_workspace_files_summary(workspace_path: str, excluded_patterns: List[st
     và EXTENDED_IGNORE_PATTERNS đã được định nghĩa trong toàn ứng dụng.
     Giới hạn tối đa 1000 tệp tin để tránh tràn context.
     """
-    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from domain.ports.registry import DomainRegistry
     from pathlib import Path
 
     root = Path(workspace_path)
-    engine = IgnoreEngine()
+    engine = DomainRegistry.ignore_engine()
     spec = engine.build_pathspec(
         root,
         use_default_ignores=True,

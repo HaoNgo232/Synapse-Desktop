@@ -18,11 +18,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -p -y wget chmod grep
-
       - name: Set up Virtual Environment and Dependencies
         run: |
           python -m venv .venv
@@ -55,8 +50,8 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          python -m venv .venv
-          .venv\Scripts\activate
+          python -m venv .venv-win
+          .venv-win\Scripts\activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller

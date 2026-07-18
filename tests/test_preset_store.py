@@ -51,9 +51,11 @@ class TestPresetStore:
 
     def test_list_presets(self, store, temp_workspace):
         """Test listing presets sorted by updated_at."""
+        import time
         paths = [str(temp_workspace / "src" / "main.py")]
 
         entry1 = store.create_preset("First", paths)
+        time.sleep(0.02)  # Ensure distinct timestamps on Windows (low-res clock ~10-15ms)
         entry2 = store.create_preset("Second", paths)
 
         presets = store.list_presets()

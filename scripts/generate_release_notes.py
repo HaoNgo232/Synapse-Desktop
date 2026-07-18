@@ -5,24 +5,75 @@ import sys
 import json
 import requests
 
+def get_last_published_release_tag() -> str:
+    """
+    Gọi GitHub API để lấy tag của bản release đã publish thành công gần nhất.
+    Giúp tránh trùng lặp nội dung của các tag bị build lỗi trước đó.
+    """
+    repo = os.getenv("GITHUB_REPOSITORY")
+    if not repo:
+        return None
+    token = os.getenv("GITHUB_TOKEN")
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    url = f"https://api.github.com/repos/{repo}/releases"
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        releases = response.json()
+        # Lọc bỏ các bản nháp (draft), chỉ lấy các bản đã phát hành thực tế
+        published = [r for r in releases if not r.get("draft")]
+        if published:
+            tag = published[0]["tag_name"]
+            print(f"GitHub API: Detected last successfully published release tag: {tag}")
+            return tag
+    except Exception as e:
+        print(f"Failed to fetch latest release from GitHub API: {e}")
+    return None
+
 def get_git_commit_log():
     """
-    Lấy danh sách các commit từ git tag gần nhất đến HEAD.
-    Nếu không có tag cũ, lấy toàn bộ commit history (tối đa 50 commit).
+    Lấy danh sách các commit từ tag stable gần nhất (vX.Y.0) hoặc tag đã publish thành công đến HEAD.
+    Nếu không có, lấy tag gần nhất bất kỳ. Nếu vẫn không có, lấy 50 commit gần nhất.
     """
-    try:
-        # Lấy tag gần nhất
-        tag_match = subprocess.run(
-            ["git", "describe", "--tags", "--abbrev=0", "HEAD^"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True
-        )
-        last_tag = tag_match.stdout.strip()
-        print(f"Detecting last tag: {last_tag}")
+    last_tag = get_last_published_release_tag()
+    if last_tag:
+        print(f"Using last successfully published release tag: {last_tag}")
+    else:
+        # 1. Thử tìm tag dạng vX.Y.0 (ví dụ: v1.0.0, v1.1.0) làm base
+        try:
+            tag_match = subprocess.run(
+                ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.0", "HEAD^"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True
+            )
+            last_tag = tag_match.stdout.strip()
+            print(f"Detecting last stable base tag (fallback): {last_tag}")
+        except subprocess.CalledProcessError:
+            # 2. Fallback tìm tag bất kỳ gần nhất
+            try:
+                tag_match = subprocess.run(
+                    ["git", "describe", "--tags", "--abbrev=0", "HEAD^"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=True
+                )
+                last_tag = tag_match.stdout.strip()
+                print(f"Detecting last tag (fallback 2): {last_tag}")
+            except subprocess.CalledProcessError:
+                pass
+
+    if last_tag:
         commit_range = f"{last_tag}..HEAD"
-    except subprocess.CalledProcessError:
+    else:
         print("No previous tag found, taking recent commits...")
         commit_range = "HEAD~50..HEAD"
 
@@ -68,7 +119,7 @@ Ensure the output matches this exact Markdown structure:
 
 ## Synapse Desktop {version}
 
-> Released by **{user}**
+> Released automatically by **GitHub Actions Bot** (triggered by **{user}**)
 
 Synapse Desktop is a local desktop tool for developers who use AI coding assistants. It lets you manually select project files, package them into a structured prompt, and send that context to any AI web chat for planning, analysis, or patch generation.
 

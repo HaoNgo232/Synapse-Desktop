@@ -94,14 +94,15 @@ def get_git_commit_log():
 
 def generate_notes_with_mistral(api_key, commits, version, user):
     """
-    Gọi Mistral API (model mistral-large-latest) để tạo Release Note chuyên nghiệp.
+    Gọi API tương thích OpenAI (mặc định Mistral AI) để tạo Release Note chuyên nghiệp.
     """
-    url = "https://api.mistral.ai/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
+    from openai import OpenAI
 
+    # Hardcode cấu hình nhà cung cấp mặc định (Mistral AI)
+    base_url = "https://api.mistral.ai/v1"
+    model = "mistral-large-latest"
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     # Prompt chỉ định cấu trúc Release Notes chuẩn chuyên nghiệp dạng Markdown
     system_prompt = (
@@ -126,18 +127,9 @@ Synapse Desktop is a local desktop tool for developers who use AI coding assista
 
 ---
 
-## Architecture Support
-
-| Platform | Status |
-|---|---|
-| x86_64 (AMD64) | ✅ Supported |
-| ARM | ⚠️ Untested / Not officially supported |
-
----
-
 ## What's Changed
 
-(Generate this section based on the commits. Group into ### Summary, ### Bug Fixes, ### New Features as appropriate. Use bullet points.)
+(Analyze the commits above and generate a structured changelog here. Group into ### Features, ### Bug Fixes, etc. as appropriate. Use bullet points and keep it concise.)
 
 ---
 
@@ -147,23 +139,35 @@ Synapse Desktop is a local desktop tool for developers who use AI coding assista
 - `Synapse-{version}-linux-x86_64.AppImage` — Linux x86_64 portable AppImage
 """
 
-    payload = {
-        "model": "mistral-large-latest",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        "temperature": 0.2
-    }
-
+    # Thử gọi API với model chính
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.2
+        )
+        return response.choices[0].message.content
     except Exception as e:
-        print(f"API Request to Mistral failed: {e}")
-        sys.exit(1)
+        # Nếu model chính bị lỗi (hết rate limit, nghẽn mạng...), tự động thử lại với model phụ (rẻ và nhanh hơn)
+        fallback_model = "mistral-small-latest"
+        print(f"Primary model '{model}' failed: {e}. Trying fallback model '{fallback_model}'...")
+        try:
+            response = client.chat.completions.create(
+                model=fallback_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2
+            )
+            print(f"Fallback model '{fallback_model}' succeeded!")
+            return response.choices[0].message.content
+        except Exception as fallback_err:
+            print(f"Fallback model '{fallback_model}' also failed: {fallback_err}")
+            sys.exit(1)
 
 def clean_llm_markdown(content: str) -> str:
     """

@@ -106,8 +106,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Requests Library
-        run: pip install requests
+      - name: Install Dependencies
+        run: pip install requests openai
 
       - name: Download Linux AppImage Artifact
         uses: actions/download-artifact@v4

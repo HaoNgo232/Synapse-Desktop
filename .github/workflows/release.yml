@@ -55,6 +55,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+          # Tạo giả lập Linux venv để bypass kiểm tra của build-windows.ps1
+          New-Item -ItemType Directory -Force -Path .venv/bin | Out-Null
+          New-Item -ItemType File -Force -Path .venv/bin/activate | Out-Null
 
       - name: Build Windows EXE
         shell: powershell

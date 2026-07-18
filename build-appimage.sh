@@ -169,18 +169,25 @@ DESKTOP_DEST="$DESKTOP_DIR/$APP_NAME-v$APP_VERSION-linux-x86_64.AppImage"
 if [ -f "$OUTPUT_FILE" ]; then
     # Ensure destination directory exists
     mkdir -p "$DESKTOP_DIR"
-    echo "Moving AppImage to Desktop..."
-    if mv -f "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null; then
-        chmod +x "$DESKTOP_DEST"
-        echo "Successfully moved to: $DESKTOP_DEST"
+    if [ "$GITHUB_ACTIONS" = "true" ]; then
+        echo "Running in GitHub Actions. Copying AppImage to Desktop..."
+        cp "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null || true
+        chmod +x "$DESKTOP_DEST" 2>/dev/null || true
+        echo "AppImage copied to Desktop, keeping original at $OUTPUT_FILE"
     else
-        # Fallback to copy + remove (useful for cross-device mount links in WSL)
-        if cp "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null; then
-            rm -f "$OUTPUT_FILE"
+        echo "Moving AppImage to Desktop..."
+        if mv -f "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null; then
             chmod +x "$DESKTOP_DEST"
             echo "Successfully moved to: $DESKTOP_DEST"
         else
-            echo "Warning: Could not move AppImage to Desktop. File remains at: $OUTPUT_FILE"
+            # Fallback to copy + remove (useful for cross-device mount links in WSL)
+            if cp "$OUTPUT_FILE" "$DESKTOP_DEST" 2>/dev/null; then
+                rm -f "$OUTPUT_FILE"
+                chmod +x "$DESKTOP_DEST"
+                echo "Successfully moved to: $DESKTOP_DEST"
+            else
+                echo "Warning: Could not move AppImage to Desktop. File remains at: $OUTPUT_FILE"
+            fi
         fi
     fi
 else

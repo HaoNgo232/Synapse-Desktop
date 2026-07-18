@@ -34,6 +34,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libegl1 libgl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 libxcb-cursor0
 
+      - name: Fetch Material Icons Assets
+        run: |
+          source .venv/bin/activate
+          python scripts/fetch_material_icons.py
+
       - name: Run Tests (Quality Gate)
         env:
           QT_QPA_PLATFORM: offscreen
@@ -75,6 +80,11 @@ jobs:
           # Tạo giả lập Linux venv để bypass kiểm tra của build-windows.ps1
           New-Item -ItemType Directory -Force -Path .venv/bin | Out-Null
           New-Item -ItemType File -Force -Path .venv/bin/activate | Out-Null
+
+      - name: Fetch Material Icons Assets
+        run: |
+          .venv-win\Scripts\activate
+          python scripts/fetch_material_icons.py
 
       - name: Run Tests (Quality Gate)
         run: |

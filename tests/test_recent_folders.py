@@ -39,7 +39,7 @@ class TestRecentFoldersIntegration:
     def temp_settings_dir(self):
         """Tạo temp directory cho tests"""
         temp_dir = tempfile.mkdtemp()
-        yield Path(temp_dir)
+        yield Path(temp_dir).resolve()
         shutil.rmtree(temp_dir, ignore_errors=True)
 
     @pytest.fixture

@@ -27,7 +27,7 @@ class TestIgnoreSelectedPatternFormat:
         """Pattern should be relative path, not just filename."""
         # Setup
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Path(tmpdir)
+            workspace = Path(tmpdir).resolve()
 
             # Create structure
             (workspace / "src").mkdir()
@@ -48,7 +48,7 @@ class TestIgnoreSelectedPatternFormat:
     def test_pattern_matches_gitignore_style(self):
         """Pattern should work with gitignore-style matching."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Path(tmpdir)
+            workspace = Path(tmpdir).resolve()
 
             # Create files
             (workspace / "src").mkdir()
@@ -135,7 +135,7 @@ class TestIgnoreSelectedIntegration:
     def test_add_and_scan_with_exclusion(self):
         """Test adding pattern and scanning with exclusion."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Path(tmpdir)
+            workspace = Path(tmpdir).resolve()
 
             # Create structure
             (workspace / "src").mkdir()
@@ -197,7 +197,7 @@ class TestIgnoreSelectedIntegration:
     def test_multiple_files_same_name_different_paths(self):
         """Test ignoring one file doesn't affect same-named file in different path."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Path(tmpdir)
+            workspace = Path(tmpdir).resolve()
 
             # Create same filename in different paths
             (workspace / "frontend").mkdir()
@@ -237,7 +237,7 @@ class TestIgnoreSelectedEdgeCases:
     def test_ignore_folder(self):
         """Test ignoring entire folder."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Path(tmpdir)
+            workspace = Path(tmpdir).resolve()
 
             (workspace / "src").mkdir()
             (workspace / "src" / "app.py").write_text("# app")
@@ -275,7 +275,7 @@ class TestIgnoreSelectedEdgeCases:
     def test_ignore_nested_file(self):
         """Test ignoring deeply nested file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Path(tmpdir)
+            workspace = Path(tmpdir).resolve()
 
             (workspace / "a").mkdir()
             (workspace / "a" / "b").mkdir()

@@ -171,8 +171,9 @@ class TestGetWorkerCount:
         assert get_worker_count(50) == 1
         assert get_worker_count(99) == 1
 
-    def test_medium_task_count(self):
+    def test_medium_task_count(self, monkeypatch):
         """Medium task count returns proportional workers."""
+        monkeypatch.setattr(os, "cpu_count", lambda: 8)
         # 100 tasks = 1 worker (TASKS_PER_WORKER = 100)
         assert get_worker_count(100) == 1
         # 200 tasks = 2 workers
@@ -180,9 +181,10 @@ class TestGetWorkerCount:
         # 500 tasks = 5 workers
         assert get_worker_count(500) == 5
 
-    def test_large_task_count_capped_by_cpu(self):
+    def test_large_task_count_capped_by_cpu(self, monkeypatch):
         """Large task count is capped by CPU cores."""
-        cpu_count = os.cpu_count() or 4
+        monkeypatch.setattr(os, "cpu_count", lambda: 4)
+        cpu_count = 4
 
         # 10000 tasks would need 100 workers, but capped by CPU
         result = get_worker_count(10000)

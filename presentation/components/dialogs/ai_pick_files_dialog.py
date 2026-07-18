@@ -198,6 +198,7 @@ class AIPickFilesDialog(QDialog):
         layout.addLayout(footer_layout)
 
         # Set initial status
+        self.current_step_index = 0
         self.update_step(0, "active")
         for i in range(1, len(self.steps)):
             self.update_step(i, "pending")
@@ -210,6 +211,24 @@ class AIPickFilesDialog(QDialog):
         """Cập nhật trạng thái cho từng bước."""
         if 0 <= index < len(self.steps):
             self.steps[index].set_status(status, detail_text)
+            if status == "active":
+                self.current_step_index = index
+
+    def show_error(self, error_msg: str) -> None:
+        """Hiển thị lỗi tại step đang chạy hiện tại và chuyển progress bar sang màu đỏ."""
+        self.timer.stop()
+        self.cancel_btn.setEnabled(False)
+        
+        idx = getattr(self, "current_step_index", 0)
+        self.update_step(idx, "error", f"Error: {error_msg}")
+        
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(100)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar::chunk {{
+                background: {ThemeColors.ERROR};
+            }}
+        """)
 
     def finish_with_success(self) -> None:
         """Đánh dấu tất cả các bước thành công và đóng Dialog sau 600ms để hiển thị mượt mà."""

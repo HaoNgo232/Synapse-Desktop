@@ -1603,6 +1603,8 @@ class ContextViewQt(
             display_msg = "API key does not have access to the selected model."
         elif "404" in sanitized_msg or "not found" in sanitized_msg:
             display_msg = "Selected AI model was not found."
+        elif "429" in sanitized_msg or "too many requests" in sanitized_msg or "retry limit" in sanitized_msg:
+            display_msg = "Rate limit exceeded. Too many requests to the AI provider. Please wait a moment."
         elif "timeout" in sanitized_msg or "timed out" in sanitized_msg:
             display_msg = "AI provider did not respond in time."
         elif "connection refused" in sanitized_msg or "connect" in sanitized_msg:
@@ -1621,7 +1623,7 @@ class ContextViewQt(
         # Đánh dấu bước lỗi và đóng Dialog sau 2s
         dialog = getattr(self, "_ai_pick_files_dialog", None)
         if dialog:
-            dialog.update_step(2, "error", f"Error: {display_msg}")
+            dialog.show_error(display_msg)
             from PySide6.QtCore import QTimer
 
             QTimer.singleShot(2000, dialog, dialog.reject)

@@ -27,6 +27,8 @@ jobs:
           pip install pyinstaller
 
       - name: Build Linux AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
           chmod +x build-appimage.sh
           ./build-appimage.sh

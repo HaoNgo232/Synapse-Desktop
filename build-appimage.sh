@@ -118,7 +118,7 @@ if [ ! -f "$APPIMAGETOOL" ]; then
 fi
 
 # Build AppImage
-ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" "$APPDIR" "$BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
 
 echo ""
 echo "========================================"

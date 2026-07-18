@@ -116,6 +116,8 @@ def generate_notes_with_mistral(api_key, commits, version, user):
 
     client = OpenAI(api_key=api_key, base_url=base_url)
 
+    repo_name = os.getenv("GITHUB_REPOSITORY", "HaoNgo232/Synapse-Desktop")
+
     # Prompt chỉ định cấu trúc Release Notes chuẩn chuyên nghiệp dạng Markdown
     system_prompt = (
         "You are an expert software release manager. Your task is to generate professional, structured "
@@ -141,7 +143,8 @@ Synapse Desktop is a local desktop tool for developers who use AI coding assista
 
 ## What's Changed
 
-(Analyze the commits above and generate a structured changelog here. Group into ### Features, ### Bug Fixes, etc. as appropriate. Use bullet points and keep it concise.)
+(Analyze the commits above and generate a structured changelog here. Group into ### Features, ### Bug Fixes, etc. as appropriate. Use bullet points and keep it concise.
+CRITICAL: For every change entry, you MUST extract the corresponding commit hash from the git log and append a GitHub commit reference link at the end of the line, formatted exactly as: `([short_hash](https://github.com/{repo_name}/commit/short_hash))`. Example: `Add security checks ([ee62371](https://github.com/{repo_name}/commit/ee62371))`.)
 
 ---
 

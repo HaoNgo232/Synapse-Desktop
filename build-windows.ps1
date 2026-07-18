@@ -276,7 +276,9 @@ $pyinstallerArgs += $hiddenImportArgs
 $pyinstallerArgs += @(
     "--collect-all", "tiktoken_ext",
     "--collect-all", "tiktoken",
-    "--collect-all", "detect_secrets"
+    "--collect-all", "detect_secrets",
+    "--copy-metadata", "openai-codex",
+    "--copy-metadata", "openai-codex-cli-bin"
 )
 
 # Debug mode: don't strip debug info

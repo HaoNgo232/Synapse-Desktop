@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Trigger script cho lỗi không kiểm tra huỷ tác vụ (cancellation) trong AIContextWorker.
+Trigger script cho lỗi không kiểm tra huỷ tác vụ (cancellation) trong ImproveInstructionsWorker.
 Chứng minh rằng khi gọi worker.cancel() trong lúc worker đang chờ LLM API phản hồi (blocking call),
 sau khi API phản hồi, worker vẫn tiếp tục thực thi và phát tín hiệu finished (emit finished signal),
 làm cập nhật UI ngoài ý muốn dù người dùng đã huỷ tác vụ.
@@ -15,12 +15,12 @@ from typing import Any
 WORKSPACE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WORKSPACE))
 
-# Khởi tạo Qt Application vì AIContextWorker sử dụng QObject và Signals
+# Khởi tạo Qt Application vì ImproveInstructionsWorker sử dụng QObject và Signals
 from PySide6.QtCore import QCoreApplication
 
 app = QCoreApplication(sys.argv)
 
-from application.services.ai_context_worker import AIContextWorker
+from application.services.improve_instructions_worker import ImproveInstructionsWorker
 from infrastructure.ai.base_provider import LLMResponse
 
 
@@ -39,13 +39,13 @@ class MockProvider:
         time.sleep(0.5)
         print("[LLM Provider] API đã trả về kết quả.")
         return LLMResponse(
-            content='{"selected_paths": ["file_a.py", "file_b.py"], "reasoning": "Test reasoning"}',
+            content='{"improved_instructions": "improved instruction", "explanation": "Test reasoning"}',
             usage={"total_tokens": 100},
         )
 
 
-# Mock OpenAICompatibleProvider trong module ai_context_worker
-import application.services.ai_context_worker as worker_module
+# Mock OpenAICompatibleProvider trong module improve_instructions_worker
+import application.services.improve_instructions_worker as worker_module
 
 worker_module.OpenAICompatibleProvider = MockProvider
 
@@ -60,14 +60,15 @@ def trigger_cancel_action():
 
 def main():
     global worker_instance
-    print("=== BẮT ĐẦU CHẠY THỬ NGHIỆM LỖI CANCELLATION TRONG AI CONTEXT WORKER ===")
+    print(
+        "=== BẮT ĐẦU CHẠY THỬ NGHIỆM LỖI CANCELLATION TRONG IMPROVE INSTRUCTIONS WORKER ==="
+    )
 
     # Khởi tạo worker
-    worker_instance = AIContextWorker(
+    worker_instance = ImproveInstructionsWorker(
         api_key="dummy_key",
         base_url="dummy_url",
         model_id="dummy_model",
-        file_tree="dummy_tree",
         user_query="dummy_query",
     )
 
@@ -75,10 +76,10 @@ def main():
     error_emitted = False
 
     # Connect các signals để theo dõi
-    def on_finished(selected_paths, reasoning, usage):
+    def on_finished(improved, explanation, usage):
         nonlocal finished_emitted
         finished_emitted = True
-        print(f"[UI Thread] NHẬN ĐƯỢC SIGNAL finished! Paths: {selected_paths}")
+        print(f"[UI Thread] NHẬN ĐƯỢC SIGNAL finished! Content: {improved}")
 
     def on_error(err_msg):
         nonlocal error_emitted
@@ -103,13 +104,13 @@ def main():
     if finished_emitted:
         print("[STATUS] THÀNH CÔNG: Đã trigger được lỗi cancellation bug!")
         print(
-            "Lý do: AIContextWorker.run() không kiểm tra biến self._cancelled sau cuộc gọi API,"
+            "Lý do: ImproveInstructionsWorker.run() không kiểm tra biến self._cancelled sau cuộc gọi API,"
         )
         print("vẫn tiếp tục emit finished signal về Main UI thread.")
         sys.exit(0)
     else:
         print(
-            "[STATUS] THÀNH CÔNG: Lỗi cancellation bug đã được vá thành công trong codebase (AIContextWorker không emit signal finished khi bị cancel)!"
+            "[STATUS] THÀNH CÔNG: Lỗi cancellation bug đã được vá thành công trong codebase (ImproveInstructionsWorker không emit signal finished khi bị cancel)!"
         )
         sys.exit(0)
 

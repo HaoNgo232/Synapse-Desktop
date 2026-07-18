@@ -164,7 +164,7 @@ if grep -qE "(Microsoft|WSL)" /proc/version 2>/dev/null; then
 fi
 
 OUTPUT_FILE="$BUILD_DIR/$APP_NAME-$APP_VERSION-x86_64.AppImage"
-DESKTOP_DEST="$DESKTOP_DIR/$APP_NAME.AppImage"
+DESKTOP_DEST="$DESKTOP_DIR/$APP_NAME-v$APP_VERSION-linux-x86_64.AppImage"
 
 if [ -f "$OUTPUT_FILE" ]; then
     # Ensure destination directory exists

@@ -182,7 +182,7 @@ $hiddenImports = @(
     "infrastructure.git.repo_manager",
     # --- Application Layer ---
     "application.services.prompt_build_service",
-    "application.services.ai_context_worker",
+    "application.services.improve_instructions_worker",
     "application.services.workspace_config",
     "application.services.preview_analyzer",
     "application.services.error_context",
@@ -192,6 +192,7 @@ $hiddenImports = @(
     "domain.prompt.generator",
     "domain.prompt.template_manager",
     "domain.prompt.context_builder_prompts",
+    "domain.prompt.improve_instructions_prompts",
     "domain.prompt.assembler",
     "domain.tokenization.cancellation",
     "domain.smart_context.parser",
@@ -351,7 +352,7 @@ if (Test-Path $exePath) {
         Write-Host ""
         Write-Host "[8/8] Moving output to Desktop..." -ForegroundColor Green
         $desktopPath = [Environment]::GetFolderPath("Desktop")
-        $destPath = Join-Path $desktopPath "$APP_NAME.exe"
+        $destPath = Join-Path $desktopPath "$APP_NAME-v$APP_VERSION-windows-x64.exe"
         
         try {
             # Dùng Copy-Item thay vì Move-Item để giữ lại backup trong dist

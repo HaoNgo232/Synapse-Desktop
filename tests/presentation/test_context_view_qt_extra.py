@@ -217,9 +217,9 @@ def test_context_view_cleanup(qtbot, setup_settings_registry):
     qtbot.addWidget(view)
 
     # Setup some dummy states to cleanup
-    view._ai_suggest_worker = MagicMock()
+    view._improve_instructions_worker = MagicMock()
 
     view.cleanup()
 
-    assert view._ai_suggest_worker is None
+    assert view._improve_instructions_worker is None
     watcher.stop.assert_called_once()

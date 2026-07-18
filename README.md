@@ -244,9 +244,9 @@ Enable **Related** mode in the toolbar to automatically add files that are impor
 
 ---
 
-### AI Suggest Select
+### Improve Instructions
 
-Write your task in the Instructions field and click **AI Suggest Select**. The app calls your configured LLM API, analyzes the file tree, and ticks the most relevant files automatically. Requires an API key in Settings.
+Write your raw task draft in the Instructions field and click **Improve Instructions**. The app calls your configured LLM API to analyze, restructure, and rewrite your draft into a highly polished, plain-text professional prompt (copy-paste ready) for external AI webchats. Requires an API key in Settings.
 
 ---
 
@@ -679,7 +679,7 @@ The auto-detection debounces for 800ms. Wait briefly after pasting. If it still 
 
 - **You want fully automated context selection.** Synapse requires manual file selection. Use an IDE agent directly if you want full automation.
 - **You need real-time collaboration.** Synapse is a single-user local tool with no sharing or sync features.
-- **Your project has thousands of files and you don't know where to start.** Use the AI Suggest Select feature or the Tree Map workflow first to identify relevant files.
+- **Your project has thousands of files and you don't know where to start.** Use the Related Files presets or the Tree Map workflow first to identify relevant files.
 - **You want to apply patches to files outside your workspace.** The Apply tab enforces workspace boundaries for security.
 - **You need a CI/CD integration.** Synapse is a desktop GUI tool, not a CLI pipeline tool.
 

@@ -107,10 +107,9 @@ class ContextViewQt(
         self._smart_comparison_key: tuple[str, ...] | None = None
         self._latest_token_comparison: Optional["TokenComparison"] = None
         self._smart_comparison_worker: Any = None
-        # AI Suggest Select state: worker reference + snapshot cho Undo
-        self._ai_suggest_worker = None
-        self._ai_suggest_previous_selection: Optional[List[str]] = None
-        self._ai_suggest_generation: int = 0
+        # Improve Instructions state: worker reference
+        self._improve_instructions_worker = None
+        self._improve_instructions_generation: int = 0
 
         # Services (with dependency injection support)
         self._file_watcher = DomainRegistry.file_watcher_service()
@@ -232,12 +231,12 @@ class ContextViewQt(
         self._copy_controller._begin_copy_operation()
         self.set_copy_buttons_enabled(True)
 
-        # Invalidate any in-flight AI suggest request
-        self._ai_suggest_generation += 1
-        self._cancel_ai_suggest_worker()
-        if hasattr(self, "_ai_suggest_btn"):
-            self._ai_suggest_btn.setEnabled(True)
-            self._ai_suggest_btn.setText("AI Suggest Select")
+        # Invalidate any in-flight Improve Instructions request
+        self._improve_instructions_generation += 1
+        self._cancel_improve_instructions_worker()
+        if hasattr(self, "_improve_instructions_btn"):
+            self._improve_instructions_btn.setEnabled(True)
+            self._improve_instructions_btn.setText("Improve Instructions")
 
         # 1. Stop file watcher for old workspace
         if self._file_watcher:
@@ -674,8 +673,8 @@ class ContextViewQt(
         if self._copy_controller:
             self._copy_controller._begin_copy_operation()
 
-        self._ai_suggest_generation += 1
-        self._cancel_ai_suggest_worker()
+        self._improve_instructions_generation += 1
+        self._cancel_improve_instructions_worker()
 
         # Cleanup preset widget connections to prevent leaks
         if hasattr(self, "_preset_widget") and self._preset_widget:
@@ -724,15 +723,15 @@ class ContextViewQt(
 
         self.file_tree_widget.cleanup()
 
-    def _cancel_ai_suggest_worker(self) -> None:
+    def _cancel_improve_instructions_worker(self) -> None:
         """
-        Huy va ngat ket noi signals cua AIContextWorker neu dang chay.
+        Huy va ngat ket noi signals cua ImproveInstructionsWorker neu dang chay.
 
-        Giu nguyen generation guard trong _on_ai_suggest_finished/_on_ai_suggest_error
+        Giu nguyen generation guard trong _on_improve_instructions_finished/_on_improve_instructions_error
         de bo qua ket qua stale, nhung van dam bao khong co signal nao
         duoc deliver vao QWidget da bi huy.
         """
-        worker = self._ai_suggest_worker
+        worker = self._improve_instructions_worker
         if worker is None:
             return
 
@@ -762,7 +761,7 @@ class ContextViewQt(
             # signals co the da bi xoa boi Qt
             pass  # intentionally silent — worker or signals already deleted by Qt
 
-        self._ai_suggest_worker = None
+        self._improve_instructions_worker = None
 
     # ===== Slots =====
 
@@ -1237,18 +1236,18 @@ class ContextViewQt(
 
         self.file_tree_widget.set_selected_paths(resolved_paths)
 
-    # ===== AI Suggest Select (doc tu Instructions field) =====
+    # ===== Improve User Instructions (doc tu Instructions field) =====
 
-    def _run_ai_suggest_from_instructions(self) -> None:
+    def _run_improve_instructions(self) -> None:
         """
-        Doc noi dung tu Instructions field va chay AI worker de tu dong chon files.
+        Doc noi dung tu Instructions field va chay ImproveInstructionsWorker de cai thien instructions.
 
         Luong xu ly:
         1. Doc text tu _instructions_field
-        2. Validate settings (API key, model, tree)
-        3. Luu snapshot selection hien tai cho Undo
-        4. Tao AIContextWorker chay tren background thread
-        5. Khi worker xong -> auto-apply ket qua vao file tree
+        2. Validate settings (API key, model)
+        3. Thu thap file tree va git diff (neu co workspace) de lam context
+        4. Tao ImproveInstructionsWorker chay tren background thread
+        5. Khi worker xong -> cap nhat ket qua vao _instructions_field
         """
         user_query = self._instructions_field.toPlainText().strip()
         if not user_query:
@@ -1257,7 +1256,9 @@ class ContextViewQt(
             toast_error("Please write your instruction first.")
             return
 
-        from application.services.ai_context_worker import AIContextWorker
+        from application.services.improve_instructions_worker import (
+            ImproveInstructionsWorker,
+        )
         from domain.prompt.generator import generate_file_map
         from domain.prompt.context_builder_prompts import build_full_tree_string
         from presentation.components.toast.toast_qt import toast_error
@@ -1269,110 +1270,102 @@ class ContextViewQt(
         if not settings.ai_model_id:
             toast_error("Please select an AI model in Settings first.")
             return
-        if self.tree is None:
-            toast_error("No project loaded. Open a folder first.")
-            return
 
         workspace = self.get_workspace()
-        all_paths = self._collect_all_tree_paths(self.tree)
-
-        file_tree_map = generate_file_map(
-            self.tree,
-            all_paths,
-            workspace_root=workspace,
-            use_relative_paths=True,
-        )
-
-        # Optional: Git diff
+        file_tree_map = None
         git_diff_str = None
-        if workspace:
-            try:
-                diff_result = DomainRegistry.git_service().get_diffs(workspace)
-                if diff_result is not None:
-                    _, git_diff_str = build_full_tree_string(
-                        file_tree_map, diff_result, include_git=True
-                    )
-            except Exception:
-                logger.error("context_view: operation failed", exc_info=True)
 
-        # Luu snapshot selection hien tai de phuc vu Undo
-        self._ai_suggest_previous_selection = list(
-            self.file_tree_widget.get_selected_paths()
-        )
+        if self.tree:
+            all_paths = self._collect_all_tree_paths(self.tree)
+            file_tree_map = generate_file_map(
+                self.tree,
+                all_paths,
+                workspace_root=workspace,
+                use_relative_paths=True,
+            )
+
+            # Optional: Git diff
+            if workspace:
+                try:
+                    diff_result = DomainRegistry.git_service().get_diffs(workspace)
+                    if diff_result is not None:
+                        _, git_diff_str = build_full_tree_string(
+                            file_tree_map, diff_result, include_git=True
+                        )
+                except Exception:
+                    logger.error("context_view: operation failed", exc_info=True)
 
         # Disable button khi dang chay
-        self._ai_suggest_btn.setEnabled(False)
-        self._ai_suggest_btn.setText("Analyzing...")
+        self._improve_instructions_btn.setEnabled(False)
+        self._improve_instructions_btn.setText("Improving...")
 
         # Tao worker chay tren background thread
-        worker = AIContextWorker(
+        worker = ImproveInstructionsWorker(
             api_key=settings.ai_api_key,
             base_url=settings.ai_base_url,
             model_id=settings.ai_model_id,
-            file_tree=file_tree_map,
             user_query=user_query,
+            file_tree=file_tree_map,
             git_diff=git_diff_str,
-            all_file_paths=list(all_paths),
-            workspace_root=workspace,
         )
 
-        self._ai_suggest_generation += 1
-        current_gen = self._ai_suggest_generation
+        self._improve_instructions_generation += 1
+        current_gen = self._improve_instructions_generation
 
         worker.signals.finished.connect(
-            lambda paths, reasoning, usage, g=current_gen: self._on_ai_suggest_finished(
-                paths, reasoning, usage, g
+            lambda improved, explanation, usage, g=current_gen: (
+                self._on_improve_instructions_finished(improved, explanation, usage, g)
             )
         )
         worker.signals.error.connect(
-            lambda msg, g=current_gen: self._on_ai_suggest_error(msg, g)
+            lambda msg, g=current_gen: self._on_improve_instructions_error(msg, g)
         )
-        worker.signals.progress.connect(self._on_ai_suggest_progress)
+        worker.signals.progress.connect(self._on_improve_instructions_progress)
 
         # Giu reference tranh GC
-        self._ai_suggest_worker = worker
+        self._improve_instructions_worker = worker
         from PySide6.QtCore import QThreadPool
 
         QThreadPool.globalInstance().start(worker)
 
-    def _on_ai_suggest_finished(
-        self, paths: list, reasoning: str, usage: dict, generation: int
+    def _on_improve_instructions_finished(
+        self, improved_instructions: str, explanation: str, usage: dict, generation: int
     ) -> None:
-        """Xu ly khi AI suggest worker hoan thanh thanh cong."""
-        if generation != self._ai_suggest_generation:
+        """Xu ly khi Improve instructions worker hoan thanh thanh cong."""
+        if generation != self._improve_instructions_generation:
             return
 
-        self._ai_suggest_worker = None
-        self._ai_suggest_btn.setEnabled(True)
-        self._ai_suggest_btn.setText("AI Suggest Select")
+        self._improve_instructions_worker = None
+        self._improve_instructions_btn.setEnabled(True)
+        self._improve_instructions_btn.setText("Improve Instructions")
 
-        if paths:
-            self._on_ai_selection_applied(paths)
+        if improved_instructions:
+            self._instructions_field.setPlainText(improved_instructions)
 
             from presentation.components.toast.toast_qt import toast_success
 
-            toast_success(f"AI selected {len(paths)} files.")
+            toast_success("Instructions improved successfully!")
         else:
             from presentation.components.toast.toast_qt import toast_error
 
-            toast_error(f"AI could not find relevant files. {reasoning}")
+            toast_error("AI could not improve the instructions.")
 
-    def _on_ai_suggest_error(self, error_msg: str, generation: int) -> None:
-        """Xu ly khi AI suggest worker gap loi."""
-        if generation != self._ai_suggest_generation:
+    def _on_improve_instructions_error(self, error_msg: str, generation: int) -> None:
+        """Xu ly khi Improve instructions worker gap loi."""
+        if generation != self._improve_instructions_generation:
             return
 
-        self._ai_suggest_worker = None
-        self._ai_suggest_btn.setEnabled(True)
-        self._ai_suggest_btn.setText("AI Suggest Select")
+        self._improve_instructions_worker = None
+        self._improve_instructions_btn.setEnabled(True)
+        self._improve_instructions_btn.setText("Improve Instructions")
 
         from presentation.components.toast.toast_qt import toast_error
 
         toast_error(error_msg)
 
-    def _on_ai_suggest_progress(self, status: str) -> None:
+    def _on_improve_instructions_progress(self, status: str) -> None:
         """Cap nhat text button khi worker dang chay."""
-        self._ai_suggest_btn.setText(status)
+        self._improve_instructions_btn.setText(status)
 
     # ===== Helpers =====
 

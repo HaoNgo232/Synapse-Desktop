@@ -84,6 +84,3 @@ def test_dependency_contract_error():
     err = DependencyContractError("contract violated", details={"port": "git"})
     assert isinstance(err, ApplicationError)
     assert err.code == "dependency_contract_error"
-
-
-

@@ -838,10 +838,10 @@ class UIBuilderMixin:
         self._history_btn.setMenu(self._history_menu)
         header.addWidget(self._history_btn)
 
-        # AI Suggest Select button: doc instruction va tu dong chon files
-        self._ai_suggest_btn = QToolButton()
-        self._ai_suggest_btn.setText("AI Suggest Select")
-        self._ai_suggest_btn.setStyleSheet(
+        # Improve Instructions button: doc instruction va goi AI toi uu hoa
+        self._improve_instructions_btn = QToolButton()
+        self._improve_instructions_btn.setText("Improve Instructions")
+        self._improve_instructions_btn.setStyleSheet(
             f"""
             QToolButton {{
                 background: {ThemeColors.BG_ELEVATED};
@@ -863,12 +863,12 @@ class UIBuilderMixin:
             }}
             """
         )
-        self._ai_suggest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ai_suggest_btn.setToolTip(
-            "AI reads your instruction and auto-selects relevant files"
+        self._improve_instructions_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._improve_instructions_btn.setToolTip(
+            "Improve your instruction using AI for clearer results"
         )
-        self._ai_suggest_btn.clicked.connect(self._run_ai_suggest_from_instructions)
-        header.addWidget(self._ai_suggest_btn)
+        self._improve_instructions_btn.clicked.connect(self._run_improve_instructions)
+        header.addWidget(self._improve_instructions_btn)
 
         header.addStretch()
 

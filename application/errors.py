@@ -112,6 +112,3 @@ class DependencyContractError(ApplicationError):
             details=details,
             cause=cause,
         )
-
-
-

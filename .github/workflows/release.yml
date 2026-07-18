@@ -1,0 +1,126 @@
+# .github/workflows/release.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -p -y wget chmod grep
+
+      - name: Set up Virtual Environment and Dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Linux AppImage
+        run: |
+          chmod +x build-appimage.sh
+          ./build-appimage.sh
+
+      - name: Upload Linux AppImage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-linux-appimage
+          path: build/Synapse-1.0.0-x86_64.AppImage
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m venv .venv
+          .venv\Scripts\activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows EXE
+        shell: powershell
+        run: |
+          .\build-windows.ps1
+
+      - name: Upload Windows EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-windows-exe
+          path: build/dist/Synapse.exe
+
+  create-release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Requests Library
+        run: pip install requests
+
+      - name: Download Linux AppImage Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: synapse-linux-appimage
+          path: build-artifacts/
+
+      - name: Download Windows EXE Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: synapse-windows-exe
+          path: build-artifacts/
+
+      - name: Generate Release Notes via Mistral AI
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          python scripts/generate_release_notes.py
+
+      - name: Rename Binaries to Release Format
+        run: |
+          # Đồng bộ tên file theo đúng format release chuyên nghiệp của bạn
+          mv build-artifacts/Synapse-1.0.0-x86_64.AppImage build-artifacts/Synapse-${{ github.ref_name }}-linux-x86_64.AppImage
+          mv build-artifacts/Synapse.exe build-artifacts/Synapse-${{ github.ref_name }}-windows-x64.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: build/release_notes.txt
+          files: |
+            build-artifacts/Synapse-${{ github.ref_name }}-linux-x86_64.AppImage
+            build-artifacts/Synapse-${{ github.ref_name }}-windows-x64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

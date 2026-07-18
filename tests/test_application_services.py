@@ -16,8 +16,8 @@ from domain.contracts.contract_pack import (
     locked_modify_contract_pack,
     build_contract_pack,
 )
-from application.services.ai_context_worker import (
-    AIContextWorker,
+from application.services.improve_instructions_worker import (
+    ImproveInstructionsWorker,
 )
 from application.services.workspace_config import (
     get_excluded_patterns,
@@ -182,7 +182,8 @@ def test_build_contract_pack(tmp_path: Path):
 
 
 # ===========================================================================
-# AI Context Worker Tests
+# ===========================================================================
+# Improve Instructions Worker Tests
 # ===========================================================================
 
 
@@ -195,8 +196,8 @@ class DummyAIProvider:
         self.structured_response = LLMResponse(
             content=json.dumps(
                 {
-                    "selected_paths": ["main.py", "domain/model.py"],
-                    "reasoning": "Core files for execution",
+                    "improved_instructions": "improved instructions",
+                    "explanation": "Core files for execution",
                 }
             ),
             usage={"total_tokens": 150},
@@ -212,8 +213,8 @@ class DummyAIProvider:
         return self.structured_response
 
 
-def test_ai_context_worker_success(tmp_path: Path):
-    """Test AIContextWorker chạy thành công phát ra tín hiệu finished."""
+def test_improve_instructions_worker_success(tmp_path: Path):
+    """Test ImproveInstructionsWorker chạy thành công phát ra tín hiệu finished."""
     # Mock AI provider factory
     provider = DummyAIProvider()
 
@@ -225,27 +226,26 @@ def test_ai_context_worker_success(tmp_path: Path):
 
     DomainRegistry.register_ai_provider_factory(lambda: provider)
 
-    worker = AIContextWorker(
+    worker = ImproveInstructionsWorker(
         api_key="fake_key",
         base_url="fake_url",
         model_id="gpt-4",
-        file_tree="root\n- main.py",
         user_query="Run model",
-        all_file_paths=["main.py", "domain/model.py"],
-        workspace_root=tmp_path,
+        file_tree="root\n- main.py",
+        git_diff="some diff",
     )
 
     # Listen to signals
     finished_called = False
-    result_paths = []
-    result_reasoning = ""
+    result_improved = ""
+    result_explanation = ""
     result_usage = {}
 
-    def on_finished(paths, reasoning, usage):
-        nonlocal finished_called, result_paths, result_reasoning, result_usage
+    def on_finished(improved, explanation, usage):
+        nonlocal finished_called, result_improved, result_explanation, result_usage
         finished_called = True
-        result_paths = paths
-        result_reasoning = reasoning
+        result_improved = improved
+        result_explanation = explanation
         result_usage = usage
 
     worker.signals.finished.connect(on_finished)
@@ -254,8 +254,8 @@ def test_ai_context_worker_success(tmp_path: Path):
     worker.run()
 
     assert finished_called is True
-    assert result_paths == ["main.py", "domain/model.py"]
-    assert result_reasoning == "Core files for execution"
+    assert result_improved == "improved instructions"
+    assert result_explanation == "Core files for execution"
     assert result_usage == {"total_tokens": 150}
 
     # Dọn dẹp
@@ -263,20 +263,18 @@ def test_ai_context_worker_success(tmp_path: Path):
         DomainRegistry.register_ai_provider_factory(old_factory)
 
 
-def test_ai_context_worker_cancelled(tmp_path: Path):
-    """Test AIContextWorker bị cancel trước khi hoàn thành."""
-    worker = AIContextWorker(
+def test_improve_instructions_worker_cancelled(tmp_path: Path):
+    """Test ImproveInstructionsWorker bị cancel trước khi hoàn thành."""
+    worker = ImproveInstructionsWorker(
         api_key="fake_key",
         base_url="fake_url",
         model_id="gpt-4",
-        file_tree="root",
         user_query="Query",
-        workspace_root=tmp_path,
     )
 
     finished_called = False
     worker.signals.finished.connect(
-        lambda p, r, u: setattr(finished_called, "val", True)
+        lambda imp, exp, u: setattr(finished_called, "val", True)
     )
 
     # Cancel worker

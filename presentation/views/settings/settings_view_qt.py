@@ -667,7 +667,7 @@ class SettingsViewQt(QWidget):
         api_key_row.addWidget(self._ai_api_key_input, stretch=1)
 
         # Eye toggle button overlaid on the right side of input
-        self._api_key_eye_btn = QToolButton()
+        self._api_key_eye_btn = QToolButton(self._ai_api_key_input)
         self._api_key_eye_btn.setText("\U0001f441")  # Eye emoji
         self._api_key_eye_btn.setFixedSize(28, 28)
         self._api_key_eye_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -680,7 +680,6 @@ class SettingsViewQt(QWidget):
                 border-radius: 4px;
                 color: {ThemeColors.TEXT_MUTED};
                 font-size: 14px;
-                margin-left: -32px;
             }}
             QToolButton:hover {{
                 color: {ThemeColors.PRIMARY};
@@ -689,7 +688,12 @@ class SettingsViewQt(QWidget):
         """
         )
         self._api_key_eye_btn.clicked.connect(self._toggle_api_key_visibility)
-        api_key_row.addWidget(self._api_key_eye_btn)
+
+        # Tao layout ben trong QLineEdit de dinh vi nut eye
+        eye_layout = QHBoxLayout(self._ai_api_key_input)
+        eye_layout.setContentsMargins(0, 0, 4, 0)
+        eye_layout.addStretch()
+        eye_layout.addWidget(self._api_key_eye_btn)
 
         card3b_layout.addLayout(api_key_row)
 

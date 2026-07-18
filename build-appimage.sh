@@ -64,6 +64,8 @@ pyinstaller \
     --hidden-import tiktoken_ext \
     --hidden-import tiktoken_ext.openai_public \
     --collect-all tiktoken_ext \
+    --collect-all codex_cli_bin \
+    --collect-all openai_codex \
     --copy-metadata openai-codex \
     --copy-metadata openai-codex-cli-bin \
     --distpath "$BUILD_DIR/dist" \

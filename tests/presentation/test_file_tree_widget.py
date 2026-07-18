@@ -328,3 +328,47 @@ def test_collect_expanded_empty(widget):
 
 def test_widget_has_close_workspace_button(widget):
     assert widget._close_workspace_btn is not None
+
+
+def test_is_loading_tree_prevents_selection_write(widget_with_tree):
+    widget, tmp_path = widget_with_tree
+    
+    # Ghi nhận trạng thái lúc bình thường
+    assert widget._is_loading_tree is False
+    
+    # Mocking self._write_agent_selection để kiểm tra xem có bị gọi không
+    original_write = widget._write_agent_selection
+    mock_write = MagicMock()
+    widget._write_agent_selection = mock_write
+    
+    # 1. Khi load_tree chạy, flag _is_loading_tree được kích hoạt
+    # Chúng ta verify rằng trong suốt quá trình load_tree, nếu _write_agent_selection được gọi,
+    # nó sẽ return sớm nhờ _is_loading_tree.
+    widget._is_loading_tree = True
+    widget._write_agent_selection({"test_path"})
+    
+    # Vì mock_write được gọi nhưng bên trong _write_agent_selection nguyên bản
+    # sẽ return sớm khi _is_loading_tree = True, hãy verify logic này gián tiếp qua
+    # việc gọi hàm thật với flag.
+    # Khôi phục hàm thật để test logic của nó
+    widget._write_agent_selection = original_write
+    
+    # Tạo mock cho json.dump hoặc os.replace để verify nó không chạy ghi IO xuống disk
+    import os
+    original_replace = os.replace
+    mock_replace = MagicMock()
+    os.replace = mock_replace
+    
+    try:
+        # Khi flag = True: Không được ghi xuống disk
+        widget._is_loading_tree = True
+        widget._write_agent_selection({str(tmp_path / "main.py")})
+        mock_replace.assert_not_called()
+        
+        # Khi flag = False: Phải ghi xuống disk
+        widget._is_loading_tree = False
+        widget._write_agent_selection({str(tmp_path / "main.py")})
+        mock_replace.assert_called_once()
+    finally:
+        os.replace = original_replace
+

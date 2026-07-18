@@ -277,6 +277,8 @@ $pyinstallerArgs += @(
     "--collect-all", "tiktoken_ext",
     "--collect-all", "tiktoken",
     "--collect-all", "detect_secrets",
+    "--collect-all", "codex_cli_bin",
+    "--collect-all", "openai_codex",
     "--copy-metadata", "openai-codex",
     "--copy-metadata", "openai-codex-cli-bin"
 )

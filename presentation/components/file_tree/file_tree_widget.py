@@ -9,6 +9,7 @@ Composite widget bao gồm:
 """
 
 import os
+import json
 import logging
 from pathlib import Path
 from typing import Optional, Set, List, Dict, TYPE_CHECKING
@@ -100,6 +101,7 @@ class FileTreeWidget(QWidget):
         # Write thực hiện synchronous để tránh race condition với poll
         self._last_synced_selection: Set[str] = set()
         self._is_syncing_selection: bool = False
+        self._is_loading_tree: bool = False
         self._selection_poll_timer = QTimer(self)
         self._selection_poll_timer.setInterval(2000)
         self._selection_poll_timer.timeout.connect(self._poll_agent_selection)
@@ -320,7 +322,11 @@ class FileTreeWidget(QWidget):
         else:
             self._selection_poll_timer.stop()
 
-        self._model.load_tree(workspace_path)
+        self._is_loading_tree = True
+        try:
+            self._model.load_tree(workspace_path)
+        finally:
+            self._is_loading_tree = False
 
         if workspace_path is not None:
             # Expand root node
@@ -1062,8 +1068,8 @@ class FileTreeWidget(QWidget):
         Neu dung debounce, poll timer co the doc JSON cu trong khoang delay
         va ghi de selection moi cua user -> mat checkbox.
         """
-        # Bỏ qua nếu đang sync từ poll (tránh vòng lặp)
-        if self._is_syncing_selection:
+        # Bỏ qua nếu đang sync từ poll hoặc đang reload/load tree (tránh ghi đè mảng rỗng)
+        if self._is_syncing_selection or self._is_loading_tree:
             return
 
         workspace = self._model.get_workspace_path()

@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot, QTimer
+from presentation.config.theme import ThemeColors
 
 
 from domain.smart_context.tree_item import TreeItem

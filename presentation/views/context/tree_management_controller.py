@@ -214,6 +214,9 @@ class TreeManagementController(QObject):
         Invalidate cac cache lien quan den file nay.
         Thread-safe: co the goi tu bat ky thread nao.
         """
+        if ".synapse" in path:
+            return
+
         from domain.ports.registry import DomainRegistry
 
         DomainRegistry.cache_registry().invalidate_for_path(path)
@@ -230,6 +233,9 @@ class TreeManagementController(QObject):
 
         Khong can invalidate cache cho files moi.
         """
+        if ".synapse" in path:
+            return
+
         # Notify graph service de them file moi vao graph
         if hasattr(self._view, "_graph_provider") and self._view._graph_provider:
             self._view._graph_provider.on_files_changed([path])
@@ -240,6 +246,9 @@ class TreeManagementController(QObject):
 
         Delegate sang on_file_modified vi can invalidate cache tuong tu.
         """
+        if ".synapse" in path:
+            return
+
         self.on_file_modified(path)
 
         # Notify graph service de xoa stale edges

@@ -38,6 +38,63 @@ class AIPickFilesWorkerSignals(QObject):
     progress = Signal(str)
 
 
+def _get_workspace_files_summary(workspace_path: str, excluded_patterns: List[str]) -> str:
+    """
+    Duyệt nhanh và trả về danh sách các tệp tin trong workspace dưới dạng chuỗi rút gọn,
+    sử dụng IgnoreEngine (source of truth) để lọc — bao gồm .gitignore, global gitignore
+    và EXTENDED_IGNORE_PATTERNS đã được định nghĩa trong toàn ứng dụng.
+    Giới hạn tối đa 1000 tệp tin để tránh tràn context.
+    """
+    from infrastructure.filesystem.ignore_engine import IgnoreEngine
+    from pathlib import Path
+
+    root = Path(workspace_path)
+    engine = IgnoreEngine()
+    spec = engine.build_pathspec(
+        root,
+        use_default_ignores=True,
+        excluded_patterns=excluded_patterns or [],
+        use_gitignore=True,
+    )
+
+    files_list = []
+    max_files = 1000
+    count = 0
+
+    for root_dir, dirs, files in os.walk(workspace_path):
+        rel_root = os.path.relpath(root_dir, workspace_path)
+        if rel_root == ".":
+            rel_root = ""
+
+        # Prune ignored directories để tránh quét sâu vào .venv, node_modules...
+        pruned = []
+        for d in dirs:
+            d_path = (os.path.join(rel_root, d) if rel_root else d) + "/"
+            if spec.match_file(d_path):
+                continue
+            pruned.append(d)
+        dirs[:] = pruned
+
+        for f in files:
+            f_path = os.path.join(rel_root, f) if rel_root else f
+            if spec.match_file(f_path):
+                continue
+            files_list.append(f_path)
+            count += 1
+            if count >= max_files:
+                break
+        if count >= max_files:
+            break
+
+    if not files_list:
+        return "No files found or all files are excluded."
+
+    summary = "\n".join([f"- {fp}" for fp in files_list])
+    if count >= max_files:
+        summary += "\n- ... (truncated, too many files)"
+    return summary
+
+
 class AIPickFilesWorker(QRunnable):
     """
     Background worker sử dụng Codex SDK để thám hiểm thư mục và chọn file.
@@ -141,6 +198,13 @@ class AIPickFilesWorker(QRunnable):
 
             excluded_patterns_str = "\n".join([f"- {pat}" for pat in excluded_patterns])
 
+            # Tạo danh sách file tree tóm tắt của workspace để cung cấp sẵn cho Agent
+            try:
+                files_summary = _get_workspace_files_summary(self._workspace, excluded_patterns)
+            except Exception as ex:
+                logger.warning("Failed to generate workspace files summary: %s", ex)
+                files_summary = "Error scanning workspace files."
+
             prompt = f"""You are a file selection assistant. Your task is to identify all files in this workspace that are relevant to the user instruction:
 
 USER_INSTRUCTION:
@@ -149,11 +213,14 @@ USER_INSTRUCTION:
 EXCLUDED_PATTERNS (Do NOT scan, access, view, or suggest any paths matching these patterns):
 {excluded_patterns_str}
 
+AVAILABLE FILES IN WORKSPACE (Use this list to identify files directly without crawling the workspace):
+{files_summary}
+
 Selection Philosophy:
 - It is better to be slightly over-inclusive than under-inclusive. If you suspect a file might be relevant or helpful for context, include it in the paths list.
 
-Please explore the workspace using directory listing, file viewing, or search tools to find relevant files.
-Once you have identified the relevant files, output a single JSON object containing a list of relative file paths.
+Please review the user instruction and the available files listed above.
+Select the files that are most relevant. Output a single JSON object containing a list of relative file paths.
 The format MUST strictly follow this JSON structure:
 {{
   "paths": [
@@ -164,6 +231,7 @@ The format MUST strictly follow this JSON structure:
 
 DO NOT write any files to the workspace (you are in a read-only sandbox).
 Return ONLY the JSON object and absolutely nothing else. Do not include markdown formatting or explanations.
+You can still use file viewing or search tools if you need to inspect the contents of specific files to verify their relevance, but avoid listing directories since the full available file list is already provided above.
 """
             if self._cancelled:
                 return

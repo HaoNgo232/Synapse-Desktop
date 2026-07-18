@@ -110,6 +110,9 @@ class ContextViewQt(
         # Improve Instructions state: worker reference
         self._improve_instructions_worker = None
         self._improve_instructions_generation: int = 0
+        # AI Pick Files state: worker reference
+        self._ai_pick_files_worker = None
+        self._ai_pick_files_generation: int = 0
 
         # Services (with dependency injection support)
         self._file_watcher = DomainRegistry.file_watcher_service()
@@ -237,6 +240,13 @@ class ContextViewQt(
         if hasattr(self, "_improve_instructions_btn"):
             self._improve_instructions_btn.setEnabled(True)
             self._improve_instructions_btn.setText("Improve Instructions")
+
+        # Invalidate any in-flight AI Pick Files request
+        self._ai_pick_files_generation += 1
+        self._cancel_ai_pick_files_worker()
+        if hasattr(self, "_ai_pick_files_btn"):
+            self._ai_pick_files_btn.setEnabled(True)
+            self._ai_pick_files_btn.setText("AI Pick Files")
 
         # 1. Stop file watcher for old workspace
         if self._file_watcher:
@@ -675,6 +685,9 @@ class ContextViewQt(
 
         self._improve_instructions_generation += 1
         self._cancel_improve_instructions_worker()
+
+        self._ai_pick_files_generation += 1
+        self._cancel_ai_pick_files_worker()
 
         # Cleanup preset widget connections to prevent leaks
         if hasattr(self, "_preset_widget") and self._preset_widget:
@@ -1366,6 +1379,129 @@ class ContextViewQt(
     def _on_improve_instructions_progress(self, status: str) -> None:
         """Cap nhat text button khi worker dang chay."""
         self._improve_instructions_btn.setText(status)
+
+    # ===== AI Pick Files =====
+
+    def _cancel_ai_pick_files_worker(self) -> None:
+        """Huỷ và ngắt kết nối signals của AIPickFilesWorker nếu đang chạy."""
+        worker = self._ai_pick_files_worker
+        if worker is None:
+            return
+
+        try:
+            cancel = getattr(worker, "cancel", None)
+            if callable(cancel):
+                cancel()
+        except Exception:
+            logger.error(
+                "context_view: cancel ai_pick_files_worker failed", exc_info=True
+            )
+
+        try:
+            signals = getattr(worker, "signals", None)
+            if signals is not None:
+                try:
+                    signals.finished.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                try:
+                    signals.error.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                try:
+                    signals.progress.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+        except RuntimeError:
+            pass
+
+        self._ai_pick_files_worker = None
+
+    def _run_ai_pick_files(self) -> None:
+        """
+        Đọc instruction hiện tại và chạy AIPickFilesWorker trong background thread.
+        """
+        user_instruction = self.get_instructions_text().strip()
+        if not user_instruction:
+            self._show_status("Please write your instruction first.", is_error=True)
+            return
+
+        workspace = self.get_workspace()
+        if not workspace:
+            self._show_status(
+                "No folder opened. Open a workspace first.", is_error=True
+            )
+            return
+
+        settings = DomainRegistry.settings()
+        if not settings.ai_api_key:
+            self._show_status(
+                "Please configure AI API Key in Settings first.", is_error=True
+            )
+            return
+        if not settings.ai_model_id:
+            self._show_status(
+                "Please select an AI model in Settings first.", is_error=True
+            )
+            return
+
+        from application.services.ai_pick_files_worker import AIPickFilesWorker
+        from PySide6.QtCore import QThreadPool
+
+        # Disable button khi đang chạy
+        self._ai_pick_files_btn.setEnabled(False)
+        self._ai_pick_files_btn.setText("AI Picking...")
+
+        # Tạo worker chạy trên background thread
+        worker = AIPickFilesWorker(
+            api_key=settings.ai_api_key,
+            base_url=settings.ai_base_url,
+            model_id=settings.ai_model_id,
+            workspace=str(workspace),
+            user_instruction=user_instruction,
+        )
+
+        self._ai_pick_files_generation += 1
+        current_gen = self._ai_pick_files_generation
+
+        worker.signals.finished.connect(
+            lambda paths, g=current_gen: self._on_ai_pick_files_finished(paths, g)
+        )
+        worker.signals.error.connect(
+            lambda msg, g=current_gen: self._on_ai_pick_files_error(msg, g)
+        )
+        worker.signals.progress.connect(self._on_ai_pick_files_progress)
+
+        # Giữ reference tránh GC
+        self._ai_pick_files_worker = worker
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_ai_pick_files_finished(self, paths: list, generation: int) -> None:
+        if generation != self._ai_pick_files_generation:
+            return
+
+        self._ai_pick_files_worker = None
+        self._ai_pick_files_btn.setEnabled(True)
+        self._ai_pick_files_btn.setText("AI Pick Files")
+
+        # Đồng bộ hóa ngay lập tức từ selection.json
+        if hasattr(self, "file_tree_widget") and self.file_tree_widget:
+            self.file_tree_widget._poll_agent_selection()
+
+        self._show_status(f"AI picked {len(paths)} files successfully!")
+
+    def _on_ai_pick_files_error(self, error_msg: str, generation: int) -> None:
+        if generation != self._ai_pick_files_generation:
+            return
+
+        self._ai_pick_files_worker = None
+        self._ai_pick_files_btn.setEnabled(True)
+        self._ai_pick_files_btn.setText("AI Pick Files")
+
+        self._show_status(f"AI Pick Files failed: {error_msg}", is_error=True)
+
+    def _on_ai_pick_files_progress(self, status: str) -> None:
+        self._ai_pick_files_btn.setText(status)
 
     # ===== Helpers =====
 

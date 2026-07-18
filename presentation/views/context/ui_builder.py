@@ -870,6 +870,47 @@ class UIBuilderMixin:
         self._improve_instructions_btn.clicked.connect(self._run_improve_instructions)
         header.addWidget(self._improve_instructions_btn)
 
+        # AI Pick Files button: chon file bang AI
+        self._ai_pick_files_btn = QToolButton()
+        self._ai_pick_files_btn.setText("AI Pick Files")
+        self._ai_pick_files_btn.setIcon(
+            create_colored_icon(
+                os.path.join(assets_dir, "brain.svg"), ThemeColors.PRIMARY
+            )
+        )
+        self._ai_pick_files_btn.setIconSize(QSize(13, 13))
+        self._ai_pick_files_btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self._ai_pick_files_btn.setStyleSheet(
+            f"""
+            QToolButton {{
+                background: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.PRIMARY};
+                border: 1px solid {ThemeColors.PRIMARY}50;
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QToolButton:hover {{
+                background: {ThemeColors.PRIMARY}20;
+                border-color: {ThemeColors.PRIMARY};
+            }}
+            QToolButton:disabled {{
+                background: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_MUTED};
+                border-color: {ThemeColors.BORDER};
+            }}
+            """
+        )
+        self._ai_pick_files_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ai_pick_files_btn.setToolTip(
+            "Automatically select relevant files in the workspace based on your instructions"
+        )
+        self._ai_pick_files_btn.clicked.connect(self._run_ai_pick_files)
+        header.addWidget(self._ai_pick_files_btn)
+
         header.addStretch()
 
         # Word/char counter

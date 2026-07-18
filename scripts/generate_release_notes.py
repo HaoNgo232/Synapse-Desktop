@@ -2,8 +2,8 @@
 import os
 import subprocess
 import sys
-import json
 import requests
+
 
 def get_last_published_release_tag() -> str:
     """
@@ -16,7 +16,7 @@ def get_last_published_release_tag() -> str:
     token = os.getenv("GITHUB_TOKEN")
     headers = {
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+        "X-GitHub-Api-Version": "2022-11-28",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -30,11 +30,14 @@ def get_last_published_release_tag() -> str:
         published = [r for r in releases if not r.get("draft")]
         if published:
             tag = published[0]["tag_name"]
-            print(f"GitHub API: Detected last successfully published release tag: {tag}")
+            print(
+                f"GitHub API: Detected last successfully published release tag: {tag}"
+            )
             return tag
     except Exception as e:
         print(f"Failed to fetch latest release from GitHub API: {e}")
     return None
+
 
 def get_git_commit_log():
     """
@@ -48,11 +51,19 @@ def get_git_commit_log():
         # 1. Thử tìm tag dạng vX.Y.0 (ví dụ: v1.0.0, v1.1.0) làm base
         try:
             tag_match = subprocess.run(
-                ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.0", "HEAD^"],
+                [
+                    "git",
+                    "describe",
+                    "--tags",
+                    "--abbrev=0",
+                    "--match",
+                    "v[0-9]*.[0-9]*.0",
+                    "HEAD^",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                check=True
+                check=True,
             )
             last_tag = tag_match.stdout.strip()
             print(f"Detecting last stable base tag (fallback): {last_tag}")
@@ -64,7 +75,7 @@ def get_git_commit_log():
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    check=True
+                    check=True,
                 )
                 last_tag = tag_match.stdout.strip()
                 print(f"Detecting last tag (fallback 2): {last_tag}")
@@ -85,12 +96,13 @@ def get_git_commit_log():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            check=True
+            check=True,
         )
         return logs.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"Error fetching git logs: {e.stderr}")
         return ""
+
 
 def generate_notes_with_mistral(api_key, commits, version, user):
     """
@@ -145,29 +157,32 @@ Synapse Desktop is a local desktop tool for developers who use AI coding assista
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
-            temperature=0.2
+            temperature=0.2,
         )
         return response.choices[0].message.content
     except Exception as e:
         # Nếu model chính bị lỗi (hết rate limit, nghẽn mạng...), tự động thử lại với model phụ (rẻ và nhanh hơn)
         fallback_model = "mistral-small-latest"
-        print(f"Primary model '{model}' failed: {e}. Trying fallback model '{fallback_model}'...")
+        print(
+            f"Primary model '{model}' failed: {e}. Trying fallback model '{fallback_model}'..."
+        )
         try:
             response = client.chat.completions.create(
                 model=fallback_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
-                temperature=0.2
+                temperature=0.2,
             )
             print(f"Fallback model '{fallback_model}' succeeded!")
             return response.choices[0].message.content
         except Exception as fallback_err:
             print(f"Fallback model '{fallback_model}' also failed: {fallback_err}")
             sys.exit(1)
+
 
 def clean_llm_markdown(content: str) -> str:
     """
@@ -176,13 +191,14 @@ def clean_llm_markdown(content: str) -> str:
     """
     content = content.strip()
     if content.startswith("```markdown"):
-        content = content[len("```markdown"):].strip()
+        content = content[len("```markdown") :].strip()
     elif content.startswith("```"):
         content = content[3:].strip()
-    
+
     if content.endswith("```"):
         content = content[:-3].strip()
     return content
+
 
 def main():
     api_key = os.getenv("MISTRAL_API_KEY")
@@ -212,6 +228,7 @@ def main():
     print("----------------------------------------")
     print(notes)
     print("----------------------------------------")
+
 
 if __name__ == "__main__":
     main()

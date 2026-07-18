@@ -228,7 +228,9 @@ class TestPresetController:
         mock_view._selected_paths = {str(temp_workspace / "file1.py")}
 
         controller.create_preset("First")
-        time.sleep(0.02)  # Ensure distinct timestamps on Windows (low-res clock ~10-15ms)
+        time.sleep(
+            0.02
+        )  # Ensure distinct timestamps on Windows (low-res clock ~10-15ms)
         controller.create_preset("Second")
 
         presets = controller.list_presets()

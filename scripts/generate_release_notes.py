@@ -102,20 +102,21 @@ def generate_notes_with_mistral(api_key, commits, version, user):
         "Authorization": f"Bearer {api_key}"
     }
 
+
     # Prompt chỉ định cấu trúc Release Notes chuẩn chuyên nghiệp dạng Markdown
     system_prompt = (
         "You are an expert software release manager. Your task is to generate professional, structured "
         "and clean release notes in Markdown format for a desktop app named 'Synapse Desktop'.\n"
         "Use proper Markdown formatting: ## for section headers, **bold** for emphasis, - for bullet lists, etc.\n"
         f"CRITICAL: Do NOT invent or change the version or user name. You MUST use '{version}' as the version and '{user}' as the release actor.\n"
-        "Keep the language natural, concise, and focused on developers."
+        "CRITICAL: Do NOT wrap the entire output in markdown code blocks like ```markdown or ```. Output the raw markdown content directly."
     )
 
     user_prompt = f"""Please write the release notes based on the following recent git commits:
 
 {commits}
 
-Ensure the output matches this exact Markdown structure:
+Ensure the output matches this exact Markdown structure (Do NOT wrap the output in ```markdown or ```):
 
 ## Synapse Desktop {version}
 
@@ -164,6 +165,21 @@ Synapse Desktop is a local desktop tool for developers who use AI coding assista
         print(f"API Request to Mistral failed: {e}")
         sys.exit(1)
 
+def clean_llm_markdown(content: str) -> str:
+    """
+    Loại bỏ các ký tự bao bọc code block ```markdown ... ``` nếu LLM tự ý thêm vào.
+    Điều này giúp GitHub Release render chuẩn Markdown thay vì hiển thị như một code block lớn.
+    """
+    content = content.strip()
+    if content.startswith("```markdown"):
+        content = content[len("```markdown"):].strip()
+    elif content.startswith("```"):
+        content = content[3:].strip()
+    
+    if content.endswith("```"):
+        content = content[:-3].strip()
+    return content
+
 def main():
     api_key = os.getenv("MISTRAL_API_KEY")
     if not api_key:
@@ -181,6 +197,7 @@ def main():
 
     print("Calling Mistral AI to generate release notes...")
     notes = generate_notes_with_mistral(api_key, commits, version, user)
+    notes = clean_llm_markdown(notes)
 
     # Lưu vào file build/release_notes.txt để workflow sử dụng
     os.makedirs("build", exist_ok=True)

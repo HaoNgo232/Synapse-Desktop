@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QWidget,
+    QPushButton,
 )
 from PySide6.QtCore import Qt, QTimer
 from presentation.config.theme import ThemeColors, ThemeFonts
@@ -95,7 +96,7 @@ class AIPickFilesDialog(QDialog):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("AI File Suggestions")
-        self.setFixedSize(380, 230)
+        self.setFixedSize(380, 270)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.CustomizeWindowHint
@@ -108,12 +109,19 @@ class AIPickFilesDialog(QDialog):
                 border-radius: 12px;
             }}
         """)
+
+        self.elapsed_seconds = 0
+        self.timer = QTimer(self)
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self._update_time)
+
         self._build_ui()
+        self.timer.start()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         title_label = QLabel("AI File Selection Progress")
         title_label.setStyleSheet(
@@ -122,7 +130,7 @@ class AIPickFilesDialog(QDialog):
         layout.addWidget(title_label)
 
         self.step_container = QVBoxLayout()
-        self.step_container.setSpacing(8)
+        self.step_container.setSpacing(6)
 
         self.steps = [
             StepRow("Initialize Codex Agent"),
@@ -154,10 +162,49 @@ class AIPickFilesDialog(QDialog):
         """)
         layout.addWidget(self.progress_bar)
 
+        # Footer layout containing timer and cancel button
+        footer_layout = QHBoxLayout()
+        footer_layout.setContentsMargins(0, 4, 0, 0)
+
+        self.time_label = QLabel("Elapsed: 0s")
+        self.time_label.setStyleSheet(
+            f"font-size: 11px; color: {ThemeColors.TEXT_MUTED}; font-family: {ThemeFonts.FAMILY_BODY};"
+        )
+        footer_layout.addWidget(self.time_label)
+
+        footer_layout.addStretch()
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setFixedSize(72, 28)
+        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {ThemeColors.BG_ELEVATED};
+                color: {ThemeColors.TEXT_SECONDARY};
+                border: 1px solid {ThemeColors.BORDER_LIGHT};
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.ERROR}20;
+                color: {ThemeColors.ERROR};
+                border-color: {ThemeColors.ERROR};
+            }}
+        """)
+        self.cancel_btn.clicked.connect(self.reject)
+        footer_layout.addWidget(self.cancel_btn)
+
+        layout.addLayout(footer_layout)
+
         # Set initial status
         self.update_step(0, "active")
         for i in range(1, len(self.steps)):
             self.update_step(i, "pending")
+
+    def _update_time(self) -> None:
+        self.elapsed_seconds += 1
+        self.time_label.setText(f"Elapsed: {self.elapsed_seconds}s")
 
     def update_step(self, index: int, status: str, detail_text: str = "") -> None:
         """Cập nhật trạng thái cho từng bước."""
@@ -166,6 +213,8 @@ class AIPickFilesDialog(QDialog):
 
     def finish_with_success(self) -> None:
         """Đánh dấu tất cả các bước thành công và đóng Dialog sau 600ms để hiển thị mượt mà."""
+        self.timer.stop()
+        self.cancel_btn.setEnabled(False)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
         self.progress_bar.setStyleSheet(f"""
@@ -175,3 +224,7 @@ class AIPickFilesDialog(QDialog):
         """)
         # Đợi một chút để người dùng thấy hoàn thành
         QTimer.singleShot(600, self, self.accept)
+
+    def reject(self) -> None:
+        self.timer.stop()
+        super().reject()

@@ -1,4 +1,3 @@
-import json
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +6,9 @@ from openai_codex import Sandbox
 
 
 class DummyTurnResult:
-    def __init__(self, error=None, final_response="Done") -> None:
+    def __init__(
+        self, error=None, final_response='{"paths": ["main.py", "utils/helper.py"]}'
+    ) -> None:
         self.id = "turn-123"
         self.status = "completed"
         self.error = error
@@ -26,20 +27,17 @@ class TestAIPickFilesWorker:
             yield mock
 
     def test_ai_pick_files_worker_success(self, mock_codex, tmp_path):
-        # Setup workspace and selection.json mock data
+        # Setup workspace and mock files to pass validation
         workspace = tmp_path
-        synapse_dir = workspace / ".synapse"
-        synapse_dir.mkdir()
-        selection_file = synapse_dir / "selection.json"
+        (workspace / "main.py").write_text("print('hello')", encoding="utf-8")
+        (workspace / "utils").mkdir()
+        (workspace / "utils" / "helper.py").write_text(
+            "def helper(): pass", encoding="utf-8"
+        )
 
         expected_paths = ["main.py", "utils/helper.py"]
-        selection_data = {
-            "version": 2,
-            "paths": expected_paths,
-            "provenance": {p: "agent" for p in expected_paths},
-        }
 
-        # Mock thread behavior: when _collect_stream_with_progress is called, simulate selection.json creation
+        # Mock thread behavior: when _collect_stream_with_progress is called, return DummyTurnResult
         mock_thread = MagicMock()
         mock_turn = MagicMock()
         mock_turn.id = "turn-123"
@@ -70,13 +68,7 @@ class TestAIPickFilesWorker:
         with patch.object(
             AIPickFilesWorker, "_collect_stream_with_progress"
         ) as mock_collect:
-
-            def mock_collect_impl(stream, turn_id):
-                with open(selection_file, "w", encoding="utf-8") as f:
-                    json.dump(selection_data, f, indent=2)
-                return DummyTurnResult()
-
-            mock_collect.side_effect = mock_collect_impl
+            mock_collect.return_value = DummyTurnResult()
 
             # Run worker
             worker.run()
@@ -84,16 +76,9 @@ class TestAIPickFilesWorker:
         # Assertions
         assert finished_paths == expected_paths
         mock_codex_instance.thread_start.assert_called_once_with(
-            cwd=str(workspace), sandbox=Sandbox.workspace_write
+            cwd=str(workspace), sandbox=Sandbox.read_only
         )
         mock_codex_instance.close.assert_called_once()
-
-        # Check corrected format was written
-        with open(selection_file, "r", encoding="utf-8") as f:
-            saved_data = json.load(f)
-        assert saved_data["version"] == 2
-        assert saved_data["paths"] == expected_paths
-        assert saved_data["provenance"]["main.py"] == "agent"
 
     def test_ai_pick_files_worker_agent_error(self, mock_codex, tmp_path):
         workspace = tmp_path

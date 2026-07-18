@@ -1430,15 +1430,33 @@ class ContextViewQt(
         """
         Đọc instruction hiện tại và chạy AIPickFilesWorker trong background thread.
         """
+        # 1. Single-flight guard
+        if self._ai_pick_files_worker is not None:
+            self._show_status("AI file selection is already running.", is_error=True)
+            return
+
         user_instruction = self.get_instructions_text().strip()
         if not user_instruction:
             self._show_status("Please write your instruction first.", is_error=True)
+            return
+        if len(user_instruction) > 8000:
+            self._show_status(
+                "Instruction is too long. Shorten it to under 8000 characters.",
+                is_error=True,
+            )
             return
 
         workspace = self.get_workspace()
         if not workspace:
             self._show_status(
                 "No folder opened. Open a workspace first.", is_error=True
+            )
+            return
+
+        # Validate workspace directory existence
+        if not Path(workspace).is_dir():
+            self._show_status(
+                "Workspace path is invalid or does not exist.", is_error=True
             )
             return
 
@@ -1466,6 +1484,7 @@ class ContextViewQt(
 
         # Khởi tạo và hiển thị Dialog tiến độ (non-blocking)
         self._ai_pick_files_dialog = AIPickFilesDialog(self)
+        self._ai_pick_files_dialog.rejected.connect(self._cancel_ai_pick_files_worker)
         self._ai_pick_files_dialog.show()
 
         # Tạo worker chạy trên background thread
@@ -1486,7 +1505,10 @@ class ContextViewQt(
         worker.signals.error.connect(
             lambda msg, g=current_gen: self._on_ai_pick_files_error(msg, g)
         )
-        worker.signals.progress.connect(self._on_ai_pick_files_progress)
+        # Kết nối progress signal bảo vệ bằng generation counter
+        worker.signals.progress.connect(
+            lambda msg, g=current_gen: self._on_ai_pick_files_progress(msg, g)
+        )
 
         # Giữ reference tránh GC
         self._ai_pick_files_worker = worker
@@ -1507,11 +1529,59 @@ class ContextViewQt(
             dialog.finish_with_success()
             self._ai_pick_files_dialog = None
 
-        # Đồng bộ hóa ngay lập tức từ selection.json
-        if hasattr(self, "file_tree_widget") and self.file_tree_widget:
-            self.file_tree_widget._poll_agent_selection()
+        if not paths:
+            self._show_status(
+                "AI found no relevant files in the workspace.", is_error=False
+            )
+            return
 
-        self._show_status(f"AI picked {len(paths)} files successfully!")
+        settings = DomainRegistry.settings()
+        auto_apply = getattr(settings, "ai_auto_apply", True)
+
+        # Nếu số lượng file đề xuất > 50 hoặc auto_apply tắt, hiện Dialog xác nhận
+        if len(paths) > 50 or not auto_apply:
+            from PySide6.QtWidgets import QMessageBox
+
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Apply Selection?")
+            msg_box.setText(
+                f"AI suggested {len(paths)} files.\nDo you want to apply this selection to your workspace?"
+            )
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            msg_box.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            msg_box.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {ThemeColors.BG_SURFACE};
+                    color: white;
+                }}
+                QLabel {{
+                    color: white;
+                    font-size: 12px;
+                }}
+                QPushButton {{
+                    background-color: {ThemeColors.BG_ELEVATED};
+                    color: white;
+                    border: 1px solid {ThemeColors.BORDER_LIGHT};
+                    border-radius: 4px;
+                    padding: 4px 14px;
+                    min-width: 60px;
+                }}
+                QPushButton:hover {{
+                    background-color: {ThemeColors.PRIMARY}20;
+                    border-color: {ThemeColors.PRIMARY};
+                }}
+            """)
+            if msg_box.exec() != QMessageBox.StandardButton.Yes:
+                self._show_status("AI file suggestions discarded.")
+                return
+
+        # Đồng bộ hóa qua public API sync_agent_selection của file_tree_widget
+        if hasattr(self, "file_tree_widget") and self.file_tree_widget:
+            self.file_tree_widget.sync_agent_selection(paths)
+
+        self._show_status(f"AI suggested {len(paths)} files; applied successfully!")
 
     def _on_ai_pick_files_error(self, error_msg: str, generation: int) -> None:
         if generation != self._ai_pick_files_generation:
@@ -1521,18 +1591,48 @@ class ContextViewQt(
         self._ai_pick_files_btn.setEnabled(True)
         self._ai_pick_files_btn.setText("AI Pick Files")
 
+        # Actionable error mapping
+        sanitized_msg = error_msg.lower()
+        if (
+            "401" in sanitized_msg
+            or "invalid key" in sanitized_msg
+            or "authentication" in sanitized_msg
+        ):
+            display_msg = "API key was rejected. Check AI Context Builder in Settings."
+        elif "403" in sanitized_msg or "forbidden" in sanitized_msg:
+            display_msg = "API key does not have access to the selected model."
+        elif "404" in sanitized_msg or "not found" in sanitized_msg:
+            display_msg = "Selected AI model was not found."
+        elif "timeout" in sanitized_msg or "timed out" in sanitized_msg:
+            display_msg = "AI provider did not respond in time."
+        elif "connection refused" in sanitized_msg or "connect" in sanitized_msg:
+            display_msg = "Could not connect to AI provider. Verify Base URL and network connection."
+        else:
+            display_msg = error_msg
+            if (
+                "authorization" in display_msg.lower()
+                or "api_key" in display_msg.lower()
+                or "bearer" in display_msg.lower()
+            ):
+                display_msg = "Invalid authorization or AI credentials."
+            if len(display_msg) > 120:
+                display_msg = display_msg[:120] + "..."
+
         # Đánh dấu bước lỗi và đóng Dialog sau 2s
         dialog = getattr(self, "_ai_pick_files_dialog", None)
         if dialog:
-            dialog.update_step(2, "error", f"Error: {error_msg}")
+            dialog.update_step(2, "error", f"Error: {display_msg}")
             from PySide6.QtCore import QTimer
 
             QTimer.singleShot(2000, dialog, dialog.reject)
             self._ai_pick_files_dialog = None
 
-        self._show_status(f"AI Pick Files failed: {error_msg}", is_error=True)
+        self._show_status(f"AI Pick Files failed: {display_msg}", is_error=True)
 
-    def _on_ai_pick_files_progress(self, status: str) -> None:
+    def _on_ai_pick_files_progress(self, status: str, generation: int) -> None:
+        if generation != self._ai_pick_files_generation:
+            return
+
         if hasattr(self, "_ai_pick_files_btn") and self._ai_pick_files_btn:
             self._ai_pick_files_btn.setText("AI Picking...")
 

@@ -7,7 +7,7 @@ Sử dụng QRunnable + QThreadPool để tương tác với Codex SDK trên sec
 import os
 import json
 import logging
-from pathlib import Path
+import re
 from typing import List
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
@@ -62,12 +62,21 @@ class AIPickFilesWorker(QRunnable):
         if self._cancelled:
             return
 
-        self.signals.progress.emit("Initializing Codex...")
+        # Validate input parameters
+        instr_trimmed = self._user_instruction.strip()
+        if not instr_trimmed:
+            self.signals.error.emit("User instruction cannot be empty.")
+            return
+        if len(instr_trimmed) > 8000:
+            self.signals.error.emit(
+                "User instruction exceeds maximum length of 8000 characters."
+            )
+            return
+        if "\x00" in instr_trimmed:
+            self.signals.error.emit("User instruction contains invalid characters.")
+            return
 
-        # Đảm bảo thư mục .synapse tồn tại
-        synapse_dir = Path(self._workspace) / ".synapse"
-        synapse_dir.mkdir(parents=True, exist_ok=True)
-        selection_file = synapse_dir / "selection.json"
+        self.signals.progress.emit("Initializing Codex...")
 
         # Cấu hình custom provider cho Codex SDK
         provider_id = "synapse_custom"
@@ -82,7 +91,8 @@ class AIPickFilesWorker(QRunnable):
             )
         )
 
-        # Thiết lập biến môi trường để Codex SDK sử dụng cho custom provider
+        # Thiết lập biến môi trường để Codex SDK sử dụng, lưu lại giá trị cũ để restore
+        old_env_key = os.environ.get("AI_API_KEY")
         os.environ["AI_API_KEY"] = self._api_key
 
         codex = None
@@ -97,29 +107,47 @@ class AIPickFilesWorker(QRunnable):
 
             self.signals.progress.emit("Connecting to Agent...")
 
-            # Khởi chạy thread trong workspace với sandbox write
-            thread = codex.thread_start(
-                cwd=self._workspace, sandbox=Sandbox.workspace_write
-            )
+            # Khởi chạy thread trong workspace với sandbox read_only để đảm bảo an toàn tuyệt đối
+            thread = codex.thread_start(cwd=self._workspace, sandbox=Sandbox.read_only)
 
-            prompt = f"""You are a file selection assistant. Your task is to identify all files in this workspace that are relevant to the user instruction: '{self._user_instruction}'.
+            # JSON encode user instruction để tránh prompt injection
+            instruction_json = json.dumps(self._user_instruction, ensure_ascii=False)
+
+            # Đọc settings để lấy các thư mục bị loại trừ (excluded patterns)
+            from domain.ports.registry import DomainRegistry
+
+            try:
+                settings = DomainRegistry.settings()
+                excluded_patterns = [
+                    p.strip()
+                    for p in settings.excluded_folders.split("\n")
+                    if p.strip()
+                ]
+            except Exception:
+                excluded_patterns = []
+
+            excluded_patterns_str = "\n".join([f"- {pat}" for pat in excluded_patterns])
+
+            prompt = f"""You are a file selection assistant. Your task is to identify all files in this workspace that are relevant to the user instruction:
+
+USER_INSTRUCTION:
+{instruction_json}
+
+EXCLUDED_PATTERNS (Do NOT scan, access, view, or suggest any paths matching these patterns):
+{excluded_patterns_str}
 
 Please explore the workspace using directory listing, file viewing, or search tools to find relevant files.
-Once you have identified the relevant files, write the list of relative file paths directly into the file '.synapse/selection.json' in the workspace.
-The format must strictly follow SelectionState v2 JSON structure:
+Once you have identified the relevant files, output a single JSON object containing a list of relative file paths.
+The format MUST strictly follow this JSON structure:
 {{
-  "version": 2,
   "paths": [
     "relative/path/to/file1.py",
     "relative/path/to/file2.py"
-  ],
-  "provenance": {{
-    "relative/path/to/file1.py": "agent",
-    "relative/path/to/file2.py": "agent"
-  }}
+  ]
 }}
-Make sure to only select files that actually exist in the workspace and are highly relevant. Do not include files in your ignore list if any.
-Do not write anything else to .synapse/selection.json. It must be valid JSON only.
+
+DO NOT write any files to the workspace (you are in a read-only sandbox).
+Return ONLY the JSON object and absolutely nothing else. Do not include markdown formatting or explanations.
 """
             if self._cancelled:
                 return
@@ -142,56 +170,114 @@ Do not write anything else to .synapse/selection.json. It must be valid JSON onl
 
             self.signals.progress.emit("Synchronizing...")
 
-            # 5. Validation and fallback
-            selected_paths: List[str] = []
-            if not selection_file.exists():
+            # Parse JSON từ response của Agent
+            response_text = result.final_response or ""
+            raw_paths = self._parse_agent_response(response_text)
+
+            # Đọc settings để check excluded folders
+            from domain.ports.registry import DomainRegistry
+
+            settings = DomainRegistry.settings()
+            excluded_patterns = [
+                p.strip() for p in settings.excluded_folders.split("\n") if p.strip()
+            ]
+
+            # Thực hiện validate an toàn qua SelectionPathValidator
+            from application.services.selection_path_validator import (
+                validate_ai_selection,
+            )
+
+            validation = validate_ai_selection(
+                workspace=self._workspace,
+                raw_paths=raw_paths,
+                ignore_patterns=excluded_patterns,
+            )
+
+            if validation.sensitive_blocked:
                 logger.warning(
-                    "Agent did not create selection.json. Attempting to initialize fallback..."
+                    "Sensitive files blocked from selection: %s",
+                    validation.sensitive_blocked,
                 )
-                empty_state = {"version": 2, "paths": [], "provenance": {}}
-                with open(selection_file, "w", encoding="utf-8") as f:
-                    json.dump(empty_state, f, indent=2)
-            else:
-                try:
-                    with open(selection_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-
-                    if isinstance(data, dict) and "paths" in data:
-                        raw_paths = data["paths"]
-                        if isinstance(raw_paths, list):
-                            selected_paths = [
-                                p for p in raw_paths if isinstance(p, str)
-                            ]
-
-                    # Chuẩn hóa lại định dạng SelectionState v2 nếu cần
-                    provenance = {p: "agent" for p in selected_paths}
-                    corrected_state = {
-                        "version": 2,
-                        "paths": selected_paths,
-                        "provenance": provenance,
-                    }
-                    with open(selection_file, "w", encoding="utf-8") as f:
-                        json.dump(corrected_state, f, indent=2)
-
-                except Exception as e:
-                    logger.warning(
-                        f"Error validating selection.json: {e}. Writing fallback."
-                    )
-                    empty_state = {"version": 2, "paths": [], "provenance": {}}
-                    with open(selection_file, "w", encoding="utf-8") as f:
-                        json.dump(empty_state, f, indent=2)
 
             if self._cancelled:
                 return
 
-            self.signals.finished.emit(selected_paths)
+            # Chỉ trả về các valid relative paths
+            self.signals.finished.emit(validation.valid_paths)
 
         except Exception as e:
             logger.exception("Error in AIPickFilesWorker execution")
             self.signals.error.emit(str(e))
         finally:
+            # Khôi phục lại biến môi trường ban đầu
+            if old_env_key is None:
+                os.environ.pop("AI_API_KEY", None)
+            else:
+                os.environ["AI_API_KEY"] = old_env_key
+
             if codex is not None:
-                codex.close()
+                try:
+                    codex.close()
+                except Exception:
+                    logger.warning("Failed to close Codex client", exc_info=True)
+
+    def _parse_agent_response(self, response_text: str) -> List[str]:
+        """
+        Trích xuất danh sách đường dẫn từ response text của Agent một cách an toàn.
+        """
+        if not response_text:
+            return []
+
+        text = response_text.strip()
+
+        # 1. Thử parse trực tiếp
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict) and "paths" in data:
+                return [p for p in data["paths"] if isinstance(p, str)]
+            elif isinstance(data, list):
+                return [p for p in data if isinstance(p, str)]
+        except json.JSONDecodeError:
+            pass
+
+        # 2. Tìm khối code ```json ... ``` hoặc ``` ... ```
+        match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+        if match:
+            json_content = match.group(1)
+            try:
+                data = json.loads(json_content)
+                if isinstance(data, dict) and "paths" in data:
+                    return [p for p in data["paths"] if isinstance(p, str)]
+                elif isinstance(data, list):
+                    return [p for p in data if isinstance(p, str)]
+            except json.JSONDecodeError:
+                pass
+
+        # 3. Fallback: tìm dấu ngoặc nhọn { đầu tiên và } cuối cùng
+        first_brace = text.find("{")
+        last_brace = text.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            json_content = text[first_brace : last_brace + 1]
+            try:
+                data = json.loads(json_content)
+                if isinstance(data, dict) and "paths" in data:
+                    return [p for p in data["paths"] if isinstance(p, str)]
+            except json.JSONDecodeError:
+                pass
+
+        # 4. Fallback 2: tìm dấu ngoặc vuông [ đầu tiên và ] cuối cùng
+        first_bracket = text.find("[")
+        last_bracket = text.rfind("]")
+        if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
+            json_content = text[first_bracket : last_bracket + 1]
+            try:
+                data = json.loads(json_content)
+                if isinstance(data, list):
+                    return [p for p in data if isinstance(p, str)]
+            except json.JSONDecodeError:
+                pass
+
+        return []
 
     def _collect_stream_with_progress(self, stream, turn_id: str):
         """

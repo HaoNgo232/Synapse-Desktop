@@ -1004,6 +1004,57 @@ class FileTreeWidget(QWidget):
         except Exception as e:
             logger.debug(f"Failed to poll selection: {e}")
 
+    def sync_agent_selection(self, relative_paths: List[str]) -> None:
+        """
+        Đồng bộ trực tiếp danh sách relative paths được AI gợi ý lên UI.
+        Xử lý convert sang absolute paths, apply lên model tree, và ghi atomic xuống selection.json.
+        """
+        workspace = self._model.get_workspace_path()
+        if not workspace:
+            return
+
+        workspace_path = Path(workspace)
+        absolute_selected = set()
+        for rel_path in relative_paths:
+            try:
+                fp = (workspace_path / rel_path).absolute()
+                absolute_selected.add(str(fp))
+            except Exception:
+                logger.error(
+                    "file_tree_widget: failed to convert relative path to absolute",
+                    exc_info=True,
+                )
+
+        # Lưu lại selection cache để tránh poll refresh vòng lặp
+        self._last_synced_selection = absolute_selected
+
+        # Cập nhật model tree
+        self._is_syncing_selection = True
+        try:
+            self.set_selected_paths(absolute_selected)
+            self._tree_view.viewport().update()
+        finally:
+            self._is_syncing_selection = False
+
+        # Ghi file selection.json của user dạng sync để đảm bảo disk khớp state UI
+        payload = {
+            "version": 2,
+            "paths": sorted(relative_paths),
+            "provenance": {p: "agent" for p in sorted(relative_paths)},
+        }
+
+        session_file = workspace_path / ".synapse" / "selection.json"
+        try:
+            session_file.parent.mkdir(parents=True, exist_ok=True)
+            # Ghi atomic bằng temp file + os.replace() để tránh race condition
+            temp_file = session_file.with_suffix(".tmp")
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+                f.write("\n")
+            os.replace(temp_file, session_file)
+        except Exception as e:
+            logger.debug(f"Failed to write selection.json in sync_agent_selection: {e}")
+
     def _write_agent_selection(self, selected: Set[str]) -> None:
         """Ghi selection hien tai vao .synapse/selection.json v2 (synchronous).
 
@@ -1051,9 +1102,12 @@ class FileTreeWidget(QWidget):
 
         try:
             session_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(session_file, "w", encoding="utf-8") as f:
+            # Ghi atomic bằng temp file + os.replace() để tránh race condition
+            temp_file = session_file.with_suffix(".tmp")
+            with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
                 f.write("\n")
+            os.replace(temp_file, session_file)
         except Exception as e:
             logger.debug(f"Failed to write selection.json: {e}")
 

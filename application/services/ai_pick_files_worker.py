@@ -136,6 +136,9 @@ USER_INSTRUCTION:
 EXCLUDED_PATTERNS (Do NOT scan, access, view, or suggest any paths matching these patterns):
 {excluded_patterns_str}
 
+Selection Philosophy:
+- It is better to be slightly over-inclusive than under-inclusive. If you suspect a file might be relevant or helpful for context, include it in the paths list.
+
 Please explore the workspace using directory listing, file viewing, or search tools to find relevant files.
 Once you have identified the relevant files, output a single JSON object containing a list of relative file paths.
 The format MUST strictly follow this JSON structure:

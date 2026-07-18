@@ -250,6 +250,16 @@ Write your raw task draft in the Instructions field and click **Improve Instruct
 
 ---
 
+### AI Pick Files (File Suggestions)
+
+Write your instruction in the Instructions field and click **AI Pick Files** (brain icon). If you are feeling a bit too lazy to manually search for files in a huge codebase, or just want a quick starting point, Synapse runs a read-only background Codex Agent that securely scans your workspace, explores file structures, and automatically suggests relevant files step-by-step.
+
+- **Secure Read-Only Scan**: The AI is confined to a read-only sandbox and cannot modify any workspace files.
+- **Sensitive File Filter**: Credentials and secret configs (like `.env`, private keys, v.v.) are automatically filtered out.
+- **Auto-Apply or Review**: Suggestions are applied automatically or shown for review if there are more than 50 files suggested.
+
+---
+
 ### Apply Tab — Patch Workflow
 
 Paste a Search/Replace response from AI chat, preview the diffs, and apply changes safely. Backups are created automatically before any file is modified.

@@ -41,7 +41,7 @@ def get_git_commit_log():
         print(f"Error fetching git logs: {e.stderr}")
         return ""
 
-def generate_notes_with_mistral(api_key, commits):
+def generate_notes_with_mistral(api_key, commits, version, user):
     """
     Gọi Mistral API (model mistral-large-latest) để tạo Release Note chuyên nghiệp.
     """
@@ -51,12 +51,12 @@ def generate_notes_with_mistral(api_key, commits):
         "Authorization": f"Bearer {api_key}"
     }
 
-    # Prompt chỉ định cấu trúc Release Notes chuẩn chuyên nghiệp dạng Plain Text theo ý người dùng
+    # Prompt chỉ định cấu trúc Release Notes chuẩn chuyên nghiệp dạng Markdown
     system_prompt = (
         "You are an expert software release manager. Your task is to generate professional, structured "
-        "and clean release notes for a desktop app named 'Synapse Desktop'.\n"
-        "Use ONLY plain-text formatting (no markdown header symbols like #, ##, ###, no bolding with **). "
-        "Use numbered sections like '1. Summary', '2. Features', '3. Included Binaries' for headers.\n"
+        "and clean release notes in Markdown format for a desktop app named 'Synapse Desktop'.\n"
+        "Use proper Markdown formatting: ## for section headers, **bold** for emphasis, - for bullet lists, etc.\n"
+        f"CRITICAL: Do NOT invent or change the version or user name. You MUST use '{version}' as the version and '{user}' as the release actor.\n"
         "Keep the language natural, concise, and focused on developers."
     )
 
@@ -64,32 +64,35 @@ def generate_notes_with_mistral(api_key, commits):
 
 {commits}
 
-Ensure the output matches this exact plain-text structure:
+Ensure the output matches this exact Markdown structure:
 
-Synapse Desktop [VERSION] Latest
-released by [USER]
+## Synapse Desktop {version}
 
-This is the release of Synapse Desktop — a local desktop tool for developers who use AI coding assistants. It lets you manually select project files, package them into a structured prompt, and send that context to any AI web chat for planning, analysis, or patch generation.
+> Released by **{user}**
 
-Architecture Support
-Target Platform: Optimized and built for x86_64 (AMD64) architectures.
-ARM Support: ARM architectures are currently untested and not officially supported in this build.
+Synapse Desktop is a local desktop tool for developers who use AI coding assistants. It lets you manually select project files, package them into a structured prompt, and send that context to any AI web chat for planning, analysis, or patch generation.
 
-Key Features
-1. Visual File Selection: Open a project folder and tick files in a tree view. Token count updates in real time.
-2. Real-Time Token Counter: Live token usage bar with context window tracking.
-3. Context Presets: Save/load file selections and instructions as named presets.
-4. Related Files Auto-Detection: Automatically add imported files at configurable depth (1–5).
-5. Improve Instructions: Automatically rewrite and optimize raw prompts using LLM API in plain text format.
-6. Smart Context Mode: Copy code structure only (signatures, docstrings, declarations) — ~70% token savings.
-7. Apply Tab — Patch Workflow: Paste Search/Replace blocks from AI, preview visual diffs, apply with automatic backups.
-8. History Tab: Full history of apply operations with re-apply support.
-9. Git Diff Integration: Append staged/unstaged changes to context.
-10. Secret Scanning: Built-in detect-secrets scanning prevents accidental credential exposure.
+---
 
-Included Binaries
-- Synapse-[VERSION]-windows-x64.exe (Windows x86_64 executable)
-- Synapse-[VERSION]-linux-x86_64.AppImage (Linux x86_64 portable AppImage)
+## Architecture Support
+
+| Platform | Status |
+|---|---|
+| x86_64 (AMD64) | ✅ Supported |
+| ARM | ⚠️ Untested / Not officially supported |
+
+---
+
+## What's Changed
+
+(Generate this section based on the commits. Group into ### Summary, ### Bug Fixes, ### New Features as appropriate. Use bullet points.)
+
+---
+
+## Included Binaries
+
+- `Synapse-{version}-windows-x64.exe` — Windows x86_64 executable
+- `Synapse-{version}-linux-x86_64.AppImage` — Linux x86_64 portable AppImage
 """
 
     payload = {
@@ -118,6 +121,7 @@ def main():
 
     # Lấy tag hiện tại làm version
     version = os.getenv("GITHUB_REF_NAME", "v1.0.0")
+    user = os.getenv("GITHUB_ACTOR", "HaoNgo232")
 
     print("Fetching commit logs...")
     commits = get_git_commit_log()
@@ -125,11 +129,7 @@ def main():
         commits = "Initial development and improvements."
 
     print("Calling Mistral AI to generate release notes...")
-    notes = generate_notes_with_mistral(api_key, commits)
-
-    # Thay thế version động
-    notes = notes.replace("[VERSION]", version)
-    notes = notes.replace("[USER]", os.getenv("GITHUB_ACTOR", "HaoNgo232"))
+    notes = generate_notes_with_mistral(api_key, commits, version, user)
 
     # Lưu vào file build/release_notes.txt để workflow sử dụng
     os.makedirs("build", exist_ok=True)

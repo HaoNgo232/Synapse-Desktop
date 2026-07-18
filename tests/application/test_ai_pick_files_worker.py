@@ -2,7 +2,12 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from application.services.ai_pick_files_worker import AIPickFilesWorker
-from openai_codex import Sandbox
+try:
+    from openai_codex import Sandbox
+except ModuleNotFoundError:
+    class Sandbox:
+        read_only = "read_only"
+        workspace_write = "workspace_write"
 
 
 class DummyTurnResult:
@@ -21,6 +26,14 @@ class DummyTurnResult:
 
 
 class TestAIPickFilesWorker:
+    @pytest.fixture(autouse=True)
+    def force_has_openai_codex(self):
+        import application.services.ai_pick_files_worker as worker_module
+        old_val = getattr(worker_module, "HAS_OPENAI_CODEX", False)
+        worker_module.HAS_OPENAI_CODEX = True
+        yield
+        worker_module.HAS_OPENAI_CODEX = old_val
+
     @pytest.fixture
     def mock_codex(self):
         with patch("application.services.ai_pick_files_worker.Codex") as mock:

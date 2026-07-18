@@ -11,7 +11,16 @@ import re
 from typing import List
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
-from openai_codex import Codex, CodexConfig, Sandbox
+try:
+    from openai_codex import Codex, CodexConfig, Sandbox
+    HAS_OPENAI_CODEX = True
+except ModuleNotFoundError:
+    class Sandbox:
+        read_only = "read_only"
+        workspace_write = "workspace_write"
+    Codex = None
+    CodexConfig = None
+    HAS_OPENAI_CODEX = False
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +69,10 @@ class AIPickFilesWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         if self._cancelled:
+            return
+
+        if not HAS_OPENAI_CODEX:
+            self.signals.error.emit("OpenAI Codex SDK is not installed in this environment.")
             return
 
         # Validate input parameters

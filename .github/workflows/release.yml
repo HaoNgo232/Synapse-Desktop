@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -25,6 +28,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+
+      - name: Install X11 Libraries for Headless Qt Testing
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 libxcb-cursor0
+
+      - name: Run Tests (Quality Gate)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          source .venv/bin/activate
+          xvfb-run -a env -u PYTHONHOME -u PYTHONPATH python -m pytest tests/ -v
 
       - name: Build Linux AppImage
         env:
@@ -60,6 +75,11 @@ jobs:
           # Tạo giả lập Linux venv để bypass kiểm tra của build-windows.ps1
           New-Item -ItemType Directory -Force -Path .venv/bin | Out-Null
           New-Item -ItemType File -Force -Path .venv/bin/activate | Out-Null
+
+      - name: Run Tests (Quality Gate)
+        run: |
+          .venv-win\Scripts\activate
+          python -m pytest tests/ -v
 
       - name: Build Windows EXE
         shell: powershell

@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import pytest
 from infrastructure.adapters.subprocess_utils import run_subprocess
 
@@ -16,7 +17,7 @@ def test_run_subprocess_utf8_encoding(tmp_path):
     # nó sẽ ném ra UnicodeDecodeError trong luồng đọc của subprocess.
     try:
         result = run_subprocess(
-            ["python", str(script)], capture_output=True, text=True, check=True
+            [sys.executable, str(script)], capture_output=True, text=True, check=True
         )
         # Nếu không lỗi thì kiểm tra stdout
         assert "Xin chào" in result.stdout

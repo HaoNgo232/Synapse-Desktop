@@ -126,10 +126,15 @@ Do not write anything else to .synapse/selection.json. It must be valid JSON onl
 
             self.signals.progress.emit("AI Selecting...")
 
-            # Chạy agent turn (blocking call trên thread con)
-            result = thread.run(prompt)
+            # Chạy agent turn (sử dụng stream để emit progress)
+            turn = thread.turn(prompt)
+            stream = turn.stream()
+            try:
+                result = self._collect_stream_with_progress(stream, turn.id)
+            finally:
+                stream.close()
 
-            if self._cancelled:
+            if self._cancelled or result is None:
                 return
 
             if result.error:
@@ -187,3 +192,86 @@ Do not write anything else to .synapse/selection.json. It must be valid JSON onl
         finally:
             if codex is not None:
                 codex.close()
+
+    def _collect_stream_with_progress(self, stream, turn_id: str):
+        """
+        Duyệt stream sự kiện của Turn để phát hiện các MCP Tool Call, reasoning
+        và phát ra tín hiệu progress, đồng thời tích luỹ TurnResult giống như _collect_turn_result.
+        """
+        from openai_codex.generated.v2_all import (
+            ItemCompletedNotification,
+            ThreadTokenUsageUpdatedNotification,
+            TurnCompletedNotification,
+            ItemStartedNotification,
+        )
+        from openai_codex._run import (
+            _raise_for_failed_turn,
+            _final_assistant_response_from_items,
+            TurnResult,
+        )
+
+        completed = None
+        items = []
+        usage = None
+
+        for event in stream:
+            if self._cancelled:
+                break
+
+            payload = event.payload
+            method = event.method
+
+            # Gửi tín hiệu tiến độ dựa trên các sự kiện trong Agent Turn
+            if (
+                method == "item/started"
+                and isinstance(payload, ItemStartedNotification)
+                and payload.turn_id == turn_id
+            ):
+                item_root = getattr(payload.item, "root", None)
+                if item_root:
+                    item_type = getattr(item_root, "type", None)
+                    if item_type == "mcpToolCall":
+                        tool_name = getattr(item_root, "tool", "unknown")
+                        self.signals.progress.emit(f"tool_call:{tool_name}")
+                    elif item_type == "reasoning":
+                        self.signals.progress.emit("reasoning")
+                    elif item_type == "fileChange":
+                        self.signals.progress.emit("file_change")
+
+            if (
+                isinstance(payload, ItemCompletedNotification)
+                and payload.turn_id == turn_id
+            ):
+                items.append(payload.item)
+                continue
+            if (
+                isinstance(payload, ThreadTokenUsageUpdatedNotification)
+                and payload.turn_id == turn_id
+            ):
+                usage = payload.token_usage
+                continue
+            if (
+                isinstance(payload, TurnCompletedNotification)
+                and payload.turn.id == turn_id
+            ):
+                completed = payload
+
+        if self._cancelled:
+            return None
+
+        if completed is None:
+            raise RuntimeError("turn completed event not received")
+
+        _raise_for_failed_turn(completed.turn)
+        turn = completed.turn
+        return TurnResult(
+            id=turn.id,
+            status=turn.status,
+            error=turn.error,
+            started_at=turn.started_at,
+            completed_at=turn.completed_at,
+            duration_ms=turn.duration_ms,
+            final_response=_final_assistant_response_from_items(items),
+            items=items,
+            usage=usage,
+        )

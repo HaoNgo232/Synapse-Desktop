@@ -39,15 +39,11 @@ class TestAIPickFilesWorker:
             "provenance": {p: "agent" for p in expected_paths},
         }
 
-        # Mock thread behavior: when thread.run is called, simulate selection.json creation
+        # Mock thread behavior: when _collect_stream_with_progress is called, simulate selection.json creation
         mock_thread = MagicMock()
-
-        def mock_run(prompt):
-            with open(selection_file, "w", encoding="utf-8") as f:
-                json.dump(selection_data, f, indent=2)
-            return DummyTurnResult()
-
-        mock_thread.run.side_effect = mock_run
+        mock_turn = MagicMock()
+        mock_turn.id = "turn-123"
+        mock_thread.turn.return_value = mock_turn
 
         mock_codex_instance = MagicMock()
         mock_codex_instance.thread_start.return_value = mock_thread
@@ -70,8 +66,20 @@ class TestAIPickFilesWorker:
 
         worker.signals.finished.connect(on_finished)
 
-        # Run worker
-        worker.run()
+        # Patch _collect_stream_with_progress
+        with patch.object(
+            AIPickFilesWorker, "_collect_stream_with_progress"
+        ) as mock_collect:
+
+            def mock_collect_impl(stream, turn_id):
+                with open(selection_file, "w", encoding="utf-8") as f:
+                    json.dump(selection_data, f, indent=2)
+                return DummyTurnResult()
+
+            mock_collect.side_effect = mock_collect_impl
+
+            # Run worker
+            worker.run()
 
         # Assertions
         assert finished_paths == expected_paths
@@ -91,7 +99,9 @@ class TestAIPickFilesWorker:
         workspace = tmp_path
 
         mock_thread = MagicMock()
-        mock_thread.run.return_value = DummyTurnResult(error="LLM Connection Refused")
+        mock_turn = MagicMock()
+        mock_turn.id = "turn-123"
+        mock_thread.turn.return_value = mock_turn
 
         mock_codex_instance = MagicMock()
         mock_codex_instance.thread_start.return_value = mock_thread
@@ -112,7 +122,12 @@ class TestAIPickFilesWorker:
             error_message = msg
 
         worker.signals.error.connect(on_error)
-        worker.run()
+
+        with patch.object(
+            AIPickFilesWorker, "_collect_stream_with_progress"
+        ) as mock_collect:
+            mock_collect.return_value = DummyTurnResult(error="LLM Connection Refused")
+            worker.run()
 
         assert error_message is not None
         assert "Codex Agent error: LLM Connection Refused" in error_message

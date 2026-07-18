@@ -1417,6 +1417,15 @@ class ContextViewQt(
 
         self._ai_pick_files_worker = None
 
+        # Huỷ dialog nếu có
+        dialog = getattr(self, "_ai_pick_files_dialog", None)
+        if dialog:
+            try:
+                dialog.reject()
+            except Exception:
+                pass
+            self._ai_pick_files_dialog = None
+
     def _run_ai_pick_files(self) -> None:
         """
         Đọc instruction hiện tại và chạy AIPickFilesWorker trong background thread.
@@ -1446,11 +1455,18 @@ class ContextViewQt(
             return
 
         from application.services.ai_pick_files_worker import AIPickFilesWorker
+        from presentation.components.dialogs.ai_pick_files_dialog import (
+            AIPickFilesDialog,
+        )
         from PySide6.QtCore import QThreadPool
 
         # Disable button khi đang chạy
         self._ai_pick_files_btn.setEnabled(False)
         self._ai_pick_files_btn.setText("AI Picking...")
+
+        # Khởi tạo và hiển thị Dialog tiến độ (non-blocking)
+        self._ai_pick_files_dialog = AIPickFilesDialog(self)
+        self._ai_pick_files_dialog.show()
 
         # Tạo worker chạy trên background thread
         worker = AIPickFilesWorker(
@@ -1484,6 +1500,13 @@ class ContextViewQt(
         self._ai_pick_files_btn.setEnabled(True)
         self._ai_pick_files_btn.setText("AI Pick Files")
 
+        # Đóng dialog thành công
+        dialog = getattr(self, "_ai_pick_files_dialog", None)
+        if dialog:
+            dialog.update_step(3, "success", f"Selected {len(paths)} files")
+            dialog.finish_with_success()
+            self._ai_pick_files_dialog = None
+
         # Đồng bộ hóa ngay lập tức từ selection.json
         if hasattr(self, "file_tree_widget") and self.file_tree_widget:
             self.file_tree_widget._poll_agent_selection()
@@ -1498,10 +1521,43 @@ class ContextViewQt(
         self._ai_pick_files_btn.setEnabled(True)
         self._ai_pick_files_btn.setText("AI Pick Files")
 
+        # Đánh dấu bước lỗi và đóng Dialog sau 2s
+        dialog = getattr(self, "_ai_pick_files_dialog", None)
+        if dialog:
+            dialog.update_step(2, "error", f"Error: {error_msg}")
+            from PySide6.QtCore import QTimer
+
+            QTimer.singleShot(2000, dialog, dialog.reject)
+            self._ai_pick_files_dialog = None
+
         self._show_status(f"AI Pick Files failed: {error_msg}", is_error=True)
 
     def _on_ai_pick_files_progress(self, status: str) -> None:
-        self._ai_pick_files_btn.setText(status)
+        if hasattr(self, "_ai_pick_files_btn") and self._ai_pick_files_btn:
+            self._ai_pick_files_btn.setText("AI Picking...")
+
+        dialog = getattr(self, "_ai_pick_files_dialog", None)
+        if not dialog:
+            return
+
+        if status == "Initializing Codex...":
+            dialog.update_step(0, "active")
+        elif status == "Connecting to Agent...":
+            dialog.update_step(0, "success")
+            dialog.update_step(1, "active")
+        elif status == "AI Selecting...":
+            dialog.update_step(1, "success")
+            dialog.update_step(2, "active", "AI is analyzing workspace...")
+        elif status.startswith("tool_call:"):
+            tool_name = status.split(":", 1)[1]
+            dialog.update_step(2, "active", f"Agent is running '{tool_name}'...")
+        elif status == "reasoning":
+            dialog.update_step(2, "active", "Agent is thinking...")
+        elif status == "file_change":
+            dialog.update_step(2, "active", "Agent is applying file changes...")
+        elif status == "Synchronizing...":
+            dialog.update_step(2, "success")
+            dialog.update_step(3, "active")
 
     # ===== Helpers =====
 

@@ -1,29 +1,12 @@
 # Synapse Desktop
 
-> **Manually select the right code context, copy it to AI web chat for planning, then give your IDE agent a laser-focused task.**
-
-> _Personal note: This is a local desktop tool built to cut AI costs. Instead of letting an IDE agent explore your entire codebase (burning tokens), you pick the relevant files yourself, use a free chat model to think through the problem, and only then hand the agent a clear, bounded task._
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Quick Start](#quick-start)
-- [What Problem Does This Solve?](#what-problem-does-this-solve)
-- [Core Workflow](#core-workflow)
-- [Core Philosophy](#core-philosophy)
-- [Key Features](#key-features)
-- [Copy Modes](#copy-modes)
-- [Apply Tab — Patch Workflow](#apply-tab--patch-workflow)
-- [Prompt Templates](#prompt-templates)
-- [Security and Privacy](#security-and-privacy)
-- [Interface](#interface)
-- [Example Workflows](#example-workflows)
-- [Environment Variables and CLI Options](#environment-variables-and-cli-options)
-- [Troubleshooting](#troubleshooting)
-- [When NOT to Use This](#when-not-to-use-this)
-- [License](#license)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PySide6](https://img.shields.io/badge/GUI-PySide6-41CD52?logo=qt&logoColor=white)](https://pypi.org/project/PySide6/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-informational.svg)]()
+[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
+[![Type Check: Pyrefly](https://img.shields.io/badge/Type%20Check-Pyrefly-purple.svg)]()
+[![MCP Server](https://img.shields.io/badge/MCP-Server-orange.svg)]()
 
 ---
 
@@ -48,6 +31,27 @@ You pick files → Synapse packages context → Web chat plans → IDE agent exe
 - People who want fully automated AI workflows with no manual steps
 - Teams looking for a shared or cloud context management platform
 - Developers who are happy with their current AI agent costs
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [What Problem Does This Solve?](#what-problem-does-this-solve)
+- [Core Workflow](#core-workflow)
+- [Core Philosophy](#core-philosophy)
+- [Key Features](#key-features)
+- [Copy Modes](#copy-modes)
+- [Apply Tab — Patch Workflow](#apply-tab--patch-workflow)
+- [Prompt Templates](#prompt-templates)
+- [Security and Privacy](#security-and-privacy)
+- [Interface](#interface)
+- [Example Workflows](#example-workflows)
+- [Environment Variables and CLI Options](#environment-variables-and-cli-options)
+- [Troubleshooting](#troubleshooting)
+- [When NOT to Use This](#when-not-to-use-this)
+- [License](#license)
 
 ---
 

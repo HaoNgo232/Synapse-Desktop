@@ -9,30 +9,70 @@ Cac operations:
 - rename: Doi ten/di chuyen file
 """
 
+import json
 import shutil
-from pathlib import Path
-from typing import Optional, Literal, Union, List
+import uuid
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import List, Literal, Optional, Union
 
-from domain.prompt.opx_parser import FileAction
 from domain.ports.action_result import ActionResult
 from domain.ports.file_actions_port import IFileActionsService
-from shared.logging_config import log_error, log_info, log_debug, log_warning
+from domain.prompt.opx_parser import FileAction
 from shared.config.paths import BACKUP_DIR
+from shared.logging_config import log_debug, log_error, log_info, log_warning
 import logging
 
 logger = logging.getLogger("synapse-desktop")
 
 
+@dataclass
+class ApplySessionItem:
+    action: str
+    path: str
+    resolved_path: str
+    backup_path: Optional[str] = None
+    created_path: Optional[str] = None
+    new_path: Optional[str] = None
+    resolved_new_path: Optional[str] = None
+    backup_new_path: Optional[str] = None
+    success: bool = False
+    message: str = ""
+
+
+@dataclass
+class ApplySessionManifest:
+    session_id: str
+    timestamp: str
+    items: List[ApplySessionItem] = field(default_factory=list)
+
+
+@dataclass
+class RollbackItemResult:
+    path: str
+    action: str
+    success: bool
+    message: str
+
+
+@dataclass
+class RollbackResult:
+    session_id: str
+    success: bool
+    message: str
+    item_results: List[RollbackItemResult] = field(default_factory=list)
+
+
 def create_backup(file_path: Path) -> Optional[Path]:
     """
-    Tạo backup của file trước khi modify.
+    Tạo backup của file hoặc thư mục trước khi modify / delete / overwrite.
 
     Args:
-        file_path: Path đến file cần backup
+        file_path: Path đến file/folder cần backup
 
     Returns:
-        Path đến backup file, hoặc None nếu thất bại
+        Path đến backup file/folder, hoặc None nếu thất bại
     """
     if not file_path.exists():
         return None
@@ -40,12 +80,15 @@ def create_backup(file_path: Path) -> Optional[Path]:
     try:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Tạo tên backup với timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Tạo tên backup với timestamp và microsecond để chống va chạm tên file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         backup_name = f"{file_path.name}.{timestamp}.bak"
         backup_path = BACKUP_DIR / backup_name
 
-        shutil.copy2(file_path, backup_path)
+        if file_path.is_dir():
+            shutil.copytree(file_path, backup_path)
+        else:
+            shutil.copy2(file_path, backup_path)
         log_debug(f"Created backup: {backup_path}")
         return backup_path
     except Exception as e:
@@ -55,32 +98,277 @@ def create_backup(file_path: Path) -> Optional[Path]:
 
 def restore_backup(backup_path: Path, original_path: Path) -> bool:
     """
-    Khôi phục file từ backup.
+    Khôi phục file hoặc thư mục từ backup.
 
     Args:
-        backup_path: Path đến backup file
-        original_path: Path đến file gốc cần restore
+        backup_path: Path đến backup file/folder
+        original_path: Path đến vị trí gốc cần restore
 
     Returns:
         True nếu restore thành công
     """
     try:
         if not backup_path.exists():
-            log_error(f"Backup file not found: {backup_path}")
+            log_error(f"Backup path not found: {backup_path}")
             return False
 
-        # Basic validation: check file is readable and not empty
-        file_size = backup_path.stat().st_size
-        if file_size == 0:
-            log_warning(f"Backup file is empty: {backup_path}")
-            # Still allow restore of empty files - might be intentional
+        if original_path.exists():
+            if original_path.is_dir():
+                shutil.rmtree(original_path)
+            else:
+                original_path.unlink()
 
-        shutil.copy2(backup_path, original_path)
+        if backup_path.is_dir():
+            shutil.copytree(backup_path, original_path)
+        else:
+            original_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup_path, original_path)
         log_info(f"Restored from backup: {original_path}")
         return True
     except Exception as e:
         log_error(f"Failed to restore backup for {original_path}", e)
-    return False
+        return False
+
+
+def save_apply_session_manifest(manifest: ApplySessionManifest) -> Optional[Path]:
+    """Save an ApplySessionManifest to a JSON file in BACKUP_DIR."""
+    try:
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        session_file = BACKUP_DIR / f"session_{manifest.session_id}.json"
+        manifest_dict = asdict(manifest)
+        session_file.write_text(
+            json.dumps(manifest_dict, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        log_debug(f"Saved session manifest: {session_file}")
+        return session_file
+    except Exception as e:
+        log_error(f"Failed to save session manifest {manifest.session_id}", e)
+        return None
+
+
+def load_apply_session_manifest(session_id: str) -> Optional[ApplySessionManifest]:
+    """Load an ApplySessionManifest by session_id from BACKUP_DIR."""
+    try:
+        if not BACKUP_DIR.exists():
+            return None
+        session_file = BACKUP_DIR / f"session_{session_id}.json"
+        if not session_file.exists():
+            log_error(f"Session manifest file not found: {session_file}")
+            return None
+        content = session_file.read_text(encoding="utf-8")
+        data = json.loads(content)
+        items = [ApplySessionItem(**item) for item in data.get("items", [])]
+        return ApplySessionManifest(
+            session_id=data["session_id"],
+            timestamp=data["timestamp"],
+            items=items,
+        )
+    except Exception as e:
+        log_error(f"Failed to load session manifest {session_id}", e)
+        return None
+
+
+def get_last_apply_session() -> Optional[ApplySessionManifest]:
+    """Get the most recent ApplySessionManifest from BACKUP_DIR."""
+    if not BACKUP_DIR.exists():
+        return None
+    try:
+        session_files = sorted(
+            BACKUP_DIR.glob("session_*.json"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        if not session_files:
+            return None
+        filename = session_files[0].stem
+        session_id = filename.replace("session_", "", 1)
+        return load_apply_session_manifest(session_id)
+    except Exception as e:
+        log_error("Failed to get last apply session", e)
+        return None
+
+
+def rollback_apply_session(
+    session: Union[ApplySessionManifest, str, object, None] = None,
+    workspace_roots: Optional[List[Path]] = None,
+) -> RollbackResult:
+    """
+    Rollback an entire Apply session in reverse order.
+
+    Args:
+        session: ApplySessionManifest instance, session_id string, or None for the last session.
+        workspace_roots: Optional list of workspace roots for security validation.
+
+    Returns:
+        RollbackResult containing item details and overall status.
+    """
+    manifest: Optional[ApplySessionManifest] = None
+
+    if session is None or session == "last":
+        manifest = get_last_apply_session()
+    elif isinstance(session, str):
+        manifest = load_apply_session_manifest(session)
+    elif isinstance(session, ApplySessionManifest):
+        manifest = session
+
+    if not manifest:
+        return RollbackResult(
+            session_id=session if isinstance(session, str) else "unknown",
+            success=False,
+            message="No valid apply session found to rollback",
+            item_results=[],
+        )
+
+    log_info(f"Starting rollback for apply session: {manifest.session_id}")
+    item_results: List[RollbackItemResult] = []
+    overall_success = True
+
+    # Process items in reverse order
+    for item in reversed(manifest.items):
+        if not item.success:
+            # Skip items that failed during apply
+            continue
+
+        try:
+            resolved_path = Path(item.resolved_path)
+
+            if item.action == "create":
+                created_target = (
+                    Path(item.created_path) if item.created_path else resolved_path
+                )
+                if created_target.exists():
+                    if created_target.is_dir():
+                        shutil.rmtree(created_target)
+                    else:
+                        created_target.unlink()
+                    item_results.append(
+                        RollbackItemResult(
+                            path=item.path,
+                            action="create",
+                            success=True,
+                            message=f"Deleted created path: {item.path}",
+                        )
+                    )
+                else:
+                    item_results.append(
+                        RollbackItemResult(
+                            path=item.path,
+                            action="create",
+                            success=True,
+                            message=f"Path already removed: {item.path}",
+                        )
+                    )
+
+            elif item.action in ("rewrite", "modify"):
+                if item.backup_path:
+                    bk_path = Path(item.backup_path)
+                    res = restore_backup(bk_path, resolved_path)
+                    item_results.append(
+                        RollbackItemResult(
+                            path=item.path,
+                            action=item.action,
+                            success=res,
+                            message=(
+                                f"Restored {item.path} from backup"
+                                if res
+                                else f"Failed to restore {item.path}"
+                            ),
+                        )
+                    )
+                    if not res:
+                        overall_success = False
+                else:
+                    item_results.append(
+                        RollbackItemResult(
+                            path=item.path,
+                            action=item.action,
+                            success=False,
+                            message=f"No backup available for {item.path}",
+                        )
+                    )
+                    overall_success = False
+
+            elif item.action == "delete":
+                if item.backup_path:
+                    bk_path = Path(item.backup_path)
+                    res = restore_backup(bk_path, resolved_path)
+                    item_results.append(
+                        RollbackItemResult(
+                            path=item.path,
+                            action="delete",
+                            success=res,
+                            message=(
+                                f"Restored deleted path {item.path} from backup"
+                                if res
+                                else f"Failed to restore deleted path {item.path}"
+                            ),
+                        )
+                    )
+                    if not res:
+                        overall_success = False
+                else:
+                    item_results.append(
+                        RollbackItemResult(
+                            path=item.path,
+                            action="delete",
+                            success=False,
+                            message=f"No backup available for deleted path {item.path}",
+                        )
+                    )
+                    overall_success = False
+
+            elif item.action == "rename":
+                msg_parts: List[str] = []
+                rename_ok = True
+                if item.resolved_new_path:
+                    new_p = Path(item.resolved_new_path)
+                    if new_p.exists():
+                        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.move(new_p, resolved_path)
+                        msg_parts.append(f"Moved {item.new_path} back to {item.path}")
+
+                if item.backup_new_path:
+                    bk_target = Path(item.backup_new_path)
+                    if item.resolved_new_path:
+                        restore_res = restore_backup(
+                            bk_target, Path(item.resolved_new_path)
+                        )
+                        if restore_res:
+                            msg_parts.append(
+                                f"Restored original file at target path {item.new_path}"
+                            )
+
+                item_results.append(
+                    RollbackItemResult(
+                        path=item.path,
+                        action="rename",
+                        success=rename_ok,
+                        message="; ".join(msg_parts) or "Reverted rename",
+                    )
+                )
+
+        except Exception as e:
+            log_error(f"Failed rollback for item {item.path}", e)
+            item_results.append(
+                RollbackItemResult(
+                    path=item.path,
+                    action=item.action,
+                    success=False,
+                    message=f"Rollback error: {e}",
+                )
+            )
+            overall_success = False
+
+    success_count = sum(1 for r in item_results if r.success)
+    msg = f"Rollback finished: {success_count}/{len(item_results)} items reverted"
+    log_info(msg)
+
+    return RollbackResult(
+        session_id=manifest.session_id,
+        success=overall_success,
+        message=msg,
+        item_results=item_results,
+    )
 
 
 def list_backups(file_name: Optional[str] = None) -> list[Path]:
@@ -183,6 +471,13 @@ def apply_file_actions(
     if not dry_run:
         cleanup_old_backups()
 
+    session_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    manifest = ApplySessionManifest(
+        session_id=session_id,
+        timestamp=datetime.now().isoformat(),
+        items=[],
+    )
+
     results: list[ActionResult] = []
     mode = "Validating" if dry_run else "Applying"
     log_info(f"{mode} {len(file_actions)} file action(s)")
@@ -194,15 +489,91 @@ def apply_file_actions(
             file_path = _resolve_path(action.path, action.root, workspace_roots)
 
             if action.action == "create":
+                existed_before = file_path.exists()
                 result = _handle_create(action, file_path, dry_run)
-            elif action.action == "rewrite":
-                result = _handle_rewrite(action, file_path, dry_run)
-            elif action.action == "modify":
-                result = _handle_modify(action, file_path, dry_run)
+                if not dry_run:
+                    manifest.items.append(
+                        ApplySessionItem(
+                            action="create",
+                            path=action.path,
+                            resolved_path=str(file_path),
+                            created_path=str(file_path)
+                            if (result.success and not existed_before)
+                            else None,
+                            success=result.success,
+                            message=result.message,
+                        )
+                    )
+            elif action.action in ("rewrite", "modify"):
+                backup_p = (
+                    create_backup(file_path)
+                    if (not dry_run and file_path.exists())
+                    else None
+                )
+                if action.action == "rewrite":
+                    result = _handle_rewrite(action, file_path, dry_run)
+                else:
+                    result = _handle_modify(action, file_path, dry_run)
+                if not dry_run:
+                    manifest.items.append(
+                        ApplySessionItem(
+                            action=action.action,
+                            path=action.path,
+                            resolved_path=str(file_path),
+                            backup_path=str(backup_p) if backup_p else None,
+                            success=result.success,
+                            message=result.message,
+                        )
+                    )
             elif action.action == "delete":
+                backup_p = (
+                    create_backup(file_path)
+                    if (not dry_run and file_path.exists())
+                    else None
+                )
                 result = _handle_delete(action, file_path, dry_run)
+                if not dry_run:
+                    manifest.items.append(
+                        ApplySessionItem(
+                            action="delete",
+                            path=action.path,
+                            resolved_path=str(file_path),
+                            backup_path=str(backup_p) if backup_p else None,
+                            success=result.success,
+                            message=result.message,
+                        )
+                    )
             elif action.action == "rename":
+                new_path = (
+                    _resolve_path(action.new_path, action.root, workspace_roots)
+                    if action.new_path
+                    else None
+                )
+                bk_orig = (
+                    create_backup(file_path)
+                    if (not dry_run and file_path.exists())
+                    else None
+                )
+                bk_target = (
+                    create_backup(new_path)
+                    if (not dry_run and new_path and new_path.exists())
+                    else None
+                )
                 result = _handle_rename(action, file_path, workspace_roots, dry_run)
+                if not dry_run:
+                    manifest.items.append(
+                        ApplySessionItem(
+                            action="rename",
+                            path=action.path,
+                            resolved_path=str(file_path),
+                            new_path=action.new_path,
+                            resolved_new_path=str(new_path) if new_path else None,
+                            backup_path=str(bk_orig) if bk_orig else None,
+                            backup_new_path=str(bk_target) if bk_target else None,
+                            success=result.success,
+                            message=result.message,
+                        )
+                    )
             else:
                 result = ActionResult(
                     path=action.path,
@@ -223,6 +594,9 @@ def apply_file_actions(
                     message=str(e),
                 )
             )
+
+    if not dry_run and manifest.items:
+        save_apply_session_manifest(manifest)
 
     success_count = sum(1 for r in results if r.success)
     log_info(f"Completed: {success_count}/{len(results)} action(s) successful")
@@ -835,6 +1209,9 @@ def _handle_delete(
                 message="Dry Run: File would be deleted",
             )
 
+        # Create backup before delete
+        create_backup(file_path)
+
         if file_path.is_dir():
             import shutil
 
@@ -953,3 +1330,13 @@ class FileActionsService(IFileActionsService):
 
     def normalize_eol(self, text: str, eol: str) -> str:
         return normalize_eol(text, eol)
+
+    def rollback_apply_session(
+        self,
+        session: Optional[Union[object, str]] = None,
+        workspace_roots: Optional[List[Path]] = None,
+    ) -> object:
+        return rollback_apply_session(session, workspace_roots)
+
+    def get_last_apply_session(self) -> Optional[object]:
+        return get_last_apply_session()

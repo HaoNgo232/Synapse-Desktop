@@ -325,6 +325,37 @@ class ApplyViewQt(QWidget):
         self._apply_btn.clicked.connect(self._apply_changes)
         btn_row.addWidget(self._apply_btn)
 
+        # Rollback CTA
+        self._rollback_btn = QPushButton("↩ Rollback Last Apply")
+        self._rollback_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: rgba(245, 158, 11, 0.15);
+                color: #F59E0B;
+                border: 1px solid #F59E0B;
+                border-radius: 8px;
+                padding: 8px 14px;
+                font-weight: 700;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(245, 158, 11, 0.25);
+            }}
+            QPushButton:pressed {{
+                background-color: rgba(245, 158, 11, 0.35);
+            }}
+            QPushButton:disabled {{
+                background-color: {ThemeColors.BG_SURFACE};
+                color: {ThemeColors.TEXT_MUTED};
+                border: 1px solid {ThemeColors.BORDER};
+            }}
+        """
+        )
+        self._rollback_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rollback_btn.setEnabled(self._check_can_rollback())
+        self._rollback_btn.clicked.connect(self._rollback_last_apply)
+        btn_row.addWidget(self._rollback_btn)
+
         layout.addLayout(btn_row)
 
         return panel
@@ -559,6 +590,8 @@ class ApplyViewQt(QWidget):
                     self._summary_label.show()
                 if self._apply_btn:
                     self._apply_btn.setEnabled(False)
+                if hasattr(self, "_rollback_btn") and self._rollback_btn:
+                    self._rollback_btn.setEnabled(True)
 
             # Save continuous memory if apply was at least partially successful
             if success_count > 0 and memory_block:
@@ -568,11 +601,85 @@ class ApplyViewQt(QWidget):
                     schedule_background(
                         lambda: save_memory_block(workspace, memory_block)
                     )
-                except ImportError:
-                    save_memory_block(workspace, memory_block)
+                except Exception as e:
+                    logger.error(f"Failed to schedule memory block save: {e}")
 
         except Exception as e:
+            logger.error(f"Apply failed: {e}", exc_info=True)
             self._show_status(f"Apply error: {e}", is_error=True)
+
+    def _check_can_rollback(self) -> bool:
+        """Check if there is a valid last apply session available to rollback."""
+        try:
+            session = DomainRegistry.file_actions_service().get_last_apply_session()
+            return session is not None and len(getattr(session, "items", [])) > 0
+        except Exception:
+            return False
+
+    def _rollback_last_apply(self) -> None:
+        """Rollback the most recent Apply session."""
+        try:
+            session = DomainRegistry.file_actions_service().get_last_apply_session()
+            if not session or not getattr(session, "items", []):
+                QMessageBox.information(
+                    self,
+                    "No Session Found",
+                    "No apply session is available to rollback.",
+                )
+                return
+
+            items = getattr(session, "items", [])
+            item_count = len(items)
+            session_id = getattr(session, "session_id", "last")
+            reply = QMessageBox.question(
+                self,
+                "Confirm Rollback",
+                f"Are you sure you want to rollback the last apply session ({session_id})?\n"
+                f"This will revert changes across {item_count} file(s).",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            workspace = self.get_workspace()
+            workspace_roots = [workspace] if workspace else None
+            result = DomainRegistry.file_actions_service().rollback_apply_session(
+                session, workspace_roots
+            )
+
+            if result and getattr(result, "success", False):
+                msg = getattr(result, "message", "Rollback complete")
+                toast_success(f"Rollback complete! ({msg})")
+                self._show_status(f"Rollback successful: {msg}", is_error=False)
+                if self._summary_label:
+                    self._summary_label.setText(
+                        f"↩ Rolled back last apply ({item_count} files)"
+                    )
+                    self._summary_label.setToolTip("")
+                    self._summary_label.setStyleSheet(
+                        "font-size: 11px; color: #F59E0B; font-weight: 600; "
+                        "background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); "
+                        "border-radius: 6px; padding: 6px 10px; margin-top: 4px;"
+                    )
+                    self._summary_label.show()
+            else:
+                err_msg = (
+                    getattr(result, "message", "Unknown rollback error")
+                    if result
+                    else "Unknown rollback error"
+                )
+                toast_error(f"Rollback failed: {err_msg}")
+                self._show_status(f"Rollback failed: {err_msg}", is_error=True)
+
+            if hasattr(self, "_rollback_btn") and self._rollback_btn:
+                self._rollback_btn.setEnabled(self._check_can_rollback())
+
+        except Exception as e:
+            logger.error(f"Failed to execute rollback: {e}", exc_info=True)
+            QMessageBox.critical(
+                self, "Rollback Error", f"An error occurred during rollback: {e}"
+            )
 
     @Slot(int, object, object)
     def _apply_single_change(
